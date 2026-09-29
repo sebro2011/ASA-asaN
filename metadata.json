@@ -1,0 +1,6 @@
+{
+  "name": "NASA Trilingual Space Exploration & APOD",
+  "description": "Trilingual (Sinhala, Tamil, English) NASA space exploration app featuring real-time APOD with Gemini AI dynamic translation, interactive 3D space visualizations, live NASA news, and space missions timeline.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
