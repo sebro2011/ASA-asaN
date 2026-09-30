@@ -19,7 +19,8 @@ import {
   Heart,
   Bot,
   Globe2,
-  Share2
+  Share2,
+  BrainCircuit
 } from 'lucide-react';
 import { useFavorites } from '../utils/favorites';
 
@@ -61,6 +62,26 @@ export const NAV_ITEMS = [
       en: 'NASA News',
       si: 'නාසා පුවත්',
       ta: 'நாசா செய்திகள்'
+    }
+  },
+  {
+    id: 'quiz',
+    icon: BrainCircuit,
+    badge: 'NEW',
+    labels: {
+      en: 'Trivia Quiz',
+      si: 'දැනුම මිනුම',
+      ta: 'வினாடி வினா'
+    }
+  },
+  {
+    id: 'iss',
+    icon: Globe2,
+    badge: 'LIVE',
+    labels: {
+      en: 'ISS Orbit',
+      si: 'ISS කක්ෂය',
+      ta: 'ISS நேரலை'
     }
   },
   {

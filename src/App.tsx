@@ -15,6 +15,8 @@ import { Space3DViewer } from './components/Space3DViewer';
 import { MissionsTimeline } from './components/MissionsTimeline';
 import { NewsSection } from './components/NewsSection';
 import { SavedFavorites } from './components/SavedFavorites';
+import { SpaceTriviaQuiz } from './components/SpaceTriviaQuiz';
+import ISSTracker from './components/ISSTracker.jsx';
 import { ExportHtmlModal } from './components/ExportHtmlModal';
 import OpenRouterChat from './components/OpenRouterChat.jsx';
 import { useFavorites } from './utils/favorites';
@@ -37,14 +39,18 @@ import {
   ChevronRight,
   ShieldCheck,
   Bot,
-  MessageSquare
+  MessageSquare,
+  BrainCircuit,
+  Award
 } from 'lucide-react';
+
+type TabKey = 'apod' | '3d' | 'missions' | 'news' | 'saved' | 'assistant' | 'quiz' | 'iss';
 
 export default function App() {
   const { t, i18n } = useTranslation();
   const lang = (i18n.language || 'en').slice(0, 2) as SupportedLanguage;
-  const [activeTab, setActiveTab] = useState<'apod' | '3d' | 'missions' | 'news' | 'saved' | 'assistant'>('apod');
-  const [displayedTab, setDisplayedTab] = useState<'apod' | '3d' | 'missions' | 'news' | 'saved' | 'assistant'>('apod');
+  const [activeTab, setActiveTab] = useState<TabKey>('apod');
+  const [displayedTab, setDisplayedTab] = useState<TabKey>('apod');
   const [isTabLoading, setIsTabLoading] = useState<boolean>(false);
   const [targetApodDate, setTargetApodDate] = useState<string | undefined>(undefined);
   const [targetMissionId, setTargetMissionId] = useState<string | undefined>(undefined);
@@ -71,7 +77,7 @@ export default function App() {
     document.documentElement.lang = lang;
   }, [lang]);
 
-  const handleTabSwitch = (tab: 'apod' | '3d' | 'missions' | 'news' | 'saved' | 'assistant') => {
+  const handleTabSwitch = (tab: TabKey) => {
     if (tab === activeTab && !isTabLoading) return;
 
     setActiveTab(tab);
@@ -195,8 +201,8 @@ export default function App() {
           </div>
         </section>
 
-        {/* Space Dashboard 5-Card Grid Hub with Framer Motion hover */}
-        <section className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
+        {/* Space Dashboard Multi-Card Grid Hub with Framer Motion hover */}
+        <section className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3 sm:gap-4">
           {/* Tile 1: APOD */}
           <motion.button
             whileHover={{ y: -4, scale: 1.02 }}
@@ -313,7 +319,36 @@ export default function App() {
             </div>
           </motion.button>
 
-          {/* Tile 5: AI Assistant (OpenRouter) */}
+          {/* Tile 5: Space Trivia Quiz */}
+          <motion.button
+            whileHover={{ y: -4, scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={() => handleTabSwitch('quiz')}
+            className={`p-4 rounded-2xl border text-left transition-all duration-200 relative overflow-hidden flex flex-col justify-between ${
+              activeTab === 'quiz'
+                ? 'bg-cyan-950/50 border-cyan-400/70 shadow-lg shadow-cyan-950/60'
+                : 'bg-[#0B0F19]/80 hover:bg-slate-900/60 border-slate-800 hover:border-cyan-500/40'
+            }`}
+          >
+            <div className="flex items-center justify-between w-full">
+              <div className="w-9 h-9 rounded-xl bg-cyan-500/15 border border-cyan-500/30 flex items-center justify-center">
+                <BrainCircuit className="w-5 h-5 text-cyan-400" />
+              </div>
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 font-bold">
+                TRIVIA
+              </span>
+            </div>
+            <div className="mt-3">
+              <h3 className="text-sm font-bold text-white font-['Orbitron']">
+                {lang === 'si' ? 'දැනුම මිනුම' : lang === 'ta' ? 'வினாடி வினா' : 'Space Trivia'}
+              </h3>
+              <p className="text-[11px] text-slate-400 mt-0.5 line-clamp-1">
+                {lang === 'si' ? 'Gemini AI ප්‍රශ්න' : lang === 'ta' ? 'AI வினாக்கள்' : 'AI Quiz & Confetti'}
+              </p>
+            </div>
+          </motion.button>
+
+          {/* Tile 6: AI Assistant (OpenRouter) */}
           <motion.button
             whileHover={{ y: -4, scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
@@ -342,7 +377,37 @@ export default function App() {
             </div>
           </motion.button>
 
-          {/* Tile 6: Saved Favorites */}
+          {/* Tile 7: ISS Tracker */}
+          <motion.button
+            whileHover={{ y: -4, scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={() => handleTabSwitch('iss')}
+            className={`p-4 rounded-2xl border text-left transition-all duration-200 relative overflow-hidden flex flex-col justify-between ${
+              activeTab === 'iss'
+                ? 'bg-indigo-950/50 border-indigo-400/70 shadow-lg shadow-indigo-950/60'
+                : 'bg-[#0B0F19]/80 hover:bg-slate-900/60 border-slate-800 hover:border-indigo-500/40'
+            }`}
+          >
+            <div className="flex items-center justify-between w-full">
+              <div className="w-9 h-9 rounded-xl bg-indigo-500/15 border border-indigo-500/30 flex items-center justify-center">
+                <Globe2 className="w-5 h-5 text-indigo-400 animate-spin" style={{ animationDuration: '30s' }} />
+              </div>
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-bold flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
+                LIVE
+              </span>
+            </div>
+            <div className="mt-3">
+              <h3 className="text-sm font-bold text-white font-['Orbitron']">
+                {lang === 'si' ? 'ISS ලුහුබැඳීම' : lang === 'ta' ? 'ISS நேரலை' : 'ISS Tracker'}
+              </h3>
+              <p className="text-[11px] text-slate-400 mt-0.5 line-clamp-1">
+                {lang === 'si' ? 'තත්‍ය කාලීන කක්ෂය' : lang === 'ta' ? 'நேரலை சுற்றுப்பாதை' : 'Real-Time Orbit'}
+              </p>
+            </div>
+          </motion.button>
+
+          {/* Tile 8: Saved Favorites */}
           <motion.button
             whileHover={{ y: -4, scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
@@ -474,6 +539,22 @@ export default function App() {
                       handleTabSwitch('missions');
                     }}
                   />
+                </section>
+              </AtmosphericEntryTransition>
+            )}
+
+            {!isTabLoading && displayedTab === 'quiz' && (
+              <AtmosphericEntryTransition key="entry-quiz" tabKey="quiz">
+                <section className="space-y-4">
+                  <SpaceTriviaQuiz lang={lang} />
+                </section>
+              </AtmosphericEntryTransition>
+            )}
+
+            {!isTabLoading && displayedTab === 'iss' && (
+              <AtmosphericEntryTransition key="entry-iss" tabKey="iss">
+                <section className="space-y-4">
+                  <ISSTracker />
                 </section>
               </AtmosphericEntryTransition>
             )}

@@ -238,6 +238,40 @@ export function useFavorites() {
     [savedMissionIds]
   );
 
+  const checkIsFavorite = useCallback(
+    (idOrDate: string) => {
+      if (!idOrDate) return false;
+      const stripped = idOrDate.startsWith('news-') ? idOrDate.replace('news-', '') : idOrDate;
+      return (
+        savedApods.some(item => item.date === idOrDate || item.date === stripped || item.title === idOrDate) ||
+        savedMissionIds.includes(idOrDate) ||
+        savedMissionIds.includes(stripped)
+      );
+    },
+    [savedApods, savedMissionIds]
+  );
+
+  const handleToggleFavorite = useCallback(
+    (item: any) => {
+      if (!item) return false;
+      if (typeof item === 'string') {
+        return toggleMission(item);
+      }
+      const dateKey = item.date || (typeof item.id === 'string' ? item.id.replace('news-', '') : '') || new Date().toISOString().slice(0, 10);
+      const apodData = {
+        date: dateKey,
+        title: item.title || 'Saved Space Item',
+        explanation: item.explanation || item.description || '',
+        url: item.url || item.thumbnail || '',
+        hdurl: item.hdurl || item.hdUrl || item.url || item.thumbnail,
+        media_type: item.media_type || 'image',
+        copyright: item.copyright
+      };
+      return toggleApod(apodData);
+    },
+    [toggleApod, toggleMission]
+  );
+
   return {
     savedApods,
     savedMissionIds,
@@ -254,6 +288,8 @@ export function useFavorites() {
       removeSavedMission(missionId);
       refresh();
     },
+    isFavorite: checkIsFavorite,
+    toggleFavorite: handleToggleFavorite,
     clearAll: () => {
       clearAllFavorites();
       refresh();

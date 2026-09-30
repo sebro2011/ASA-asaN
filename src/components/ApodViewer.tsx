@@ -37,7 +37,25 @@ interface ApodViewerProps {
 }
 
 const FALLBACK_APOD_ENTRIES: Record<string, ApodData> = {
-  default: {
+  '2026-09-30': {
+    date: '2026-09-30',
+    title: 'The Pillars of Creation in Deep Infrared',
+    explanation: 'Towering tendrils of cosmic dust and gas glow brilliantly in this deep infrared composite captured by space observatories. Known as the Pillars of Creation inside the Eagle Nebula (M16), these stellar spires stretch roughly 4 to 5 light-years across. Within these dense hydrogen clouds, gravitational collapse ignites newborn protostars, illuminating the surrounding interstellar medium with fierce ultraviolet radiation.',
+    url: 'https://images.unsplash.com/photo-1462331940025-496dfbfc7564?auto=format&fit=crop&w=2048&q=85',
+    hdurl: 'https://images.unsplash.com/photo-1462331940025-496dfbfc7564?auto=format&fit=crop&w=3840&q=95',
+    media_type: 'image',
+    copyright: 'NASA, ESA, CSA, STScI'
+  },
+  '2026-09-29': {
+    date: '2026-09-29',
+    title: 'Supermassive Black Hole at Galactic Core',
+    explanation: 'Swirling relativistic accretion disks of superheated plasma encircle the gravitational boundary of a supermassive black hole. The intense gravitational lensing bends space-time into luminous photon rings, providing physicists with unprecedented tests of Einstein’s General Relativity.',
+    url: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=2048&q=85',
+    hdurl: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=3840&q=95',
+    media_type: 'image',
+    copyright: 'Event Horizon Telescope / NASA Astrophysics'
+  },
+  '2026-09-28': {
     date: '2026-09-28',
     title: 'Cosmic Latte: The Average Color of the Universe',
     explanation: 'What color is the universe? More precisely, if the entire sky were smeared out, what color would the final mix be? This whimsical question came up when trying to determine what stars are commonplace in nearby galaxies. The answer, depicted here, is a conditionally perceived shade of beige: #FFF8E7. Astronomers computationally averaged the light emitted by 200,000 galaxies of the 2dF Galaxy Redshift Survey to reveal the cosmic spectrum. APOD is moving to science.nasa.gov/apod.',
@@ -45,6 +63,15 @@ const FALLBACK_APOD_ENTRIES: Record<string, ApodData> = {
     hdurl: 'https://images.unsplash.com/photo-1462331940025-496dfbfc7564?auto=format&fit=crop&w=3840&q=95',
     media_type: 'image',
     copyright: 'NASA, ESA, STScI'
+  },
+  default: {
+    date: '2026-09-30',
+    title: 'The Pillars of Creation in Deep Infrared',
+    explanation: 'Towering tendrils of cosmic dust and gas glow brilliantly in this deep infrared composite captured by space observatories. Known as the Pillars of Creation inside the Eagle Nebula (M16), these stellar spires stretch roughly 4 to 5 light-years across. Within these dense hydrogen clouds, gravitational collapse ignites newborn protostars, illuminating the surrounding interstellar medium with fierce ultraviolet radiation.',
+    url: 'https://images.unsplash.com/photo-1462331940025-496dfbfc7564?auto=format&fit=crop&w=2048&q=85',
+    hdurl: 'https://images.unsplash.com/photo-1462331940025-496dfbfc7564?auto=format&fit=crop&w=3840&q=95',
+    media_type: 'image',
+    copyright: 'NASA, ESA, CSA, STScI'
   },
   '2022-07-13': {
     date: '2022-07-13',

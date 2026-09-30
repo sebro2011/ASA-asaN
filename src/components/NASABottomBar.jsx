@@ -3,10 +3,10 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
-import { Image, Newspaper, Box, Bot } from 'lucide-react';
+import { Image, Newspaper, Box, Bot, BrainCircuit } from 'lucide-react';
 
 /**
- * 4 Navigation Tabs with Trilingual Labels
+ * Navigation Tabs with Trilingual Labels
  */
 const TABS = [
   {
@@ -34,6 +34,15 @@ const TABS = [
       en: '3D Lab',
       si: '3D අභ්‍යවකාශය',
       ta: '3D ஆய்வகம்'
+    }
+  },
+  {
+    id: 'quiz',
+    icon: BrainCircuit,
+    labels: {
+      en: 'Quiz',
+      si: 'දැනුම',
+      ta: 'வினா'
     }
   },
   {

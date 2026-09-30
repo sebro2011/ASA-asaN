@@ -12,6 +12,29 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Sans+Sinhala:wght@400;500;600;700&family=Noto+Sans+Tamil:wght@400;500;600;700&family=Orbitron:wght@500;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+    <script>
+      // Defensive polyfill protection for window.fetch getter/setter in strict sandboxes
+      (function() {
+        try {
+          if (typeof window !== 'undefined') {
+            var _activeFetch = window.fetch ? window.fetch.bind(window) : null;
+            try {
+              Object.defineProperty(window, 'fetch', {
+                get: function() { return _activeFetch; },
+                set: function(fn) { _activeFetch = fn; },
+                configurable: true,
+                enumerable: true
+              });
+            } catch (e) {
+              try {
+                window.fetch = _activeFetch;
+              } catch (_) {}
+            }
+          }
+        } catch (err) {}
+      })();
+    </script>
   </head>
   <body class="bg-slate-950 text-slate-100 antialiased selection:bg-cyan-500/30 selection:text-cyan-200">
     <div id="root"></div>
