@@ -10,7 +10,7 @@ interface Space3DViewerProps {
 }
 
 export const Space3DViewer: React.FC<Space3DViewerProps> = ({ lang }) => {
-  const [labMode, setLabMode] = useState<'focused' | 'full' | 'starmap'>('starmap');
+  const [labMode, setLabMode] = useState<'focused' | 'full' | 'starmap'>('focused');
 
   return (
     <div className="w-full space-y-4">

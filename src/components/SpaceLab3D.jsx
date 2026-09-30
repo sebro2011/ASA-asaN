@@ -220,8 +220,10 @@ function useSafeTexture(url, fallbackTexture) {
       url,
       (loadedTex) => {
         if (isMounted) {
+          loadedTex.colorSpace = THREE.SRGBColorSpace;
           loadedTex.wrapS = THREE.RepeatWrapping;
           loadedTex.wrapT = THREE.ClampToEdgeWrapping;
+          loadedTex.needsUpdate = true;
           setTexture(loadedTex);
         }
       },
@@ -240,15 +242,13 @@ function useSafeTexture(url, fallbackTexture) {
 }
 
 // ====================================================
-// 1. MARS MODEL (Memoized, 64-segment geometry)
+// 1. MARS MODEL (Custom Equirectangular Texture Map)
 // ====================================================
 const MarsModel = memo(function MarsModel({ autoRotate, atmosphereHaze, wireframe }) {
   const marsRef = useRef();
   const fallbackTex = useMemo(() => createOptimizedFallbackTexture('mars'), []);
-  const marsMap = useSafeTexture(
-    'https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/planets/mars_1k_color.jpg',
-    fallbackTex
-  );
+  // Use custom local equirectangular Mars surface texture
+  const marsMap = useSafeTexture('/textures/mars.jpg', fallbackTex);
 
   // Cleanup texture on unmount
   useEffect(() => {
@@ -265,32 +265,21 @@ const MarsModel = memo(function MarsModel({ autoRotate, atmosphereHaze, wirefram
 
   return (
     <group ref={marsRef}>
-      {/* 64x64 geometry provides crisp curvature with 75% fewer vertices */}
-      <mesh>
-        <sphereGeometry args={[2.7, 64, 64]} />
+      {/* Interactive 3D textured Mars sphere */}
+      <mesh castShadow receiveShadow>
+        <sphereGeometry args={[2.7, 96, 96]} />
         <meshStandardMaterial
           map={marsMap || fallbackTex}
-          color="#c1440e"
-          roughness={0.85}
-          metalness={0.12}
+          roughness={0.78}
+          metalness={0.08}
           wireframe={wireframe}
         />
       </mesh>
 
-      {/* Polar Ice Caps */}
-      <mesh position={[0, 2.64, 0]}>
-        <sphereGeometry args={[0.55, 24, 12, 0, Math.PI * 2, 0, Math.PI / 3.4]} />
-        <meshStandardMaterial color="#f8fafc" roughness={0.3} wireframe={wireframe} />
-      </mesh>
-      <mesh position={[0, -2.64, 0]} rotation={[Math.PI, 0, 0]}>
-        <sphereGeometry args={[0.42, 24, 12, 0, Math.PI * 2, 0, Math.PI / 3.4]} />
-        <meshStandardMaterial color="#f8fafc" roughness={0.3} wireframe={wireframe} />
-      </mesh>
-
-      {/* Atmospheric Haze */}
+      {/* Atmospheric Dust Haze */}
       {atmosphereHaze && (
         <mesh>
-          <sphereGeometry args={[2.84, 32, 32]} />
+          <sphereGeometry args={[2.82, 36, 36]} />
           <shaderMaterial
             args={[MarsDustShader]}
             side={THREE.BackSide}

@@ -18,6 +18,13 @@
       (function() {
         try {
           if (typeof window !== 'undefined') {
+            // Ignore harmless Vite HMR WebSocket connection messages in sandbox
+            window.addEventListener('error', function(event) {
+              if (event && event.message && (event.message.includes('WebSocket') || event.message.includes('websocket'))) {
+                event.stopImmediatePropagation();
+              }
+            });
+
             var _activeFetch = window.fetch ? window.fetch.bind(window) : null;
             try {
               Object.defineProperty(window, 'fetch', {

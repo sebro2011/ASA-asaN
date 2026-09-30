@@ -400,10 +400,8 @@ function UltraEarth({ autoRotate, atmosphereGlow, wireframe }) {
 function UltraMars({ autoRotate, atmosphereGlow, wireframe }) {
   const marsRef = useRef();
   const fallbackMarsTex = useMemo(() => createProceduralSpaceTexture('mars'), []);
-  const marsMap = useSafeTexture(
-    'https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/planets/mars_1k_color.jpg',
-    fallbackMarsTex
-  );
+  // Use custom local equirectangular Mars surface texture
+  const marsMap = useSafeTexture('/textures/mars.jpg', fallbackMarsTex);
 
   useFrame((_, delta) => {
     if (autoRotate && marsRef.current) {
@@ -418,10 +416,9 @@ function UltraMars({ autoRotate, atmosphereGlow, wireframe }) {
         <sphereGeometry args={[2.5, 96, 96]} />
         <meshStandardMaterial
           map={marsMap || fallbackMarsTex}
-          color="#c1440e"
-          roughness={0.88}
-          metalness={0.12}
-          bumpScale={0.06}
+          roughness={0.78}
+          metalness={0.08}
+          bumpScale={0.05}
           wireframe={wireframe}
         />
       </mesh>
