@@ -179,7 +179,7 @@ const UI_TEXT = {
     playAgain: "Launch New Mission",
     greatJob: "Galactic Commander Rank Achieved!",
     highScore: "High Score",
-    aiPowered: "Gemini AI Space Engine"
+    aiPowered: "NASA Space Intelligence Engine"
   },
   si: {
     title: "අභ්‍යවකාශ දැනුම මිනුම",
@@ -197,7 +197,7 @@ const UI_TEXT = {
     playAgain: "නැවත ආරම්භ කරන්න",
     greatJob: "විශිෂ්ට අභ්‍යවකාශ ගවේෂක ශ්‍රේණිය!",
     highScore: "උපරිම ලකුණු",
-    aiPowered: "Gemini AI බුද්ධිමය පද්ධතිය"
+    aiPowered: "නාසා අභ්‍යවකාශ බුද්ධිමය පද්ධතිය"
   },
   ta: {
     title: "விண்வெளி வினாடி வினா",
@@ -215,7 +215,7 @@ const UI_TEXT = {
     playAgain: "மீண்டும் விளையாடுக",
     greatJob: "விண்வெளி தளபதி தரவரிசை!",
     highScore: "அதிகபட்ச மதிப்பெண்",
-    aiPowered: "Gemini AI இயக்கவியல்"
+    aiPowered: "நாசா விண்வெளி தொழில் நுட்பம்"
   }
 };
 

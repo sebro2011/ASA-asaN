@@ -435,16 +435,17 @@ function UltraMars({ autoRotate, atmosphereGlow, wireframe }) {
         <meshStandardMaterial color="#f8fafc" roughness={0.25} wireframe={wireframe} />
       </mesh>
 
-      {/* Mars Atmospheric Dust Haze */}
+      {/* Translucent Atmospheric Glow Halo Sphere */}
       {atmosphereGlow && (
         <mesh>
-          <sphereGeometry args={[2.65, 48, 48]} />
+          <sphereGeometry args={[2.65, 64, 64]} />
           <meshBasicMaterial
-            color="#fb923c"
+            color="#f97316"
             transparent
-            opacity={0.14}
+            opacity={0.35}
             side={THREE.BackSide}
             blending={THREE.AdditiveBlending}
+            depthWrite={false}
           />
         </mesh>
       )}

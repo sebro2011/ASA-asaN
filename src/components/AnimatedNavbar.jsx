@@ -20,7 +20,9 @@ import {
   Bot,
   Globe2,
   Share2,
-  BrainCircuit
+  BrainCircuit,
+  Target,
+  Globe
 } from 'lucide-react';
 import { useFavorites } from '../utils/favorites';
 
@@ -44,6 +46,36 @@ export const NAV_ITEMS = [
       en: '3D Space Lab',
       si: '3D අභ්‍යවකාශගාරය',
       ta: '3D விண்வெளி ஆய்வகம்'
+    }
+  },
+  {
+    id: 'asteroids',
+    icon: Target,
+    badge: 'LIVE',
+    labels: {
+      en: 'Asteroid Radar',
+      si: 'අභ්‍යවකාශ රේඩාර්',
+      ta: 'சிறுகෝள் ரேடார்'
+    }
+  },
+  {
+    id: 'epic',
+    icon: Globe,
+    badge: 'L1',
+    labels: {
+      en: 'EPIC Earth',
+      si: 'EPIC පෘථිවිය',
+      ta: 'EPIC பூமி'
+    }
+  },
+  {
+    id: 'exoplanets',
+    icon: Sparkles,
+    badge: '3D',
+    labels: {
+      en: 'Exoplanet Lab',
+      si: 'බාහිර ග්‍රහලෝක',
+      ta: 'புறக்கோள்கள்'
     }
   },
   {

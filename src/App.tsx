@@ -17,6 +17,9 @@ import { NewsSection } from './components/NewsSection';
 import { SavedFavorites } from './components/SavedFavorites';
 import { SpaceTriviaQuiz } from './components/SpaceTriviaQuiz';
 import ISSTracker from './components/ISSTracker.jsx';
+import AsteroidRadar from './components/AsteroidRadar.jsx';
+import EPICViewer from './components/EPICViewer.jsx';
+import ExoplanetLab from './components/ExoplanetLab.jsx';
 import { ExportHtmlModal } from './components/ExportHtmlModal';
 import OpenRouterChat from './components/OpenRouterChat.jsx';
 import { useFavorites } from './utils/favorites';
@@ -44,7 +47,7 @@ import {
   Award
 } from 'lucide-react';
 
-type TabKey = 'apod' | '3d' | 'missions' | 'news' | 'saved' | 'assistant' | 'quiz' | 'iss';
+type TabKey = 'apod' | '3d' | 'asteroids' | 'epic' | 'exoplanets' | 'missions' | 'news' | 'saved' | 'assistant' | 'quiz' | 'iss';
 
 export default function App() {
   const { t, i18n } = useTranslation();
@@ -486,6 +489,24 @@ export default function App() {
               </AtmosphericEntryTransition>
             )}
 
+            {!isTabLoading && displayedTab === 'asteroids' && (
+              <AtmosphericEntryTransition key="entry-asteroids" tabKey="asteroids">
+                <AsteroidRadar lang={lang} />
+              </AtmosphericEntryTransition>
+            )}
+
+            {!isTabLoading && displayedTab === 'epic' && (
+              <AtmosphericEntryTransition key="entry-epic" tabKey="epic">
+                <EPICViewer lang={lang} />
+              </AtmosphericEntryTransition>
+            )}
+
+            {!isTabLoading && displayedTab === 'exoplanets' && (
+              <AtmosphericEntryTransition key="entry-exoplanets" tabKey="exoplanets">
+                <ExoplanetLab lang={lang} />
+              </AtmosphericEntryTransition>
+            )}
+
             {!isTabLoading && displayedTab === 'missions' && (
               <AtmosphericEntryTransition key="entry-missions" tabKey="missions">
                 <section className="space-y-4">
@@ -569,7 +590,7 @@ export default function App() {
                         <span>NASA Astrophysics AI Assistant</span>
                       </h2>
                       <p className="text-xs sm:text-sm text-slate-400 mt-1">
-                        Powered by OpenRouter with Llama 3.3 70B & DeepSeek R1 • Fluent in English, සිංහල, and தமிழ்
+                        NASA Deep Space Intelligence & Mission Assistant • Fluent in English, සිංහල, and தமிழ்
                       </p>
                     </div>
                   </div>

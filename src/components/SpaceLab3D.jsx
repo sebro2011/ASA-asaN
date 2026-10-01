@@ -276,19 +276,30 @@ const MarsModel = memo(function MarsModel({ autoRotate, atmosphereHaze, wirefram
         />
       </mesh>
 
-      {/* Atmospheric Dust Haze */}
-      {atmosphereHaze && (
-        <mesh>
-          <sphereGeometry args={[2.82, 36, 36]} />
-          <shaderMaterial
-            args={[MarsDustShader]}
-            side={THREE.BackSide}
-            transparent
-            blending={THREE.AdditiveBlending}
-            depthWrite={false}
-          />
-        </mesh>
-      )}
+      {/* Translucent Atmospheric Glow Halo Sphere (Secondary larger sphere with soft additive blending) */}
+      <mesh>
+        <sphereGeometry args={[2.86, 64, 64]} />
+        <meshBasicMaterial
+          color="#f97316"
+          transparent
+          opacity={0.32}
+          blending={THREE.AdditiveBlending}
+          side={THREE.BackSide}
+          depthWrite={false}
+        />
+      </mesh>
+
+      {/* Outer Atmospheric Limb Fresnel Glow */}
+      <mesh>
+        <sphereGeometry args={[2.92, 64, 64]} />
+        <shaderMaterial
+          args={[MarsDustShader]}
+          side={THREE.BackSide}
+          transparent
+          blending={THREE.AdditiveBlending}
+          depthWrite={false}
+        />
+      </mesh>
     </group>
   );
 });

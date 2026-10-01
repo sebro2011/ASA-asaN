@@ -80,7 +80,7 @@ export const resources = {
       downloadHtmlFile: 'Download .html File',
       openStandaloneTab: 'Open Standalone Preview',
       close: 'Close',
-      footerPoweredBy: 'Powered by Gemini 3.8 Flash • Three.js • React-i18next • NASA Open APIs',
+      footerPoweredBy: 'Trilingual NASA Space Exploration, APOD & Real AR Observation Portal',
     },
   },
   si: {
@@ -161,7 +161,7 @@ export const resources = {
       downloadHtmlFile: '.html ගොනුව බාගන්න',
       openStandaloneTab: 'තනි ගොනුව පෙරදසුන් කරන්න',
       close: 'වසන්න',
-      footerPoweredBy: 'Gemini 3.8 Flash • Three.js • React-i18next • නාසා විවෘත API මඟින් බලගැන්වේ',
+      footerPoweredBy: 'තිරෛභාෂික නාසා අභ්‍යවකාශ ගවේෂණ සහ සැබෑ AR තාරකා නිරීක්ෂණ පද්ධතිය',
     },
   },
   ta: {
@@ -242,7 +242,7 @@ export const resources = {
       downloadHtmlFile: '.html கோப்பைப் பதிவிறக்கு',
       openStandaloneTab: 'முன்னோட்டத்தைத் திற',
       close: 'மூடு',
-      footerPoweredBy: 'Gemini 3.8 Flash • Three.js • React-i18next • நாசா திறந்தநிலை API மூலம் இயங்குகிறது',
+      footerPoweredBy: 'மும்மொழி நாசா விண்வெளி ஆராய்ச்சி மற்றும் நேரலை AR விண்மீன் கண்காணிப்பு அமைப்பு',
     },
   },
 };
