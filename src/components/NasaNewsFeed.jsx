@@ -79,14 +79,16 @@ export default function NasaNewsFeed() {
   // 1. Fetch NASA APOD (Astronomy Picture of the Day)
   const fetchApod = async () => {
     setApodLoading(true);
+    let timeout;
     try {
       // Primary: NASA Open API
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 4000);
+      timeout = setTimeout(() => {
+        try { controller.abort(new DOMException('Request timeout', 'AbortError')); } catch (_) {}
+      }, 4000);
       const res = await fetch('https://api.nasa.gov/planetary/apod?api_key=DEMO_KEY', {
         signal: controller.signal
       });
-      clearTimeout(timeout);
 
       if (res.ok) {
         const data = await res.json();
@@ -95,6 +97,8 @@ export default function NasaNewsFeed() {
       }
     } catch {
       // Secondary fallback
+    } finally {
+      if (timeout) clearTimeout(timeout);
     }
 
     try {
@@ -120,14 +124,16 @@ export default function NasaNewsFeed() {
   // 2. Fetch NASA RSS News Feed
   const fetchNewsFeed = async () => {
     setNewsLoading(true);
+    let timeout;
     try {
       const rssUrl = encodeURIComponent('https://www.nasa.gov/news-release/feed/');
       const endpoint = `https://api.rss2json.com/v1/api.json?rss_url=${rssUrl}`;
       
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 5000);
+      timeout = setTimeout(() => {
+        try { controller.abort(new DOMException('Request timeout', 'AbortError')); } catch (_) {}
+      }, 5000);
       const res = await fetch(endpoint, { signal: controller.signal });
-      clearTimeout(timeout);
 
       if (res.ok) {
         const data = await res.json();
@@ -158,6 +164,8 @@ export default function NasaNewsFeed() {
       }
     } catch {
       // Fallback below
+    } finally {
+      if (timeout) clearTimeout(timeout);
     }
 
     // Fallback news list

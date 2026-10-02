@@ -20,6 +20,15 @@ import ISSTracker from './components/ISSTracker.jsx';
 import AsteroidRadar from './components/AsteroidRadar.jsx';
 import EPICViewer from './components/EPICViewer.jsx';
 import ExoplanetLab from './components/ExoplanetLab.jsx';
+import FloatingVoiceControl from './components/FloatingVoiceControl.jsx';
+import SolarAlertCard from './components/SolarAlertCard.jsx';
+import SolarWeatherAlertCard from './components/SolarWeatherAlertCard.jsx';
+import SpaceQuizModule from './components/SpaceQuizModule.jsx';
+import SmartSpaceQuiz from './components/SmartSpaceQuiz.jsx';
+import MarsImageTagger from './components/MarsImageTagger.jsx';
+import PWAInstallButton from './components/PWAInstallButton';
+import OfflineIndicator from './components/OfflineIndicator';
+import { TrilingualProvider } from './context/TrilingualProvider.jsx';
 import { ExportHtmlModal } from './components/ExportHtmlModal';
 import OpenRouterChat from './components/OpenRouterChat.jsx';
 import { useFavorites } from './utils/favorites';
@@ -98,6 +107,32 @@ export default function App() {
     }, 420);
   };
 
+  // Voice Navigation command dispatcher
+  const handleVoiceNavigate = (target: string) => {
+    if (target === 'mars') {
+      setTargetMissionId('perseverance');
+      handleTabSwitch('missions');
+    } else if (target === 'sun') {
+      handleTabSwitch('missions');
+    } else if (target === 'iss') {
+      handleTabSwitch('iss');
+    } else if (target === 'epic') {
+      handleTabSwitch('epic');
+    } else if (target === 'exoplanets') {
+      handleTabSwitch('exoplanets');
+    } else if (target === 'asteroids') {
+      handleTabSwitch('asteroids');
+    } else if (target === 'apod') {
+      handleTabSwitch('apod');
+    } else if (target === 'quiz') {
+      handleTabSwitch('quiz');
+    }
+  };
+
+  const handleVoiceCameraAction = (action: string) => {
+    window.dispatchEvent(new CustomEvent('nasa-camera-action', { detail: { action } }));
+  };
+
   return (
     <div className="min-h-screen bg-[#0B0F19] text-slate-100 flex flex-col font-sans selection:bg-cyan-500/30 selection:text-cyan-200 relative">
       {/* High-Performance 60FPS Cosmic Starfield & Meteor Particle Background */}
@@ -132,6 +167,8 @@ export default function App() {
             <span className="hidden lg:inline text-slate-400">
               AI ENGINE: <span className="text-emerald-300 font-semibold">GEMINI 2.5 FLASH</span>
             </span>
+            {/* PWA In-App Install Button */}
+            <PWAInstallButton lang={lang} />
             <button
               onClick={() => setIsExportModalOpen(true)}
               className="text-amber-400 hover:text-amber-300 font-medium flex items-center gap-1 transition"
@@ -509,7 +546,7 @@ export default function App() {
 
             {!isTabLoading && displayedTab === 'missions' && (
               <AtmosphericEntryTransition key="entry-missions" tabKey="missions">
-                <section className="space-y-4">
+                <section className="space-y-6">
                   <div className="border-b border-slate-800/80 pb-3">
                     <h2 className="text-xl sm:text-2xl font-bold text-white flex items-center gap-2.5 font-['Orbitron']">
                       <Rocket className="w-6 h-6 text-cyan-400" />
@@ -524,6 +561,13 @@ export default function App() {
                     lang={lang} 
                     initialMissionId={targetMissionId}
                   />
+
+                  {/* Mars Rover Surface Image Hotspot Tagger */}
+                  <MarsImageTagger />
+
+                  {/* Solar Weather AI Alert System */}
+                  <SolarWeatherAlertCard />
+                  <SolarAlertCard />
                 </section>
               </AtmosphericEntryTransition>
             )}
@@ -566,7 +610,10 @@ export default function App() {
 
             {!isTabLoading && displayedTab === 'quiz' && (
               <AtmosphericEntryTransition key="entry-quiz" tabKey="quiz">
-                <section className="space-y-4">
+                <section className="space-y-6">
+                  {/* Smart Interactive Space Flight Quiz */}
+                  <SmartSpaceQuiz />
+                  <SpaceQuizModule lang={lang} />
                   <SpaceTriviaQuiz lang={lang} />
                 </section>
               </AtmosphericEntryTransition>
@@ -663,6 +710,17 @@ export default function App() {
           </div>
         </div>
       </footer>
+
+      {/* Offline Status & Cached Telemetry Indicator */}
+      <OfflineIndicator lang={lang} />
+
+      {/* Voice-Controlled 3D Navigation Hook Floating Mic Overlay */}
+      <FloatingVoiceControl
+        onNavigate={handleVoiceNavigate}
+        onCameraAction={handleVoiceCameraAction}
+        lang={lang === 'si' ? 'si-LK' : lang === 'ta' ? 'ta-IN' : 'en-US'}
+        className="bottom-24 sm:bottom-24 right-5"
+      />
 
       {/* Responsive iOS-Style Bottom Navigation Bar with Spring Bounce Animation */}
       <NASABottomBar

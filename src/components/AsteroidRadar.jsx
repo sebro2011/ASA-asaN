@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import AsteroidRiskBadge from './AsteroidRiskBadge.jsx';
 import { 
   Radio, 
   AlertTriangle, 
@@ -512,6 +513,9 @@ export default function AsteroidRadar({ lang = 'en' }) {
                   <span className="text-emerald-400 block text-[10px] mt-0.5">Target: {selectedAsteroid.orbitingBody}</span>
                 </div>
               </div>
+
+              {/* Asteroid Hazard Risk Score Engine Badge */}
+              <AsteroidRiskBadge asteroid={selectedAsteroid} />
 
               {/* Size Comparison Box */}
               <div className="p-4 rounded-2xl bg-indigo-950/30 border border-indigo-500/30 text-xs font-mono space-y-1">

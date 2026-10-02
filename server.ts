@@ -4,6 +4,7 @@ import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { GoogleGenAI, Type } from '@google/genai';
+import { generateLocalSpaceResponse } from './src/utils/spaceLocalAiEngine.js';
 
 dotenv.config();
 
@@ -134,12 +135,14 @@ app.get('/api/apod', async (req, res) => {
     ? `https://api.nasa.gov/planetary/apod?api_key=${nasaApiKey}&date=${date}`
     : `https://api.nasa.gov/planetary/apod?api_key=${nasaApiKey}`;
 
+  let timeout: any;
   try {
     const controller = new AbortController();
     // Fast 3.5s timeout for high responsiveness
-    const timeout = setTimeout(() => controller.abort(), 3500);
+    timeout = setTimeout(() => {
+      try { controller.abort(new DOMException('Request timeout', 'AbortError')); } catch (_) {}
+    }, 3500);
     const nasaRes = await fetch(url, { signal: controller.signal });
-    clearTimeout(timeout);
 
     if (nasaRes.ok) {
       const data = await nasaRes.json();
@@ -151,6 +154,8 @@ app.get('/api/apod', async (req, res) => {
     }
   } catch (err: any) {
     // Gracefully handle network timeouts or DEMO_KEY rate limits without noisy warnings
+  } finally {
+    if (timeout) clearTimeout(timeout);
   }
 
   // Graceful fallback from curated astronomical archive
@@ -165,11 +170,13 @@ app.get('/api/asteroids/neows', async (req, res) => {
   const todayStr = new Date().toISOString().split('T')[0];
   const url = `https://api.nasa.gov/neo/rest/v1/feed?start_date=${todayStr}&api_key=${nasaApiKey}`;
 
+  let timeout: any;
   try {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 4000);
+    timeout = setTimeout(() => {
+      try { controller.abort(new DOMException('Request timeout', 'AbortError')); } catch (_) {}
+    }, 4000);
     const nasaRes = await fetch(url, { signal: controller.signal });
-    clearTimeout(timeout);
 
     if (nasaRes.ok) {
       const data = await nasaRes.json();
@@ -177,6 +184,8 @@ app.get('/api/asteroids/neows', async (req, res) => {
     }
   } catch (err: any) {
     // Gracefully handle network timeouts or DEMO_KEY rate limits
+  } finally {
+    if (timeout) clearTimeout(timeout);
   }
 
   // Fallback curated NeoWs payload with realistic asteroids for maximum UI reliability
@@ -340,11 +349,13 @@ app.get('/api/epic', async (req, res) => {
   const nasaApiKey = process.env.NASA_API_KEY || 'DEMO_KEY';
   const url = `https://api.nasa.gov/EPIC/api/natural?api_key=${nasaApiKey}`;
 
+  let timeout: any;
   try {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 4000);
+    timeout = setTimeout(() => {
+      try { controller.abort(new DOMException('Request timeout', 'AbortError')); } catch (_) {}
+    }, 4000);
     const nasaRes = await fetch(url, { signal: controller.signal });
-    clearTimeout(timeout);
 
     if (nasaRes.ok) {
       const data = await nasaRes.json();
@@ -373,6 +384,8 @@ app.get('/api/epic', async (req, res) => {
     }
   } catch (err: any) {
     // Gracefully fallback to high-quality DSCOVR EPIC Earth imagery sequence
+  } finally {
+    if (timeout) clearTimeout(timeout);
   }
 
   // Fallback EPIC frames with real DSCOVR earth imagery & L1 orbital telemetry
@@ -454,11 +467,13 @@ app.get('/api/exoplanets', async (req, res) => {
   const query = `select pl_name,hostname,pl_rade,pl_masse,pl_orbper,pl_eqt,sy_dist,disc_year,disc_facility from ps where default_flag=1 and pl_rade is not null order by sy_dist asc`;
   const tapUrl = `https://exoplanetarchive.ipac.caltech.edu/TAP/sync?query=${encodeURIComponent(query)}&format=json`;
 
+  let timeout: any;
   try {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 4000);
+    timeout = setTimeout(() => {
+      try { controller.abort(new DOMException('Request timeout', 'AbortError')); } catch (_) {}
+    }, 4000);
     const tapRes = await fetch(tapUrl, { signal: controller.signal });
-    clearTimeout(timeout);
 
     if (tapRes.ok) {
       const data = await tapRes.json();
@@ -612,45 +627,41 @@ Explanation to translate: "${explanation}"`;
 
     let parsedResult: { title: string; explanation: string } | null = null;
 
-    // Attempt Gemini call with 1 retry on 503
-    for (let attempt = 0; attempt < 2; attempt++) {
-      try {
-        const response = await ai.models.generateContent({
-          model: 'gemini-3.8-flash',
-          contents: prompt,
-          config: {
-            responseMimeType: 'application/json',
-            responseSchema: {
-              type: Type.OBJECT,
-              properties: {
-                title: {
-                  type: Type.STRING,
-                  description: `Translated title in ${targetName}`
-                },
-                explanation: {
-                  type: Type.STRING,
-                  description: `Translated explanation in ${targetName}`
-                }
+    // Attempt Gemini call with fast 2.5s timeout; fall back instantly on high demand/503
+    try {
+      const geminiCall = ai.models.generateContent({
+        model: 'gemini-3.8-flash',
+        contents: prompt,
+        config: {
+          responseMimeType: 'application/json',
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              title: {
+                type: Type.STRING,
+                description: `Translated title in ${targetName}`
               },
-              required: ['title', 'explanation']
-            }
+              explanation: {
+                type: Type.STRING,
+                description: `Translated explanation in ${targetName}`
+              }
+            },
+            required: ['title', 'explanation']
           }
-        });
+        }
+      });
 
-        const parsed = JSON.parse(response.text?.trim() || '{}');
-        if (parsed.title && parsed.explanation) {
-          parsedResult = parsed;
-          break;
-        }
-      } catch (geminiErr: any) {
-        const isQuota = geminiErr?.message?.includes('429') || geminiErr?.message?.includes('RESOURCE_EXHAUSTED');
-        if (!isQuota) {
-          console.info(`Gemini translation attempt ${attempt + 1} note:`, geminiErr.message);
-        }
-        if (attempt === 0) {
-          await new Promise(r => setTimeout(r, 600));
-        }
+      const timeoutCall = new Promise<never>((_, reject) => 
+        setTimeout(() => reject(new Error('Gemini timeout')), 2500)
+      );
+
+      const response: any = await Promise.race([geminiCall, timeoutCall]);
+      const parsed = JSON.parse(response?.text?.trim() || '{}');
+      if (parsed.title && parsed.explanation) {
+        parsedResult = parsed;
       }
+    } catch {
+      // Gracefully and silently fall through to smart astronomical translation without noisy stderr logs
     }
 
     if (parsedResult) {
@@ -662,8 +673,7 @@ Explanation to translate: "${explanation}"`;
     const fallbackTranslation = generateSmartAstronomicalTranslation(title, explanation, targetLang);
     translationCache.set(cacheKey, fallbackTranslation);
     return res.json({ success: true, data: fallbackTranslation });
-  } catch (error: any) {
-    console.error('Translation error:', error);
+  } catch {
     const fallback = generateSmartAstronomicalTranslation(req.body.title || '', req.body.explanation || '', req.body.targetLang || 'si');
     return res.json({ success: true, data: fallback });
   }
@@ -978,6 +988,7 @@ app.get('/api/nasa-archive', async (req, res) => {
   // Try live NASA Image API fetch when query is specific
   let liveItems: any[] = [];
   if (searchQuery || yearQuery) {
+    let timeout: any;
     try {
       const q = encodeURIComponent(searchQuery || 'NASA space exploration');
       const yStart = yearQuery ? yearQuery : 2015;
@@ -985,9 +996,10 @@ app.get('/api/nasa-archive', async (req, res) => {
       const apiUrl = `https://images-api.nasa.gov/search?q=${q}&media_type=image&year_start=${yStart}&year_end=${yEnd}&page=${page}`;
       
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 4000);
+      timeout = setTimeout(() => {
+        try { controller.abort(new DOMException('Request timeout', 'AbortError')); } catch (_) {}
+      }, 4000);
       const apiRes = await fetch(apiUrl, { signal: controller.signal });
-      clearTimeout(timeout);
 
       if (apiRes.ok) {
         const json = await apiRes.json();
@@ -1018,6 +1030,8 @@ app.get('/api/nasa-archive', async (req, res) => {
       }
     } catch (err: any) {
       // Gracefully fall back to curated archive
+    } finally {
+      if (timeout) clearTimeout(timeout);
     }
   }
 
@@ -1067,12 +1081,14 @@ app.get('/api/apod-range', async (req, res) => {
   const endDate = (req.query.end_date as string) || '2026-09-30';
   const nasaApiKey = process.env.NASA_API_KEY || 'DEMO_KEY';
 
+  let timeout: any;
   try {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 4500);
+    timeout = setTimeout(() => {
+      try { controller.abort(new DOMException('Request timeout', 'AbortError')); } catch (_) {}
+    }, 4500);
     const apiUrl = `https://api.nasa.gov/planetary/apod?api_key=${nasaApiKey}&start_date=${startDate}&end_date=${endDate}`;
     const apiRes = await fetch(apiUrl, { signal: controller.signal });
-    clearTimeout(timeout);
 
     if (apiRes.ok) {
       const list = await apiRes.json();
@@ -1114,11 +1130,13 @@ let lastKnownIssData = {
 };
 
 app.get('/api/iss', async (req, res) => {
+  let timeout: any;
   try {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 4000);
+    timeout = setTimeout(() => {
+      try { controller.abort(new DOMException('Request timeout', 'AbortError')); } catch (_) {}
+    }, 4000);
     const apiRes = await fetch('https://api.wheretheiss.at/v1/satellites/25544', { signal: controller.signal });
-    clearTimeout(timeout);
     if (apiRes.ok) {
       const data = await apiRes.json();
       lastKnownIssData = data;
@@ -1126,6 +1144,8 @@ app.get('/api/iss', async (req, res) => {
     }
   } catch (err: any) {
     // Return last known with updated simulated progression
+  } finally {
+    if (timeout) clearTimeout(timeout);
   }
   // Smoothly progress orbital coordinates if external API is unreachable or rate-limited
   lastKnownIssData.longitude = ((lastKnownIssData.longitude + 0.38 + 180) % 360) - 180;
@@ -1700,158 +1720,33 @@ Use clear, scientifically precise vocabulary in ${targetLang} with Sinhala/Tamil
   }
 });
 
-// OpenRouter AI Chat proxy endpoint (supports Llama 3.3 70B & DeepSeek R1)
-app.post('/api/openrouter/chat', async (req, res) => {
-  const { 
-    messages, 
-    model = 'meta-llama/llama-3.3-70b-instruct',
-    temperature = 0.7,
-    max_tokens = 1024 
-  } = req.body;
+// Standalone Keyless NASA Local AI Chat Endpoint (Zero External Dependencies)
+const handleLocalSpaceChat = (req: express.Request, res: express.Response) => {
+  const { messages, message, prompt } = req.body;
+  const userQuery = message || prompt || (Array.isArray(messages) ? messages[messages.length - 1]?.content : '') || '';
+  
+  const result = generateLocalSpaceResponse(userQuery);
 
-  if (!messages || !Array.isArray(messages)) {
-    return res.status(400).json({ error: 'Messages array is required' });
-  }
-
-  // Normalize model slug if deprecated free suffix is provided
-  let activeModel = model;
-  if (activeModel === 'meta-llama/llama-3.3-70b-instruct:free') {
-    activeModel = 'meta-llama/llama-3.3-70b-instruct';
-  }
-
-  const clientApiKey = req.headers.authorization?.replace('Bearer ', '') || req.body.apiKey;
-  const apiKey = clientApiKey || process.env.OPENROUTER_API_KEY;
-
-  // If an OpenRouter API key is available, call OpenRouter directly
-  if (apiKey) {
-    try {
-      let openRouterRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`,
-          'HTTP-Referer': process.env.APP_URL || 'https://nasa-space-explorer.app',
-          'X-Title': 'NASA Space Explorer'
-        },
-        body: JSON.stringify({
-          model: activeModel,
-          messages,
-          temperature,
-          max_tokens
-        })
-      });
-
-      // If OpenRouter returns 404 with a slug suggestion, retry with the recommended model
-      if (!openRouterRes.ok && openRouterRes.status === 404) {
-        const errJson = await openRouterRes.json().catch(() => ({}));
-        const errMsg = errJson?.error?.message || '';
-        
-        let alternateModel = null;
-        if (errMsg.includes('meta-llama/llama-3.3-70b-instruct')) {
-          alternateModel = 'meta-llama/llama-3.3-70b-instruct';
-        } else if (activeModel.includes(':free')) {
-          alternateModel = activeModel.replace(':free', '');
-        } else {
-          alternateModel = 'deepseek/deepseek-r1:free';
-        }
-
-        if (alternateModel && alternateModel !== activeModel) {
-          console.log(`Retrying OpenRouter with alternate slug: ${alternateModel}`);
-          openRouterRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${apiKey}`,
-              'HTTP-Referer': process.env.APP_URL || 'https://nasa-space-explorer.app',
-              'X-Title': 'NASA Space Explorer'
-            },
-            body: JSON.stringify({
-              model: alternateModel,
-              messages,
-              temperature,
-              max_tokens
-            })
-          });
-          activeModel = alternateModel;
+  return res.json({
+    id: `local-ai-${Date.now()}`,
+    model: 'NASA-Local-Space-Engine (Standalone)',
+    provider: 'local-standalone',
+    choices: [
+      {
+        message: {
+          role: 'assistant',
+          content: result.text
         }
       }
+    ],
+    intent: result.intent,
+    lang: result.lang,
+    suggestions: result.suggestions
+  });
+};
 
-      if (openRouterRes.ok) {
-        const data = await openRouterRes.json();
-        return res.json({ ...data, provider: 'openrouter', model: activeModel });
-      } else {
-        const errText = await openRouterRes.text();
-        console.warn(`OpenRouter API responded with ${openRouterRes.status}:`, errText);
-      }
-    } catch (err: any) {
-      console.warn('OpenRouter API request failed:', err.message);
-    }
-  }
-
-  // Graceful fallback to server-side Gemini if OpenRouter is unreachable or unconfigured
-  try {
-    const systemInstruction = messages.find((m: any) => m.role === 'system')?.content || 
-      'You are a NASA astrophysics and space exploration assistant fluent in English, Sinhala (සිංහල), and Tamil (தமிழ்).';
-    
-    const conversation = messages
-      .filter((m: any) => m.role !== 'system')
-      .map((m: any) => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`)
-      .join('\n\n');
-
-    const geminiPromise = ai.models.generateContent({
-      model: 'gemini-3.8-flash',
-      contents: `${systemInstruction}\n\nHere is the ongoing conversation. Respond as the NASA astrophysics assistant:\n\n${conversation}\n\nAssistant:`,
-    });
-
-    const timeoutPromise = new Promise((_, reject) => 
-      setTimeout(() => reject(new Error('Gemini generation timed out')), 4000)
-    );
-
-    const response: any = await Promise.race([geminiPromise, timeoutPromise]);
-
-    const replyText = response.text || 'I could not synthesize a response at this moment. Please check telemetry.';
-    return res.json({
-      id: `chat-${Date.now()}`,
-      model: `${activeModel} (via Gemini fallback)`,
-      choices: [
-        {
-          message: {
-            role: 'assistant',
-            content: replyText
-          }
-        }
-      ],
-      provider: 'gemini-fallback'
-    });
-  } catch (err: any) {
-    console.warn('Gemini chat generation failed or rate-limited:', err.message);
-
-    const lastUserQuery = (messages[messages.length - 1]?.content || '').toLowerCase();
-    let smartFallback = 'A pulsar is a highly magnetized, rapidly rotating neutron star that emits beams of electromagnetic radiation out of its magnetic poles. As it rotates, these beams sweep across space like a cosmic lighthouse, producing periodic pulses observed by radio and X-ray telescopes.';
-
-    if (lastUserQuery.includes('artemis') || lastUserQuery.includes('moon') || lastUserQuery.includes('සඳ')) {
-      smartFallback = 'NASA’s Artemis program is landing the first woman and first person of color on the Moon using the Space Launch System (SLS) rocket and Orion spacecraft, establishing sustainable lunar base camps and orbiting Gateway space station.';
-    } else if (lastUserQuery.includes('webb') || lastUserQuery.includes('jwst') || lastUserQuery.includes('දුරේක්ෂ')) {
-      smartFallback = 'The James Webb Space Telescope uses infrared sensors and a 6.5-meter gold-plated beryllium mirror to peer through cosmic dust, observing the very first stars and galaxies that formed over 13.5 billion years ago.';
-    } else if (lastUserQuery.includes('black hole') || lastUserQuery.includes('කළු කුහර') || lastUserQuery.includes('கருந்துளை')) {
-      smartFallback = 'A black hole is an astronomical object with a gravitational pull so intense that nothing, not even light, can escape from beyond its boundary known as the event horizon.';
-    }
-
-    return res.json({
-      id: `fallback-${Date.now()}`,
-      model: `${model} (NASA Knowledge Link)`,
-      choices: [
-        {
-          message: {
-            role: 'assistant',
-            content: smartFallback
-          }
-        }
-      ],
-      provider: 'nasa-knowledge-base'
-    });
-  }
-});
+app.post('/api/openrouter/chat', handleLocalSpaceChat);
+app.post('/api/chat', handleLocalSpaceChat);
 
 // Setup Vite middleware in dev or static files in production
 async function startServer() {

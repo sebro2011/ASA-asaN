@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { SupportedLanguage, translations } from '../i18n/translations';
 import { useFavorites } from '../utils/favorites';
 import { CustomApodDatePicker } from './CustomApodDatePicker';
+import APODStoryteller from './APODStoryteller.jsx';
 import { 
   Calendar, 
   Sparkles, 
@@ -191,14 +192,16 @@ export const ApodViewer: React.FC<ApodViewerProps> = ({
     }
 
     // Tier 1: Try local backend route
+    let timeout1: any;
     try {
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 4000);
+      timeout1 = setTimeout(() => {
+        try { controller.abort(new DOMException('Request timeout', 'AbortError')); } catch (_) {}
+      }, 4000);
       const res = await fetch(`/api/apod${date ? `?date=${date}` : ''}`, {
         headers: { Accept: 'application/json' },
         signal: controller.signal
       });
-      clearTimeout(timeout);
 
       if (res.ok) {
         const json = await res.json();
@@ -210,17 +213,21 @@ export const ApodViewer: React.FC<ApodViewerProps> = ({
       }
     } catch {
       // Fall through to next tier
+    } finally {
+      if (timeout1) clearTimeout(timeout1);
     }
 
     // Tier 2: Try direct NASA Open API
+    let timeout2: any;
     try {
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 4000);
+      timeout2 = setTimeout(() => {
+        try { controller.abort(new DOMException('Request timeout', 'AbortError')); } catch (_) {}
+      }, 4000);
       const directUrl = date 
         ? `https://api.nasa.gov/planetary/apod?api_key=DEMO_KEY&date=${date}`
         : `https://api.nasa.gov/planetary/apod?api_key=DEMO_KEY`;
       const res = await fetch(directUrl, { signal: controller.signal });
-      clearTimeout(timeout);
 
       if (res.ok) {
         const data = await res.json();
@@ -232,6 +239,8 @@ export const ApodViewer: React.FC<ApodViewerProps> = ({
       }
     } catch {
       // Fall through to next tier
+    } finally {
+      if (timeout2) clearTimeout(timeout2);
     }
 
     // Tier 3: Pre-seeded curated archival data
@@ -251,49 +260,60 @@ export const ApodViewer: React.FC<ApodViewerProps> = ({
     const cacheKey = `${lang}:${apodData.title.slice(0, 30)}`;
     if (cachedTranslations[cacheKey]) return;
 
-    // Trigger Gemini dynamic translation with fallback
+    // Trigger dynamic translation with fallback
     const performTranslation = async () => {
       setIsTranslating(true);
+      let timeout: any;
       try {
         const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 6000);
-        const res = await fetch('/api/translate', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            title: apodData.title,
-            explanation: apodData.explanation,
-            targetLang: lang
-          }),
-          signal: controller.signal
-        });
-        clearTimeout(timeout);
+        timeout = setTimeout(() => {
+          try { controller.abort(); } catch (_) {}
+        }, 5000);
 
-        if (res.ok) {
-          const json = await res.json();
-          if (json.success && json.data) {
-            setCachedTranslations(prev => ({
-              ...prev,
-              [cacheKey]: json.data
-            }));
-            setIsTranslating(false);
-            return;
+        try {
+          const res = await fetch('/api/translate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              title: apodData.title,
+              explanation: apodData.explanation,
+              targetLang: lang
+            }),
+            signal: controller.signal
+          });
+
+          if (res.ok) {
+            const json = await res.json();
+            if (json.success && json.data) {
+              setCachedTranslations(prev => ({
+                ...prev,
+                [cacheKey]: json.data
+              }));
+              setIsTranslating(false);
+              return;
+            }
           }
+        } catch {
+          // Graceful fallback below
         }
       } catch {
         // Fallback translation
+      } finally {
+        if (timeout) clearTimeout(timeout);
       }
 
-      // Offline scientific translation generator
-      const localTrans = generateLocalTranslation(apodData.title, apodData.explanation, lang);
-      setCachedTranslations(prev => ({
-        ...prev,
-        [cacheKey]: localTrans
-      }));
+      try {
+        // Offline scientific translation generator
+        const localTrans = generateLocalTranslation(apodData.title, apodData.explanation, lang);
+        setCachedTranslations(prev => ({
+          ...prev,
+          [cacheKey]: localTrans
+        }));
+      } catch (_) {}
       setIsTranslating(false);
     };
 
-    performTranslation();
+    performTranslation().catch(() => {});
   }, [apodData, lang]);
 
   // Current display text
@@ -633,6 +653,13 @@ export const ApodViewer: React.FC<ApodViewerProps> = ({
               <span>{copied ? t.copiedText : t.copyText}</span>
             </button>
           </div>
+
+          {/* AI APOD Audio Storyteller */}
+          <APODStoryteller 
+            title={displayTitle} 
+            explanation={displayExplanation} 
+            lang={lang === 'si' ? 'si-LK' : lang === 'ta' ? 'ta-IN' : 'en-US'} 
+          />
 
           {/* Explanation Text */}
           <div className="p-5 rounded-2xl bg-slate-950/60 border border-slate-800/80 text-slate-300 text-base md:text-lg leading-relaxed whitespace-pre-line font-normal">

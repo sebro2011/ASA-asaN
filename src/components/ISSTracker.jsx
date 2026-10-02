@@ -326,11 +326,13 @@ export default function ISSTracker({ className = '' }) {
     });
 
     // If active satellite is ISS, attempt live NORAD real-time ping
+    let timeout;
     try {
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 3200);
+      timeout = setTimeout(() => {
+        try { controller.abort(new DOMException('Request timeout', 'AbortError')); } catch (_) {}
+      }, 3200);
       const res = await fetch('/api/iss', { signal: controller.signal });
-      clearTimeout(timeout);
       if (res.ok) {
         const json = await res.json();
         if (json.data && typeof json.data.latitude === 'number') {
@@ -342,7 +344,9 @@ export default function ISSTracker({ className = '' }) {
           };
         }
       }
-    } catch {}
+    } catch {} finally {
+      if (timeout) clearTimeout(timeout);
+    }
 
     setSatPositions(updatedPositions);
 

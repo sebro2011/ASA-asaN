@@ -1,0 +1,39 @@
+{
+  "id": "/",
+  "name": "NASA Learn Space Explorer",
+  "short_name": "NASALearn",
+  "description": "Trilingual NASA space exploration app featuring real-time APOD, 3D orbits, rover missions, and full offline caching.",
+  "theme_color": "#0B0F19",
+  "background_color": "#0B0F19",
+  "display": "standalone",
+  "orientation": "any",
+  "start_url": "/",
+  "scope": "/",
+  "categories": ["education", "science", "astronomy"],
+  "icons": [
+    {
+      "src": "/pwa-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/pwa-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/pwa-maskable-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
