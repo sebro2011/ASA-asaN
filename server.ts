@@ -130,7 +130,7 @@ app.get('/api/apod', async (req, res) => {
     return res.json({ success: true, data: apodCache.get(date), cached: true });
   }
 
-  const nasaApiKey = process.env.NASA_API_KEY || 'DEMO_KEY';
+  const nasaApiKey = process.env.NEXT_PUBLIC_NASA_API_KEY || process.env.NASA_API_KEY || 'DEMO_KEY';
   const url = date 
     ? `https://api.nasa.gov/planetary/apod?api_key=${nasaApiKey}&date=${date}`
     : `https://api.nasa.gov/planetary/apod?api_key=${nasaApiKey}`;
@@ -166,7 +166,7 @@ app.get('/api/apod', async (req, res) => {
 
 // NASA NeoWs Near-Earth Object Asteroids Endpoint
 app.get('/api/asteroids/neows', async (req, res) => {
-  const nasaApiKey = process.env.NASA_API_KEY || 'DEMO_KEY';
+  const nasaApiKey = process.env.NEXT_PUBLIC_NASA_API_KEY || process.env.NASA_API_KEY || 'DEMO_KEY';
   const todayStr = new Date().toISOString().split('T')[0];
   const url = `https://api.nasa.gov/neo/rest/v1/feed?start_date=${todayStr}&api_key=${nasaApiKey}`;
 
@@ -346,7 +346,7 @@ app.get('/api/asteroids/neows', async (req, res) => {
 
 // NASA EPIC Full-Disc Earth Imagery Endpoint
 app.get('/api/epic', async (req, res) => {
-  const nasaApiKey = process.env.NASA_API_KEY || 'DEMO_KEY';
+  const nasaApiKey = process.env.NEXT_PUBLIC_NASA_API_KEY || process.env.NASA_API_KEY || 'DEMO_KEY';
   const url = `https://api.nasa.gov/EPIC/api/natural?api_key=${nasaApiKey}`;
 
   let timeout: any;
@@ -1079,7 +1079,7 @@ app.get('/api/nasa-archive', async (req, res) => {
 app.get('/api/apod-range', async (req, res) => {
   const startDate = (req.query.start_date as string) || '2024-01-01';
   const endDate = (req.query.end_date as string) || '2026-09-30';
-  const nasaApiKey = process.env.NASA_API_KEY || 'DEMO_KEY';
+  const nasaApiKey = process.env.NEXT_PUBLIC_NASA_API_KEY || process.env.NASA_API_KEY || 'DEMO_KEY';
 
   let timeout: any;
   try {

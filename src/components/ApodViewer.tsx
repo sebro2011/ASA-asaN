@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { SupportedLanguage, translations } from '../i18n/translations';
 import { useFavorites } from '../utils/favorites';
+import { buildNasaApodUrl } from '../utils/nasaApiClient';
 import { CustomApodDatePicker } from './CustomApodDatePicker';
 import APODStoryteller from './APODStoryteller.jsx';
 import { 
@@ -224,9 +225,7 @@ export const ApodViewer: React.FC<ApodViewerProps> = ({
       timeout2 = setTimeout(() => {
         try { controller.abort(new DOMException('Request timeout', 'AbortError')); } catch (_) {}
       }, 4000);
-      const directUrl = date 
-        ? `https://api.nasa.gov/planetary/apod?api_key=DEMO_KEY&date=${date}`
-        : `https://api.nasa.gov/planetary/apod?api_key=DEMO_KEY`;
+      const directUrl = buildNasaApodUrl(date);
       const res = await fetch(directUrl, { signal: controller.signal });
 
       if (res.ok) {

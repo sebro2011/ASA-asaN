@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { VoiceSearchInput } from './VoiceSearchInput';
+import { buildNasaApodUrl } from '../utils/nasaApiClient';
 import { 
   Sparkles, 
   Newspaper, 
@@ -86,7 +87,8 @@ export default function NasaNewsFeed() {
       timeout = setTimeout(() => {
         try { controller.abort(new DOMException('Request timeout', 'AbortError')); } catch (_) {}
       }, 4000);
-      const res = await fetch('https://api.nasa.gov/planetary/apod?api_key=DEMO_KEY', {
+      const directUrl = buildNasaApodUrl();
+      const res = await fetch(directUrl, {
         signal: controller.signal
       });
 
