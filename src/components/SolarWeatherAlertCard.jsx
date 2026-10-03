@@ -97,30 +97,31 @@ export function SolarWeatherAlertCard({ className = '' }) {
 
   return (
     <LiquidGlassCard 
-      className={`p-6 space-y-5 font-sans ${className}`}
+      className={`px-5 py-4 max-h-[250px] space-y-3 font-sans ${className}`}
       edgeHighlight={true}
       hoverable={true}
+      padding="py-4 px-5"
     >
       {/* Header with Live Pulsing Badge */}
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 pb-4">
-        <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 pb-2.5">
+        <div className="flex items-center gap-2.5">
           <div 
-            className="p-3 rounded-2xl flex items-center justify-center shadow-lg transition-colors"
+            className="p-2 rounded-xl flex items-center justify-center shadow-lg transition-colors shrink-0"
             style={{ backgroundColor: `${activeScale.color}20`, color: activeScale.color }}
           >
-            <Sun className="w-6 h-6 animate-spin" style={{ animationDuration: '24s' }} />
+            <Sun className="w-5 h-5 animate-spin" style={{ animationDuration: '24s' }} />
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h3 className="font-['Orbitron'] font-bold text-white text-base md:text-lg">
+              <h3 className="font-['Orbitron'] font-bold text-white text-sm md:text-base leading-tight">
                 NASA DONKI Space Weather Alert
               </h3>
-              <span className="relative flex h-2.5 w-2.5">
+              <span className="relative flex h-2 w-2">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75" />
-                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-cyan-500" />
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-cyan-500" />
               </span>
             </div>
-            <p className="text-xs text-slate-400 font-mono">
+            <p className="text-[10px] text-slate-400 font-mono">
               Planetary Kp Geomagnetic Storm Index & Aurora Forecast
             </p>
           </div>
@@ -128,7 +129,7 @@ export function SolarWeatherAlertCard({ className = '' }) {
 
         <div className="flex items-center gap-2">
           <span
-            className="px-3.5 py-1.5 rounded-full text-xs font-mono font-bold uppercase tracking-wider border shadow-md"
+            className="px-2.5 py-1 rounded-full text-[10px] font-mono font-bold uppercase tracking-wider border shadow-md"
             style={{
               backgroundColor: `${activeScale.color}18`,
               color: activeScale.color,
@@ -141,76 +142,56 @@ export function SolarWeatherAlertCard({ className = '' }) {
         </div>
       </div>
 
-      {/* Main Alert Banner */}
-      <div 
-        className="p-4 rounded-2xl border transition-all duration-500 space-y-2 liquid-glass"
-        style={{
-          backgroundColor: `${activeScale.color}10`,
-          borderColor: `${activeScale.color}35`
-        }}
-      >
-        <div className="flex items-center justify-between">
-          <span className="font-['Orbitron'] text-sm font-bold text-white tracking-wide">
-            {activeTitle}
+      {/* Main Content with Scroll Container */}
+      <div className="overflow-y-auto max-h-[140px] space-y-2.5 pr-1 text-xs">
+        {/* Main Alert Banner */}
+        <div 
+          className="p-2.5 rounded-xl border transition-all duration-500 space-y-1 apple-liquid-glass"
+          style={{
+            backgroundColor: `${activeScale.color}10`,
+            borderColor: `${activeScale.color}35`
+          }}
+        >
+          <div className="flex items-center justify-between">
+            <span className="font-['Orbitron'] text-xs font-bold text-white tracking-wide">
+              {activeTitle}
+            </span>
+            <span className="font-mono text-xs font-bold" style={{ color: activeScale.color }}>
+              Kp = {kpIndex.toFixed(1)} / 9.0
+            </span>
+          </div>
+          <p className="text-[11px] text-slate-300 font-mono leading-relaxed">
+            Aurora Visibility Threshold: <strong className="text-white">{activeScale.auroraLat}</strong>
+          </p>
+        </div>
+
+        {/* Real-Time Telemetry Metrics Grid */}
+        <div className="grid grid-cols-3 gap-2 font-mono text-[11px]">
+          <div className="p-2 rounded-xl apple-liquid-glass">
+            <span className="text-slate-400 block text-[9px] uppercase">Solar Wind</span>
+            <span className="text-cyan-300 font-bold text-xs">{solarWindSpeed} km/s</span>
+          </div>
+
+          <div className="p-2 rounded-xl apple-liquid-glass">
+            <span className="text-slate-400 block text-[9px] uppercase">Power Grid</span>
+            <span className="text-slate-200 font-medium text-[11px] leading-tight block truncate">{activeGrid}</span>
+          </div>
+
+          <div className="p-2 rounded-xl apple-liquid-glass">
+            <span className="text-slate-400 block text-[9px] uppercase">Satellite Link</span>
+            <span className="text-slate-200 font-medium text-[11px] leading-tight block truncate">{activeSat}</span>
+          </div>
+        </div>
+
+        {/* Critical Mitigation Protocols */}
+        <div className="p-2.5 rounded-xl bg-indigo-950/25 border border-indigo-500/25 font-mono text-xs space-y-1">
+          <span className="text-indigo-300 font-bold text-[10px] flex items-center gap-1">
+            <Zap className="w-3 h-3 text-indigo-400" />
+            Recommended Operational Mitigation:
           </span>
-          <span className="font-mono text-xs font-bold" style={{ color: activeScale.color }}>
-            Kp = {kpIndex.toFixed(1)} / 9.0
-          </span>
-        </div>
-        <p className="text-xs text-slate-300 font-mono leading-relaxed">
-          Aurora Visibility Threshold: <strong className="text-white">{activeScale.auroraLat}</strong>
-        </p>
-      </div>
-
-      {/* Real-Time Telemetry Metrics Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 font-mono text-xs">
-        <div className="p-3.5 rounded-2xl liquid-glass liquid-glass-edge">
-          <span className="text-slate-400 block text-[10px] uppercase">Solar Wind Velocity</span>
-          <span className="text-cyan-300 font-bold text-sm">{solarWindSpeed} km/s</span>
-          <span className="text-slate-500 block text-[10px] mt-0.5">DSCOVR Satellite Link</span>
-        </div>
-
-        <div className="p-3.5 rounded-2xl liquid-glass liquid-glass-edge">
-          <span className="text-slate-400 block text-[10px] uppercase">Power Grid Impact</span>
-          <span className="text-slate-200 font-medium text-xs leading-snug block mt-0.5">{activeGrid}</span>
-        </div>
-
-        <div className="p-3.5 rounded-2xl liquid-glass liquid-glass-edge">
-          <span className="text-slate-400 block text-[10px] uppercase">Satellite / XR Link</span>
-          <span className="text-slate-200 font-medium text-xs leading-snug block mt-0.5">{activeSat}</span>
-        </div>
-      </div>
-
-      {/* Critical Mitigation Protocols */}
-      <div className="p-4 rounded-2xl bg-indigo-950/25 border border-indigo-500/25 font-mono text-xs space-y-1.5">
-        <span className="text-indigo-300 font-bold flex items-center gap-1.5">
-          <Zap className="w-3.5 h-3.5 text-indigo-400" />
-          Recommended NASA Operational Mitigation:
-        </span>
-        <p className="text-slate-200 leading-relaxed">
-          {activeMitigation}
-        </p>
-      </div>
-
-      {/* Interactive Simulation Slider */}
-      <div className="pt-2 border-t border-white/10 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs font-mono text-slate-400">
-        <span>Simulate Kp Intensity:</span>
-        <div className="flex items-center gap-3 w-full sm:w-64">
-          <span className="text-[10px]">0</span>
-          <input
-            type="range"
-            min="0"
-            max="9"
-            step="0.5"
-            value={kpIndex}
-            onChange={(e) => {
-              const val = parseFloat(e.target.value);
-              setKpIndex(val);
-              setSolarWindSpeed(Math.round(300 + val * 65));
-            }}
-            className="w-full accent-cyan-400 cursor-pointer h-1.5 bg-slate-800 rounded-lg"
-          />
-          <span className="text-[10px]">9</span>
+          <p className="text-slate-200 text-xs leading-relaxed">
+            {activeMitigation}
+          </p>
         </div>
       </div>
     </LiquidGlassCard>

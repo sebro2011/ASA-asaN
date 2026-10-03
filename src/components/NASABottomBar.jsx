@@ -3,7 +3,7 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
-import { Image, Newspaper, Box, Bot, BrainCircuit } from 'lucide-react';
+import { Compass, Newspaper, Orbit, Rocket, Bot, BrainCircuit, Globe2, Heart } from 'lucide-react';
 
 /**
  * Navigation Tabs with Trilingual Labels
@@ -11,11 +11,29 @@ import { Image, Newspaper, Box, Bot, BrainCircuit } from 'lucide-react';
 const TABS = [
   {
     id: 'apod',
-    icon: Image,
+    icon: Compass,
     labels: {
       en: 'APOD',
       si: 'ඡායාරූප',
       ta: 'படம்'
+    }
+  },
+  {
+    id: '3d',
+    icon: Orbit,
+    labels: {
+      en: '3D Lab',
+      si: '3D අභ්‍යවකාශය',
+      ta: '3D ஆய்வகம்'
+    }
+  },
+  {
+    id: 'missions',
+    icon: Rocket,
+    labels: {
+      en: 'Missions',
+      si: 'මෙහෙයුම්',
+      ta: 'பணிகள்'
     }
   },
   {
@@ -28,21 +46,21 @@ const TABS = [
     }
   },
   {
-    id: '3d',
-    icon: Box,
-    labels: {
-      en: '3D Lab',
-      si: '3D අභ්‍යවකාශය',
-      ta: '3D ஆய்வகம்'
-    }
-  },
-  {
     id: 'quiz',
     icon: BrainCircuit,
     labels: {
       en: 'Quiz',
       si: 'දැනුම',
       ta: 'வினா'
+    }
+  },
+  {
+    id: 'iss',
+    icon: Globe2,
+    labels: {
+      en: 'ISS',
+      si: 'ISS',
+      ta: 'ISS'
     }
   },
   {

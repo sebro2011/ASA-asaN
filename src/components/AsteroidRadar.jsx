@@ -662,16 +662,16 @@ export default function AsteroidRadar({ lang = 'en' }) {
       {/* Selected Asteroid Modal Dossier */}
       <AnimatePresence>
         {selectedAsteroid && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xl">
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="w-full max-w-2xl rounded-3xl bg-slate-950 border border-cyan-500/40 p-6 sm:p-8 shadow-2xl space-y-6 text-slate-200 font-sans max-h-[90vh] overflow-y-auto"
+              className="w-full max-w-2xl rounded-3xl apple-liquid-glass p-6 sm:p-8 shadow-2xl space-y-6 text-slate-200 font-sans max-h-[90vh] overflow-y-auto"
             >
-              <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+              <div className="flex items-center justify-between border-b border-white/10 pb-4">
                 <div className="flex items-center gap-3">
-                  <div className={`p-3 rounded-2xl ${selectedAsteroid.isHazardous ? 'bg-rose-500/20 text-rose-400' : 'bg-cyan-500/20 text-cyan-400'}`}>
+                  <div className={`p-3 rounded-2xl ${selectedAsteroid.isHazardous ? 'bg-rose-500/20 text-rose-400 border border-rose-500/40' : 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/40'}`}>
                     <Target className="w-6 h-6" />
                   </div>
                   <div>
@@ -687,7 +687,7 @@ export default function AsteroidRadar({ lang = 'en' }) {
                 <button
                   type="button"
                   onClick={() => setSelectedAsteroid(null)}
-                  className="p-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-white transition cursor-pointer"
+                  className="p-2 rounded-xl apple-liquid-glass text-slate-400 hover:text-white transition cursor-pointer"
                 >
                   <X className="w-5 h-5" />
                 </button>
@@ -698,37 +698,37 @@ export default function AsteroidRadar({ lang = 'en' }) {
 
               {/* Detailed Physical Parameters */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 font-mono text-xs">
-                <div className="p-3.5 rounded-2xl bg-slate-900/90 border border-slate-800 space-y-1">
+                <div className="p-3.5 rounded-2xl apple-liquid-glass space-y-1">
                   <span className="text-slate-400 block text-[10px] uppercase">Miss Distance Breakdown</span>
                   <span className="text-white font-bold text-sm">{selectedAsteroid.missDistanceKm} km</span>
                   <span className="text-cyan-400 block text-[11px]">({selectedAsteroid.lunarDistance}x Lunar Distances)</span>
                 </div>
 
-                <div className="p-3.5 rounded-2xl bg-slate-900/90 border border-slate-800 space-y-1">
+                <div className="p-3.5 rounded-2xl apple-liquid-glass space-y-1">
                   <span className="text-slate-400 block text-[10px] uppercase">Orbital Velocity</span>
                   <span className="text-white font-bold text-sm">{selectedAsteroid.velocityKmh} km/h</span>
                   <span className="text-amber-400 block text-[11px]">({selectedAsteroid.velocityKms} km/s • ~Mach {Math.round(parseFloat(selectedAsteroid.velocityKms) * 2916)})</span>
                 </div>
 
-                <div className="p-3.5 rounded-2xl bg-slate-900/90 border border-slate-800 space-y-1">
+                <div className="p-3.5 rounded-2xl apple-liquid-glass space-y-1">
                   <span className="text-slate-400 block text-[10px] uppercase">Size Benchmark</span>
                   <span className="text-white font-bold text-sm">~{selectedAsteroid.avgDiameterMeters} meters</span>
                   <span className="text-indigo-400 block text-[11px]">{getSizeComparison(selectedAsteroid.avgDiameterMeters)}</span>
                 </div>
 
-                <div className="p-3.5 rounded-2xl bg-slate-900/90 border border-slate-800 space-y-1">
+                <div className="p-3.5 rounded-2xl apple-liquid-glass space-y-1">
                   <span className="text-slate-400 block text-[10px] uppercase">Primary Orbiting Body</span>
                   <span className="text-white font-bold text-sm">{selectedAsteroid.orbitingBody}</span>
                   <span className="text-slate-400 block text-[11px]">Heliocentric / Earth Intersection</span>
                 </div>
               </div>
 
-              <div className="flex items-center justify-between pt-2 border-t border-slate-800">
+              <div className="flex items-center justify-between pt-2 border-t border-white/10">
                 <a
                   href={selectedAsteroid.jplUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-cyan-300 font-mono text-xs flex items-center gap-1.5 transition"
+                  className="px-4 py-2.5 rounded-xl apple-liquid-glass text-cyan-300 font-mono text-xs flex items-center gap-1.5 transition hover:border-cyan-400"
                 >
                   <span>{t.jplDatabase}</span>
                   <ExternalLink className="w-3.5 h-3.5" />

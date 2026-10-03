@@ -640,7 +640,7 @@ export default function SpaceLab3D({ lang = 'en' }) {
 
       {/* Top Header & Target Switcher */}
       <div className="relative z-10 p-4 sm:p-6 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 pointer-events-none">
-        <div className="pointer-events-auto bg-slate-900/85 backdrop-blur-xl border border-cyan-500/30 rounded-2xl p-3 shadow-xl flex items-center gap-3">
+        <div className="pointer-events-auto apple-liquid-glass rounded-2xl p-3 shadow-xl flex items-center gap-3">
           <div 
             className="w-10 h-10 rounded-xl flex items-center justify-center shadow-lg transition-colors"
             style={{ 
@@ -667,7 +667,7 @@ export default function SpaceLab3D({ lang = 'en' }) {
         </div>
 
         {/* Mars, Moon, JWST Selector Pill */}
-        <div className="pointer-events-auto flex items-center gap-1.5 p-1.5 rounded-2xl bg-slate-900/85 backdrop-blur-2xl border border-slate-800 shadow-2xl overflow-x-auto">
+        <div className="pointer-events-auto flex items-center gap-1.5 p-1.5 rounded-2xl apple-liquid-glass shadow-2xl overflow-x-auto">
           {SPACE_TARGETS.map((target) => {
             const isSelected = selectedTargetId === target.id;
             return (
@@ -694,8 +694,8 @@ export default function SpaceLab3D({ lang = 'en' }) {
 
       {/* Bottom Floating Area: Telemetry HUD & Controls */}
       <div className="relative z-10 p-4 sm:p-6 flex flex-col lg:flex-row items-end justify-between gap-4 pointer-events-none">
-        <div className="pointer-events-auto w-full lg:max-w-md bg-slate-950/85 backdrop-blur-2xl border border-cyan-500/30 rounded-2xl p-4 shadow-2xl space-y-3">
-          <div className="flex items-center justify-between border-b border-slate-800/80 pb-2">
+        <div className="pointer-events-auto w-full lg:max-w-md apple-liquid-glass rounded-2xl p-4 shadow-2xl space-y-3">
+          <div className="flex items-center justify-between border-b border-white/10 pb-2">
             <div className="flex items-center gap-2">
               <Gauge className="w-4 h-4 text-cyan-400" />
               <span className="font-mono text-xs font-bold text-white uppercase tracking-wider">
@@ -712,35 +712,35 @@ export default function SpaceLab3D({ lang = 'en' }) {
 
           {hudExpanded && (
             <div className="grid grid-cols-2 gap-2.5 text-xs font-mono">
-              <div className="p-2.5 rounded-xl bg-slate-900/70 border border-slate-800">
+              <div className="p-2.5 rounded-xl apple-liquid-glass">
                 <span className="text-[10px] text-slate-400 block mb-0.5">
                   {lang === 'si' ? 'කක්ෂීය ප්‍රවේගය' : lang === 'ta' ? 'சுற்றுப்பாதை வேகம்' : 'Orbital Velocity'}
                 </span>
                 <span className="text-cyan-300 font-bold">{currentTarget.telemetry.velocity}</span>
               </div>
 
-              <div className="p-2.5 rounded-xl bg-slate-900/70 border border-slate-800">
+              <div className="p-2.5 rounded-xl apple-liquid-glass">
                 <span className="text-[10px] text-slate-400 block mb-0.5">
                   {lang === 'si' ? 'දුරස්ථභාවය' : lang === 'ta' ? 'தொலைவு' : 'Distance'}
                 </span>
                 <span className="text-cyan-300 font-bold">{currentTarget.telemetry.distance}</span>
               </div>
 
-              <div className="p-2.5 rounded-xl bg-slate-900/70 border border-slate-800">
+              <div className="p-2.5 rounded-xl apple-liquid-glass">
                 <span className="text-[10px] text-slate-400 block mb-0.5">
                   {lang === 'si' ? 'පෘෂ්ඨීය පීඩනය' : lang === 'ta' ? 'மேற்பரப்பு அழுத்தம்' : 'Pressure / Vacuum'}
                 </span>
                 <span className="text-emerald-300 font-bold">{currentTarget.telemetry.surfacePressure}</span>
               </div>
 
-              <div className="p-2.5 rounded-xl bg-slate-900/70 border border-slate-800">
+              <div className="p-2.5 rounded-xl apple-liquid-glass">
                 <span className="text-[10px] text-slate-400 block mb-0.5">
                   {lang === 'si' ? 'තාප තත්ත්වය' : lang === 'ta' ? 'வெப்பநிலை' : 'Thermal Profile'}
                 </span>
                 <span className="text-amber-300 font-bold">{currentTarget.telemetry.temperature}</span>
               </div>
 
-              <div className="col-span-2 p-2.5 rounded-xl bg-slate-900/70 border border-slate-800">
+              <div className="col-span-2 p-2.5 rounded-xl apple-liquid-glass">
                 <span className="text-[10px] text-slate-400 block mb-0.5">
                   {lang === 'si' ? 'වායුගෝලය / පරිසරය' : lang === 'ta' ? 'வளிமண்டலம்' : 'Environment & Medium'}
                 </span>
@@ -758,7 +758,7 @@ export default function SpaceLab3D({ lang = 'en' }) {
         </div>
 
         {/* Controls Bar */}
-        <div className="pointer-events-auto flex flex-wrap items-center gap-2 p-2 rounded-2xl bg-slate-900/85 backdrop-blur-xl border border-cyan-500/30 shadow-2xl">
+        <div className="pointer-events-auto flex flex-wrap items-center gap-2 p-2 rounded-2xl apple-liquid-glass shadow-2xl">
           <button
             onClick={() => setAutoRotate(!autoRotate)}
             className={`p-2.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition ${

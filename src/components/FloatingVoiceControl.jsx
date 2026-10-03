@@ -37,9 +37,9 @@ export default function FloatingVoiceControl({
             initial={{ opacity: 0, y: 10, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 10, scale: 0.95 }}
-            className="max-w-xs p-3 rounded-2xl bg-slate-950/90 border border-cyan-500/30 backdrop-blur-xl shadow-2xl text-xs space-y-1.5"
+            className="max-w-xs p-3 rounded-2xl apple-liquid-glass shadow-2xl text-xs space-y-1.5"
           >
-            <div className="flex items-center justify-between gap-2 border-b border-slate-800 pb-1 font-mono text-[10px]">
+            <div className="flex items-center justify-between gap-2 border-b border-white/10 pb-1 font-mono text-[10px]">
               <span className="flex items-center gap-1.5 text-cyan-300 font-bold">
                 {isListening ? (
                   <>
@@ -77,14 +77,14 @@ export default function FloatingVoiceControl({
             {/* Error Notice */}
             {error && (
               <div className="flex items-center gap-1 text-rose-400 text-[11px]">
-                <AlertCircle className="w-3 h-3 shrink-0" />
+                <AlertCircle className="w-3.5 h-3.5 shrink-0" />
                 <span>{error}</span>
               </div>
             )}
 
             {/* Commands Quick List */}
             {showHelp && (
-              <div className="pt-1.5 border-t border-slate-800 text-[10px] text-slate-400 font-mono space-y-0.5">
+              <div className="pt-1.5 border-t border-white/10 text-[10px] text-slate-400 font-mono space-y-0.5">
                 <p>🗣️ Say: <b>"Mars"</b>, <b>"ISS"</b>, <b>"Sun"</b>, <b>"Exoplanets"</b></p>
                 <p>🎥 Camera: <b>"Rotate"</b>, <b>"Reset view"</b>, <b>"Zoom in"</b></p>
                 <p>සිංහල: <b>"අඟහරු"</b>, <b>"මධ්‍යස්ථානය"</b>, <b>"කැරකෙන්න"</b></p>
@@ -119,10 +119,10 @@ export default function FloatingVoiceControl({
           title={supported ? (isListening ? 'Stop Voice Control' : 'Start Voice Control') : 'Speech recognition not supported in this browser'}
           className={`relative z-10 w-14 h-14 rounded-full flex items-center justify-center shadow-2xl transition-all cursor-pointer ${
             !supported
-              ? 'bg-slate-900 border border-slate-800 text-slate-600 opacity-60 cursor-not-allowed'
+              ? 'apple-liquid-glass text-slate-600 opacity-60 cursor-not-allowed'
               : isListening
               ? 'bg-gradient-to-tr from-rose-600 to-amber-600 text-white border-2 border-rose-400/80 shadow-rose-900/50 scale-105'
-              : 'bg-slate-950/90 hover:bg-slate-900 text-cyan-300 border border-cyan-500/40 hover:border-cyan-400 backdrop-blur-xl shadow-cyan-950/50 hover:scale-105'
+              : 'apple-liquid-glass text-cyan-300 hover:border-cyan-400 backdrop-blur-xl shadow-cyan-950/50 hover:scale-105'
           }`}
         >
           {isListening ? (

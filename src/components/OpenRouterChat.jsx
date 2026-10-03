@@ -332,20 +332,20 @@ export default function OpenRouterChat({ className = '', onClose = () => {} }) {
   const currentModelObj = AVAILABLE_MODELS.find(m => m.id === selectedModel) || AVAILABLE_MODELS[0];
 
   return (
-    <div className={`w-full max-w-4xl mx-auto rounded-3xl apple-liquid-glass shadow-2xl overflow-hidden flex flex-col h-[700px] text-slate-100 font-sans ${className}`}>
+    <div className={`w-full max-w-4xl mx-auto rounded-3xl apple-liquid-glass shadow-2xl overflow-hidden flex flex-col gap-3 min-h-[140px] p-4 text-slate-100 font-sans ${className}`}>
       
-      {/* Space Chat Header */}
-      <div className="p-4 sm:p-5 border-b border-white/10 apple-liquid-glass flex items-center justify-between gap-4 flex-wrap select-none">
+      {/* Space Chat Header: NASA AI Title at top */}
+      <div className="p-4 sm:p-5 border-b border-white/10 apple-liquid-glass flex flex-col sm:flex-row sm:items-center justify-between gap-3 select-none">
         <div className="flex items-center gap-3">
-          <div className="relative w-10 h-10 rounded-2xl bg-gradient-to-tr from-cyan-600 via-blue-600 to-indigo-600 p-0.5 flex items-center justify-center shadow-lg shadow-cyan-500/20">
+          <div className="relative w-10 h-10 rounded-2xl bg-gradient-to-tr from-cyan-600 via-blue-600 to-indigo-600 p-0.5 flex items-center justify-center shadow-lg shadow-cyan-500/20 shrink-0">
             <Bot className="w-5 h-5 text-white" />
             <span className="absolute -top-1 -right-1 w-3 h-3 bg-emerald-500 rounded-full border-2 border-[#030712] animate-pulse" />
           </div>
 
           <div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <h3 className="font-['Orbitron'] font-bold text-sm sm:text-base text-white tracking-wide">
-                NASA Local AI Engine
+                NASA AI Assistant
               </h3>
               <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 flex items-center gap-1">
                 <ShieldCheck className="w-3 h-3" />
@@ -361,7 +361,7 @@ export default function OpenRouterChat({ className = '', onClose = () => {} }) {
         </div>
 
         {/* Action Controls */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 self-end sm:self-auto">
           {/* Audio Synthesizer Toggle */}
           <button
             type="button"

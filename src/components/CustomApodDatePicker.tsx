@@ -160,7 +160,7 @@ export const CustomApodDatePicker: React.FC<CustomApodDatePickerProps> = ({
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-2.5 px-3.5 py-2 rounded-xl bg-slate-950/80 hover:bg-slate-900 border border-cyan-500/40 hover:border-cyan-400 text-xs font-semibold text-white shadow-lg shadow-cyan-950/50 transition-all hover:scale-[1.02] active:scale-[0.98]"
+        className="flex items-center gap-2.5 px-3.5 py-2 rounded-xl apple-liquid-glass text-xs font-semibold text-white shadow-lg transition-all hover:scale-[1.02] active:scale-[0.98]"
         aria-label="Select NASA APOD date"
       >
         <div className="w-6 h-6 rounded-lg bg-cyan-500/20 border border-cyan-500/40 flex items-center justify-center text-cyan-300">
@@ -184,10 +184,10 @@ export const CustomApodDatePicker: React.FC<CustomApodDatePickerProps> = ({
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 8, scale: 0.96 }}
             transition={{ type: 'spring', stiffness: 450, damping: 30 }}
-            className="absolute left-0 mt-2 z-50 w-[330px] sm:w-[360px] rounded-3xl bg-slate-950/95 border border-cyan-500/40 shadow-[0_20px_60px_rgba(0,0,0,0.8)] backdrop-blur-2xl p-4 sm:p-5 text-slate-200"
+            className="absolute left-0 mt-2 z-50 w-[330px] sm:w-[360px] rounded-3xl apple-liquid-glass shadow-[0_20px_60px_rgba(0,0,0,0.6)] p-4 sm:p-5 text-slate-200"
           >
             {/* Header Controls */}
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3 mb-3">
+            <div className="flex items-center justify-between border-b border-white/10 pb-3 mb-3">
               <div className="flex items-center gap-2">
                 <Telescope className="w-4 h-4 text-cyan-400" />
                 <span className="font-['Orbitron'] text-xs font-bold text-white tracking-wide">
@@ -198,19 +198,19 @@ export const CustomApodDatePicker: React.FC<CustomApodDatePickerProps> = ({
               <button
                 type="button"
                 onClick={() => setIsOpen(false)}
-                className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition"
+                className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
             {/* Month & Year Jump Selectors */}
-            <div className="flex items-center justify-between gap-2 mb-4 bg-slate-900/80 p-2 rounded-2xl border border-slate-800">
+            <div className="flex items-center justify-between gap-2 mb-4 apple-liquid-glass p-2 rounded-2xl">
               <button
                 type="button"
                 onClick={handlePrevMonth}
                 disabled={viewYear === 1995 && viewMonth <= 5}
-                className="p-1.5 rounded-xl hover:bg-slate-800 text-slate-300 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition"
+                className="p-1.5 rounded-xl hover:bg-white/10 text-slate-300 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition"
               >
                 <ChevronLeft className="w-4 h-4 text-cyan-400" />
               </button>
@@ -220,10 +220,10 @@ export const CustomApodDatePicker: React.FC<CustomApodDatePickerProps> = ({
                 <select
                   value={viewMonth}
                   onChange={(e) => setViewMonth(parseInt(e.target.value, 10))}
-                  className="bg-slate-950 border border-slate-700/80 text-white rounded-lg px-2 py-1 text-xs font-medium outline-none focus:border-cyan-400 cursor-pointer"
+                  className="bg-white/10 border border-white/20 text-white rounded-lg px-2 py-1 text-xs font-medium outline-none focus:border-cyan-400 cursor-pointer"
                 >
                   {MONTH_NAMES[lang]?.map((m, idx) => (
-                    <option key={idx} value={idx} disabled={viewYear === 1995 && idx < 5}>
+                    <option key={idx} value={idx} disabled={viewYear === 1995 && idx < 5} className="bg-slate-900 text-white">
                       {m}
                     </option>
                   ))}
@@ -233,10 +233,10 @@ export const CustomApodDatePicker: React.FC<CustomApodDatePickerProps> = ({
                 <select
                   value={viewYear}
                   onChange={(e) => setViewYear(parseInt(e.target.value, 10))}
-                  className="bg-slate-950 border border-slate-700/80 text-cyan-300 font-mono font-bold rounded-lg px-2 py-1 text-xs outline-none focus:border-cyan-400 cursor-pointer"
+                  className="bg-white/10 border border-white/20 text-cyan-300 font-mono font-bold rounded-lg px-2 py-1 text-xs outline-none focus:border-cyan-400 cursor-pointer"
                 >
                   {yearOptions.map((y) => (
-                    <option key={y} value={y}>
+                    <option key={y} value={y} className="bg-slate-900 text-cyan-300">
                       {y}
                     </option>
                   ))}

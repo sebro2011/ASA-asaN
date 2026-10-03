@@ -54,7 +54,8 @@ import {
   Bot,
   MessageSquare,
   BrainCircuit,
-  Award
+  Award,
+  Target
 } from 'lucide-react';
 
 type TabKey = 'apod' | '3d' | 'asteroids' | 'epic' | 'exoplanets' | 'missions' | 'news' | 'saved' | 'assistant' | 'quiz' | 'iss';
@@ -142,21 +143,21 @@ export default function App() {
       {/* High-Performance 60FPS Cosmic Starfield & Meteor Particle Background */}
       <CosmicStarfieldBackground starCount={240} enableMeteors={true} speed={0.28} />
 
-      {/* Apple Exact Liquid Glass: 3 Animated Background Ambient Light Orbs with Chromatic Bleed */}
+      {/* Apple Exact Liquid Glass: Fixed Cyan, Purple, and Blue Glowing Ambient Blur Spots */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
-        {/* Orb 1: Vibrant Cyan Light Orb */}
+        {/* Cyan Glowing Ambient Spot */}
         <div 
-          className="absolute top-[8%] left-[10%] w-[560px] h-[560px] rounded-full bg-gradient-to-tr from-cyan-500/30 via-teal-400/25 to-sky-400/20 blur-[130px] animate-orb-1"
+          className="fixed top-12 left-16 w-[560px] h-[560px] rounded-full bg-cyan-400 blur-[140px] opacity-20 animate-orb-1"
           aria-hidden="true"
         />
-        {/* Orb 2: Vibrant Magenta / Fuchsia Light Orb */}
+        {/* Purple Glowing Ambient Spot */}
         <div 
-          className="absolute top-[36%] right-[6%] w-[600px] h-[600px] rounded-full bg-gradient-to-br from-fuchsia-500/25 via-pink-500/20 to-rose-400/15 blur-[140px] animate-orb-2"
+          className="fixed top-1/3 right-12 w-[620px] h-[620px] rounded-full bg-purple-500 blur-[140px] opacity-20 animate-orb-2"
           aria-hidden="true"
         />
-        {/* Orb 3: Deep Royal Blue / Violet Light Orb */}
+        {/* Blue Glowing Ambient Spot */}
         <div 
-          className="absolute bottom-[4%] left-[20%] w-[680px] h-[680px] rounded-full bg-gradient-to-r from-blue-600/30 via-indigo-600/25 to-violet-600/20 blur-[150px] animate-orb-3"
+          className="fixed bottom-12 left-1/4 w-[680px] h-[680px] rounded-full bg-blue-600 blur-[140px] opacity-20 animate-orb-3"
           aria-hidden="true"
         />
       </div>
@@ -275,239 +276,326 @@ export default function App() {
           {/* Ambient chromatic light streak behind the tile hub */}
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[90%] h-32 bg-gradient-to-r from-cyan-500/20 via-fuchsia-500/20 to-blue-500/20 blur-3xl pointer-events-none -z-10" />
 
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3 sm:gap-4">
-          {/* Tile 1: APOD */}
-          <motion.button
-            whileHover={{ y: -4, scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-            onClick={() => handleTabSwitch('apod')}
-            className={`p-4 sm:p-5 rounded-3xl apple-liquid-glass text-left transition-all duration-300 relative overflow-hidden flex flex-col justify-between ${
-              activeTab === 'apod'
-                ? 'ring-2 ring-cyan-400/80 shadow-[0_12px_36px_rgba(6,182,212,0.35)]'
-                : 'hover:border-cyan-500/50'
-            }`}
-          >
-            <div className="flex items-center justify-between w-full">
-              <div className="w-9 h-9 rounded-2xl bg-cyan-500/20 border border-cyan-500/40 flex items-center justify-center">
-                <Compass className="w-5 h-5 text-cyan-300" />
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-11 gap-3 sm:gap-4">
+            {/* Tile 1: APOD */}
+            <motion.button
+              whileHover={{ y: -4, scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={() => handleTabSwitch('apod')}
+              className={`p-3.5 sm:p-4 rounded-3xl apple-liquid-glass text-left transition-all duration-300 relative overflow-hidden flex flex-col justify-between ${
+                activeTab === 'apod'
+                  ? 'ring-2 ring-cyan-400/80 shadow-[0_12px_36px_rgba(6,182,212,0.35)]'
+                  : 'hover:border-cyan-500/50'
+              }`}
+            >
+              <div className="flex items-center justify-between w-full">
+                <div className="w-8 h-8 rounded-2xl bg-cyan-500/20 border border-cyan-500/40 flex items-center justify-center">
+                  <Compass className="w-4 h-4 text-cyan-300" />
+                </div>
+                <span className="text-[9px] font-mono px-1.5 py-0.5 rounded-full bg-cyan-500/15 text-cyan-300 border border-cyan-500/30">
+                  DAILY
+                </span>
               </div>
-              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-cyan-500/15 text-cyan-300 border border-cyan-500/30">
-                DAILY
-              </span>
-            </div>
-            <div className="mt-3">
-              <h3 className="text-sm font-bold text-white font-['Orbitron']">
-                {t('navApod')}
-              </h3>
-              <p className="text-[11px] text-slate-300 mt-0.5 line-clamp-1">
-                4K Space Imagery
-              </p>
-            </div>
-          </motion.button>
+              <div className="mt-2.5">
+                <h3 className="text-xs sm:text-sm font-bold text-white font-['Orbitron'] truncate">
+                  {t('navApod')}
+                </h3>
+                <p className="text-[10px] text-slate-300 mt-0.5 line-clamp-1">
+                  4K Imagery
+                </p>
+              </div>
+            </motion.button>
 
-          {/* Tile 2: 3D Lab */}
-          <motion.button
-            whileHover={{ y: -4, scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-            onClick={() => handleTabSwitch('3d')}
-            className={`p-4 sm:p-5 rounded-3xl apple-liquid-glass text-left transition-all duration-300 relative overflow-hidden flex flex-col justify-between ${
-              activeTab === '3d'
-                ? 'ring-2 ring-blue-400/80 shadow-[0_12px_36px_rgba(59,130,246,0.35)]'
-                : 'hover:border-blue-500/50'
-            }`}
-          >
-            <div className="flex items-center justify-between w-full">
-              <div className="w-9 h-9 rounded-2xl bg-blue-500/20 border border-blue-500/40 flex items-center justify-center">
-                <Orbit className="w-5 h-5 text-blue-300" />
+            {/* Tile 2: 3D Space Lab */}
+            <motion.button
+              whileHover={{ y: -4, scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={() => handleTabSwitch('3d')}
+              className={`p-3.5 sm:p-4 rounded-3xl apple-liquid-glass text-left transition-all duration-300 relative overflow-hidden flex flex-col justify-between ${
+                activeTab === '3d'
+                  ? 'ring-2 ring-blue-400/80 shadow-[0_12px_36px_rgba(59,130,246,0.35)]'
+                  : 'hover:border-blue-500/50'
+              }`}
+            >
+              <div className="flex items-center justify-between w-full">
+                <div className="w-8 h-8 rounded-2xl bg-blue-500/20 border border-blue-500/40 flex items-center justify-center">
+                  <Orbit className="w-4 h-4 text-blue-300" />
+                </div>
+                <span className="text-[9px] font-mono px-1.5 py-0.5 rounded-full bg-blue-500/15 text-blue-300 border border-blue-500/30">
+                  3D
+                </span>
               </div>
-              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-blue-500/15 text-blue-300 border border-blue-500/30">
-                WEBGL 60FPS
-              </span>
-            </div>
-            <div className="mt-3">
-              <h3 className="text-sm font-bold text-white font-['Orbitron']">
-                {t('nav3D')}
-              </h3>
-              <p className="text-[11px] text-slate-300 mt-0.5 line-clamp-1">
-                Planets & JWST
-              </p>
-            </div>
-          </motion.button>
+              <div className="mt-2.5">
+                <h3 className="text-xs sm:text-sm font-bold text-white font-['Orbitron'] truncate">
+                  {t('nav3D')}
+                </h3>
+                <p className="text-[10px] text-slate-300 mt-0.5 line-clamp-1">
+                  Planets & JWST
+                </p>
+              </div>
+            </motion.button>
 
-          {/* Tile 3: Missions */}
-          <motion.button
-            whileHover={{ y: -4, scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-            onClick={() => handleTabSwitch('missions')}
-            className={`p-4 sm:p-5 rounded-3xl apple-liquid-glass text-left transition-all duration-300 relative overflow-hidden flex flex-col justify-between ${
-              activeTab === 'missions'
-                ? 'ring-2 ring-amber-400/80 shadow-[0_12px_36px_rgba(245,158,11,0.35)]'
-                : 'hover:border-amber-500/50'
-            }`}
-          >
-            <div className="flex items-center justify-between w-full">
-              <div className="w-9 h-9 rounded-2xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center">
-                <Rocket className="w-5 h-5 text-amber-300" />
+            {/* Tile 3: Asteroid Radar */}
+            <motion.button
+              whileHover={{ y: -4, scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={() => handleTabSwitch('asteroids')}
+              className={`p-3.5 sm:p-4 rounded-3xl apple-liquid-glass text-left transition-all duration-300 relative overflow-hidden flex flex-col justify-between ${
+                activeTab === 'asteroids'
+                  ? 'ring-2 ring-rose-400/80 shadow-[0_12px_36px_rgba(244,63,94,0.35)]'
+                  : 'hover:border-rose-500/50'
+              }`}
+            >
+              <div className="flex items-center justify-between w-full">
+                <div className="w-8 h-8 rounded-2xl bg-rose-500/20 border border-rose-500/40 flex items-center justify-center">
+                  <Target className="w-4 h-4 text-rose-300" />
+                </div>
+                <span className="text-[9px] font-mono px-1.5 py-0.5 rounded-full bg-rose-500/15 text-rose-300 border border-rose-500/30">
+                  LIVE
+                </span>
               </div>
-              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30">
-                TIMELINE
-              </span>
-            </div>
-            <div className="mt-3">
-              <h3 className="text-sm font-bold text-white font-['Orbitron']">
-                {t('navMissions')}
-              </h3>
-              <p className="text-[11px] text-slate-300 mt-0.5 line-clamp-1">
-                Apollo to Artemis
-              </p>
-            </div>
-          </motion.button>
+              <div className="mt-2.5">
+                <h3 className="text-xs sm:text-sm font-bold text-white font-['Orbitron'] truncate">
+                  {lang === 'si' ? 'රේඩාර්' : lang === 'ta' ? 'ரேடார்' : 'Asteroids'}
+                </h3>
+                <p className="text-[10px] text-slate-300 mt-0.5 line-clamp-1">
+                  Near-Earth
+                </p>
+              </div>
+            </motion.button>
 
-          {/* Tile 4: NASA News */}
-          <motion.button
-            whileHover={{ y: -4, scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-            onClick={() => handleTabSwitch('news')}
-            className={`p-4 sm:p-5 rounded-3xl apple-liquid-glass text-left transition-all duration-300 relative overflow-hidden flex flex-col justify-between ${
-              activeTab === 'news'
-                ? 'ring-2 ring-emerald-400/80 shadow-[0_12px_36px_rgba(16,185,129,0.35)]'
-                : 'hover:border-emerald-500/50'
-            }`}
-          >
-            <div className="flex items-center justify-between w-full">
-              <div className="w-9 h-9 rounded-2xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center">
-                <Newspaper className="w-5 h-5 text-emerald-300" />
+            {/* Tile 4: EPIC Earth */}
+            <motion.button
+              whileHover={{ y: -4, scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={() => handleTabSwitch('epic')}
+              className={`p-3.5 sm:p-4 rounded-3xl apple-liquid-glass text-left transition-all duration-300 relative overflow-hidden flex flex-col justify-between ${
+                activeTab === 'epic'
+                  ? 'ring-2 ring-emerald-400/80 shadow-[0_12px_36px_rgba(16,185,129,0.35)]'
+                  : 'hover:border-emerald-500/50'
+              }`}
+            >
+              <div className="flex items-center justify-between w-full">
+                <div className="w-8 h-8 rounded-2xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center">
+                  <Globe2 className="w-4 h-4 text-emerald-300" />
+                </div>
+                <span className="text-[9px] font-mono px-1.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                  L1
+                </span>
               </div>
-              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
-                LIVE RSS
-              </span>
-            </div>
-            <div className="mt-3">
-              <h3 className="text-sm font-bold text-white font-['Orbitron']">
-                {t('navNews')}
-              </h3>
-              <p className="text-[11px] text-slate-300 mt-0.5 line-clamp-1">
-                AI Translation
-              </p>
-            </div>
-          </motion.button>
+              <div className="mt-2.5">
+                <h3 className="text-xs sm:text-sm font-bold text-white font-['Orbitron'] truncate">
+                  EPIC Earth
+                </h3>
+                <p className="text-[10px] text-slate-300 mt-0.5 line-clamp-1">
+                  Daily Globe
+                </p>
+              </div>
+            </motion.button>
 
-          {/* Tile 5: Space Trivia Quiz */}
-          <motion.button
-            whileHover={{ y: -4, scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-            onClick={() => handleTabSwitch('quiz')}
-            className={`p-4 sm:p-5 rounded-3xl apple-liquid-glass text-left transition-all duration-300 relative overflow-hidden flex flex-col justify-between ${
-              activeTab === 'quiz'
-                ? 'ring-2 ring-cyan-400/80 shadow-[0_12px_36px_rgba(6,182,212,0.35)]'
-                : 'hover:border-cyan-500/50'
-            }`}
-          >
-            <div className="flex items-center justify-between w-full">
-              <div className="w-9 h-9 rounded-2xl bg-cyan-500/20 border border-cyan-500/40 flex items-center justify-center">
-                <BrainCircuit className="w-5 h-5 text-cyan-300" />
+            {/* Tile 5: Exoplanet Lab */}
+            <motion.button
+              whileHover={{ y: -4, scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={() => handleTabSwitch('exoplanets')}
+              className={`p-3.5 sm:p-4 rounded-3xl apple-liquid-glass text-left transition-all duration-300 relative overflow-hidden flex flex-col justify-between ${
+                activeTab === 'exoplanets'
+                  ? 'ring-2 ring-violet-400/80 shadow-[0_12px_36px_rgba(139,92,246,0.35)]'
+                  : 'hover:border-violet-500/50'
+              }`}
+            >
+              <div className="flex items-center justify-between w-full">
+                <div className="w-8 h-8 rounded-2xl bg-violet-500/20 border border-violet-500/40 flex items-center justify-center">
+                  <Sparkles className="w-4 h-4 text-violet-300" />
+                </div>
+                <span className="text-[9px] font-mono px-1.5 py-0.5 rounded-full bg-violet-500/15 text-violet-300 border border-violet-500/30">
+                  3D LAB
+                </span>
               </div>
-              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 font-bold">
-                TRIVIA
-              </span>
-            </div>
-            <div className="mt-3">
-              <h3 className="text-sm font-bold text-white font-['Orbitron']">
-                {lang === 'si' ? 'දැනුම මිනුම' : lang === 'ta' ? 'வினாடி வினா' : 'Space Trivia'}
-              </h3>
-              <p className="text-[11px] text-slate-300 mt-0.5 line-clamp-1">
-                {lang === 'si' ? 'AI ප්‍රශ්නාවලිය' : lang === 'ta' ? 'AI வினாக்கள்' : 'AI Quiz & Confetti'}
-              </p>
-            </div>
-          </motion.button>
+              <div className="mt-2.5">
+                <h3 className="text-xs sm:text-sm font-bold text-white font-['Orbitron'] truncate">
+                  {lang === 'si' ? 'බාහිර ග්‍රහ' : lang === 'ta' ? 'புறக்கோள்' : 'Exoplanets'}
+                </h3>
+                <p className="text-[10px] text-slate-300 mt-0.5 line-clamp-1">
+                  Kepler & TESS
+                </p>
+              </div>
+            </motion.button>
 
-          {/* Tile 6: AI Assistant (OpenRouter) */}
-          <motion.button
-            whileHover={{ y: -4, scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-            onClick={() => handleTabSwitch('assistant')}
-            className={`p-4 sm:p-5 rounded-3xl apple-liquid-glass text-left transition-all duration-300 relative overflow-hidden flex flex-col justify-between ${
-              activeTab === 'assistant'
-                ? 'ring-2 ring-purple-400/80 shadow-[0_12px_36px_rgba(168,85,247,0.35)]'
-                : 'hover:border-purple-500/50'
-            }`}
-          >
-            <div className="flex items-center justify-between w-full">
-              <div className="w-9 h-9 rounded-2xl bg-purple-500/20 border border-purple-500/40 flex items-center justify-center">
-                <Bot className="w-5 h-5 text-purple-300" />
+            {/* Tile 6: Landmark Missions */}
+            <motion.button
+              whileHover={{ y: -4, scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={() => handleTabSwitch('missions')}
+              className={`p-3.5 sm:p-4 rounded-3xl apple-liquid-glass text-left transition-all duration-300 relative overflow-hidden flex flex-col justify-between ${
+                activeTab === 'missions'
+                  ? 'ring-2 ring-amber-400/80 shadow-[0_12px_36px_rgba(245,158,11,0.35)]'
+                  : 'hover:border-amber-500/50'
+              }`}
+            >
+              <div className="flex items-center justify-between w-full">
+                <div className="w-8 h-8 rounded-2xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center">
+                  <Rocket className="w-4 h-4 text-amber-300" />
+                </div>
+                <span className="text-[9px] font-mono px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30">
+                  FLIGHT
+                </span>
               </div>
-              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-purple-500/15 text-purple-300 border border-purple-500/30">
-                ASSISTANT
-              </span>
-            </div>
-            <div className="mt-3">
-              <h3 className="text-sm font-bold text-white font-['Orbitron']">
-                AI Assistant
-              </h3>
-              <p className="text-[11px] text-slate-300 mt-0.5 line-clamp-1">
-                Deep Space Intelligence
-              </p>
-            </div>
-          </motion.button>
+              <div className="mt-2.5">
+                <h3 className="text-xs sm:text-sm font-bold text-white font-['Orbitron'] truncate">
+                  {t('navMissions')}
+                </h3>
+                <p className="text-[10px] text-slate-300 mt-0.5 line-clamp-1">
+                  Apollo to Artemis
+                </p>
+              </div>
+            </motion.button>
 
-          {/* Tile 7: ISS Tracker */}
-          <motion.button
-            whileHover={{ y: -4, scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-            onClick={() => handleTabSwitch('iss')}
-            className={`p-4 sm:p-5 rounded-3xl apple-liquid-glass text-left transition-all duration-300 relative overflow-hidden flex flex-col justify-between ${
-              activeTab === 'iss'
-                ? 'ring-2 ring-indigo-400/80 shadow-[0_12px_36px_rgba(99,102,241,0.35)]'
-                : 'hover:border-indigo-500/50'
-            }`}
-          >
-            <div className="flex items-center justify-between w-full">
-              <div className="w-9 h-9 rounded-2xl bg-indigo-500/20 border border-indigo-500/40 flex items-center justify-center">
-                <Globe2 className="w-5 h-5 text-indigo-300 animate-spin" style={{ animationDuration: '30s' }} />
+            {/* Tile 7: NASA News */}
+            <motion.button
+              whileHover={{ y: -4, scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={() => handleTabSwitch('news')}
+              className={`p-3.5 sm:p-4 rounded-3xl apple-liquid-glass text-left transition-all duration-300 relative overflow-hidden flex flex-col justify-between ${
+                activeTab === 'news'
+                  ? 'ring-2 ring-teal-400/80 shadow-[0_12px_36px_rgba(20,184,166,0.35)]'
+                  : 'hover:border-teal-500/50'
+              }`}
+            >
+              <div className="flex items-center justify-between w-full">
+                <div className="w-8 h-8 rounded-2xl bg-teal-500/20 border border-teal-500/40 flex items-center justify-center">
+                  <Newspaper className="w-4 h-4 text-teal-300" />
+                </div>
+                <span className="text-[9px] font-mono px-1.5 py-0.5 rounded-full bg-teal-500/15 text-teal-300 border border-teal-500/30">
+                  LIVE
+                </span>
               </div>
-              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-bold flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
-                LIVE
-              </span>
-            </div>
-            <div className="mt-3">
-              <h3 className="text-sm font-bold text-white font-['Orbitron']">
-                {lang === 'si' ? 'ISS ලුහුබැඳීම' : lang === 'ta' ? 'ISS நேரலை' : 'ISS Tracker'}
-              </h3>
-              <p className="text-[11px] text-slate-300 mt-0.5 line-clamp-1">
-                {lang === 'si' ? 'තත්‍ය කාලීන කක්ෂය' : lang === 'ta' ? 'நேரலை சுற்றுப்பாதை' : 'Real-Time Orbit'}
-              </p>
-            </div>
-          </motion.button>
+              <div className="mt-2.5">
+                <h3 className="text-xs sm:text-sm font-bold text-white font-['Orbitron'] truncate">
+                  {t('navNews')}
+                </h3>
+                <p className="text-[10px] text-slate-300 mt-0.5 line-clamp-1">
+                  AI Translation
+                </p>
+              </div>
+            </motion.button>
 
-          {/* Tile 8: Saved Favorites */}
-          <motion.button
-            whileHover={{ y: -4, scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-            onClick={() => handleTabSwitch('saved')}
-            className={`p-4 sm:p-5 rounded-3xl apple-liquid-glass text-left transition-all duration-300 relative overflow-hidden flex flex-col justify-between ${
-              activeTab === 'saved'
-                ? 'ring-2 ring-pink-400/80 shadow-[0_12px_36px_rgba(244,63,94,0.35)]'
-                : 'hover:border-pink-500/50'
-            }`}
-          >
-            <div className="flex items-center justify-between w-full">
-              <div className="w-9 h-9 rounded-2xl bg-pink-500/20 border border-pink-500/40 flex items-center justify-center">
-                <Heart className={`w-5 h-5 ${totalCount > 0 ? 'text-pink-400 fill-pink-500/40' : 'text-pink-400'}`} />
+            {/* Tile 8: Space Trivia Quiz */}
+            <motion.button
+              whileHover={{ y: -4, scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={() => handleTabSwitch('quiz')}
+              className={`p-3.5 sm:p-4 rounded-3xl apple-liquid-glass text-left transition-all duration-300 relative overflow-hidden flex flex-col justify-between ${
+                activeTab === 'quiz'
+                  ? 'ring-2 ring-cyan-400/80 shadow-[0_12px_36px_rgba(6,182,212,0.35)]'
+                  : 'hover:border-cyan-500/50'
+              }`}
+            >
+              <div className="flex items-center justify-between w-full">
+                <div className="w-8 h-8 rounded-2xl bg-cyan-500/20 border border-cyan-500/40 flex items-center justify-center">
+                  <BrainCircuit className="w-4 h-4 text-cyan-300" />
+                </div>
+                <span className="text-[9px] font-mono px-1.5 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 font-bold">
+                  QUIZ
+                </span>
               </div>
-              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-pink-500/20 text-pink-300 border border-pink-500/30 font-bold">
-                {totalCount} ITEMS
-              </span>
-            </div>
-            <div className="mt-3">
-              <h3 className="text-sm font-bold text-white font-['Orbitron']">
-                {t('navSaved')}
-              </h3>
-              <p className="text-[11px] text-slate-300 mt-0.5 line-clamp-1">
-                Cosmic Favorites
-              </p>
-            </div>
-          </motion.button>
+              <div className="mt-2.5">
+                <h3 className="text-xs sm:text-sm font-bold text-white font-['Orbitron'] truncate">
+                  {lang === 'si' ? 'දැනුම මිනුම' : lang === 'ta' ? 'வினாடி வினா' : 'Space Trivia'}
+                </h3>
+                <p className="text-[10px] text-slate-300 mt-0.5 line-clamp-1">
+                  {lang === 'si' ? 'AI ප්‍රශ්නාවලිය' : lang === 'ta' ? 'AI வினாக்கள்' : 'AI Quiz'}
+                </p>
+              </div>
+            </motion.button>
+
+            {/* Tile 9: ISS Tracker */}
+            <motion.button
+              whileHover={{ y: -4, scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={() => handleTabSwitch('iss')}
+              className={`p-3.5 sm:p-4 rounded-3xl apple-liquid-glass text-left transition-all duration-300 relative overflow-hidden flex flex-col justify-between ${
+                activeTab === 'iss'
+                  ? 'ring-2 ring-indigo-400/80 shadow-[0_12px_36px_rgba(99,102,241,0.35)]'
+                  : 'hover:border-indigo-500/50'
+              }`}
+            >
+              <div className="flex items-center justify-between w-full">
+                <div className="w-8 h-8 rounded-2xl bg-indigo-500/20 border border-indigo-500/40 flex items-center justify-center">
+                  <Globe2 className="w-4 h-4 text-indigo-300 animate-spin" style={{ animationDuration: '30s' }} />
+                </div>
+                <span className="text-[9px] font-mono px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-bold flex items-center gap-1">
+                  <span className="w-1 h-1 rounded-full bg-emerald-400 animate-ping" />
+                  ORBIT
+                </span>
+              </div>
+              <div className="mt-2.5">
+                <h3 className="text-xs sm:text-sm font-bold text-white font-['Orbitron'] truncate">
+                  {lang === 'si' ? 'ISS' : lang === 'ta' ? 'ISS' : 'ISS Tracker'}
+                </h3>
+                <p className="text-[10px] text-slate-300 mt-0.5 line-clamp-1">
+                  {lang === 'si' ? 'කක්ෂය' : lang === 'ta' ? 'சுற்றுப்பாதை' : 'Real-Time'}
+                </p>
+              </div>
+            </motion.button>
+
+            {/* Tile 10: AI Assistant */}
+            <motion.button
+              whileHover={{ y: -4, scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={() => handleTabSwitch('assistant')}
+              className={`p-3.5 sm:p-4 rounded-3xl apple-liquid-glass text-left transition-all duration-300 relative overflow-hidden flex flex-col justify-between ${
+                activeTab === 'assistant'
+                  ? 'ring-2 ring-purple-400/80 shadow-[0_12px_36px_rgba(168,85,247,0.35)]'
+                  : 'hover:border-purple-500/50'
+              }`}
+            >
+              <div className="flex items-center justify-between w-full">
+                <div className="w-8 h-8 rounded-2xl bg-purple-500/20 border border-purple-500/40 flex items-center justify-center">
+                  <Bot className="w-4 h-4 text-purple-300" />
+                </div>
+                <span className="text-[9px] font-mono px-1.5 py-0.5 rounded-full bg-purple-500/15 text-purple-300 border border-purple-500/30">
+                  AI
+                </span>
+              </div>
+              <div className="mt-2.5">
+                <h3 className="text-xs sm:text-sm font-bold text-white font-['Orbitron'] truncate">
+                  AI Chat
+                </h3>
+                <p className="text-[10px] text-slate-300 mt-0.5 line-clamp-1">
+                  Trilingual Assistant
+                </p>
+              </div>
+            </motion.button>
+
+            {/* Tile 11: Saved Favorites */}
+            <motion.button
+              whileHover={{ y: -4, scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={() => handleTabSwitch('saved')}
+              className={`p-3.5 sm:p-4 rounded-3xl apple-liquid-glass text-left transition-all duration-300 relative overflow-hidden flex flex-col justify-between ${
+                activeTab === 'saved'
+                  ? 'ring-2 ring-pink-400/80 shadow-[0_12px_36px_rgba(244,63,94,0.35)]'
+                  : 'hover:border-pink-500/50'
+              }`}
+            >
+              <div className="flex items-center justify-between w-full">
+                <div className="w-8 h-8 rounded-2xl bg-pink-500/20 border border-pink-500/40 flex items-center justify-center">
+                  <Heart className={`w-4 h-4 ${totalCount > 0 ? 'text-pink-400 fill-pink-500/40' : 'text-pink-400'}`} />
+                </div>
+                <span className="text-[9px] font-mono px-1.5 py-0.5 rounded-full bg-pink-500/20 text-pink-300 border border-pink-500/30 font-bold">
+                  {totalCount}
+                </span>
+              </div>
+              <div className="mt-2.5">
+                <h3 className="text-xs sm:text-sm font-bold text-white font-['Orbitron'] truncate">
+                  {t('navSaved')}
+                </h3>
+                <p className="text-[10px] text-slate-300 mt-0.5 line-clamp-1">
+                  Cosmic Favorites
+                </p>
+              </div>
+            </motion.button>
           </div>
         </section>
 
