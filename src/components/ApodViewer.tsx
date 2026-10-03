@@ -377,7 +377,7 @@ export const ApodViewer: React.FC<ApodViewerProps> = ({
   return (
     <div className="w-full space-y-6">
       {/* Date & Preset Controls Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-4 p-4 rounded-2xl bg-slate-900/60 border border-slate-800/80 backdrop-blur-xl">
+      <div className="flex flex-wrap items-center justify-between gap-4 p-5 rounded-3xl apple-liquid-glass">
         {/* Custom Date Selector & Time Travel Actions */}
         <div className="flex flex-wrap items-center gap-2.5">
           <CustomApodDatePicker
@@ -388,10 +388,10 @@ export const ApodViewer: React.FC<ApodViewerProps> = ({
 
           <button
             onClick={() => setSelectedDate(todayStr)}
-            className={`px-3 py-2 rounded-xl text-xs font-semibold transition ${
+            className={`px-3.5 py-2 rounded-2xl text-xs font-semibold transition ${
               selectedDate === todayStr
                 ? 'bg-cyan-600 text-white shadow-md shadow-cyan-600/30 font-bold border border-cyan-400'
-                : 'bg-slate-800/80 hover:bg-slate-700 text-slate-300 border border-slate-700'
+                : 'apple-liquid-glass hover:text-white text-slate-300'
             }`}
           >
             {t.today}
@@ -399,24 +399,24 @@ export const ApodViewer: React.FC<ApodViewerProps> = ({
 
           <button
             onClick={handleRandomDate}
-            className="px-3 py-2 rounded-xl text-xs font-semibold bg-cyan-950/60 hover:bg-cyan-900/60 text-cyan-300 border border-cyan-500/30 transition flex items-center gap-1.5 shadow-sm"
+            className="px-3.5 py-2 rounded-2xl text-xs font-semibold apple-liquid-glass text-cyan-300 hover:text-white border-cyan-500/30 transition flex items-center gap-1.5 shadow-sm"
           >
             <Shuffle className="w-3.5 h-3.5 text-cyan-400" />
             <span>{t.randomDate}</span>
           </button>
 
           {/* Quality Toggle Switch (SD / HD 4K) */}
-          <div className="flex items-center gap-1.5 bg-slate-950/80 px-2.5 py-1.5 rounded-xl border border-cyan-500/30 shadow-sm">
-            <span className="text-[10px] font-mono uppercase tracking-wider text-slate-400 font-bold">
+          <div className="flex items-center gap-1.5 apple-liquid-glass px-3 py-1.5 rounded-2xl border-cyan-500/30 shadow-sm">
+            <span className="text-[10px] font-mono uppercase tracking-wider text-slate-300 font-bold">
               {lang === 'si' ? 'ගුණාත්මකභාවය' : lang === 'ta' ? 'தரம்' : 'Quality'}:
             </span>
-            <div className="flex items-center bg-slate-900 rounded-lg p-0.5 border border-slate-800">
+            <div className="flex items-center bg-white/5 rounded-xl p-0.5 border border-white/10">
               <button
                 type="button"
                 onClick={() => setIsHdQuality(false)}
-                className={`px-2 py-0.5 rounded-md text-[11px] font-mono font-bold transition ${
+                className={`px-2 py-0.5 rounded-lg text-[11px] font-mono font-bold transition ${
                   !isHdQuality
-                    ? 'bg-slate-700 text-white shadow-sm'
+                    ? 'bg-white/20 text-white shadow-sm'
                     : 'text-slate-400 hover:text-slate-200'
                 }`}
                 title="Standard Definition"
@@ -426,7 +426,7 @@ export const ApodViewer: React.FC<ApodViewerProps> = ({
               <button
                 type="button"
                 onClick={() => setIsHdQuality(true)}
-                className={`px-2 py-0.5 rounded-md text-[11px] font-mono font-bold transition flex items-center gap-1 ${
+                className={`px-2 py-0.5 rounded-lg text-[11px] font-mono font-bold transition flex items-center gap-1 ${
                   isHdQuality
                     ? 'bg-gradient-to-r from-cyan-600 to-blue-600 text-white shadow-md shadow-cyan-500/30'
                     : 'text-cyan-400 hover:text-cyan-300'
@@ -444,7 +444,7 @@ export const ApodViewer: React.FC<ApodViewerProps> = ({
         <div className="flex items-center gap-2">
           <button
             onClick={onOpenExportModal}
-            className="px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-gradient-to-r from-amber-500/20 to-orange-500/20 hover:from-amber-500/30 hover:to-orange-500/30 text-amber-300 border border-amber-500/40 transition flex items-center gap-1.5 shadow-sm"
+            className="px-3.5 py-1.5 rounded-2xl text-xs font-semibold bg-gradient-to-r from-amber-500/20 to-orange-500/20 hover:from-amber-500/30 hover:to-orange-500/30 text-amber-300 border border-amber-500/40 transition flex items-center gap-1.5 shadow-sm"
           >
             <FileCode className="w-3.5 h-3.5" />
             <span>{t.navExportHtml}</span>
@@ -452,7 +452,7 @@ export const ApodViewer: React.FC<ApodViewerProps> = ({
 
           <button
             onClick={() => loadApod(selectedDate)}
-            className="p-2 rounded-xl text-slate-400 hover:text-cyan-400 hover:bg-slate-800 transition"
+            className="p-2.5 rounded-2xl apple-liquid-glass text-slate-300 hover:text-cyan-400 transition"
             title="Refresh"
           >
             <RotateCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
@@ -467,10 +467,10 @@ export const ApodViewer: React.FC<ApodViewerProps> = ({
           <button
             key={idx}
             onClick={() => setSelectedDate(preset.date)}
-            className={`px-3 py-1 rounded-lg whitespace-nowrap border transition ${
+            className={`px-3.5 py-1.5 rounded-xl whitespace-nowrap border transition ${
               selectedDate === preset.date
-                ? 'bg-cyan-600 text-white border-cyan-400'
-                : 'bg-slate-900/40 text-slate-300 border-slate-800 hover:border-slate-700 hover:bg-slate-800/40'
+                ? 'bg-cyan-600 text-white border-cyan-400 font-semibold shadow-md'
+                : 'apple-liquid-glass text-slate-300 hover:text-white'
             }`}
           >
             {preset.label}
@@ -479,9 +479,9 @@ export const ApodViewer: React.FC<ApodViewerProps> = ({
       </div>
 
       {/* Main APOD Display Card */}
-      <div className="relative rounded-3xl overflow-hidden border border-cyan-500/25 bg-slate-900/75 shadow-2xl backdrop-blur-2xl">
+      <div className="apple-liquid-glass rounded-3xl overflow-hidden shadow-2xl">
         {/* Media Frame */}
-        <div className="relative w-full max-h-[580px] bg-black flex items-center justify-center overflow-hidden group">
+        <div className="relative w-full max-h-[580px] bg-transparent flex items-center justify-center overflow-hidden group">
           {isLoading ? (
             <div className="py-32 flex flex-col items-center justify-center gap-4 text-slate-400">
               <div className="w-10 h-10 border-2 border-cyan-500/20 border-t-cyan-400 rounded-full animate-spin"></div>
@@ -497,7 +497,7 @@ export const ApodViewer: React.FC<ApodViewerProps> = ({
               />
             </div>
           ) : (
-            <div className="relative w-full flex justify-center bg-black overflow-hidden">
+            <div className="relative w-full flex justify-center bg-transparent overflow-hidden">
               <motion.img
                 key={isHdQuality && apodData?.hdurl ? apodData.hdurl : (apodData?.url || '')}
                 src={isHdQuality && apodData?.hdurl ? apodData.hdurl : (apodData?.url || '')}
@@ -510,10 +510,10 @@ export const ApodViewer: React.FC<ApodViewerProps> = ({
 
               {/* Quality State Pill (Top-Left of Image) */}
               <div className="absolute top-4 left-4 flex items-center gap-2">
-                <span className={`px-2.5 py-1 rounded-lg text-[10px] font-mono font-bold backdrop-blur-md border shadow-lg transition flex items-center gap-1.5 ${
+                <span className={`px-3 py-1 rounded-full text-[10px] font-mono font-bold apple-liquid-glass shadow-lg transition flex items-center gap-1.5 ${
                   isHdQuality
-                    ? 'bg-gradient-to-r from-cyan-950/90 to-blue-950/90 text-cyan-300 border-cyan-400/50 shadow-cyan-500/20'
-                    : 'bg-slate-950/80 text-slate-300 border-slate-700/60'
+                    ? 'text-cyan-300 border-cyan-400/50'
+                    : 'text-slate-300'
                 }`}>
                   <span className={`w-1.5 h-1.5 rounded-full ${isHdQuality ? 'bg-cyan-400 animate-pulse' : 'bg-slate-400'}`} />
                   <span>{isHdQuality ? 'HD 4K (Original)' : 'SD (Optimized)'}</span>
@@ -525,10 +525,10 @@ export const ApodViewer: React.FC<ApodViewerProps> = ({
                 {/* Toggle Quality Shortcut Button */}
                 <button
                   onClick={() => setIsHdQuality(!isHdQuality)}
-                  className={`px-3 py-2 rounded-xl backdrop-blur-md transition flex items-center gap-1.5 shadow-lg border text-xs font-semibold ${
+                  className={`px-3.5 py-2 rounded-2xl apple-liquid-glass transition flex items-center gap-1.5 shadow-lg text-xs font-semibold ${
                     isHdQuality
-                      ? 'bg-gradient-to-r from-cyan-600/90 to-blue-600/90 text-white border-cyan-300 shadow-cyan-500/30'
-                      : 'bg-slate-950/80 hover:bg-slate-900 border-slate-700/80 text-slate-300'
+                      ? 'bg-gradient-to-r from-cyan-600/80 to-blue-600/80 text-white border-cyan-300'
+                      : 'text-slate-300 hover:text-white'
                   }`}
                   title={isHdQuality ? 'Switch to Standard Quality (SD)' : 'Switch to High Definition (HD 4K)'}
                 >
@@ -545,10 +545,10 @@ export const ApodViewer: React.FC<ApodViewerProps> = ({
                       });
                     }
                   }}
-                  className={`px-3.5 py-2 rounded-xl backdrop-blur-md transition flex items-center gap-2 shadow-lg border text-xs font-semibold ${
+                  className={`px-3.5 py-2 rounded-2xl apple-liquid-glass transition flex items-center gap-2 shadow-lg text-xs font-semibold ${
                     apodData && isApodSaved(apodData.date)
                       ? 'bg-pink-600 text-white border-pink-400 shadow-pink-500/25'
-                      : 'bg-slate-950/80 hover:bg-slate-900 border-slate-700/80 text-white'
+                      : 'text-white hover:text-pink-300'
                   }`}
                   title={apodData && isApodSaved(apodData.date) ? t.removeFromFavorites : t.saveToFavorites}
                 >
@@ -558,7 +558,7 @@ export const ApodViewer: React.FC<ApodViewerProps> = ({
 
                 <button
                   onClick={() => setShowHdModal(true)}
-                  className="px-3.5 py-2 rounded-xl bg-slate-950/80 hover:bg-slate-900 border border-slate-700/80 text-white text-xs font-semibold backdrop-blur-md transition flex items-center gap-2 shadow-lg"
+                  className="px-3.5 py-2 rounded-2xl apple-liquid-glass text-white text-xs font-semibold transition flex items-center gap-2 shadow-lg hover:border-cyan-400"
                 >
                   <Maximize2 className="w-3.5 h-3.5 text-cyan-400" />
                   <span>{t.viewOriginalHd}</span>
@@ -568,17 +568,17 @@ export const ApodViewer: React.FC<ApodViewerProps> = ({
           )}
         </div>
 
-        {/* Content Body */}
+        {/* Content Body with Apple Liquid Glass styling */}
         <div className="p-6 md:p-8 space-y-5">
           {/* Metadata Row */}
           <div className="flex flex-wrap items-center justify-between gap-3 text-xs">
             <div className="flex items-center gap-3">
-              <span className="px-3 py-1 rounded-full bg-cyan-500/15 border border-cyan-500/30 text-cyan-300 font-mono font-bold">
+              <span className="px-3.5 py-1 rounded-full apple-liquid-glass text-cyan-300 font-mono font-bold">
                 {apodData?.date}
               </span>
               {apodData?.copyright && (
-                <span className="text-slate-400 font-medium">
-                  {t.copyright}: <strong className="text-slate-300">{apodData.copyright}</strong>
+                <span className="text-slate-300 font-medium">
+                  {t.copyright}: <strong className="text-white">{apodData.copyright}</strong>
                 </span>
               )}
             </div>
@@ -586,17 +586,17 @@ export const ApodViewer: React.FC<ApodViewerProps> = ({
             {/* Translation state indicator */}
             <div className="flex items-center gap-2">
               {isTranslating ? (
-                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300 text-xs font-medium animate-pulse">
+                <span className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full apple-liquid-glass text-amber-300 text-xs font-medium animate-pulse border-amber-500/40">
                   <Sparkles className="w-3.5 h-3.5 text-amber-400 animate-spin" />
                   {t.translatingWithGemini}
                 </span>
               ) : lang !== 'en' ? (
-                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-xs font-medium">
+                <span className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full apple-liquid-glass text-emerald-300 text-xs font-medium border-emerald-500/40">
                   <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
                   {t.translatedByAi} ({lang === 'si' ? 'සිංහල' : 'தமிழ்'})
                 </span>
               ) : (
-                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-800 text-slate-300 text-xs font-medium">
+                <span className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full apple-liquid-glass text-slate-300 text-xs font-medium">
                   <Info className="w-3.5 h-3.5 text-cyan-400" />
                   {t.originalEnglish}
                 </span>
@@ -605,7 +605,7 @@ export const ApodViewer: React.FC<ApodViewerProps> = ({
           </div>
 
           {/* Title */}
-          <h2 className="text-2xl md:text-3xl font-extrabold text-white tracking-tight leading-snug">
+          <h2 className="text-2xl md:text-3xl font-extrabold text-white tracking-tight leading-snug font-['Orbitron']">
             {displayTitle || 'Cosmic Mystery'}
           </h2>
 
@@ -620,10 +620,10 @@ export const ApodViewer: React.FC<ApodViewerProps> = ({
                   });
                 }
               }}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition flex items-center gap-2 border ${
+              className={`px-4 py-2 rounded-2xl text-xs font-semibold transition flex items-center gap-2 ${
                 apodData && isApodSaved(apodData.date)
-                  ? 'bg-pink-500/20 text-pink-300 border-pink-500/40 shadow-sm'
-                  : 'bg-slate-800/80 hover:bg-slate-700 text-slate-200 border-slate-700/80'
+                  ? 'bg-pink-500/20 text-pink-300 border border-pink-500/40 shadow-sm'
+                  : 'apple-liquid-glass text-slate-200 hover:text-white'
               }`}
             >
               <Heart className={`w-3.5 h-3.5 ${apodData && isApodSaved(apodData.date) ? 'fill-pink-400 text-pink-400' : 'text-pink-400'}`} />
@@ -633,10 +633,10 @@ export const ApodViewer: React.FC<ApodViewerProps> = ({
             {speechSynthesisAvailable && (
               <button
                 onClick={toggleSpeech}
-                className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition flex items-center gap-2 border ${
+                className={`px-4 py-2 rounded-2xl text-xs font-semibold transition flex items-center gap-2 ${
                   isSpeaking
-                    ? 'bg-rose-500/20 text-rose-300 border-rose-500/40'
-                    : 'bg-slate-800/80 hover:bg-slate-700 text-slate-200 border-slate-700/80'
+                    ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
+                    : 'apple-liquid-glass text-slate-200 hover:text-white'
                 }`}
               >
                 {isSpeaking ? <VolumeX className="w-3.5 h-3.5 text-rose-400" /> : <Volume2 className="w-3.5 h-3.5 text-cyan-400" />}
@@ -646,7 +646,7 @@ export const ApodViewer: React.FC<ApodViewerProps> = ({
 
             <button
               onClick={copyToClipboard}
-              className="px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-slate-800/80 hover:bg-slate-700 text-slate-200 border border-slate-700/80 transition flex items-center gap-2"
+              className="px-4 py-2 rounded-2xl text-xs font-semibold apple-liquid-glass text-slate-200 hover:text-white transition flex items-center gap-2"
             >
               {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5 text-slate-400" />}
               <span>{copied ? t.copiedText : t.copyText}</span>
@@ -660,8 +660,8 @@ export const ApodViewer: React.FC<ApodViewerProps> = ({
             lang={lang === 'si' ? 'si-LK' : lang === 'ta' ? 'ta-IN' : 'en-US'} 
           />
 
-          {/* Explanation Text */}
-          <div className="p-5 rounded-2xl bg-slate-950/60 border border-slate-800/80 text-slate-300 text-base md:text-lg leading-relaxed whitespace-pre-line font-normal">
+          {/* Explanation Text Container with Apple Liquid Glass */}
+          <div className="p-6 rounded-3xl apple-liquid-glass text-slate-200 text-base md:text-lg leading-relaxed whitespace-pre-line font-normal">
             {displayExplanation}
           </div>
         </div>

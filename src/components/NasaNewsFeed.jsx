@@ -391,7 +391,7 @@ export default function NasaNewsFeed() {
       )}
 
       {/* Filter and Search Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-4 bg-[#0B0F19]/80 p-4 rounded-2xl border border-cyan-500/20 backdrop-blur-md shadow-lg">
+      <div className="flex flex-wrap items-center justify-between gap-4 apple-liquid-glass p-5 rounded-3xl shadow-lg">
         {/* Voice and Keyword Search Input */}
         <div className="flex-1 min-w-[260px] max-w-md">
           <VoiceSearchInput
@@ -412,10 +412,10 @@ export default function NasaNewsFeed() {
             <button
               key={cat}
               onClick={() => setSelectedCategory(cat)}
-              className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition border ${
+              className={`px-3.5 py-1.5 rounded-2xl text-xs font-semibold whitespace-nowrap transition border ${
                 selectedCategory === cat
-                  ? 'bg-cyan-600 text-white border-cyan-400 shadow-md shadow-cyan-600/20'
-                  : 'bg-slate-950/60 text-slate-400 border-slate-800 hover:text-slate-200 hover:border-slate-700'
+                  ? 'bg-cyan-600 text-white border-cyan-400 shadow-md shadow-cyan-600/20 font-bold'
+                  : 'apple-liquid-glass text-slate-300 hover:text-white'
               }`}
             >
               {cat}
@@ -431,7 +431,7 @@ export default function NasaNewsFeed() {
           <p className="text-xs font-mono">Connecting to NASA News RSS Feed...</p>
         </div>
       ) : filteredNews.length === 0 ? (
-        <div className="py-16 text-center text-slate-400 bg-slate-900/40 rounded-2xl border border-slate-800">
+        <div className="py-16 text-center text-slate-400 apple-liquid-glass rounded-3xl">
           <Info className="w-8 h-8 text-cyan-400 mx-auto mb-2 opacity-60" />
           <p className="text-sm">No space news found matching your search.</p>
         </div>
@@ -449,10 +449,10 @@ export default function NasaNewsFeed() {
             return (
               <article
                 key={article.guid}
-                className="group flex flex-col justify-between rounded-2xl overflow-hidden border border-slate-850 hover:border-cyan-500/40 bg-[#0B0F19]/85 backdrop-blur-xl transition-all duration-300 shadow-xl hover:shadow-cyan-500/10 hover:-translate-y-1.5"
+                className="group flex flex-col justify-between rounded-3xl overflow-hidden apple-liquid-glass transition-all duration-300 shadow-xl hover:-translate-y-1.5"
               >
                 {/* Article Image Banner */}
-                <div className="relative aspect-video w-full overflow-hidden bg-black">
+                <div className="relative aspect-video w-full overflow-hidden bg-transparent">
                   <img
                     src={article.thumbnail}
                     alt={article.title}
@@ -462,7 +462,7 @@ export default function NasaNewsFeed() {
                   
                   {/* Category Badge */}
                   <div className="absolute top-3 left-3">
-                    <span className="px-2.5 py-1 rounded-md text-[10px] font-bold font-mono uppercase bg-slate-950/85 text-cyan-300 border border-cyan-500/30 backdrop-blur-md">
+                    <span className="px-3 py-1 rounded-full text-[10px] font-bold font-mono uppercase apple-liquid-glass text-cyan-300 border-cyan-500/30">
                       {article.category}
                     </span>
                   </div>
@@ -470,7 +470,7 @@ export default function NasaNewsFeed() {
                   {/* Bookmark Button */}
                   <button
                     onClick={() => toggleBookmark(article.guid)}
-                    className="absolute top-3 right-3 p-1.5 rounded-lg bg-slate-950/80 text-slate-300 hover:text-white border border-slate-700/80 backdrop-blur-md transition"
+                    className="absolute top-3 right-3 p-2 rounded-xl apple-liquid-glass text-slate-300 hover:text-white transition"
                     title="Bookmark Article"
                   >
                     <Bookmark className={`w-3.5 h-3.5 ${isBookmarked ? 'fill-cyan-400 text-cyan-400' : ''}`} />

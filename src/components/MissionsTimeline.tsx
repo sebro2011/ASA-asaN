@@ -650,22 +650,22 @@ export const MissionsTimeline: React.FC<MissionsTimelineProps> = ({ lang, initia
 
       {/* Main Mission Display Card */}
       {currentMission && (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 bg-slate-900/70 border border-slate-800/80 rounded-2xl p-6 backdrop-blur-xl shadow-2xl">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 apple-liquid-glass rounded-3xl p-6 sm:p-8 shadow-2xl">
           {/* Left Column: Mission Overview & Facts */}
           <div className="lg:col-span-5 space-y-5">
-            <div className="relative rounded-xl overflow-hidden border border-slate-800 aspect-video group">
+            <div className="relative rounded-3xl overflow-hidden apple-liquid-glass aspect-video group">
               <img 
                 src={currentMission.image} 
                 alt={currentMission.name[lang] || currentMission.name.en}
-                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 rounded-3xl"
               />
               {/* Save to Favorites Button */}
               <button
                 onClick={() => toggleSaveMission(currentMission.id)}
-                className={`absolute top-3 right-3 px-3 py-1.5 rounded-xl backdrop-blur-md transition flex items-center gap-1.5 text-xs font-semibold border shadow-lg ${
+                className={`absolute top-3 right-3 px-3.5 py-1.5 rounded-2xl transition flex items-center gap-1.5 text-xs font-semibold shadow-lg ${
                   isMissionSaved(currentMission.id)
-                    ? 'bg-pink-600/90 text-white border-pink-400 shadow-pink-500/30'
-                    : 'bg-slate-950/80 hover:bg-slate-900 text-slate-200 border-slate-700/80'
+                    ? 'bg-pink-600/90 text-white border border-pink-400 shadow-pink-500/30'
+                    : 'apple-liquid-glass text-slate-200 hover:text-white'
                 }`}
                 title={isMissionSaved(currentMission.id) ? t.removeFromFavorites : t.saveToFavorites}
               >
@@ -673,13 +673,13 @@ export const MissionsTimeline: React.FC<MissionsTimelineProps> = ({ lang, initia
                 <span>{isMissionSaved(currentMission.id) ? t.savedInFavorites : t.saveToFavorites}</span>
               </button>
 
-              <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/30 to-transparent flex items-end p-4 pointer-events-none">
+              <div className="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-slate-950/20 to-transparent flex items-end p-5 pointer-events-none rounded-3xl">
                 <div>
-                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
                     <ShieldCheck className="w-3 h-3" />
                     {currentMission.status[lang] || currentMission.status.en}
                   </span>
-                  <h3 className="text-xl font-bold text-white mt-1">
+                  <h3 className="text-xl font-bold text-white mt-1 font-['Orbitron']">
                     {currentMission.name[lang] || currentMission.name.en}
                   </h3>
                   <p className="text-xs text-cyan-300 font-medium">
@@ -690,26 +690,26 @@ export const MissionsTimeline: React.FC<MissionsTimelineProps> = ({ lang, initia
             </div>
 
             {/* Summary */}
-            <div className="p-4 rounded-xl bg-slate-950/60 border border-slate-800/60 text-slate-300 text-sm leading-relaxed">
+            <div className="p-5 rounded-3xl apple-liquid-glass text-slate-200 text-sm leading-relaxed">
               {currentMission.summary[lang] || currentMission.summary.en}
             </div>
 
             {/* Quick Facts Grid */}
             <div className="grid grid-cols-2 gap-3">
               {currentMission.facts.map((fact, idx) => (
-                <div key={idx} className="p-3 rounded-lg bg-slate-950/40 border border-slate-800/50">
+                <div key={idx} className="p-3.5 rounded-2xl apple-liquid-glass">
                   <div className="text-[11px] text-slate-400 font-medium">{fact.label[lang] || fact.label.en}</div>
                   <div className="text-xs font-semibold text-cyan-200 mt-0.5">{fact.value}</div>
                 </div>
               ))}
             </div>
 
-            <div className="flex items-center justify-between text-xs text-slate-400 p-3 rounded-lg bg-slate-950/30 border border-slate-800/40">
+            <div className="flex items-center justify-between text-xs text-slate-300 p-3.5 rounded-2xl apple-liquid-glass">
               <span className="flex items-center gap-1.5">
                 <Radio className="w-3.5 h-3.5 text-cyan-400 animate-pulse" />
                 <span>{t.missionOperator}:</span>
               </span>
-              <span className="font-semibold text-slate-200">{currentMission.operator}</span>
+              <span className="font-semibold text-white">{currentMission.operator}</span>
             </div>
           </div>
 
@@ -717,7 +717,7 @@ export const MissionsTimeline: React.FC<MissionsTimelineProps> = ({ lang, initia
           <div className="lg:col-span-7 flex flex-col justify-between space-y-4">
             <div>
               <div className="flex items-center justify-between mb-3">
-                <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                <h4 className="text-sm font-bold text-white flex items-center gap-2 font-['Orbitron']">
                   <Milestone className="w-4 h-4 text-cyan-400" />
                   {t.stepBreakdown}
                 </h4>
@@ -734,10 +734,10 @@ export const MissionsTimeline: React.FC<MissionsTimelineProps> = ({ lang, initia
                     <button
                       key={idx}
                       onClick={() => setActiveStepIndex(idx)}
-                      className={`p-2.5 rounded-lg text-left transition border text-xs ${
+                      className={`p-3 rounded-2xl text-left transition border text-xs ${
                         isActive
-                          ? 'bg-cyan-950/70 border-cyan-500/60 text-cyan-200 shadow-md'
-                          : 'bg-slate-950/50 border-slate-800 text-slate-400 hover:border-slate-700'
+                          ? 'bg-cyan-950/70 border-cyan-500/60 text-cyan-200 shadow-md ring-1 ring-cyan-400/50'
+                          : 'apple-liquid-glass text-slate-300 hover:text-white'
                       }`}
                     >
                       <div className="text-[10px] font-mono text-cyan-400 font-bold mb-1">
@@ -751,23 +751,23 @@ export const MissionsTimeline: React.FC<MissionsTimelineProps> = ({ lang, initia
 
               {/* Active Step Detailed Card */}
               {currentMission.steps[activeStepIndex] && (
-                <div className="p-5 rounded-xl bg-slate-950/80 border border-cyan-500/30 shadow-xl relative overflow-hidden space-y-3">
+                <div className="p-6 rounded-3xl apple-liquid-glass shadow-xl relative overflow-hidden space-y-3">
                   <div className="flex items-center justify-between">
-                    <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-cyan-500/10 text-cyan-300 font-mono text-xs border border-cyan-500/20">
+                    <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full apple-liquid-glass text-cyan-300 font-mono text-xs border-cyan-500/30">
                       <CheckCircle2 className="w-3.5 h-3.5 text-cyan-400" />
                       {currentMission.steps[activeStepIndex].phase}
                     </div>
-                    <div className="flex items-center gap-1.5 text-xs font-mono text-slate-400">
+                    <div className="flex items-center gap-1.5 text-xs font-mono text-slate-300">
                       <Gauge className="w-3.5 h-3.5 text-amber-400" />
                       <span>{currentMission.steps[activeStepIndex].telemetry}</span>
                     </div>
                   </div>
 
-                  <h5 className="text-base font-bold text-white">
+                  <h5 className="text-base font-bold text-white font-['Orbitron']">
                     {currentMission.steps[activeStepIndex].title[lang] || currentMission.steps[activeStepIndex].title.en}
                   </h5>
 
-                  <p className="text-sm text-slate-300 leading-relaxed">
+                  <p className="text-sm text-slate-200 leading-relaxed">
                     {currentMission.steps[activeStepIndex].description[lang] || currentMission.steps[activeStepIndex].description.en}
                   </p>
                 </div>
@@ -775,18 +775,18 @@ export const MissionsTimeline: React.FC<MissionsTimelineProps> = ({ lang, initia
             </div>
 
             {/* Stepper Navigation buttons */}
-            <div className="flex items-center justify-between pt-3 border-t border-slate-800">
+            <div className="flex items-center justify-between pt-3 border-t border-white/10">
               <button
                 onClick={() => setActiveStepIndex(prev => Math.max(0, prev - 1))}
                 disabled={activeStepIndex === 0}
-                className="px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 text-slate-300 hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed transition"
+                className="px-4 py-2 rounded-2xl text-xs font-semibold apple-liquid-glass text-slate-300 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed transition"
               >
                 ← {lang === 'si' ? 'පෙර අදියර' : lang === 'ta' ? 'முந்தைய நிலை' : 'Previous Phase'}
               </button>
               <button
                 onClick={() => setActiveStepIndex(prev => Math.min(currentMission.steps.length - 1, prev + 1))}
                 disabled={activeStepIndex === currentMission.steps.length - 1}
-                className="px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-cyan-600 text-white hover:bg-cyan-500 disabled:opacity-40 disabled:cursor-not-allowed transition flex items-center gap-1"
+                className="px-4 py-2 rounded-2xl text-xs font-semibold bg-cyan-600 text-white hover:bg-cyan-500 disabled:opacity-40 disabled:cursor-not-allowed transition flex items-center gap-1 shadow-lg shadow-cyan-600/30"
               >
                 {lang === 'si' ? 'මීළඟ අදියර' : lang === 'ta' ? 'அடுத்த நிலை' : 'Next Phase'} →
               </button>

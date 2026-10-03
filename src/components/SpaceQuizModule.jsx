@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { LiquidGlassCard } from './LiquidGlassCard.jsx';
 import { 
   Award, 
   Clock, 
@@ -63,66 +64,49 @@ const SPACE_QUESTIONS = [
     id: 'q3',
     category: 'James Webb Space Telescope',
     question: {
-      en: 'Where is the James Webb Space Telescope (JWST) permanently positioned in space?',
-      si: 'ජේම්ස් වෙබ් දුරේක්ෂය (JWST) කක්ෂගතව ඇති ලග්‍රාන්ජ් ලක්ෂ්‍යය කුමක්ද?',
-      ta: 'ஜேம்ஸ் வெப் விண்வெளி தொலைநோக்கி (JWST) எந்த புள்ளியில் நிலைநிறுத்தப்பட்டுள்ளது?'
+      en: 'What primary wavelength spectrum does the James Webb Space Telescope (JWST) observe in?',
+      si: 'ජේම්ස් වෙබ් අභ්‍යවකාශ දුරේක්ෂය (JWST) ප්‍රධාන වශයෙන් නිරීක්ෂණ සිදුකරන්නේ කුමන ආලෝක පරාසය තුළද?',
+      ta: 'ஜேம்ஸ் வெப் விண்வெளி தொலைநோக்கி (JWST) முக்கியமாக எந்த ஒளி அலைநீளத்தில் அவதானிக்கிறது?'
     },
     options: [
-      { text: { en: 'Low Earth Orbit (550 km)', si: 'පහළ පෘථිවි කක්ෂය (කි.මී. 550)', ta: 'பூமியின் கீழ் சுற்றுப்பாதை (550 கி.மீ)' }, correct: false },
-      { text: { en: 'Moon Polar Orbit', si: 'චන්ද්‍ර ධ්‍රැවීය කක්ෂය', ta: 'நிலவு துருவ சுற்றுப்பாதை' }, correct: false },
-      { text: { en: 'Sun-Earth Lagrange Point 2 (L2)', si: 'සූර්ය-පෘථිවි ලග්‍රාන්ජ් ලක්ෂ්‍ය 2 (L2)', ta: 'சூரிய-பூமி லக்ராஞ்ச் புள்ளி 2 (L2)' }, correct: true },
-      { text: { en: 'Sun-Earth Lagrange Point 1 (L1)', si: 'සූර්ය-පෘථිවි ලග්‍රාන්ජ් ලක්ෂ්‍ය 1 (L1)', ta: 'சூரிய-பூமி லக்ராஞ்ச் புள்ளி 1 (L1)' }, correct: false }
+      { text: { en: 'Ultraviolet (UV)', si: 'පාරජම්බුල (UV)', ta: 'புற ஊதா (UV)' }, correct: false },
+      { text: { en: 'Visible Light Only', si: 'දෘශ්‍ය ආලෝකය පමණි', ta: 'காணக்கூடிய ஒளி மட்டும்' }, correct: false },
+      { text: { en: 'Infrared (Near & Mid-IR)', si: 'අධෝරක්ත (Infrared)', ta: 'அகச்சிவப்பு (Infrared)' }, correct: true },
+      { text: { en: 'X-Ray & Gamma', si: 'එක්ස් කිරණ සහ ගැමා', ta: 'எக்ஸ்-ரே மற்றும் காமா' }, correct: false }
     ],
     explanation: {
-      en: 'JWST orbits the Sun at Lagrange Point 2 (L2), approximately 1.5 million km from Earth, keeping its sunshield facing the Sun, Earth, and Moon.',
-      si: 'JWST පෘථිවියේ සිට කිලෝමීටර මිලියන 1.5 ක් ඈතින් පිහිටි ලග්‍රාන්ජ් 2 (L2) ලක්ෂ්‍යයේ කක්ෂගතව ඇත.',
-      ta: 'JWST பூமியிலிருந்து 1.5 மில்லியன் கி.மீ தொலைவில் உள்ள லக்ராஞ்ச் 2 (L2) புள்ளியில் சூரியனைச் சுற்றி வருகிறது.'
+      en: 'JWST is optimized for infrared astronomy, penetrating cosmic dust clouds to see the very first stars and galaxies formed after the Big Bang.',
+      si: 'JWST දුරේක්ෂය අධෝරක්ත (Infrared) කිරණ ඔස්සේ ඈත අභ්‍යවකාශයේ දූවිලි වළාකුළු විනිවිද දකිමින් විශ්වයේ මුල්ම තාරකා නිරීක්ෂණය කරයි.',
+      ta: 'JWST அகச்சிவப்பு ஒளியைப் பயன்படுத்தி விண்வெளி தூசிகளை ஊடுருவி பிரபஞ்சத்தின் ஆரம்பகால விண்மீன்களைக் காண்கிறது.'
     }
   },
   {
     id: 'q4',
     category: 'Planetary Defense',
     question: {
-      en: 'What historic mission proved humanity can alter an asteroid\'s orbit via kinetic impact?',
-      si: 'ග්‍රහකයක කක්ෂය චාලක බලපෑමකින් වෙනස් කළ හැකි බව ඔප්පු කළ ඓතිහාසික නාසා මෙහෙයුම කුමක්ද?',
-      ta: 'மோதல் மூலம் ஒரு சிறுகோளின் சுற்றுப்பாதையை மாற்ற முடியும் என்பதை நிரூபித்த நாசா திட்டம் எது?'
+      en: 'What is the speed of light in vacuum, the benchmark for deep-space laser communications?',
+      si: 'හිස් අවකාශය තුළ ආලෝකයේ වේගය (ආසන්න වශයෙන්) කොපමණද?',
+      ta: 'வெற்றிடத்தில் ஒளியின் வேகம் (தோராயமாக) என்ன?'
     },
     options: [
-      { text: { en: 'OSIRIS-REx', si: 'OSIRIS-REx මෙහෙයුම', ta: 'ஒசைரிஸ்-ரெக்ஸ் (OSIRIS-REx)' }, correct: false },
-      { text: { en: 'DART Mission', si: 'DART මෙහෙයුම', ta: 'டார்ட் திட்டம் (DART Mission)' }, correct: true },
-      { text: { en: 'New Horizons', si: 'නිව් හොරයිසන්ස් (New Horizons)', ta: 'நியூ ஹொரைசன்ஸ்' }, correct: false },
-      { text: { en: 'Lucy Mission', si: 'ලුසී මෙහෙයුම (Lucy Mission)', ta: 'லூசி திட்டம்' }, correct: false }
+      { text: { en: '150,000 km/s', si: 'තත්පරයට කි.මී. 150,000', ta: 'வினாடிக்கு 150,000 கி.மீ' }, correct: false },
+      { text: { en: '300,000 km/s', si: 'තත්පරයට කි.මී. 300,000', ta: 'வினாடிக்கு 300,000 கி.மீ' }, correct: true },
+      { text: { en: '1,000,000 km/s', si: 'තත්පරයට කි.මී. 1,000,000', ta: 'வினாடிக்கு 1,000,000 கி.மீ' }, correct: false },
+      { text: { en: '30,000 km/s', si: 'තත්පරයට කි.මී. 30,000', ta: 'வினாடிக்கு 30,000 கி.மீ' }, correct: false }
     ],
     explanation: {
-      en: 'In 2022, NASA\'s DART collided with asteroid Dimorphos, altering its orbital period by 33 minutes and proving planetary defense works!',
-      si: '2022 දී DART යානය ඩයිමෝෆෝස් ග්‍රහකයේ සාර්ථකව ගැටී මිනිත්තු 33 කින් එහි කක්ෂීය කාලය වෙනස් කළේය.',
-      ta: '2022 இல் நாசாவின் DART விண்கலம் டைமார்போஸ் சிறுகோள் மீது மோதி அதன் சுற்றுப்பாதையை வெற்றிகரமாக மாற்றியது.'
-    }
-  },
-  {
-    id: 'q5',
-    category: 'Exoplanets & Habitable Worlds',
-    question: {
-      en: 'How many confirmed exoplanets have astronomers discovered and cataloged to date?',
-      si: 'තාරකා විද්‍යාඥයින් විසින් මේ වන විට තහවුරු කර ඇති බාහිර ග්‍රහලෝක සංඛ්‍යාව දළ වශයෙන් කොපමණද?',
-      ta: 'வானியலாளர்களால் இதுவரை கண்டுபிடிக்கப்பட்டு உறுதிப்படுத்தப்பட்ட புறக்கோள்களின் எண்ணிக்கை என்ன?'
-    },
-    options: [
-      { text: { en: 'Over 5,600 exoplanets', si: 'ග්‍රහලෝක 5,600 කට වඩා', ta: '5,600 க்கும் மேற்பட்ட புறக்கோள்கள்' }, correct: true },
-      { text: { en: 'Around 800 exoplanets', si: 'ග්‍රහලෝක 800 ක් පමණ', ta: 'சுமார் 800 புறக்கோள்கள்' }, correct: false },
-      { text: { en: 'Exactly 240 exoplanets', si: 'ග්‍රහලෝක 240 ක්', ta: 'சரியாக 240 புறக்கோள்கள்' }, correct: false },
-      { text: { en: 'Over 100,000 exoplanets', si: 'ග්‍රහලෝක 100,000 කට වඩා', ta: '100,000 க்கும் மேற்பட்டவை' }, correct: false }
-    ],
-    explanation: {
-      en: 'The NASA Exoplanet Archive has cataloged over 5,600 confirmed worlds orbiting other stars across the Milky Way.',
-      si: 'නාසා බාහිර ග්‍රහලෝක ලේඛනාගාරය විසින් තහවුරු කරන ලද ග්‍රහලෝක 5,600 කට වඩා ලැයිස්තුගත කර ඇත.',
-      ta: 'நாசா புறக்கோள் காப்பகத்தில் 5,600 க்கும் மேற்பட்ட உறுதிப்படுத்தப்பட்ட வேற்று கிரகங்கள் பதிவு செய்யப்பட்டுள்ளன.'
+      en: 'Light travels at exactly 299,792 km/s (approx. 300,000 km/s), taking roughly 8 minutes and 20 seconds to reach Earth from the Sun.',
+      si: 'ආලෝකය තත්පරයකට කිලෝමීටර් 300,000 ක පමණ වේගයෙන් ගමන් කරයි.',
+      ta: 'ஒளி வினாடிக்கு சுமார் 300,000 கி.மீ வேகத்தில் பயணிக்கிறது.'
     }
   }
 ];
 
 export default function SpaceQuizModule({ lang = 'en', className = '' }) {
-  const currentLang = (lang || 'en').slice(0, 2);
+  const [currentLang, setCurrentLang] = useState(lang);
+  useEffect(() => {
+    setCurrentLang(lang);
+  }, [lang]);
 
   const [currentIndex, setCurrentIndex] = useState(0);
   const [selectedOption, setSelectedOption] = useState(null);
@@ -167,7 +151,6 @@ export default function SpaceQuizModule({ lang = 'en', className = '' }) {
       setIsAnswered(false);
       setTimeLeft(15);
     } else {
-      // Game over
       setIsGameOver(true);
       setHighScore(prev => {
         const newHigh = Math.max(prev, score);
@@ -179,7 +162,7 @@ export default function SpaceQuizModule({ lang = 'en', className = '' }) {
     }
   };
 
-  // Restart quiz
+  // Restart Quiz
   const handleRestart = () => {
     setCurrentIndex(0);
     setSelectedOption(null);
@@ -190,12 +173,12 @@ export default function SpaceQuizModule({ lang = 'en', className = '' }) {
     setIsGameOver(false);
   };
 
-  // Timer countdown
+  // Countdown timer effect
   useEffect(() => {
     if (isAnswered || isGameOver) return;
 
     timerRef.current = setInterval(() => {
-      setTimeLeft(prev => {
+      setTimeLeft((prev) => {
         if (prev <= 1) {
           clearInterval(timerRef.current);
           setIsAnswered(true);
@@ -206,7 +189,9 @@ export default function SpaceQuizModule({ lang = 'en', className = '' }) {
       });
     }, 1000);
 
-    return () => clearInterval(timerRef.current);
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
   }, [currentIndex, isAnswered, isGameOver]);
 
   // Rank Badge based on score
@@ -223,11 +208,14 @@ export default function SpaceQuizModule({ lang = 'en', className = '' }) {
   const rank = getRankBadge(score);
 
   return (
-    <div className={`w-full max-w-3xl mx-auto rounded-3xl bg-slate-950/90 border border-slate-800 p-6 shadow-2xl backdrop-blur-2xl font-sans space-y-6 select-none ${className}`}>
-      
+    <LiquidGlassCard 
+      className={`w-full max-w-3xl mx-auto p-6 sm:p-8 font-sans space-y-6 select-none ${className}`}
+      edgeHighlight={true}
+      hoverable={false}
+    >
       {/* Header Bar */}
-      <div className="flex items-center justify-between gap-3 border-b border-slate-800/80 pb-4 flex-wrap">
-        <div className="flex items-center gap-2.5">
+      <div className="flex items-center justify-between gap-3 border-b border-white/10 pb-4 flex-wrap">
+        <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-cyan-600 to-indigo-600 flex items-center justify-center shadow-lg shadow-cyan-950/40">
             <Trophy className="w-5 h-5 text-white" />
           </div>
@@ -243,12 +231,12 @@ export default function SpaceQuizModule({ lang = 'en', className = '' }) {
 
         {/* Stats Pill Strip */}
         <div className="flex items-center gap-2 font-mono text-xs">
-          <div className="px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-amber-300 flex items-center gap-1.5">
+          <div className="px-3.5 py-1.5 rounded-xl liquid-glass text-amber-300 flex items-center gap-1.5 shadow-sm">
             <Flame className="w-3.5 h-3.5 text-amber-400" />
             <span>Streak: <b>{streak}x</b></span>
           </div>
 
-          <div className="px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-cyan-300 flex items-center gap-1.5">
+          <div className="px-3.5 py-1.5 rounded-xl liquid-glass text-cyan-300 flex items-center gap-1.5 shadow-sm">
             <Award className="w-3.5 h-3.5 text-cyan-400" />
             <span>Score: <b>{score}</b></span>
           </div>
@@ -266,8 +254,8 @@ export default function SpaceQuizModule({ lang = 'en', className = '' }) {
             </span>
 
             {/* Countdown Badge */}
-            <div className={`px-2.5 py-1 rounded-xl border flex items-center gap-1.5 font-bold ${
-              timeLeft <= 5 ? 'bg-rose-500/20 border-rose-500 text-rose-300 animate-pulse' : 'bg-slate-900 border-slate-800 text-slate-300'
+            <div className={`px-3 py-1 rounded-xl border flex items-center gap-1.5 font-bold ${
+              timeLeft <= 5 ? 'bg-rose-500/20 border-rose-500 text-rose-300 animate-pulse' : 'liquid-glass text-slate-300'
             }`}>
               <Clock className="w-3.5 h-3.5" />
               <span>{timeLeft}s</span>
@@ -275,7 +263,7 @@ export default function SpaceQuizModule({ lang = 'en', className = '' }) {
           </div>
 
           {/* Question Box */}
-          <div className="p-5 rounded-2xl bg-slate-900/80 border border-slate-800 shadow-inner">
+          <div className="p-5 rounded-2xl liquid-glass border border-white/10 shadow-inner">
             <h4 className="text-base sm:text-lg font-bold text-white leading-snug">
               {currentQ.question[currentLang] || currentQ.question.en}
             </h4>
@@ -287,14 +275,14 @@ export default function SpaceQuizModule({ lang = 'en', className = '' }) {
               const optText = opt.text[currentLang] || opt.text.en;
               const isSelected = selectedOption === opt;
 
-              let btnStyle = 'bg-slate-900 hover:bg-slate-800 border-slate-800 text-slate-200';
+              let btnStyle = 'liquid-glass liquid-glass-edge liquid-glass-hover text-slate-200';
               if (isAnswered) {
                 if (opt.correct) {
-                  btnStyle = 'bg-emerald-950/60 border-emerald-500 text-emerald-200 shadow-md shadow-emerald-950/50';
+                  btnStyle = 'bg-emerald-950/80 border-emerald-500 text-emerald-200 shadow-md shadow-emerald-950/50';
                 } else if (isSelected && !opt.correct) {
-                  btnStyle = 'bg-rose-950/60 border-rose-500 text-rose-200';
+                  btnStyle = 'bg-rose-950/80 border-rose-500 text-rose-200';
                 } else {
-                  btnStyle = 'bg-slate-900/40 border-slate-800/40 text-slate-500 opacity-60';
+                  btnStyle = 'liquid-glass text-slate-500 opacity-50';
                 }
               }
 
@@ -324,7 +312,7 @@ export default function SpaceQuizModule({ lang = 'en', className = '' }) {
               <motion.div
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="p-4 rounded-2xl bg-cyan-950/20 border border-cyan-500/30 text-xs text-slate-300 space-y-2"
+                className="p-4 rounded-2xl liquid-glass border border-cyan-500/30 text-xs text-slate-300 space-y-2"
               >
                 <div className="flex items-center justify-between">
                   <span className="font-mono font-bold text-cyan-300 flex items-center gap-1.5">
@@ -354,7 +342,7 @@ export default function SpaceQuizModule({ lang = 'en', className = '' }) {
           animate={{ opacity: 1, scale: 1 }}
           className="text-center py-8 space-y-6"
         >
-          <div className="inline-flex p-4 rounded-3xl bg-gradient-to-tr from-amber-500/20 to-cyan-500/20 border border-cyan-500/40 shadow-2xl">
+          <div className="inline-flex p-4 rounded-3xl bg-cyan-500/20 border border-cyan-500/40 shadow-2xl">
             <Trophy className="w-16 h-16 text-amber-400 animate-bounce" />
           </div>
 
@@ -371,12 +359,12 @@ export default function SpaceQuizModule({ lang = 'en', className = '' }) {
           </div>
 
           {/* Rank Badge Card */}
-          <div className="max-w-xs mx-auto p-4 rounded-2xl bg-slate-900 border border-slate-800 space-y-1">
+          <div className="max-w-xs mx-auto p-4 rounded-2xl liquid-glass space-y-1">
             <span className="text-[10px] font-mono text-slate-400 uppercase">Awarded Commission:</span>
             <h5 className={`text-lg font-bold font-['Orbitron'] bg-gradient-to-r ${rank.color} bg-clip-text text-transparent`}>
               {rank.title}
             </h5>
-            <span className="inline-block px-2.5 py-0.5 rounded-full bg-slate-800 text-[10px] font-mono text-cyan-300">
+            <span className="inline-block px-2.5 py-0.5 rounded-full bg-slate-800/80 text-[10px] font-mono text-cyan-300">
               {rank.tag} RANK
             </span>
           </div>
@@ -391,6 +379,6 @@ export default function SpaceQuizModule({ lang = 'en', className = '' }) {
           </button>
         </motion.div>
       )}
-    </div>
+    </LiquidGlassCard>
   );
 }

@@ -5,6 +5,7 @@ import { motion } from 'framer-motion';
 import { ShieldAlert, ShieldCheck, AlertTriangle, Activity, Ruler, Zap, Compass } from 'lucide-react';
 import { calculateAsteroidRisk } from '../utils/calculateAsteroidRisk';
 import { useTrilingual } from '../context/TrilingualProvider';
+import { LiquidGlassCard } from './LiquidGlassCard.jsx';
 
 /**
  * AsteroidRiskGauge Component
@@ -27,9 +28,13 @@ export function AsteroidRiskGauge({ asteroid, className = '' }) {
   const localizedTier = assessment.tierLabel[lang] || assessment.tierLabel.en;
 
   return (
-    <div className={`p-5 rounded-3xl bg-slate-950/80 border border-slate-800 backdrop-blur-xl shadow-2xl font-sans space-y-4 ${className}`}>
-      <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-        <div className="flex items-center gap-2">
+    <LiquidGlassCard 
+      className={`p-6 font-sans space-y-4 ${className}`}
+      edgeHighlight={true}
+      hoverable={true}
+    >
+      <div className="flex items-center justify-between border-b border-white/10 pb-3">
+        <div className="flex items-center gap-2.5">
           {tier === 'CRITICAL' && <ShieldAlert className="w-5 h-5 text-rose-500 animate-pulse" />}
           {tier === 'MODERATE' && <AlertTriangle className="w-5 h-5 text-amber-400" />}
           {tier === 'LOW' && <ShieldCheck className="w-5 h-5 text-emerald-400" />}
@@ -44,11 +49,11 @@ export function AsteroidRiskGauge({ asteroid, className = '' }) {
         </div>
 
         <span
-          className="px-2.5 py-1 rounded-full text-xs font-mono font-bold tracking-wide uppercase shadow-sm"
+          className="px-3 py-1 rounded-full text-xs font-mono font-bold tracking-wide uppercase shadow-sm"
           style={{
             backgroundColor: `${color}18`,
             color: color,
-            borderColor: `${color}40`,
+            borderColor: `${color}50`,
             borderWidth: '1px'
           }}
         >
@@ -82,7 +87,7 @@ export function AsteroidRiskGauge({ asteroid, className = '' }) {
               animate={{ strokeDashoffset }}
               transition={{ duration: 1.2, ease: 'easeOut' }}
               strokeLinecap="round"
-              style={{ filter: `drop-shadow(0 0 6px ${glowColor})` }}
+              style={{ filter: `drop-shadow(0 0 8px ${glowColor})` }}
             />
           </svg>
 
@@ -107,9 +112,9 @@ export function AsteroidRiskGauge({ asteroid, className = '' }) {
               </span>
               <span className="text-slate-200 font-bold">{factors.diameterScore}/40</span>
             </div>
-            <div className="w-full h-1.5 rounded-full bg-slate-900 overflow-hidden">
+            <div className="w-full h-1.5 rounded-full bg-slate-900/90 overflow-hidden border border-white/10">
               <div
-                className="h-full rounded-full bg-cyan-400 transition-all duration-700"
+                className="h-full rounded-full bg-cyan-400 transition-all duration-700 shadow-sm"
                 style={{ width: `${(factors.diameterScore / 40) * 100}%` }}
               />
             </div>
@@ -123,9 +128,9 @@ export function AsteroidRiskGauge({ asteroid, className = '' }) {
               </span>
               <span className="text-slate-200 font-bold">{factors.velocityScore}/30</span>
             </div>
-            <div className="w-full h-1.5 rounded-full bg-slate-900 overflow-hidden">
+            <div className="w-full h-1.5 rounded-full bg-slate-900/90 overflow-hidden border border-white/10">
               <div
-                className="h-full rounded-full bg-amber-400 transition-all duration-700"
+                className="h-full rounded-full bg-amber-400 transition-all duration-700 shadow-sm"
                 style={{ width: `${(factors.velocityScore / 30) * 100}%` }}
               />
             </div>
@@ -139,16 +144,16 @@ export function AsteroidRiskGauge({ asteroid, className = '' }) {
               </span>
               <span className="text-slate-200 font-bold">{factors.proximityScore}/30</span>
             </div>
-            <div className="w-full h-1.5 rounded-full bg-slate-900 overflow-hidden">
+            <div className="w-full h-1.5 rounded-full bg-slate-900/90 overflow-hidden border border-white/10">
               <div
-                className="h-full rounded-full bg-indigo-400 transition-all duration-700"
+                className="h-full rounded-full bg-indigo-400 transition-all duration-700 shadow-sm"
                 style={{ width: `${(factors.proximityScore / 30) * 100}%` }}
               />
             </div>
           </div>
         </div>
       </div>
-    </div>
+    </LiquidGlassCard>
   );
 }
 

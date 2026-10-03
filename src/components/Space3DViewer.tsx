@@ -13,10 +13,10 @@ export const Space3DViewer: React.FC<Space3DViewerProps> = ({ lang }) => {
   const [labMode, setLabMode] = useState<'focused' | 'full' | 'starmap'>('focused');
 
   return (
-    <div className="w-full space-y-4">
+    <div className="w-full space-y-6">
       {/* Sub-navigation mode switcher */}
-      <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-900/60 p-2.5 rounded-2xl border border-slate-800 backdrop-blur-md">
-        <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-3 apple-liquid-glass p-4 sm:p-5 rounded-3xl">
+        <div className="flex items-center gap-2.5">
           <div className="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-ping" />
           <span className="text-xs font-mono text-cyan-300 font-semibold uppercase tracking-wider">
             {lang === 'si' 
@@ -27,13 +27,13 @@ export const Space3DViewer: React.FC<Space3DViewerProps> = ({ lang }) => {
           </span>
         </div>
 
-        <div className="flex items-center gap-1.5 bg-slate-950/80 p-1 rounded-xl border border-slate-800 flex-wrap">
+        <div className="flex items-center gap-1.5 apple-liquid-glass p-1.5 rounded-2xl flex-wrap">
           <button
             onClick={() => setLabMode('starmap')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition ${
+            className={`px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition ${
               labMode === 'starmap'
-                ? 'bg-gradient-to-r from-cyan-600 to-blue-600 text-white shadow-md shadow-cyan-600/30'
-                : 'text-slate-400 hover:text-white'
+                ? 'bg-gradient-to-r from-cyan-600 to-blue-600 text-white shadow-md shadow-cyan-600/30 font-bold'
+                : 'text-slate-300 hover:text-white'
             }`}
           >
             <Compass className="w-3.5 h-3.5 text-cyan-300" />
@@ -41,20 +41,20 @@ export const Space3DViewer: React.FC<Space3DViewerProps> = ({ lang }) => {
           </button>
           <button
             onClick={() => setLabMode('focused')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
+            className={`px-3.5 py-2 rounded-xl text-xs font-semibold transition ${
               labMode === 'focused'
-                ? 'bg-gradient-to-r from-cyan-600 to-blue-600 text-white shadow-md shadow-cyan-600/30'
-                : 'text-slate-400 hover:text-white'
+                ? 'bg-gradient-to-r from-cyan-600 to-blue-600 text-white shadow-md shadow-cyan-600/30 font-bold'
+                : 'text-slate-300 hover:text-white'
             }`}
           >
-            {lang === 'si' ? 'අඟහරු • සඳ • JWST' : lang === 'ta' ? 'செவ்வாய் • நிலவு • JWST' : 'Mars • Moon • JWST (Focused)'}
+            {lang === 'si' ? 'අඟහරු • සඳ • JWST' : lang === 'ta' ? 'செவ்வாய் • நிலவு • JWST' : 'Mars • Moon • JWST'}
           </button>
           <button
             onClick={() => setLabMode('full')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
+            className={`px-3.5 py-2 rounded-xl text-xs font-semibold transition ${
               labMode === 'full'
-                ? 'bg-gradient-to-r from-cyan-600 to-blue-600 text-white shadow-md shadow-cyan-600/30'
-                : 'text-slate-400 hover:text-white'
+                ? 'bg-gradient-to-r from-cyan-600 to-blue-600 text-white shadow-md shadow-cyan-600/30 font-bold'
+                : 'text-slate-300 hover:text-white'
             }`}
           >
             {lang === 'si' ? 'සම්පූර්ණ පද්ධතිය' : lang === 'ta' ? 'முழு அமைப்பு' : 'Full Celestial System'}

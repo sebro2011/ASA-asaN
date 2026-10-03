@@ -143,10 +143,10 @@ function DynamicStarfield({
     `
   }), []);
 
-  // Update time and slow rotation
-  useFrame(({ clock }, delta) => {
+  // Update time and slow rotation using delta parameter directly (no deprecated Clock)
+  useFrame((_, delta) => {
     if (uniforms) {
-      uniforms.uTime.value = clock.getElapsedTime();
+      uniforms.uTime.value += delta;
     }
     if (pointsRef.current) {
       pointsRef.current.rotation.y += delta * driftSpeed;

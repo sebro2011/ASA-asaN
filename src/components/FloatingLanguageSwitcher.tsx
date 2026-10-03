@@ -72,7 +72,7 @@ export const FloatingLanguageSwitcher: React.FC<{ className?: string }> = ({ cla
         whileHover={{ scale: 1.04 }}
         whileTap={{ scale: 0.96 }}
         transition={{ type: 'spring', stiffness: 450, damping: 25 }}
-        className="flex items-center gap-2 px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-full bg-slate-950/85 hover:bg-slate-900 border border-cyan-500/40 hover:border-cyan-400 backdrop-blur-2xl shadow-[0_8px_24px_rgba(0,0,0,0.6),0_0_15px_rgba(6,182,212,0.2)] text-white select-none transition-colors"
+        className="flex items-center gap-2 px-3.5 py-2 rounded-full apple-liquid-glass text-white select-none transition-colors"
         aria-label="Change Language"
         aria-expanded={isOpen}
       >
@@ -100,16 +100,16 @@ export const FloatingLanguageSwitcher: React.FC<{ className?: string }> = ({ cla
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 8, scale: 0.95 }}
             transition={{ type: 'spring', stiffness: 450, damping: 28 }}
-            className="absolute right-0 mt-2.5 w-64 sm:w-72 rounded-3xl bg-slate-950/95 border border-cyan-500/40 shadow-[0_20px_50px_rgba(0,0,0,0.85),0_0_30px_rgba(6,182,212,0.15)] backdrop-blur-3xl p-3 text-slate-200"
+            className="absolute right-0 mt-2.5 w-64 sm:w-72 rounded-3xl apple-liquid-glass shadow-[0_20px_50px_rgba(0,0,0,0.85)] p-3.5 text-slate-200"
           >
             {/* Header with Cosmic Badge */}
-            <div className="flex items-center justify-between px-2.5 py-1.5 mb-1.5 border-b border-slate-800/80">
+            <div className="flex items-center justify-between px-2.5 py-1.5 mb-1.5 border-b border-white/10">
               <div className="flex items-center gap-1.5 text-[11px] font-mono font-bold uppercase tracking-wider text-cyan-400">
                 <Sparkles className="w-3 h-3 text-cyan-400" />
                 <span>Trilingual i18n</span>
               </div>
-              <span className="text-[10px] font-mono text-slate-500 font-semibold">
-                NASA & Gemini AI
+              <span className="text-[10px] font-mono text-slate-400 font-semibold">
+                NASA & Keyless AI
               </span>
             </div>
 
@@ -127,8 +127,8 @@ export const FloatingLanguageSwitcher: React.FC<{ className?: string }> = ({ cla
                     whileTap={{ scale: 0.98 }}
                     className={`w-full flex items-center justify-between p-2.5 rounded-2xl transition-all select-none text-left ${
                       isSelected
-                        ? 'bg-gradient-to-r from-cyan-950/80 via-blue-950/70 to-indigo-950/80 border border-cyan-500/50 shadow-md shadow-cyan-950/40'
-                        : 'hover:bg-slate-900/80 border border-transparent hover:border-slate-800 text-slate-300 hover:text-white'
+                        ? 'bg-gradient-to-r from-cyan-950/80 via-blue-950/70 to-indigo-950/80 border border-cyan-400/50 shadow-md shadow-cyan-950/40'
+                        : 'hover:bg-white/10 border border-transparent text-slate-300 hover:text-white'
                     }`}
                   >
                     <div className="flex items-center gap-3">

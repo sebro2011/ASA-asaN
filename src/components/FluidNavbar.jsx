@@ -163,7 +163,7 @@ export default function FluidNavbar({
 
           {/* Desktop Fluid Navigation Menu with Framer Motion layoutId */}
           <nav 
-            className="hidden md:flex items-center p-1.5 rounded-2xl bg-slate-900/80 border border-slate-800/80 shadow-inner backdrop-blur-md relative"
+            className="hidden md:flex items-center p-1.5 rounded-2xl apple-liquid-glass shadow-inner relative"
             onMouseLeave={() => setHoveredTab(null)}
           >
             {NAV_ITEMS.map((item) => {
@@ -187,7 +187,7 @@ export default function FluidNavbar({
                   {isActive && (
                     <motion.div
                       layoutId="fluid-active-pill"
-                      className="absolute inset-0 rounded-xl bg-gradient-to-r from-cyan-600/90 via-sky-600/90 to-blue-600/90 shadow-lg shadow-cyan-500/30 border border-cyan-400/50"
+                      className="absolute inset-0 rounded-xl bg-gradient-to-r from-cyan-600/70 via-sky-600/70 to-blue-600/70 shadow-lg shadow-cyan-500/25 border border-cyan-400/50 backdrop-blur-xl"
                       transition={{
                         type: 'spring',
                         stiffness: 380,
@@ -200,7 +200,7 @@ export default function FluidNavbar({
                   {isHovered && !isActive && (
                     <motion.div
                       layoutId="fluid-hover-pill"
-                      className="absolute inset-0 rounded-xl bg-slate-800/60 border border-slate-700/50"
+                      className="absolute inset-0 rounded-xl bg-white/[0.06] border border-white/10"
                       transition={{
                         type: 'spring',
                         stiffness: 450,
@@ -228,7 +228,7 @@ export default function FluidNavbar({
               <button
                 type="button"
                 onClick={() => setDropdownOpen(!dropdownOpen)}
-                className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-900/90 border border-cyan-500/30 text-white hover:border-cyan-400 text-xs font-semibold shadow-md transition-all duration-200 hover:shadow-cyan-500/20"
+                className="flex items-center gap-2 px-3.5 py-2 rounded-xl apple-liquid-glass text-white hover:border-cyan-400/50 text-xs font-semibold shadow-md transition-all duration-200 hover:shadow-cyan-500/20"
                 aria-expanded={dropdownOpen}
                 aria-haspopup="true"
               >
@@ -245,10 +245,10 @@ export default function FluidNavbar({
                     animate={{ opacity: 1, scale: 1, y: 0 }}
                     exit={{ opacity: 0, scale: 0.95, y: -8 }}
                     transition={{ duration: 0.16, ease: 'easeOut' }}
-                    className="absolute right-0 mt-2 w-52 rounded-2xl bg-slate-900/95 border border-cyan-500/30 shadow-2xl backdrop-blur-2xl p-1.5 z-50"
+                    className="absolute right-0 mt-2 w-52 rounded-2xl apple-liquid-glass shadow-2xl p-1.5 z-50 border border-white/20"
                     role="menu"
                   >
-                    <div className="px-3 py-2 border-b border-slate-800 text-[10px] font-mono text-cyan-400 uppercase tracking-wider">
+                    <div className="px-3 py-2 border-b border-white/10 text-[10px] font-mono text-cyan-400 uppercase tracking-wider">
                       {currentLang === 'si' ? 'භාෂාව තෝරන්න' : currentLang === 'ta' ? 'மொழியைத் தேர்ந்தெடுக்கவும்' : 'Select Language'}
                     </div>
 
@@ -262,7 +262,7 @@ export default function FluidNavbar({
                             className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-all duration-150 ${
                               isSelected
                                 ? 'bg-gradient-to-r from-blue-600 to-cyan-600 text-white shadow-md'
-                                : 'text-slate-300 hover:text-white hover:bg-slate-800/70'
+                                : 'text-slate-300 hover:text-white hover:bg-white/10'
                             }`}
                             role="menuitem"
                           >
@@ -296,7 +296,7 @@ export default function FluidNavbar({
             {/* Mobile Hamburger Toggle Button */}
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="md:hidden p-2 rounded-xl text-slate-300 hover:text-white hover:bg-slate-800/80 transition"
+              className="md:hidden p-2 rounded-xl text-slate-300 hover:text-white hover:bg-white/10 transition"
               aria-label="Toggle mobile menu"
             >
               {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
@@ -312,7 +312,7 @@ export default function FluidNavbar({
               animate={{ height: 'auto', opacity: 1 }}
               exit={{ height: 0, opacity: 0 }}
               transition={{ duration: 0.25, ease: 'easeInOut' }}
-              className="md:hidden overflow-hidden border-t border-slate-800 py-3 space-y-2"
+              className="md:hidden overflow-hidden border-t border-white/10 py-3 space-y-2"
             >
               <div className="grid grid-cols-2 gap-2">
                 {NAV_ITEMS.map((item) => {
@@ -330,7 +330,7 @@ export default function FluidNavbar({
                       className={`p-2.5 rounded-xl font-semibold text-xs flex items-center gap-2 transition ${
                         isActive 
                           ? 'bg-cyan-600 text-white shadow-md shadow-cyan-600/30' 
-                          : 'bg-slate-900/90 text-slate-300 border border-slate-800'
+                          : 'apple-liquid-glass text-slate-300'
                       }`}
                     >
                       <Icon className="w-4 h-4" />

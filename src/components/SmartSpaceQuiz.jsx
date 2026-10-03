@@ -12,6 +12,7 @@ import {
   Flame
 } from 'lucide-react';
 import { useTrilingual } from '../context/TrilingualProvider';
+import { LiquidGlassCard } from './LiquidGlassCard.jsx';
 
 const QUIZ_QUESTIONS = [
   {
@@ -161,11 +162,15 @@ export function SmartSpaceQuiz({ className = '' }) {
   };
 
   return (
-    <div className={`p-6 sm:p-8 rounded-3xl bg-slate-950/80 border border-slate-800 backdrop-blur-xl shadow-2xl font-sans space-y-6 ${className}`}>
+    <LiquidGlassCard 
+      className={`p-6 sm:p-8 font-sans space-y-6 ${className}`}
+      edgeHighlight={true}
+      hoverable={false}
+    >
       {/* Top Header */}
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-4">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 pb-4">
         <div className="flex items-center gap-3">
-          <div className="p-3 rounded-2xl bg-cyan-500/20 text-cyan-400">
+          <div className="p-3 rounded-2xl bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 shadow-md">
             <Trophy className="w-6 h-6" />
           </div>
           <div>
@@ -180,12 +185,12 @@ export function SmartSpaceQuiz({ className = '' }) {
 
         <div className="flex items-center gap-3 font-mono text-xs">
           {streak > 1 && (
-            <span className="px-3 py-1 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 flex items-center gap-1">
+            <span className="px-3 py-1 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 flex items-center gap-1 shadow-sm">
               <Flame className="w-3.5 h-3.5 text-amber-400 fill-amber-400 animate-bounce" />
               {streak}x Streak
             </span>
           )}
-          <span className="px-3 py-1 rounded-full bg-slate-900 border border-slate-800 text-slate-300">
+          <span className="px-3.5 py-1 rounded-full liquid-glass text-slate-300">
             Score: <strong className="text-cyan-300">{score}</strong>
           </span>
         </div>
@@ -199,9 +204,9 @@ export function SmartSpaceQuiz({ className = '' }) {
               <span>Question {currentIdx + 1} of {QUIZ_QUESTIONS.length}</span>
               <span>Category: <strong className="text-indigo-300">{currentQ.category}</strong></span>
             </div>
-            <div className="w-full h-2 rounded-full bg-slate-900 overflow-hidden">
+            <div className="w-full h-2 rounded-full bg-slate-900/90 overflow-hidden border border-white/10">
               <div
-                className="h-full bg-gradient-to-r from-cyan-500 to-indigo-500 transition-all duration-300"
+                className="h-full bg-gradient-to-r from-cyan-500 to-indigo-500 transition-all duration-300 shadow-sm"
                 style={{ width: `${((currentIdx + 1) / QUIZ_QUESTIONS.length) * 100}%` }}
               />
             </div>
@@ -217,7 +222,7 @@ export function SmartSpaceQuiz({ className = '' }) {
             {(currentQ.options[lang] || currentQ.options.en).map((opt, idx) => {
               const isSelected = selectedAnswer === idx;
               const isCorrect = idx === currentQ.correctIndex;
-              let btnStyle = 'bg-slate-900/90 hover:bg-slate-850 border-slate-800 text-slate-200';
+              let btnStyle = 'liquid-glass liquid-glass-edge liquid-glass-hover text-slate-200';
 
               if (isAnswered) {
                 if (isCorrect) {
@@ -225,7 +230,7 @@ export function SmartSpaceQuiz({ className = '' }) {
                 } else if (isSelected && !isCorrect) {
                   btnStyle = 'bg-rose-950/80 border-rose-500/80 text-rose-200 ring-2 ring-rose-500/30';
                 } else {
-                  btnStyle = 'bg-slate-900/40 border-slate-800/40 text-slate-500 opacity-60';
+                  btnStyle = 'liquid-glass text-slate-500 opacity-50';
                 }
               }
 
@@ -251,7 +256,7 @@ export function SmartSpaceQuiz({ className = '' }) {
               <motion.div
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="p-4 rounded-2xl bg-indigo-950/30 border border-indigo-500/30 font-mono text-xs space-y-3"
+                className="p-4 rounded-2xl liquid-glass border-indigo-500/40 font-mono text-xs space-y-3"
               >
                 <div className="flex items-start gap-2">
                   <HelpCircle className="w-4 h-4 text-cyan-400 shrink-0 mt-0.5" />
@@ -264,7 +269,7 @@ export function SmartSpaceQuiz({ className = '' }) {
                   <button
                     type="button"
                     onClick={handleNext}
-                    className="px-5 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold font-mono text-xs transition cursor-pointer"
+                    className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-bold font-mono text-xs transition cursor-pointer shadow-lg shadow-cyan-950/40"
                   >
                     {currentIdx < QUIZ_QUESTIONS.length - 1 ? 'Next Question →' : 'Complete Flight Review'}
                   </button>
@@ -280,7 +285,7 @@ export function SmartSpaceQuiz({ className = '' }) {
           animate={{ opacity: 1, scale: 1 }}
           className="text-center py-6 space-y-5"
         >
-          <div className="inline-flex p-4 rounded-full bg-cyan-500/20 text-cyan-400 mb-2">
+          <div className="inline-flex p-4 rounded-full bg-cyan-500/20 text-cyan-400 border border-cyan-500/40 shadow-xl mb-2">
             <Award className="w-12 h-12 animate-pulse" />
           </div>
 
@@ -288,26 +293,26 @@ export function SmartSpaceQuiz({ className = '' }) {
             Mission Debrief Complete!
           </h3>
 
-          <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 max-w-sm mx-auto space-y-2 font-mono">
+          <div className="p-5 rounded-2xl liquid-glass max-w-sm mx-auto space-y-2 font-mono">
             <div className="text-xs text-slate-400 uppercase">Assigned Rank</div>
             <div className="text-base font-bold text-cyan-300">
               {lang === 'si' ? getRankBadge().rankSi : lang === 'ta' ? getRankBadge().rankTa : getRankBadge().rank}
             </div>
-            <div className="text-2xl font-black text-white">{score} Points</div>
+            <div className="text-3xl font-black text-white">{score} Points</div>
             <div className="text-[11px] text-slate-400">Personal Best: {highScore} pts</div>
           </div>
 
           <button
             type="button"
             onClick={handleRestart}
-            className="px-6 py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-slate-950 font-bold font-mono text-xs flex items-center gap-2 mx-auto cursor-pointer transition"
+            className="px-6 py-3 rounded-xl bg-gradient-to-r from-cyan-500 to-indigo-600 hover:from-cyan-400 hover:to-indigo-500 text-slate-950 font-bold font-mono text-xs flex items-center gap-2 mx-auto cursor-pointer transition shadow-lg shadow-cyan-950/50"
           >
             <RotateCcw className="w-4 h-4" />
             <span>Retake Mission Quiz</span>
           </button>
         </motion.div>
       )}
-    </div>
+    </LiquidGlassCard>
   );
 }
 

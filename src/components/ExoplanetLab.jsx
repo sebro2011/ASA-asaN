@@ -352,16 +352,16 @@ export default function ExoplanetLab({ lang = 'en' }) {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         
         {/* 3D WebGL Viewport (Left/Top) */}
-        <div className="lg:col-span-7 rounded-3xl bg-slate-950 border border-slate-800 p-6 shadow-2xl flex flex-col justify-between relative overflow-hidden min-h-[480px]">
+        <div className="lg:col-span-7 rounded-3xl apple-liquid-glass p-6 sm:p-7 shadow-2xl flex flex-col justify-between relative overflow-hidden min-h-[480px]">
           
           {/* Top Scale Callout Header */}
-          <div className="w-full flex items-center justify-between text-xs font-mono text-slate-400 z-10 mb-2">
+          <div className="w-full flex items-center justify-between text-xs font-mono text-slate-300 z-10 mb-2">
             <span className="flex items-center gap-1.5 text-cyan-300 font-bold">
               <Globe className="w-4 h-4 text-cyan-400" />
               SIDE-BY-SIDE 3D MESH COMPARISON
             </span>
             {selectedPlanet && (
-              <span className="px-3 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 font-bold text-[11px]">
+              <span className="px-3 py-1 rounded-full apple-liquid-glass text-cyan-300 font-bold text-[11px] border-cyan-500/30">
                 Scale: 1.0x Earth vs {selectedPlanet.pl_rade?.toFixed(2)}x Earth
               </span>
             )}
@@ -371,8 +371,8 @@ export default function ExoplanetLab({ lang = 'en' }) {
           <div className="grid grid-cols-2 gap-4 w-full my-auto h-[320px] relative">
             
             {/* Viewport 1: Earth Reference */}
-            <div className="relative rounded-2xl bg-slate-900/80 border border-slate-800/80 overflow-hidden flex flex-col justify-between p-3">
-              <div className="absolute top-2 left-3 z-10 text-[10px] font-mono text-slate-400 font-bold bg-slate-950/80 px-2 py-0.5 rounded-md border border-slate-800">
+            <div className="relative rounded-3xl apple-liquid-glass overflow-hidden flex flex-col justify-between p-3.5">
+              <div className="absolute top-2 left-3 z-10 text-[10px] font-mono text-slate-300 font-bold apple-liquid-glass px-2.5 py-0.5 rounded-lg border-white/10">
                 {t.earthRef}
               </div>
 
@@ -392,8 +392,8 @@ export default function ExoplanetLab({ lang = 'en' }) {
             </div>
 
             {/* Viewport 2: Target Exoplanet */}
-            <div className="relative rounded-2xl bg-slate-900/80 border border-slate-800/80 overflow-hidden flex flex-col justify-between p-3">
-              <div className="absolute top-2 left-3 z-10 text-[10px] font-mono text-cyan-300 font-bold bg-slate-950/80 px-2 py-0.5 rounded-md border border-cyan-500/30">
+            <div className="relative rounded-3xl apple-liquid-glass overflow-hidden flex flex-col justify-between p-3.5">
+              <div className="absolute top-2 left-3 z-10 text-[10px] font-mono text-cyan-300 font-bold apple-liquid-glass px-2.5 py-0.5 rounded-lg border-cyan-500/30">
                 {selectedPlanet?.pl_name || t.targetExo}
               </div>
 
@@ -420,7 +420,7 @@ export default function ExoplanetLab({ lang = 'en' }) {
             </div>
           </div>
 
-          <div className="text-center text-[11px] font-mono text-slate-500 pt-2 border-t border-slate-800/80">
+          <div className="text-center text-[11px] font-mono text-slate-400 pt-2 border-t border-white/10">
             Rotate 3D spheres with click & drag • Real-time WebGL shader rendering
           </div>
         </div>
@@ -429,7 +429,7 @@ export default function ExoplanetLab({ lang = 'en' }) {
         <div className="lg:col-span-5 space-y-4">
           
           {/* Target Exoplanet Presets Bar */}
-          <div className="p-4 rounded-3xl bg-slate-950/90 border border-slate-800 space-y-3 shadow-xl">
+          <div className="p-5 rounded-3xl apple-liquid-glass space-y-3 shadow-xl">
             <div className="relative">
               <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
               <input
@@ -437,7 +437,7 @@ export default function ExoplanetLab({ lang = 'en' }) {
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
                 placeholder={t.searchPlaceholder}
-                className="w-full pl-10 pr-4 py-2 rounded-2xl bg-slate-900 border border-slate-800 text-xs font-mono text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500/60"
+                className="w-full pl-10 pr-4 py-2.5 rounded-2xl apple-liquid-glass text-xs font-mono text-white placeholder-slate-400 focus:outline-none focus:border-cyan-500/60"
               />
             </div>
 
@@ -448,10 +448,10 @@ export default function ExoplanetLab({ lang = 'en' }) {
                   key={p.pl_name}
                   type="button"
                   onClick={() => setSelectedPlanet(p)}
-                  className={`px-3 py-1.5 rounded-xl whitespace-nowrap transition cursor-pointer ${
+                  className={`px-3.5 py-1.5 rounded-2xl whitespace-nowrap transition cursor-pointer ${
                     selectedPlanet?.pl_name === p.pl_name
                       ? 'bg-gradient-to-r from-cyan-600 to-indigo-600 text-white font-bold shadow-md shadow-cyan-950/50'
-                      : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
+                      : 'apple-liquid-glass text-slate-300 hover:text-white'
                   }`}
                 >
                   {p.pl_name}
@@ -462,9 +462,9 @@ export default function ExoplanetLab({ lang = 'en' }) {
 
           {/* Habitability Spec Sheet Cards */}
           {selectedPlanet && (
-            <div className="p-5 rounded-3xl bg-slate-950/90 border border-slate-800 space-y-4 shadow-xl">
+            <div className="p-6 rounded-3xl apple-liquid-glass space-y-4 shadow-xl">
               
-              <div className="flex items-center justify-between border-b border-slate-800/80 pb-3">
+              <div className="flex items-center justify-between border-b border-white/10 pb-3">
                 <div>
                   <h3 className="text-lg font-bold font-['Orbitron'] text-white">
                     {selectedPlanet.pl_name}
@@ -474,7 +474,7 @@ export default function ExoplanetLab({ lang = 'en' }) {
                   </p>
                 </div>
 
-                <div className="px-3 py-1 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 font-mono text-xs font-bold flex items-center gap-1.5">
+                <div className="px-3.5 py-1 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 font-mono text-xs font-bold flex items-center gap-1.5">
                   <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
                   <span>ESI: {(selectedPlanet.esi || 0.82).toFixed(2)}</span>
                 </div>
@@ -482,47 +482,47 @@ export default function ExoplanetLab({ lang = 'en' }) {
 
               {/* Spec Sheet Grid */}
               <div className="grid grid-cols-2 gap-3 text-xs font-mono">
-                <div className="p-3 rounded-2xl bg-slate-900 border border-slate-800">
+                <div className="p-3.5 rounded-2xl apple-liquid-glass">
                   <span className="text-slate-400 block text-[10px] mb-0.5">{t.radiusRatio}</span>
                   <span className="text-cyan-300 font-bold text-sm">{selectedPlanet.pl_rade?.toFixed(2)} R⊕</span>
-                  <span className="text-slate-500 block text-[9px] mt-0.5">({Math.round((selectedPlanet.pl_rade || 1) * 6371).toLocaleString()} km)</span>
+                  <span className="text-slate-400 block text-[9px] mt-0.5">({Math.round((selectedPlanet.pl_rade || 1) * 6371).toLocaleString()} km)</span>
                 </div>
 
-                <div className="p-3 rounded-2xl bg-slate-900 border border-slate-800">
+                <div className="p-3.5 rounded-2xl apple-liquid-glass">
                   <span className="text-slate-400 block text-[10px] mb-0.5">{t.massRatio}</span>
                   <span className="text-indigo-300 font-bold text-sm">{selectedPlanet.pl_masse?.toFixed(2) || 'N/A'} M⊕</span>
-                  <span className="text-slate-500 block text-[9px] mt-0.5">(Earth Mass Multiple)</span>
+                  <span className="text-slate-400 block text-[9px] mt-0.5">(Earth Mass Multiple)</span>
                 </div>
 
-                <div className="p-3 rounded-2xl bg-slate-900 border border-slate-800">
+                <div className="p-3.5 rounded-2xl apple-liquid-glass">
                   <span className="text-slate-400 block text-[10px] mb-0.5">{t.orbitalPeriod}</span>
                   <span className="text-amber-300 font-bold text-sm">{selectedPlanet.pl_orbper?.toFixed(1)} Days</span>
-                  <span className="text-slate-500 block text-[9px] mt-0.5">({(selectedPlanet.pl_orbper / 365.25).toFixed(2)} Earth Years)</span>
+                  <span className="text-slate-400 block text-[9px] mt-0.5">({(selectedPlanet.pl_orbper / 365.25).toFixed(2)} Earth Years)</span>
                 </div>
 
-                <div className="p-3 rounded-2xl bg-slate-900 border border-slate-800">
+                <div className="p-3.5 rounded-2xl apple-liquid-glass">
                   <span className="text-slate-400 block text-[10px] mb-0.5">{t.eqTemp}</span>
                   <span className="text-rose-300 font-bold text-sm">{selectedPlanet.pl_eqt || 255} K</span>
-                  <span className="text-slate-500 block text-[9px] mt-0.5">({((selectedPlanet.pl_eqt || 255) - 273.15).toFixed(1)} °C)</span>
+                  <span className="text-slate-400 block text-[9px] mt-0.5">({((selectedPlanet.pl_eqt || 255) - 273.15).toFixed(1)} °C)</span>
                 </div>
               </div>
 
               {/* Distance & Facility Box */}
-              <div className="p-3.5 rounded-2xl bg-slate-900/80 border border-slate-800 space-y-1 text-xs font-mono">
+              <div className="p-3.5 rounded-2xl apple-liquid-glass space-y-1 text-xs font-mono">
                 <div className="flex items-center justify-between text-slate-300">
                   <span>{t.distance}:</span>
                   <span className="text-cyan-300 font-bold">
                     {selectedPlanet.sy_dist ? `${(selectedPlanet.sy_dist * 3.26156).toFixed(1)} ly (${selectedPlanet.sy_dist.toFixed(1)} pc)` : '124 ly'}
                   </span>
                 </div>
-                <div className="flex items-center justify-between text-slate-400 text-[11px] pt-1 border-t border-slate-800">
+                <div className="flex items-center justify-between text-slate-400 text-[11px] pt-1 border-t border-white/10">
                   <span>{t.facility}:</span>
                   <span className="text-slate-200">{selectedPlanet.disc_facility || 'Kepler Space Telescope'} ({selectedPlanet.disc_year || '2015'})</span>
                 </div>
               </div>
 
               {/* Planet Overview Description */}
-              <div className="p-3.5 rounded-2xl bg-cyan-950/20 border border-cyan-500/20 text-xs text-slate-300 space-y-1">
+              <div className="p-4 rounded-2xl apple-liquid-glass text-xs text-slate-300 space-y-1 border-cyan-500/30">
                 <span className="font-bold font-mono text-cyan-300 flex items-center gap-1.5">
                   <Info className="w-3.5 h-3.5" />
                   Astrophysical Overview:

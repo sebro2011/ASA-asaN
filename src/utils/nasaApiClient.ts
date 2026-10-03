@@ -46,12 +46,37 @@ export function buildNasaApodUrl(date?: string): string {
 }
 
 /**
- * Builds NASA NeoWs Asteroid Feed URL with safe API Key
+ * Formats a Date object as YYYY-MM-DD in UTC/local ISO format
  */
-export function buildNasaNeoWsUrl(startDate?: string): string {
+export function formatISODate(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+/**
+ * Builds NASA NeoWs Asteroid Feed URL with dynamic 7-day range and safe API Key
+ * https://api.nasa.gov/neo/rest/v1/feed?start_date=${today}&end_date=${nextWeek}&api_key=${API_KEY}
+ */
+export function buildNasaNeoWsUrl(customStartDate?: string, customEndDate?: string): string {
   const key = getNasaApiKey();
-  const dateStr = startDate || new Date().toISOString().split('T')[0];
-  return `https://api.nasa.gov/neo/rest/v1/feed?start_date=${encodeURIComponent(dateStr)}&api_key=${key}`;
+  
+  let startDateStr = customStartDate;
+  let endDateStr = customEndDate;
+
+  if (!startDateStr) {
+    const today = new Date();
+    startDateStr = formatISODate(today);
+  }
+
+  if (!endDateStr) {
+    const start = new Date(startDateStr);
+    const nextWeek = new Date(start.getTime() + 7 * 24 * 60 * 60 * 1000);
+    endDateStr = formatISODate(nextWeek);
+  }
+
+  return `https://api.nasa.gov/neo/rest/v1/feed?start_date=${encodeURIComponent(startDateStr)}&end_date=${encodeURIComponent(endDateStr)}&api_key=${key}`;
 }
 
 /**

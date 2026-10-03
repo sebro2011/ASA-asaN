@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { LiquidGlassCard } from './LiquidGlassCard.jsx';
 import { 
   Play, 
   Pause, 
@@ -60,23 +61,24 @@ export default function APODStoryteller({
     };
 
     updateVoices();
-    window.speechSynthesis.onvoiceschanged = updateVoices;
+    if (window.speechSynthesis.onvoiceschanged !== undefined) {
+      window.speechSynthesis.onvoiceschanged = updateVoices;
+    }
 
-    // Auto cleanup on unmount
     return () => {
-      if (window.speechSynthesis) {
+      if (typeof window !== 'undefined' && window.speechSynthesis) {
         window.speechSynthesis.cancel();
       }
     };
   }, [lang]);
 
-  // Clean stop and cleanup
+  // Handle Stop
   const handleStop = useCallback(() => {
     if (typeof window !== 'undefined' && window.speechSynthesis) {
       window.speechSynthesis.cancel();
+      setIsPlaying(false);
+      setIsPaused(false);
     }
-    setIsPlaying(false);
-    setIsPaused(false);
   }, []);
 
   // Play narration
@@ -113,7 +115,6 @@ export default function APODStoryteller({
     };
 
     utterance.onerror = (e) => {
-      // Ignore normal user cancellations
       if (e.error !== 'canceled' && e.error !== 'interrupted') {
         console.warn('SpeechSynthesis notice:', e.error);
       }
@@ -138,24 +139,28 @@ export default function APODStoryteller({
   const handleRateChange = (newSpeed) => {
     setSpeed(newSpeed);
     if (isPlaying) {
-      // Restart with new rate
       handleStop();
-      setTimeout(handlePlay, 100);
+      setTimeout(() => {
+        handlePlay();
+      }, 100);
     }
   };
 
-  if (!supported) {
-    return null;
-  }
+  if (!supported) return null;
 
   return (
-    <div className={`rounded-2xl bg-slate-950/80 border border-slate-800 p-4 backdrop-blur-xl shadow-xl space-y-3 font-sans ${className}`}>
-      
-      {/* Header with Title & Audio Wave Visualizer */}
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-cyan-600 to-indigo-600 flex items-center justify-center shadow-md">
-            <Volume2 className="w-4 h-4 text-white" />
+    <LiquidGlassCard 
+      className={`p-4 font-sans space-y-3 ${className}`}
+      edgeHighlight={true}
+      hoverable={true}
+    >
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <div className="relative p-2.5 rounded-2xl bg-cyan-500/20 border border-cyan-500/40 text-cyan-300 shadow-lg shadow-cyan-950/40">
+            <Volume2 className="w-4 h-4 text-cyan-400" />
+            {isPlaying && (
+              <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-cyan-400 animate-ping" />
+            )}
           </div>
           <div>
             <h4 className="text-xs sm:text-sm font-bold font-['Orbitron'] text-white flex items-center gap-1.5">
@@ -171,7 +176,7 @@ export default function APODStoryteller({
         </div>
 
         {/* Dynamic Animated Audio Wave */}
-        <div className="flex items-center gap-1 h-5 px-2 rounded-lg bg-slate-900/80 border border-slate-800">
+        <div className="flex items-center gap-1 h-6 px-2.5 rounded-xl liquid-glass border border-white/10">
           {[0.3, 0.7, 1.0, 0.6, 0.9, 0.4, 0.8].map((h, i) => (
             <motion.span
               key={i}
@@ -189,7 +194,7 @@ export default function APODStoryteller({
       </div>
 
       {/* Control Buttons & Playback Rate Strip */}
-      <div className="flex items-center justify-between gap-3 flex-wrap pt-2 border-t border-slate-800/80">
+      <div className="flex items-center justify-between gap-3 flex-wrap pt-2 border-t border-white/10">
         
         {/* Playback Action Buttons */}
         <div className="flex items-center gap-2">
@@ -217,7 +222,7 @@ export default function APODStoryteller({
             <button
               type="button"
               onClick={handleStop}
-              className="p-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-400 hover:text-rose-400 transition cursor-pointer"
+              className="p-2 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/10 text-slate-300 hover:text-rose-400 transition cursor-pointer"
               title="Stop narration"
             >
               <Square className="w-3.5 h-3.5 fill-current" />
@@ -227,7 +232,7 @@ export default function APODStoryteller({
 
         {/* Narration Speed Selector */}
         <div className="flex items-center gap-1 font-mono text-[11px]">
-          <span className="text-slate-500 text-[10px] mr-1 hidden sm:inline">Speed:</span>
+          <span className="text-slate-400 text-[10px] mr-1 hidden sm:inline">Speed:</span>
           {[0.8, 1.0, 1.2].map((s) => (
             <button
               key={s}
@@ -235,8 +240,8 @@ export default function APODStoryteller({
               onClick={() => handleRateChange(s)}
               className={`px-2 py-1 rounded-lg transition cursor-pointer ${
                 speed === s
-                  ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 font-bold'
-                  : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
+                  ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 font-bold shadow-sm'
+                  : 'bg-white/[0.04] text-slate-400 hover:text-white border border-white/10'
               }`}
             >
               {s.toFixed(1)}x
@@ -244,6 +249,6 @@ export default function APODStoryteller({
           ))}
         </div>
       </div>
-    </div>
+    </LiquidGlassCard>
   );
 }

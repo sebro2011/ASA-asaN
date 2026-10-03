@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { LiquidGlassCard } from './LiquidGlassCard.jsx';
 import { 
   Target, 
   Sparkles, 
@@ -62,16 +63,19 @@ export default function MarsImageTagger({
   const [activeHotspot, setActiveHotspot] = useState(hotspots[0] || null);
 
   return (
-    <div className={`rounded-3xl bg-slate-950/90 border border-slate-800 p-5 shadow-2xl backdrop-blur-2xl font-sans space-y-4 select-none ${className}`}>
-      
+    <LiquidGlassCard 
+      className={`p-6 font-sans space-y-5 select-none ${className}`}
+      edgeHighlight={true}
+      hoverable={true}
+    >
       {/* Header Bar */}
-      <div className="flex items-center justify-between gap-3 flex-wrap border-b border-slate-800/80 pb-3">
-        <div className="flex items-center gap-2.5">
-          <div className="w-9 h-9 rounded-2xl bg-gradient-to-tr from-rose-600 to-amber-600 flex items-center justify-center shadow-lg shadow-rose-950/40">
+      <div className="flex items-center justify-between gap-3 flex-wrap border-b border-white/10 pb-4">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-rose-600 to-amber-600 flex items-center justify-center shadow-lg shadow-rose-950/40">
             <Target className="w-5 h-5 text-white" />
           </div>
           <div>
-            <span className="text-[10px] font-mono text-slate-400 uppercase tracking-wider block">
+            <span className="text-[10px] font-mono text-rose-400 uppercase tracking-wider block font-semibold">
               NASA JPL Mars 2020 Exploration
             </span>
             <h3 className="text-base font-bold font-['Orbitron'] text-white">
@@ -80,13 +84,13 @@ export default function MarsImageTagger({
           </div>
         </div>
 
-        <span className="text-xs font-mono text-cyan-300 px-3 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/30">
+        <span className="text-xs font-mono text-cyan-300 px-3.5 py-1.5 rounded-full liquid-glass shadow-sm">
           {hotspots.length} Geological Targets Identified
         </span>
       </div>
 
       {/* Main Interactive 2D Coordinate Viewport Container */}
-      <div className="relative w-full rounded-2xl overflow-hidden border border-slate-800 bg-slate-900 group aspect-[16/10] sm:aspect-[16/9]">
+      <div className="relative w-full rounded-2xl overflow-hidden border border-white/10 bg-slate-950 group aspect-[16/10] sm:aspect-[16/9] shadow-inner">
         
         {/* Background Mars Image */}
         <img
@@ -124,7 +128,7 @@ export default function MarsImageTagger({
                 title={hs.title}
                 className={`relative w-7 h-7 sm:w-8 sm:h-8 rounded-full border-2 flex items-center justify-center transition-all shadow-xl cursor-pointer ${
                   isActive
-                    ? 'scale-125 border-white bg-slate-950 text-white shadow-cyan-500/50'
+                    ? 'scale-125 border-white bg-slate-950 text-white shadow-cyan-500/50 ring-4 ring-cyan-500/30'
                     : 'border-white/80 bg-slate-950/80 text-white/90 hover:scale-110 hover:border-white'
                 }`}
                 style={{ borderColor: isActive ? '#ffffff' : beaconColor }}
@@ -138,67 +142,71 @@ export default function MarsImageTagger({
           );
         })}
 
-        {/* Floating Hotspot Popover Detail Card */}
+        {/* Floating Detail Popover over Image */}
         <AnimatePresence>
           {activeHotspot && (
             <motion.div
-              key={activeHotspot.id}
               initial={{ opacity: 0, y: 15, scale: 0.95 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 10, scale: 0.95 }}
-              transition={{ duration: 0.2 }}
-              className="absolute bottom-4 left-4 right-4 sm:left-auto sm:right-4 sm:max-w-sm z-30 p-4 rounded-2xl bg-slate-950/95 border border-cyan-500/40 backdrop-blur-2xl shadow-2xl space-y-2 text-xs"
+              className="absolute bottom-4 left-4 right-4 sm:right-auto sm:max-w-md p-4 rounded-2xl liquid-glass border border-white/20 shadow-2xl z-30 space-y-2 text-slate-200"
             >
-              <div className="flex items-start justify-between gap-2 border-b border-slate-800 pb-2">
+              <div className="flex items-start justify-between gap-2 border-b border-white/10 pb-2">
                 <div>
-                  <span className="text-[10px] font-mono text-cyan-400 font-bold uppercase tracking-wider block">
+                  <span 
+                    className="text-[10px] font-mono font-bold tracking-wider uppercase px-2 py-0.5 rounded-full inline-block mb-1"
+                    style={{ 
+                      backgroundColor: `${activeHotspot.color}20`, 
+                      color: activeHotspot.color,
+                      borderColor: `${activeHotspot.color}40`,
+                      borderWidth: '1px'
+                    }}
+                  >
                     {activeHotspot.category}
                   </span>
-                  <h4 className="text-sm font-bold font-['Orbitron'] text-white">
+                  <h4 className="font-['Orbitron'] font-bold text-white text-sm">
                     {activeHotspot.title}
                   </h4>
                 </div>
+
                 <button
                   type="button"
                   onClick={() => setActiveHotspot(null)}
-                  className="p-1 rounded-lg text-slate-400 hover:text-white transition cursor-pointer"
+                  className="p-1 rounded-lg bg-white/[0.05] hover:bg-white/[0.1] text-slate-400 hover:text-white transition"
                 >
                   <X className="w-4 h-4" />
                 </button>
               </div>
 
-              <p className="text-slate-300 leading-relaxed font-sans text-xs">
+              <p className="text-xs text-slate-300 font-sans leading-relaxed">
                 {activeHotspot.description}
               </p>
-
-              <div className="pt-1 flex items-center justify-between font-mono text-[10px] text-slate-500">
-                <span>Coord: {activeHotspot.x}% X, {activeHotspot.y}% Y</span>
-                <span className="text-cyan-400 font-bold">Jezero Crater Grid</span>
-              </div>
             </motion.div>
           )}
         </AnimatePresence>
       </div>
 
-      {/* Target Selector Bar */}
-      <div className="flex items-center gap-2 overflow-x-auto text-xs font-mono pb-1">
-        <span className="text-slate-500 text-[10px] uppercase shrink-0">Focus Target:</span>
-        {hotspots.map((hs) => (
-          <button
-            key={hs.id}
-            type="button"
-            onClick={() => setActiveHotspot(hs)}
-            className={`px-3 py-1.5 rounded-xl whitespace-nowrap transition cursor-pointer flex items-center gap-1.5 ${
-              activeHotspot?.id === hs.id
-                ? 'bg-gradient-to-r from-cyan-600 to-indigo-600 text-white font-bold shadow-md shadow-cyan-950/50'
-                : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
-            }`}
-          >
-            <span className="w-2 h-2 rounded-full" style={{ backgroundColor: hs.color }} />
-            <span>{hs.title}</span>
-          </button>
-        ))}
+      {/* Hotspots Quick Selection Strip */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 font-mono text-xs">
+        {hotspots.map((hs) => {
+          const isSelected = activeHotspot?.id === hs.id;
+          return (
+            <button
+              key={hs.id}
+              type="button"
+              onClick={() => setActiveHotspot(hs)}
+              className={`p-3 rounded-2xl border text-left transition cursor-pointer flex flex-col justify-between ${
+                isSelected
+                  ? 'liquid-glass border-cyan-400 shadow-md shadow-cyan-950/40'
+                  : 'bg-white/[0.02] hover:bg-white/[0.05] border-white/10 text-slate-400 hover:text-white'
+              }`}
+            >
+              <span className="text-[10px] text-slate-400 block truncate">{hs.category}</span>
+              <span className="font-bold text-white truncate block mt-0.5">{hs.title}</span>
+            </button>
+          );
+        })}
       </div>
-    </div>
+    </LiquidGlassCard>
   );
 }

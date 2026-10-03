@@ -28,6 +28,7 @@ import SmartSpaceQuiz from './components/SmartSpaceQuiz.jsx';
 import MarsImageTagger from './components/MarsImageTagger.jsx';
 import PWAInstallButton from './components/PWAInstallButton';
 import OfflineIndicator from './components/OfflineIndicator';
+import DynamicLiquidFilter from './components/DynamicLiquidFilter.jsx';
 import { TrilingualProvider } from './context/TrilingualProvider.jsx';
 import { ExportHtmlModal } from './components/ExportHtmlModal';
 import OpenRouterChat from './components/OpenRouterChat.jsx';
@@ -134,15 +135,37 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-[#0B0F19] text-slate-100 flex flex-col font-sans selection:bg-cyan-500/30 selection:text-cyan-200 relative">
+    <div className="min-h-screen bg-[#030712] text-slate-100 flex flex-col font-sans selection:bg-cyan-500/30 selection:text-cyan-200 relative overflow-x-hidden">
+      {/* Dynamic Interactive SVG Displacement Liquid Glass Refraction Filter */}
+      <DynamicLiquidFilter />
+
       {/* High-Performance 60FPS Cosmic Starfield & Meteor Particle Background */}
       <CosmicStarfieldBackground starCount={240} enableMeteors={true} speed={0.28} />
+
+      {/* Apple Exact Liquid Glass: 3 Animated Background Ambient Light Orbs with Chromatic Bleed */}
+      <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
+        {/* Orb 1: Vibrant Cyan Light Orb */}
+        <div 
+          className="absolute top-[8%] left-[10%] w-[560px] h-[560px] rounded-full bg-gradient-to-tr from-cyan-500/30 via-teal-400/25 to-sky-400/20 blur-[130px] animate-orb-1"
+          aria-hidden="true"
+        />
+        {/* Orb 2: Vibrant Magenta / Fuchsia Light Orb */}
+        <div 
+          className="absolute top-[36%] right-[6%] w-[600px] h-[600px] rounded-full bg-gradient-to-br from-fuchsia-500/25 via-pink-500/20 to-rose-400/15 blur-[140px] animate-orb-2"
+          aria-hidden="true"
+        />
+        {/* Orb 3: Deep Royal Blue / Violet Light Orb */}
+        <div 
+          className="absolute bottom-[4%] left-[20%] w-[680px] h-[680px] rounded-full bg-gradient-to-r from-blue-600/30 via-indigo-600/25 to-violet-600/20 blur-[150px] animate-orb-3"
+          aria-hidden="true"
+        />
+      </div>
 
       {/* Floating Trilingual Language Switcher (Top-Right) */}
       <FloatingLanguageSwitcher />
 
       {/* Mission Control Live Telemetry Top Strip */}
-      <div className="relative z-50 bg-[#070A12]/95 border-b border-cyan-500/15 py-1.5 px-4 text-[11px] font-mono text-slate-400 backdrop-blur-md">
+      <div className="relative z-50 apple-liquid-glass rounded-none border-x-0 border-t-0 py-2 px-4 text-[11px] font-mono text-slate-300">
         <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-4 flex-wrap">
             <span className="flex items-center gap-1.5 text-cyan-300 font-semibold">
@@ -190,75 +213,85 @@ export default function App() {
       {/* Main Content Dashboard Container */}
       <main className="relative z-10 flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-8">
         
-        {/* Sleek Hero Banner with Glassmorphism and Mission Highlights */}
-        <section className="relative rounded-3xl p-6 sm:p-8 overflow-hidden border border-cyan-500/20 bg-gradient-to-br from-[#0B0F19]/90 via-[#0d1424]/90 to-[#0B0F19]/95 shadow-2xl backdrop-blur-2xl">
-          <div className="absolute -right-16 -top-16 w-80 h-80 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none" />
+        {/* Sleek Hero Banner with Apple Liquid Glass and Mission Highlights */}
+        <section className="relative group">
+          {/* Chromatic ambient gradient blobs directly behind Hero for SVG displacement refraction */}
+          <div className="absolute -top-10 -left-10 w-72 h-72 rounded-full bg-gradient-to-tr from-cyan-500/40 via-sky-400/30 to-blue-500/20 blur-3xl pointer-events-none -z-10 group-hover:scale-110 transition-transform duration-700" />
+          <div className="absolute -bottom-10 -right-10 w-80 h-80 rounded-full bg-gradient-to-bl from-fuchsia-500/35 via-purple-500/25 to-pink-500/20 blur-3xl pointer-events-none -z-10 group-hover:scale-110 transition-transform duration-700" />
+          
+          <div className="apple-liquid-glass rounded-3xl p-6 sm:p-8 relative overflow-hidden shadow-2xl">
+            <div className="absolute -right-16 -top-16 w-80 h-80 bg-cyan-400/10 rounded-full blur-3xl pointer-events-none" />
 
-          <div className="relative z-10 max-w-3xl space-y-4">
-            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 text-xs font-semibold">
-              <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
-              <span>
-                {lang === 'en' && 'Real-Time NASA Feed & Gemini AI Dynamic Translation'}
-                {lang === 'si' && 'නාසා සජීවී දත්ත සහ Gemini AI ස්වභාවික සිංහල පරිවර්තනය'}
-                {lang === 'ta' && 'நாசா நேரலை தரவு & Gemini AI துல்லிய தமிழ் மொழிபெயர்ப்பு'}
-              </span>
-            </div>
+            <div className="relative z-10 max-w-3xl space-y-4">
+              <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full apple-liquid-glass text-cyan-300 text-xs font-semibold">
+                <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
+                <span>
+                  {lang === 'en' && 'Real-Time NASA Feed & Keyless AI Dynamic Translation'}
+                  {lang === 'si' && 'නාසා සජීවී දත්ත සහ Keyless AI ස්වභාවික සිංහල පරිවර්තනය'}
+                  {lang === 'ta' && 'நாசா நேரலை தரவு & Keyless AI துல்லிய தமிழ் மொழிபெயர்ப்பு'}
+                </span>
+              </div>
 
-            <h1 className="text-2xl sm:text-4xl md:text-5xl font-black text-white tracking-tight leading-tight font-['Orbitron']">
-              {lang === 'en' && (
-                <>Explore the Cosmos in <span className="bg-gradient-to-r from-cyan-400 via-sky-300 to-blue-500 bg-clip-text text-transparent">Three Languages</span></>
-              )}
-              {lang === 'si' && (
-                <>විශ්වයේ විස්මිත අසිරිය <span className="bg-gradient-to-r from-cyan-400 via-sky-300 to-blue-500 bg-clip-text text-transparent">සිංහල බසින්</span> විඳගන්න</>
-              )}
-              {lang === 'ta' && (
-                <>பிரபஞ்சத்தின் அதிசயங்களை <span className="bg-gradient-to-r from-cyan-400 via-sky-300 to-blue-500 bg-clip-text text-transparent">தமிழில்</span> ஆராயுங்கள்</>
-              )}
-            </h1>
+              <h1 className="text-2xl sm:text-4xl md:text-5xl font-black text-white tracking-tight leading-tight font-['Orbitron']">
+                {lang === 'en' && (
+                  <>Explore the Cosmos in <span className="bg-gradient-to-r from-cyan-400 via-sky-300 to-blue-500 bg-clip-text text-transparent">Three Languages</span></>
+                )}
+                {lang === 'si' && (
+                  <>විශ්වයේ විස්මිත අසිරිය <span className="bg-gradient-to-r from-cyan-400 via-sky-300 to-blue-500 bg-clip-text text-transparent">සිංහල බසින්</span> විඳගන්න</>
+                )}
+                {lang === 'ta' && (
+                  <>பிரபஞ்சத்தின் அதிசயங்களை <span className="bg-gradient-to-r from-cyan-400 via-sky-300 to-blue-500 bg-clip-text text-transparent">தமிழில்</span> ஆராயுங்கள்</>
+                )}
+              </h1>
 
-            <p className="text-xs sm:text-sm md:text-base text-slate-300 leading-relaxed max-w-2xl font-sans">
-              {lang === 'en' && 'Astronomy Picture of the Day (APOD), interactive 3D celestial mechanics, landmark spaceflight breakdowns from Apollo to Artemis, and live deep-space discoveries translated dynamically on-the-fly.'}
-              {lang === 'si' && 'නාසා ආයතනයේ දවසේ තාරකා විද්‍යා ඡායාරූපය (APOD), ත්‍රිමාන (3D) අභ්‍යවකාශ ආකෘති, ඇපලෝ සිට ආටෙමිස් දක්වා ඓතිහාසික චන්ද්‍ර මෙහෙයුම් සහ සජීවී විද්‍යා පුවත් එකම වේදිකාවකින්.'}
-              {lang === 'ta' && 'நாசாவின் நாளின் வானியல் புகைப்படம் (APOD), 3D கோளப் பார்வை, வரலாற்று விண்வெளி பயணங்களின் விரிவான தகவல்கள் மற்றும் நேரலைச் செய்திகள்.'}
-            </p>
+              <p className="text-xs sm:text-sm md:text-base text-slate-300 leading-relaxed max-w-2xl font-sans">
+                {lang === 'en' && 'Astronomy Picture of the Day (APOD), interactive 3D celestial mechanics, landmark spaceflight breakdowns from Apollo to Artemis, and live deep-space discoveries translated dynamically on-the-fly.'}
+                {lang === 'si' && 'නාසා ආයතනයේ දවසේ තාරකා විද්‍යා ඡායාරූපය (APOD), ත්‍රිමාන (3D) අභ්‍යවකාශ ආකෘති, ඇපලෝ සිට ආටෙමිස් දක්වා ඓතිහාසික චන්ද්‍ර මෙහෙයුම් සහ සජීවී විද්‍යා පුවත් එකම වේදිකාවකින්.'}
+                {lang === 'ta' && 'நாசாவின் நாளின் வானியல் புகைப்படம் (APOD), 3D கோளப் பார்வை, வரலாற்று விண்வெளி பயணங்களின் விரிவான தகவல்கள் மற்றும் நேரலைச் செய்திகள்.'}
+              </p>
 
-            {/* Slide To Action Quick Launcher */}
-            <div className="pt-2 max-w-sm">
-              <SlideToAction
-                label={
-                  lang === 'si' ? 'ගවේෂණය සඳහා අදින්න' :
-                  lang === 'ta' ? 'ஆராய ஸ்லைடு செய்யவும்' :
-                  'Slide to Explore 3D Lab'
-                }
-                successLabel={
-                  lang === 'si' ? '3D අභ්‍යවකාශගාරය විවෘතයි' :
-                  lang === 'ta' ? '3D ஆய்வகம் திறக்கப்பட்டது' :
-                  '3D Space Lab Launched!'
-                }
-                onSuccess={() => handleTabSwitch('3d')}
-              />
+              {/* Slide To Action Quick Launcher */}
+              <div className="pt-2 max-w-sm">
+                <SlideToAction
+                  label={
+                    lang === 'si' ? 'ගවේෂණය සඳහා අදින්න' :
+                    lang === 'ta' ? 'ஆராய ஸ்லைடு செய்யவும்' :
+                    'Slide to Explore 3D Lab'
+                  }
+                  successLabel={
+                    lang === 'si' ? '3D අභ්‍යවකාශගාරය විවෘතයි' :
+                    lang === 'ta' ? '3D ஆய்வகம் திறக்கப்பட்டது' :
+                    '3D Space Lab Launched!'
+                  }
+                  onSuccess={() => handleTabSwitch('3d')}
+                />
+              </div>
             </div>
           </div>
         </section>
 
-        {/* Space Dashboard Multi-Card Grid Hub with Framer Motion hover */}
-        <section className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3 sm:gap-4">
+        {/* Space Dashboard Multi-Card Grid Hub with Apple Liquid Glass and Framer Motion hover */}
+        <section className="relative">
+          {/* Ambient chromatic light streak behind the tile hub */}
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[90%] h-32 bg-gradient-to-r from-cyan-500/20 via-fuchsia-500/20 to-blue-500/20 blur-3xl pointer-events-none -z-10" />
+
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3 sm:gap-4">
           {/* Tile 1: APOD */}
           <motion.button
             whileHover={{ y: -4, scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
             onClick={() => handleTabSwitch('apod')}
-            className={`p-4 rounded-2xl border text-left transition-all duration-200 relative overflow-hidden flex flex-col justify-between ${
+            className={`p-4 sm:p-5 rounded-3xl apple-liquid-glass text-left transition-all duration-300 relative overflow-hidden flex flex-col justify-between ${
               activeTab === 'apod'
-                ? 'bg-cyan-950/40 border-cyan-400/60 shadow-lg shadow-cyan-950/50'
-                : 'bg-[#0B0F19]/80 hover:bg-slate-900/60 border-slate-800 hover:border-cyan-500/40'
+                ? 'ring-2 ring-cyan-400/80 shadow-[0_12px_36px_rgba(6,182,212,0.35)]'
+                : 'hover:border-cyan-500/50'
             }`}
           >
             <div className="flex items-center justify-between w-full">
-              <div className="w-9 h-9 rounded-xl bg-cyan-500/15 border border-cyan-500/30 flex items-center justify-center">
-                <Compass className="w-5 h-5 text-cyan-400" />
+              <div className="w-9 h-9 rounded-2xl bg-cyan-500/20 border border-cyan-500/40 flex items-center justify-center">
+                <Compass className="w-5 h-5 text-cyan-300" />
               </div>
-              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-cyan-500/10 text-cyan-300 border border-cyan-500/20">
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-cyan-500/15 text-cyan-300 border border-cyan-500/30">
                 DAILY
               </span>
             </div>
@@ -266,7 +299,7 @@ export default function App() {
               <h3 className="text-sm font-bold text-white font-['Orbitron']">
                 {t('navApod')}
               </h3>
-              <p className="text-[11px] text-slate-400 mt-0.5 line-clamp-1">
+              <p className="text-[11px] text-slate-300 mt-0.5 line-clamp-1">
                 4K Space Imagery
               </p>
             </div>
@@ -277,17 +310,17 @@ export default function App() {
             whileHover={{ y: -4, scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
             onClick={() => handleTabSwitch('3d')}
-            className={`p-4 rounded-2xl border text-left transition-all duration-200 relative overflow-hidden flex flex-col justify-between ${
+            className={`p-4 sm:p-5 rounded-3xl apple-liquid-glass text-left transition-all duration-300 relative overflow-hidden flex flex-col justify-between ${
               activeTab === '3d'
-                ? 'bg-blue-950/40 border-blue-400/60 shadow-lg shadow-blue-950/50'
-                : 'bg-[#0B0F19]/80 hover:bg-slate-900/60 border-slate-800 hover:border-blue-500/40'
+                ? 'ring-2 ring-blue-400/80 shadow-[0_12px_36px_rgba(59,130,246,0.35)]'
+                : 'hover:border-blue-500/50'
             }`}
           >
             <div className="flex items-center justify-between w-full">
-              <div className="w-9 h-9 rounded-xl bg-blue-500/15 border border-blue-500/30 flex items-center justify-center">
-                <Orbit className="w-5 h-5 text-blue-400" />
+              <div className="w-9 h-9 rounded-2xl bg-blue-500/20 border border-blue-500/40 flex items-center justify-center">
+                <Orbit className="w-5 h-5 text-blue-300" />
               </div>
-              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-300 border border-blue-500/20">
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-blue-500/15 text-blue-300 border border-blue-500/30">
                 WEBGL 60FPS
               </span>
             </div>
@@ -295,7 +328,7 @@ export default function App() {
               <h3 className="text-sm font-bold text-white font-['Orbitron']">
                 {t('nav3D')}
               </h3>
-              <p className="text-[11px] text-slate-400 mt-0.5 line-clamp-1">
+              <p className="text-[11px] text-slate-300 mt-0.5 line-clamp-1">
                 Planets & JWST
               </p>
             </div>
@@ -306,17 +339,17 @@ export default function App() {
             whileHover={{ y: -4, scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
             onClick={() => handleTabSwitch('missions')}
-            className={`p-4 rounded-2xl border text-left transition-all duration-200 relative overflow-hidden flex flex-col justify-between ${
+            className={`p-4 sm:p-5 rounded-3xl apple-liquid-glass text-left transition-all duration-300 relative overflow-hidden flex flex-col justify-between ${
               activeTab === 'missions'
-                ? 'bg-amber-950/30 border-amber-400/60 shadow-lg shadow-amber-950/50'
-                : 'bg-[#0B0F19]/80 hover:bg-slate-900/60 border-slate-800 hover:border-amber-500/40'
+                ? 'ring-2 ring-amber-400/80 shadow-[0_12px_36px_rgba(245,158,11,0.35)]'
+                : 'hover:border-amber-500/50'
             }`}
           >
             <div className="flex items-center justify-between w-full">
-              <div className="w-9 h-9 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center">
-                <Rocket className="w-5 h-5 text-amber-400" />
+              <div className="w-9 h-9 rounded-2xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center">
+                <Rocket className="w-5 h-5 text-amber-300" />
               </div>
-              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-300 border border-amber-500/20">
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30">
                 TIMELINE
               </span>
             </div>
@@ -324,7 +357,7 @@ export default function App() {
               <h3 className="text-sm font-bold text-white font-['Orbitron']">
                 {t('navMissions')}
               </h3>
-              <p className="text-[11px] text-slate-400 mt-0.5 line-clamp-1">
+              <p className="text-[11px] text-slate-300 mt-0.5 line-clamp-1">
                 Apollo to Artemis
               </p>
             </div>
@@ -335,17 +368,17 @@ export default function App() {
             whileHover={{ y: -4, scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
             onClick={() => handleTabSwitch('news')}
-            className={`p-4 rounded-2xl border text-left transition-all duration-200 relative overflow-hidden flex flex-col justify-between ${
+            className={`p-4 sm:p-5 rounded-3xl apple-liquid-glass text-left transition-all duration-300 relative overflow-hidden flex flex-col justify-between ${
               activeTab === 'news'
-                ? 'bg-emerald-950/30 border-emerald-400/60 shadow-lg shadow-emerald-950/50'
-                : 'bg-[#0B0F19]/80 hover:bg-slate-900/60 border-slate-800 hover:border-emerald-500/40'
+                ? 'ring-2 ring-emerald-400/80 shadow-[0_12px_36px_rgba(16,185,129,0.35)]'
+                : 'hover:border-emerald-500/50'
             }`}
           >
             <div className="flex items-center justify-between w-full">
-              <div className="w-9 h-9 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center">
-                <Newspaper className="w-5 h-5 text-emerald-400" />
+              <div className="w-9 h-9 rounded-2xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center">
+                <Newspaper className="w-5 h-5 text-emerald-300" />
               </div>
-              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-300 border border-emerald-500/20">
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
                 LIVE RSS
               </span>
             </div>
@@ -353,8 +386,8 @@ export default function App() {
               <h3 className="text-sm font-bold text-white font-['Orbitron']">
                 {t('navNews')}
               </h3>
-              <p className="text-[11px] text-slate-400 mt-0.5 line-clamp-1">
-                Gemini AI Translate
+              <p className="text-[11px] text-slate-300 mt-0.5 line-clamp-1">
+                AI Translation
               </p>
             </div>
           </motion.button>
@@ -364,15 +397,15 @@ export default function App() {
             whileHover={{ y: -4, scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
             onClick={() => handleTabSwitch('quiz')}
-            className={`p-4 rounded-2xl border text-left transition-all duration-200 relative overflow-hidden flex flex-col justify-between ${
+            className={`p-4 sm:p-5 rounded-3xl apple-liquid-glass text-left transition-all duration-300 relative overflow-hidden flex flex-col justify-between ${
               activeTab === 'quiz'
-                ? 'bg-cyan-950/50 border-cyan-400/70 shadow-lg shadow-cyan-950/60'
-                : 'bg-[#0B0F19]/80 hover:bg-slate-900/60 border-slate-800 hover:border-cyan-500/40'
+                ? 'ring-2 ring-cyan-400/80 shadow-[0_12px_36px_rgba(6,182,212,0.35)]'
+                : 'hover:border-cyan-500/50'
             }`}
           >
             <div className="flex items-center justify-between w-full">
-              <div className="w-9 h-9 rounded-xl bg-cyan-500/15 border border-cyan-500/30 flex items-center justify-center">
-                <BrainCircuit className="w-5 h-5 text-cyan-400" />
+              <div className="w-9 h-9 rounded-2xl bg-cyan-500/20 border border-cyan-500/40 flex items-center justify-center">
+                <BrainCircuit className="w-5 h-5 text-cyan-300" />
               </div>
               <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 font-bold">
                 TRIVIA
@@ -382,8 +415,8 @@ export default function App() {
               <h3 className="text-sm font-bold text-white font-['Orbitron']">
                 {lang === 'si' ? 'දැනුම මිනුම' : lang === 'ta' ? 'வினாடி வினா' : 'Space Trivia'}
               </h3>
-              <p className="text-[11px] text-slate-400 mt-0.5 line-clamp-1">
-                {lang === 'si' ? 'Gemini AI ප්‍රශ්න' : lang === 'ta' ? 'AI வினாக்கள்' : 'AI Quiz & Confetti'}
+              <p className="text-[11px] text-slate-300 mt-0.5 line-clamp-1">
+                {lang === 'si' ? 'AI ප්‍රශ්නාවලිය' : lang === 'ta' ? 'AI வினாக்கள்' : 'AI Quiz & Confetti'}
               </p>
             </div>
           </motion.button>
@@ -393,26 +426,26 @@ export default function App() {
             whileHover={{ y: -4, scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
             onClick={() => handleTabSwitch('assistant')}
-            className={`p-4 rounded-2xl border text-left transition-all duration-200 relative overflow-hidden flex flex-col justify-between ${
+            className={`p-4 sm:p-5 rounded-3xl apple-liquid-glass text-left transition-all duration-300 relative overflow-hidden flex flex-col justify-between ${
               activeTab === 'assistant'
-                ? 'bg-purple-950/40 border-purple-400/60 shadow-lg shadow-purple-950/50'
-                : 'bg-[#0B0F19]/80 hover:bg-slate-900/60 border-slate-800 hover:border-purple-500/40'
+                ? 'ring-2 ring-purple-400/80 shadow-[0_12px_36px_rgba(168,85,247,0.35)]'
+                : 'hover:border-purple-500/50'
             }`}
           >
             <div className="flex items-center justify-between w-full">
-              <div className="w-9 h-9 rounded-xl bg-purple-500/15 border border-purple-500/30 flex items-center justify-center">
-                <Bot className="w-5 h-5 text-purple-400" />
+              <div className="w-9 h-9 rounded-2xl bg-purple-500/20 border border-purple-500/40 flex items-center justify-center">
+                <Bot className="w-5 h-5 text-purple-300" />
               </div>
-              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-300 border border-purple-500/20">
-                OPENROUTER
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-purple-500/15 text-purple-300 border border-purple-500/30">
+                ASSISTANT
               </span>
             </div>
             <div className="mt-3">
               <h3 className="text-sm font-bold text-white font-['Orbitron']">
                 AI Assistant
               </h3>
-              <p className="text-[11px] text-slate-400 mt-0.5 line-clamp-1">
-                Llama 3.3 & DeepSeek
+              <p className="text-[11px] text-slate-300 mt-0.5 line-clamp-1">
+                Deep Space Intelligence
               </p>
             </div>
           </motion.button>
@@ -422,15 +455,15 @@ export default function App() {
             whileHover={{ y: -4, scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
             onClick={() => handleTabSwitch('iss')}
-            className={`p-4 rounded-2xl border text-left transition-all duration-200 relative overflow-hidden flex flex-col justify-between ${
+            className={`p-4 sm:p-5 rounded-3xl apple-liquid-glass text-left transition-all duration-300 relative overflow-hidden flex flex-col justify-between ${
               activeTab === 'iss'
-                ? 'bg-indigo-950/50 border-indigo-400/70 shadow-lg shadow-indigo-950/60'
-                : 'bg-[#0B0F19]/80 hover:bg-slate-900/60 border-slate-800 hover:border-indigo-500/40'
+                ? 'ring-2 ring-indigo-400/80 shadow-[0_12px_36px_rgba(99,102,241,0.35)]'
+                : 'hover:border-indigo-500/50'
             }`}
           >
             <div className="flex items-center justify-between w-full">
-              <div className="w-9 h-9 rounded-xl bg-indigo-500/15 border border-indigo-500/30 flex items-center justify-center">
-                <Globe2 className="w-5 h-5 text-indigo-400 animate-spin" style={{ animationDuration: '30s' }} />
+              <div className="w-9 h-9 rounded-2xl bg-indigo-500/20 border border-indigo-500/40 flex items-center justify-center">
+                <Globe2 className="w-5 h-5 text-indigo-300 animate-spin" style={{ animationDuration: '30s' }} />
               </div>
               <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-bold flex items-center gap-1">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
@@ -441,7 +474,7 @@ export default function App() {
               <h3 className="text-sm font-bold text-white font-['Orbitron']">
                 {lang === 'si' ? 'ISS ලුහුබැඳීම' : lang === 'ta' ? 'ISS நேரலை' : 'ISS Tracker'}
               </h3>
-              <p className="text-[11px] text-slate-400 mt-0.5 line-clamp-1">
+              <p className="text-[11px] text-slate-300 mt-0.5 line-clamp-1">
                 {lang === 'si' ? 'තත්‍ය කාලීන කක්ෂය' : lang === 'ta' ? 'நேரலை சுற்றுப்பாதை' : 'Real-Time Orbit'}
               </p>
             </div>
@@ -452,14 +485,14 @@ export default function App() {
             whileHover={{ y: -4, scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
             onClick={() => handleTabSwitch('saved')}
-            className={`p-4 rounded-2xl border text-left transition-all duration-200 relative overflow-hidden flex flex-col justify-between ${
+            className={`p-4 sm:p-5 rounded-3xl apple-liquid-glass text-left transition-all duration-300 relative overflow-hidden flex flex-col justify-between ${
               activeTab === 'saved'
-                ? 'bg-pink-950/40 border-pink-400/60 shadow-lg shadow-pink-950/50'
-                : 'bg-[#0B0F19]/80 hover:bg-slate-900/60 border-slate-800 hover:border-pink-500/40'
+                ? 'ring-2 ring-pink-400/80 shadow-[0_12px_36px_rgba(244,63,94,0.35)]'
+                : 'hover:border-pink-500/50'
             }`}
           >
             <div className="flex items-center justify-between w-full">
-              <div className="w-9 h-9 rounded-xl bg-pink-500/15 border border-pink-500/30 flex items-center justify-center">
+              <div className="w-9 h-9 rounded-2xl bg-pink-500/20 border border-pink-500/40 flex items-center justify-center">
                 <Heart className={`w-5 h-5 ${totalCount > 0 ? 'text-pink-400 fill-pink-500/40' : 'text-pink-400'}`} />
               </div>
               <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-pink-500/20 text-pink-300 border border-pink-500/30 font-bold">
@@ -470,11 +503,12 @@ export default function App() {
               <h3 className="text-sm font-bold text-white font-['Orbitron']">
                 {t('navSaved')}
               </h3>
-              <p className="text-[11px] text-slate-400 mt-0.5 line-clamp-1">
+              <p className="text-[11px] text-slate-300 mt-0.5 line-clamp-1">
                 Cosmic Favorites
               </p>
             </div>
           </motion.button>
+          </div>
         </section>
 
         {/* Dashboard Workspace Display (Active View) */}
@@ -656,8 +690,8 @@ export default function App() {
         onClick={() => handleTabSwitch('assistant')}
         className={`fixed bottom-24 sm:bottom-8 right-5 z-40 p-3 sm:px-4 sm:py-3 rounded-full flex items-center gap-2 shadow-2xl transition-all duration-300 ${
           activeTab === 'assistant'
-            ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white ring-2 ring-purple-400 scale-105 shadow-purple-500/50'
-            : 'bg-[#0B0F19]/90 border border-purple-500/40 text-purple-300 hover:border-purple-400 hover:bg-slate-900/90 shadow-purple-950/60 hover:scale-105'
+            ? 'bg-gradient-to-r from-purple-600/90 to-indigo-600/90 text-white ring-2 ring-purple-400 scale-105 shadow-purple-500/50 backdrop-blur-xl'
+            : 'apple-liquid-glass text-purple-300 hover:text-white hover:scale-105 shadow-purple-950/40'
         }`}
         title="Open NASA AI Assistant"
       >
@@ -670,8 +704,8 @@ export default function App() {
         </span>
       </button>
 
-      {/* Cosmic Dashboard Footer */}
-      <footer className="relative z-10 mt-16 pb-28 border-t border-slate-800/80 bg-[#070A12]/90 py-10 text-xs text-slate-400">
+      {/* Cosmic Dashboard Footer with Apple Liquid Glass */}
+      <footer className="relative z-10 mt-16 pb-28 apple-liquid-glass rounded-b-none border-x-0 border-b-0 py-10 text-xs text-slate-300">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row items-center justify-between gap-6">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-full bg-blue-900/60 border border-cyan-400/40 flex items-center justify-center font-['Orbitron'] font-bold text-[11px] text-rose-500 shadow-md">
@@ -679,7 +713,7 @@ export default function App() {
             </div>
             <div>
               <div className="text-white font-semibold font-['Orbitron']">{t('appName')}</div>
-              <div className="text-[11px] text-slate-500 font-mono">
+              <div className="text-[11px] text-slate-400 font-mono">
                 {t('footerPoweredBy')}
               </div>
             </div>

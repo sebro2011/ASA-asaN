@@ -1,8 +1,10 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
+import { motion } from 'framer-motion';
 import { Sun, Zap } from 'lucide-react';
 import { useTrilingual } from '../context/TrilingualProvider';
+import { LiquidGlassCard } from './LiquidGlassCard.jsx';
 
 const NOAA_SCALES = {
   0: {
@@ -94,9 +96,13 @@ export function SolarWeatherAlertCard({ className = '' }) {
   const activeMitigation = activeScale.mitigationTip[lang] || activeScale.mitigationTip.en;
 
   return (
-    <div className={`rounded-3xl p-6 bg-slate-950/80 border border-slate-800 backdrop-blur-xl shadow-2xl space-y-5 font-sans ${className}`}>
+    <LiquidGlassCard 
+      className={`p-6 space-y-5 font-sans ${className}`}
+      edgeHighlight={true}
+      hoverable={true}
+    >
       {/* Header with Live Pulsing Badge */}
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-4">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 pb-4">
         <div className="flex items-center gap-3">
           <div 
             className="p-3 rounded-2xl flex items-center justify-center shadow-lg transition-colors"
@@ -122,12 +128,12 @@ export function SolarWeatherAlertCard({ className = '' }) {
 
         <div className="flex items-center gap-2">
           <span
-            className="px-3 py-1 rounded-full text-xs font-mono font-bold uppercase tracking-wider border"
+            className="px-3.5 py-1.5 rounded-full text-xs font-mono font-bold uppercase tracking-wider border shadow-md"
             style={{
               backgroundColor: `${activeScale.color}18`,
               color: activeScale.color,
               borderColor: `${activeScale.color}50`,
-              boxShadow: `0 0 12px ${activeScale.glow}`
+              boxShadow: `0 0 16px ${activeScale.glow}`
             }}
           >
             {activeScale.scale}
@@ -137,7 +143,7 @@ export function SolarWeatherAlertCard({ className = '' }) {
 
       {/* Main Alert Banner */}
       <div 
-        className="p-4 rounded-2xl border transition-all duration-500 space-y-2"
+        className="p-4 rounded-2xl border transition-all duration-500 space-y-2 liquid-glass"
         style={{
           backgroundColor: `${activeScale.color}10`,
           borderColor: `${activeScale.color}35`
@@ -158,25 +164,25 @@ export function SolarWeatherAlertCard({ className = '' }) {
 
       {/* Real-Time Telemetry Metrics Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 font-mono text-xs">
-        <div className="p-3.5 rounded-2xl bg-slate-900/90 border border-slate-800">
+        <div className="p-3.5 rounded-2xl liquid-glass liquid-glass-edge">
           <span className="text-slate-400 block text-[10px] uppercase">Solar Wind Velocity</span>
           <span className="text-cyan-300 font-bold text-sm">{solarWindSpeed} km/s</span>
           <span className="text-slate-500 block text-[10px] mt-0.5">DSCOVR Satellite Link</span>
         </div>
 
-        <div className="p-3.5 rounded-2xl bg-slate-900/90 border border-slate-800">
+        <div className="p-3.5 rounded-2xl liquid-glass liquid-glass-edge">
           <span className="text-slate-400 block text-[10px] uppercase">Power Grid Impact</span>
           <span className="text-slate-200 font-medium text-xs leading-snug block mt-0.5">{activeGrid}</span>
         </div>
 
-        <div className="p-3.5 rounded-2xl bg-slate-900/90 border border-slate-800">
+        <div className="p-3.5 rounded-2xl liquid-glass liquid-glass-edge">
           <span className="text-slate-400 block text-[10px] uppercase">Satellite / XR Link</span>
           <span className="text-slate-200 font-medium text-xs leading-snug block mt-0.5">{activeSat}</span>
         </div>
       </div>
 
       {/* Critical Mitigation Protocols */}
-      <div className="p-4 rounded-2xl bg-indigo-950/30 border border-indigo-500/30 font-mono text-xs space-y-1">
+      <div className="p-4 rounded-2xl bg-indigo-950/25 border border-indigo-500/25 font-mono text-xs space-y-1.5">
         <span className="text-indigo-300 font-bold flex items-center gap-1.5">
           <Zap className="w-3.5 h-3.5 text-indigo-400" />
           Recommended NASA Operational Mitigation:
@@ -187,7 +193,7 @@ export function SolarWeatherAlertCard({ className = '' }) {
       </div>
 
       {/* Interactive Simulation Slider */}
-      <div className="pt-2 border-t border-slate-800/80 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs font-mono text-slate-400">
+      <div className="pt-2 border-t border-white/10 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs font-mono text-slate-400">
         <span>Simulate Kp Intensity:</span>
         <div className="flex items-center gap-3 w-full sm:w-64">
           <span className="text-[10px]">0</span>
@@ -207,7 +213,7 @@ export function SolarWeatherAlertCard({ className = '' }) {
           <span className="text-[10px]">9</span>
         </div>
       </div>
-    </div>
+    </LiquidGlassCard>
   );
 }
 

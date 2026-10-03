@@ -348,9 +348,11 @@ const MoonModel = memo(function MoonModel({ autoRotate, wireframe }) {
 // ====================================================
 const JWSTModel = memo(function JWSTModel({ autoRotate, wireframe }) {
   const groupRef = useRef();
+  const elapsedRef = useRef(0);
 
-  useFrame(({ clock }, delta) => {
-    const elapsed = clock.getElapsedTime();
+  useFrame((_, delta) => {
+    elapsedRef.current += delta;
+    const elapsed = elapsedRef.current;
     if (groupRef.current) {
       groupRef.current.position.y = Math.sin(elapsed * 0.8) * 0.1;
       groupRef.current.rotation.z = Math.sin(elapsed * 0.5) * 0.02;
