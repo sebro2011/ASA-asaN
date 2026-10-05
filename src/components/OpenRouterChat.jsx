@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { 
   Bot, 
@@ -163,7 +163,7 @@ const STARTER_PROMPTS = [
  * OpenRouterChat - Standalone Local NASA Astrophysics AI Assistant Component
  * Zero external API dependencies, 100% keyless local inference.
  */
-export default function OpenRouterChat({ className = '', onClose = () => {} }) {
+function OpenRouterChat({ className = '', onClose = () => {} }) {
   const { i18n } = useTranslation();
   const currentLang = (i18n.language || 'en').slice(0, 2);
 
@@ -332,12 +332,12 @@ export default function OpenRouterChat({ className = '', onClose = () => {} }) {
   const currentModelObj = AVAILABLE_MODELS.find(m => m.id === selectedModel) || AVAILABLE_MODELS[0];
 
   return (
-    <div className={`w-full max-w-4xl mx-auto rounded-3xl apple-liquid-glass shadow-2xl overflow-hidden flex flex-col gap-3 min-h-[140px] p-4 text-slate-100 font-sans ${className}`}>
+    <div className={`flex flex-col min-h-[160px] w-full gap-3 p-5 max-w-4xl mx-auto bg-slate-900/90 border border-slate-800 rounded-2xl shadow-xl text-slate-100 font-sans ${className}`}>
       
       {/* Space Chat Header: NASA AI Title at top */}
-      <div className="p-4 sm:p-5 border-b border-white/10 apple-liquid-glass flex flex-col sm:flex-row sm:items-center justify-between gap-3 select-none">
+      <div className="p-4 rounded-xl bg-slate-950/60 border border-slate-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 select-none">
         <div className="flex items-center gap-3">
-          <div className="relative w-10 h-10 rounded-2xl bg-gradient-to-tr from-cyan-600 via-blue-600 to-indigo-600 p-0.5 flex items-center justify-center shadow-lg shadow-cyan-500/20 shrink-0">
+          <div className="relative w-10 h-10 rounded-xl bg-gradient-to-tr from-cyan-600 via-blue-600 to-indigo-600 p-0.5 flex items-center justify-center shadow-lg shadow-cyan-500/20 shrink-0">
             <Bot className="w-5 h-5 text-white" />
             <span className="absolute -top-1 -right-1 w-3 h-3 bg-emerald-500 rounded-full border-2 border-[#030712] animate-pulse" />
           </div>
@@ -369,7 +369,7 @@ export default function OpenRouterChat({ className = '', onClose = () => {} }) {
             className={`p-2 rounded-xl border text-xs font-mono transition flex items-center gap-1.5 cursor-pointer ${
               soundEnabled
                 ? 'bg-cyan-500/15 border-cyan-500/40 text-cyan-300'
-                : 'apple-liquid-glass border-white/10 text-slate-400 hover:text-slate-200'
+                : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200'
             }`}
             title={soundEnabled ? 'Mute Sci-Fi Audio Synthesizer' : 'Enable Sci-Fi Audio Synthesizer'}
           >
@@ -380,7 +380,7 @@ export default function OpenRouterChat({ className = '', onClose = () => {} }) {
           <button
             type="button"
             onClick={handleClearHistory}
-            className="p-2 rounded-xl apple-liquid-glass hover:border-rose-500/40 border-white/10 text-slate-400 hover:text-rose-400 transition cursor-pointer"
+            className="p-2 rounded-xl bg-slate-900 border border-slate-800 hover:border-rose-500/40 text-slate-400 hover:text-rose-400 transition cursor-pointer"
             title="Clear Chat History"
           >
             <Trash2 className="w-4 h-4" />
@@ -389,7 +389,7 @@ export default function OpenRouterChat({ className = '', onClose = () => {} }) {
       </div>
 
       {/* Model Selection Tabs Bar */}
-      <div className="px-4 py-2.5 border-b border-white/10 apple-liquid-glass flex items-center gap-2 overflow-x-auto text-[11px] font-mono select-none">
+      <div className="px-4 py-2.5 rounded-xl bg-slate-950/40 border border-slate-800/80 flex items-center gap-2 overflow-x-auto text-[11px] font-mono select-none">
         <span className="text-slate-400 text-[10px] uppercase tracking-wider flex items-center gap-1">
           <Cpu className="w-3 h-3 text-cyan-400" />
           Active Core:
@@ -402,7 +402,7 @@ export default function OpenRouterChat({ className = '', onClose = () => {} }) {
             className={`px-3 py-1 rounded-xl transition whitespace-nowrap cursor-pointer flex items-center gap-1.5 ${
               selectedModel === m.id
                 ? 'bg-gradient-to-r from-cyan-600 to-indigo-600 text-white font-bold shadow-md shadow-cyan-950/40'
-                : 'apple-liquid-glass text-slate-400 hover:text-white border-white/10'
+                : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
             }`}
           >
             <span>{m.name}</span>
@@ -412,7 +412,7 @@ export default function OpenRouterChat({ className = '', onClose = () => {} }) {
       </div>
 
       {/* Messages Scroll Area */}
-      <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 font-sans text-sm">
+      <div className="min-h-[220px] max-h-[420px] overflow-y-auto p-4 rounded-xl bg-slate-950/50 border border-slate-800/80 space-y-4 font-sans text-sm">
         {messages.map((msg) => {
           const isUser = msg.role === 'user';
 
@@ -437,10 +437,10 @@ export default function OpenRouterChat({ className = '', onClose = () => {} }) {
               {/* Message Bubble Card */}
               <div className="space-y-1.5 group">
                 <div
-                  className={`p-4 rounded-2xl relative shadow-xl backdrop-blur-md text-sm leading-relaxed select-text whitespace-pre-wrap ${
+                  className={`p-4 rounded-2xl relative shadow-xl text-sm leading-relaxed select-text whitespace-pre-wrap ${
                     isUser
-                      ? 'bg-gradient-to-br from-cyan-600/80 to-blue-700/80 text-white rounded-tr-none border border-cyan-400/40'
-                      : 'apple-liquid-glass text-slate-200 rounded-tl-none border-white/15'
+                      ? 'bg-gradient-to-br from-cyan-600/90 to-blue-700/90 text-white rounded-tr-none border border-cyan-400/40'
+                      : 'bg-slate-900/90 text-slate-200 rounded-tl-none border border-slate-800/80'
                   }`}
                 >
                   {/* Message Content */}
@@ -456,7 +456,7 @@ export default function OpenRouterChat({ className = '', onClose = () => {} }) {
                     <button
                       type="button"
                       onClick={() => handleCopy(msg.id, msg.content)}
-                      className="absolute top-2.5 right-2.5 p-1 rounded-lg apple-liquid-glass text-slate-400 hover:text-white transition opacity-0 group-hover:opacity-100 cursor-pointer"
+                      className="absolute top-2.5 right-2.5 p-1 rounded-lg bg-slate-800 text-slate-400 hover:text-white transition opacity-0 group-hover:opacity-100 cursor-pointer"
                       title="Copy to clipboard"
                     >
                       {copiedId === msg.id ? (
@@ -491,7 +491,7 @@ export default function OpenRouterChat({ className = '', onClose = () => {} }) {
                         key={idx}
                         type="button"
                         onClick={() => sendMessage(sug)}
-                        className="px-2.5 py-1 rounded-xl apple-liquid-glass hover:border-cyan-400/50 text-cyan-300 text-[11px] font-mono transition text-left cursor-pointer shadow-sm hover:scale-[1.02]"
+                        className="px-2.5 py-1 rounded-xl bg-slate-900 border border-slate-800 hover:border-cyan-400/50 text-cyan-300 text-[11px] font-mono transition text-left cursor-pointer shadow-sm hover:scale-[1.02]"
                       >
                         {sug}
                       </button>
@@ -508,7 +508,7 @@ export default function OpenRouterChat({ className = '', onClose = () => {} }) {
 
       {/* Quick Starter Prompts Strip */}
       {messages.length <= 2 && (
-        <div className="px-4 py-2 border-t border-white/10 apple-liquid-glass overflow-x-auto flex items-center gap-2 select-none">
+        <div className="px-4 py-2 rounded-xl bg-slate-950/40 border border-slate-800/80 overflow-x-auto flex items-center gap-2 select-none">
           <span className="text-[10px] font-mono text-slate-400 uppercase tracking-wider shrink-0 flex items-center gap-1">
             <Sparkles className="w-3 h-3 text-amber-400" />
             Quick Explore:
@@ -520,7 +520,7 @@ export default function OpenRouterChat({ className = '', onClose = () => {} }) {
                 key={idx}
                 type="button"
                 onClick={() => sendMessage(promptText)}
-                className="px-3 py-1 rounded-xl apple-liquid-glass hover:border-cyan-400/50 text-[11px] font-mono text-slate-300 hover:text-cyan-200 whitespace-nowrap transition cursor-pointer"
+                className="px-3 py-1 rounded-xl bg-slate-900 border border-slate-800 hover:border-cyan-400/50 text-[11px] font-mono text-slate-300 hover:text-cyan-200 whitespace-nowrap transition cursor-pointer"
               >
                 {promptText}
               </button>
@@ -530,7 +530,7 @@ export default function OpenRouterChat({ className = '', onClose = () => {} }) {
       )}
 
       {/* Input Composer Form */}
-      <div className="p-4 border-t border-white/10 apple-liquid-glass">
+      <div className="p-4 rounded-xl bg-slate-950/60 border border-slate-800/80">
         <form
           onSubmit={(e) => {
             e.preventDefault();
@@ -552,7 +552,7 @@ export default function OpenRouterChat({ className = '', onClose = () => {} }) {
                 : 'Ask about the ISS, Mars rovers, JWST, Artemis, or black holes...'
             }
             disabled={isLoading}
-            className="w-full pl-4 pr-12 py-3 rounded-2xl apple-liquid-glass border-white/15 focus:border-cyan-400 text-white placeholder-slate-400 text-xs sm:text-sm font-sans focus:outline-none transition shadow-inner disabled:opacity-50"
+            className="w-full pl-4 pr-12 py-3 rounded-xl bg-slate-900 border border-slate-800 focus:border-cyan-400 text-white placeholder-slate-400 text-xs sm:text-sm font-sans focus:outline-none transition shadow-inner disabled:opacity-50"
           />
 
           <button
@@ -576,3 +576,5 @@ export default function OpenRouterChat({ className = '', onClose = () => {} }) {
     </div>
   );
 }
+
+export default memo(OpenRouterChat);

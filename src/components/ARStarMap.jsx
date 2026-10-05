@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef, useMemo, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useMemo, useEffect, useCallback, memo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Sparkles, 
@@ -363,7 +363,7 @@ const CONSTELLATIONS = [
   }
 ];
 
-export default function ARStarMap({ lang = 'en', onSelectTarget = null }) {
+function ARStarMap({ lang = 'en', onSelectTarget = null }) {
   // Mode: 'real_ar' (Live Camera + AR overlay) vs 'sky_dome' (Virtual Cosmic Sky Dome)
   const [arMode, setArMode] = useState('real_ar');
   const [selectedBodyId, setSelectedBodyId] = useState('mars');
@@ -1473,3 +1473,5 @@ export default function ARStarMap({ lang = 'en', onSelectTarget = null }) {
     </div>
   );
 }
+
+export default memo(ARStarMap);

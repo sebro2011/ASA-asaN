@@ -9,7 +9,7 @@ interface Space3DViewerProps {
   lang: SupportedLanguage;
 }
 
-export const Space3DViewer: React.FC<Space3DViewerProps> = ({ lang }) => {
+export const Space3DViewer: React.FC<Space3DViewerProps> = React.memo(({ lang }) => {
   const [labMode, setLabMode] = useState<'focused' | 'full' | 'starmap'>('focused');
 
   return (
@@ -72,4 +72,4 @@ export const Space3DViewer: React.FC<Space3DViewerProps> = ({ lang }) => {
       )}
     </div>
   );
-};
+});

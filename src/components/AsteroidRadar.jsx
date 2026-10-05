@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, memo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import AsteroidRiskBadge from './AsteroidRiskBadge.jsx';
 import AsteroidRiskGauge from './AsteroidRiskGauge.jsx';
@@ -159,7 +159,7 @@ const MOCK_NEOWS_FALLBACK = [
   }
 ];
 
-export default function AsteroidRadar({ lang = 'en' }) {
+function AsteroidRadar({ lang = 'en' }) {
   const [asteroids, setAsteroids] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedAsteroid, setSelectedAsteroid] = useState(null);
@@ -276,6 +276,8 @@ export default function AsteroidRadar({ lang = 'en' }) {
 
   useEffect(() => {
     fetchAsteroids();
+    const interval = setInterval(fetchAsteroids, 45000); // 45s throttled polling for 60FPS background efficiency
+    return () => clearInterval(interval);
   }, []);
 
   // Filtered Asteroid List
@@ -749,3 +751,5 @@ export default function AsteroidRadar({ lang = 'en' }) {
     </div>
   );
 }
+
+export default memo(AsteroidRadar);

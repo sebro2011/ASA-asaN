@@ -17,21 +17,23 @@ import { NewsSection } from './components/NewsSection';
 import { SavedFavorites } from './components/SavedFavorites';
 import { SpaceTriviaQuiz } from './components/SpaceTriviaQuiz';
 import ISSTracker from './components/ISSTracker.jsx';
+import IssTracker2D from './components/IssTracker2D.jsx';
 import AsteroidRadar from './components/AsteroidRadar.jsx';
 import EPICViewer from './components/EPICViewer.jsx';
 import ExoplanetLab from './components/ExoplanetLab.jsx';
 import FloatingVoiceControl from './components/FloatingVoiceControl.jsx';
-import SolarAlertCard from './components/SolarAlertCard.jsx';
-import SolarWeatherAlertCard from './components/SolarWeatherAlertCard.jsx';
+import SolarWeather from './components/SolarWeather.jsx';
 import SpaceQuizModule from './components/SpaceQuizModule.jsx';
 import SmartSpaceQuiz from './components/SmartSpaceQuiz.jsx';
 import MarsImageTagger from './components/MarsImageTagger.jsx';
 import PWAInstallButton from './components/PWAInstallButton';
 import OfflineIndicator from './components/OfflineIndicator';
-import DynamicLiquidFilter from './components/DynamicLiquidFilter.jsx';
-import { TrilingualProvider } from './context/TrilingualProvider.jsx';
 import { ExportHtmlModal } from './components/ExportHtmlModal';
+import NasaAi from './components/NasaAi.jsx';
 import OpenRouterChat from './components/OpenRouterChat.jsx';
+import { CosmicAudioHeaderButton, SpaceAudioPlayer } from './components/SpaceAudioPlayer.jsx';
+import ARPlanetViewer from './components/ARPlanetViewer.jsx';
+import CosmicCalendar from './components/CosmicCalendar.jsx';
 import { useFavorites } from './utils/favorites';
 import { 
   Sparkles, 
@@ -60,6 +62,23 @@ import {
 
 type TabKey = 'apod' | '3d' | 'asteroids' | 'epic' | 'exoplanets' | 'missions' | 'news' | 'saved' | 'assistant' | 'quiz' | 'iss';
 
+// Isolated, memoized live clock to completely eliminate full-page App re-renders every 1s
+const LiveUtcClock = React.memo(() => {
+  const [time, setTime] = useState<string>(() =>
+    new Date().toISOString().replace('T', ' ').substring(0, 19) + ' UTC'
+  );
+
+  useEffect(() => {
+    const update = () => {
+      setTime(new Date().toISOString().replace('T', ' ').substring(0, 19) + ' UTC');
+    };
+    const interval = setInterval(update, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  return <span>{time}</span>;
+});
+
 export default function App() {
   const { t, i18n } = useTranslation();
   const lang = (i18n.language || 'en').slice(0, 2) as SupportedLanguage;
@@ -70,21 +89,6 @@ export default function App() {
   const [targetMissionId, setTargetMissionId] = useState<string | undefined>(undefined);
   const [isExportModalOpen, setIsExportModalOpen] = useState<boolean>(false);
   const { totalCount, savedApods, savedMissionIds } = useFavorites();
-
-  // Live Mission Control UTC Clock
-  const [utcTime, setUtcTime] = useState<string>('');
-
-  useEffect(() => {
-    const updateTime = () => {
-      const now = new Date();
-      setUtcTime(
-        now.toISOString().replace('T', ' ').substring(0, 19) + ' UTC'
-      );
-    };
-    updateTime();
-    const interval = setInterval(updateTime, 1000);
-    return () => clearInterval(interval);
-  }, []);
 
   // Sync HTML title & lang
   useEffect(() => {
@@ -137,36 +141,14 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#030712] text-slate-100 flex flex-col font-sans selection:bg-cyan-500/30 selection:text-cyan-200 relative overflow-x-hidden">
-      {/* Dynamic Interactive SVG Displacement Liquid Glass Refraction Filter */}
-      <DynamicLiquidFilter />
-
       {/* High-Performance 60FPS Cosmic Starfield & Meteor Particle Background */}
       <CosmicStarfieldBackground starCount={240} enableMeteors={true} speed={0.28} />
-
-      {/* Apple Exact Liquid Glass: Fixed Cyan, Purple, and Blue Glowing Ambient Blur Spots */}
-      <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
-        {/* Cyan Glowing Ambient Spot */}
-        <div 
-          className="fixed top-12 left-16 w-[560px] h-[560px] rounded-full bg-cyan-400 blur-[140px] opacity-20 animate-orb-1"
-          aria-hidden="true"
-        />
-        {/* Purple Glowing Ambient Spot */}
-        <div 
-          className="fixed top-1/3 right-12 w-[620px] h-[620px] rounded-full bg-purple-500 blur-[140px] opacity-20 animate-orb-2"
-          aria-hidden="true"
-        />
-        {/* Blue Glowing Ambient Spot */}
-        <div 
-          className="fixed bottom-12 left-1/4 w-[680px] h-[680px] rounded-full bg-blue-600 blur-[140px] opacity-20 animate-orb-3"
-          aria-hidden="true"
-        />
-      </div>
 
       {/* Floating Trilingual Language Switcher (Top-Right) */}
       <FloatingLanguageSwitcher />
 
       {/* Mission Control Live Telemetry Top Strip */}
-      <div className="relative z-50 apple-liquid-glass rounded-none border-x-0 border-t-0 py-2 px-4 text-[11px] font-mono text-slate-300">
+      <div className="relative z-50 bg-slate-900/90 border-b border-slate-800/80 py-2 px-4 text-[11px] font-mono text-slate-300">
         <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-4 flex-wrap">
             <span className="flex items-center gap-1.5 text-cyan-300 font-semibold">
@@ -179,7 +161,7 @@ export default function App() {
             <span className="hidden sm:inline text-slate-600">|</span>
             <span className="flex items-center gap-1 text-slate-300">
               <Clock className="w-3 h-3 text-cyan-400" />
-              <span>{utcTime || 'SYNCHRONIZING...'}</span>
+              <LiveUtcClock />
             </span>
             <span className="hidden md:inline text-slate-600">|</span>
             <span className="hidden md:inline text-slate-400">
@@ -188,6 +170,9 @@ export default function App() {
           </div>
 
           <div className="flex items-center gap-3">
+            {/* Ambient Planetary Soundscape Mute/Unmute Cosmic Button */}
+            <CosmicAudioHeaderButton lang={lang} />
+
             <span className="hidden lg:inline text-slate-400">
               AI ENGINE: <span className="text-emerald-300 font-semibold">GEMINI 2.5 FLASH</span>
             </span>
@@ -212,19 +197,13 @@ export default function App() {
       />
 
       {/* Main Content Dashboard Container */}
-      <main className="relative z-10 flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-8">
+      <main className="relative z-10 flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-40 space-y-8">
         
-        {/* Sleek Hero Banner with Apple Liquid Glass and Mission Highlights */}
-        <section className="relative group">
-          {/* Chromatic ambient gradient blobs directly behind Hero for SVG displacement refraction */}
-          <div className="absolute -top-10 -left-10 w-72 h-72 rounded-full bg-gradient-to-tr from-cyan-500/40 via-sky-400/30 to-blue-500/20 blur-3xl pointer-events-none -z-10 group-hover:scale-110 transition-transform duration-700" />
-          <div className="absolute -bottom-10 -right-10 w-80 h-80 rounded-full bg-gradient-to-bl from-fuchsia-500/35 via-purple-500/25 to-pink-500/20 blur-3xl pointer-events-none -z-10 group-hover:scale-110 transition-transform duration-700" />
-          
-          <div className="apple-liquid-glass rounded-3xl p-6 sm:p-8 relative overflow-hidden shadow-2xl">
-            <div className="absolute -right-16 -top-16 w-80 h-80 bg-cyan-400/10 rounded-full blur-3xl pointer-events-none" />
-
+        {/* Sleek Hero Banner - Clean Cosmic Dark UI */}
+        <section className="relative">
+          <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 sm:p-8 relative overflow-hidden shadow-xl">
             <div className="relative z-10 max-w-3xl space-y-4">
-              <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full apple-liquid-glass text-cyan-300 text-xs font-semibold">
+              <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-slate-800/80 border border-slate-700/80 text-cyan-300 text-xs font-semibold">
                 <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
                 <span>
                   {lang === 'en' && 'Real-Time NASA Feed & Keyless AI Dynamic Translation'}
@@ -271,18 +250,15 @@ export default function App() {
           </div>
         </section>
 
-        {/* Space Dashboard Multi-Card Grid Hub with Apple Liquid Glass and Framer Motion hover */}
+        {/* Space Dashboard Multi-Card Grid Hub - Clean Cosmic Dark UI */}
         <section className="relative">
-          {/* Ambient chromatic light streak behind the tile hub */}
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[90%] h-32 bg-gradient-to-r from-cyan-500/20 via-fuchsia-500/20 to-blue-500/20 blur-3xl pointer-events-none -z-10" />
-
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-11 gap-3 sm:gap-4">
             {/* Tile 1: APOD */}
             <motion.button
               whileHover={{ y: -4, scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
               onClick={() => handleTabSwitch('apod')}
-              className={`p-3.5 sm:p-4 rounded-3xl apple-liquid-glass text-left transition-all duration-300 relative overflow-hidden flex flex-col justify-between ${
+              className={`p-3.5 sm:p-4 rounded-2xl bg-slate-900/90 border border-slate-800 shadow-xl text-left transition-all duration-300 relative overflow-hidden flex flex-col justify-between ${
                 activeTab === 'apod'
                   ? 'ring-2 ring-cyan-400/80 shadow-[0_12px_36px_rgba(6,182,212,0.35)]'
                   : 'hover:border-cyan-500/50'
@@ -311,7 +287,7 @@ export default function App() {
               whileHover={{ y: -4, scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
               onClick={() => handleTabSwitch('3d')}
-              className={`p-3.5 sm:p-4 rounded-3xl apple-liquid-glass text-left transition-all duration-300 relative overflow-hidden flex flex-col justify-between ${
+              className={`p-3.5 sm:p-4 rounded-2xl bg-slate-900/90 border border-slate-800 shadow-xl text-left transition-all duration-300 relative overflow-hidden flex flex-col justify-between ${
                 activeTab === '3d'
                   ? 'ring-2 ring-blue-400/80 shadow-[0_12px_36px_rgba(59,130,246,0.35)]'
                   : 'hover:border-blue-500/50'
@@ -340,7 +316,7 @@ export default function App() {
               whileHover={{ y: -4, scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
               onClick={() => handleTabSwitch('asteroids')}
-              className={`p-3.5 sm:p-4 rounded-3xl apple-liquid-glass text-left transition-all duration-300 relative overflow-hidden flex flex-col justify-between ${
+              className={`p-3.5 sm:p-4 rounded-2xl bg-slate-900/90 border border-slate-800 shadow-xl text-left transition-all duration-300 relative overflow-hidden flex flex-col justify-between ${
                 activeTab === 'asteroids'
                   ? 'ring-2 ring-rose-400/80 shadow-[0_12px_36px_rgba(244,63,94,0.35)]'
                   : 'hover:border-rose-500/50'
@@ -369,7 +345,7 @@ export default function App() {
               whileHover={{ y: -4, scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
               onClick={() => handleTabSwitch('epic')}
-              className={`p-3.5 sm:p-4 rounded-3xl apple-liquid-glass text-left transition-all duration-300 relative overflow-hidden flex flex-col justify-between ${
+              className={`p-3.5 sm:p-4 rounded-2xl bg-slate-900/90 border border-slate-800 shadow-xl text-left transition-all duration-300 relative overflow-hidden flex flex-col justify-between ${
                 activeTab === 'epic'
                   ? 'ring-2 ring-emerald-400/80 shadow-[0_12px_36px_rgba(16,185,129,0.35)]'
                   : 'hover:border-emerald-500/50'
@@ -398,7 +374,7 @@ export default function App() {
               whileHover={{ y: -4, scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
               onClick={() => handleTabSwitch('exoplanets')}
-              className={`p-3.5 sm:p-4 rounded-3xl apple-liquid-glass text-left transition-all duration-300 relative overflow-hidden flex flex-col justify-between ${
+              className={`p-3.5 sm:p-4 rounded-2xl bg-slate-900/90 border border-slate-800 shadow-xl text-left transition-all duration-300 relative overflow-hidden flex flex-col justify-between ${
                 activeTab === 'exoplanets'
                   ? 'ring-2 ring-violet-400/80 shadow-[0_12px_36px_rgba(139,92,246,0.35)]'
                   : 'hover:border-violet-500/50'
@@ -427,7 +403,7 @@ export default function App() {
               whileHover={{ y: -4, scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
               onClick={() => handleTabSwitch('missions')}
-              className={`p-3.5 sm:p-4 rounded-3xl apple-liquid-glass text-left transition-all duration-300 relative overflow-hidden flex flex-col justify-between ${
+              className={`p-3.5 sm:p-4 rounded-2xl bg-slate-900/90 border border-slate-800 shadow-xl text-left transition-all duration-300 relative overflow-hidden flex flex-col justify-between ${
                 activeTab === 'missions'
                   ? 'ring-2 ring-amber-400/80 shadow-[0_12px_36px_rgba(245,158,11,0.35)]'
                   : 'hover:border-amber-500/50'
@@ -456,7 +432,7 @@ export default function App() {
               whileHover={{ y: -4, scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
               onClick={() => handleTabSwitch('news')}
-              className={`p-3.5 sm:p-4 rounded-3xl apple-liquid-glass text-left transition-all duration-300 relative overflow-hidden flex flex-col justify-between ${
+              className={`p-3.5 sm:p-4 rounded-2xl bg-slate-900/90 border border-slate-800 shadow-xl text-left transition-all duration-300 relative overflow-hidden flex flex-col justify-between ${
                 activeTab === 'news'
                   ? 'ring-2 ring-teal-400/80 shadow-[0_12px_36px_rgba(20,184,166,0.35)]'
                   : 'hover:border-teal-500/50'
@@ -485,7 +461,7 @@ export default function App() {
               whileHover={{ y: -4, scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
               onClick={() => handleTabSwitch('quiz')}
-              className={`p-3.5 sm:p-4 rounded-3xl apple-liquid-glass text-left transition-all duration-300 relative overflow-hidden flex flex-col justify-between ${
+              className={`p-3.5 sm:p-4 rounded-2xl bg-slate-900/90 border border-slate-800 shadow-xl text-left transition-all duration-300 relative overflow-hidden flex flex-col justify-between ${
                 activeTab === 'quiz'
                   ? 'ring-2 ring-cyan-400/80 shadow-[0_12px_36px_rgba(6,182,212,0.35)]'
                   : 'hover:border-cyan-500/50'
@@ -514,7 +490,7 @@ export default function App() {
               whileHover={{ y: -4, scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
               onClick={() => handleTabSwitch('iss')}
-              className={`p-3.5 sm:p-4 rounded-3xl apple-liquid-glass text-left transition-all duration-300 relative overflow-hidden flex flex-col justify-between ${
+              className={`p-3.5 sm:p-4 rounded-2xl bg-slate-900/90 border border-slate-800 shadow-xl text-left transition-all duration-300 relative overflow-hidden flex flex-col justify-between ${
                 activeTab === 'iss'
                   ? 'ring-2 ring-indigo-400/80 shadow-[0_12px_36px_rgba(99,102,241,0.35)]'
                   : 'hover:border-indigo-500/50'
@@ -544,7 +520,7 @@ export default function App() {
               whileHover={{ y: -4, scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
               onClick={() => handleTabSwitch('assistant')}
-              className={`p-3.5 sm:p-4 rounded-3xl apple-liquid-glass text-left transition-all duration-300 relative overflow-hidden flex flex-col justify-between ${
+              className={`p-3.5 sm:p-4 rounded-2xl bg-slate-900/90 border border-slate-800 shadow-xl text-left transition-all duration-300 relative overflow-hidden flex flex-col justify-between ${
                 activeTab === 'assistant'
                   ? 'ring-2 ring-purple-400/80 shadow-[0_12px_36px_rgba(168,85,247,0.35)]'
                   : 'hover:border-purple-500/50'
@@ -573,7 +549,7 @@ export default function App() {
               whileHover={{ y: -4, scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
               onClick={() => handleTabSwitch('saved')}
-              className={`p-3.5 sm:p-4 rounded-3xl apple-liquid-glass text-left transition-all duration-300 relative overflow-hidden flex flex-col justify-between ${
+              className={`p-3.5 sm:p-4 rounded-2xl bg-slate-900/90 border border-slate-800 shadow-xl text-left transition-all duration-300 relative overflow-hidden flex flex-col justify-between ${
                 activeTab === 'saved'
                   ? 'ring-2 ring-pink-400/80 shadow-[0_12px_36px_rgba(244,63,94,0.35)]'
                   : 'hover:border-pink-500/50'
@@ -632,7 +608,7 @@ export default function App() {
 
             {!isTabLoading && displayedTab === '3d' && (
               <AtmosphericEntryTransition key="entry-3d" tabKey="3d">
-                <section className="space-y-4">
+                <section className="space-y-6">
                   <div className="border-b border-slate-800/80 pb-3">
                     <h2 className="text-xl sm:text-2xl font-bold text-white flex items-center gap-2.5 font-['Orbitron']">
                       <Orbit className="w-6 h-6 text-cyan-400" />
@@ -644,6 +620,9 @@ export default function App() {
                   </div>
 
                   <Space3DViewer lang={lang} />
+
+                  {/* AR Augmented Reality Planet & Spacecraft Viewer (WebXR / Quick Look) */}
+                  <ARPlanetViewer lang={lang} />
                 </section>
               </AtmosphericEntryTransition>
             )}
@@ -688,15 +667,14 @@ export default function App() {
                   <MarsImageTagger />
 
                   {/* Solar Weather AI Alert System */}
-                  <SolarWeatherAlertCard />
-                  <SolarAlertCard />
+                  <SolarWeather />
                 </section>
               </AtmosphericEntryTransition>
             )}
 
             {!isTabLoading && displayedTab === 'news' && (
               <AtmosphericEntryTransition key="entry-news" tabKey="news">
-                <section className="space-y-4">
+                <section className="space-y-6">
                   <div className="border-b border-slate-800/80 pb-3">
                     <h2 className="text-xl sm:text-2xl font-bold text-white flex items-center gap-2.5 font-['Orbitron']">
                       <Newspaper className="w-6 h-6 text-cyan-400" />
@@ -706,6 +684,9 @@ export default function App() {
                       {t('newsSubheading')}
                     </p>
                   </div>
+
+                  {/* 2026/2027 Astronomical Event Calendar */}
+                  <CosmicCalendar lang={lang} />
 
                   <NewsSection lang={lang} />
                 </section>
@@ -743,7 +724,11 @@ export default function App() {
 
             {!isTabLoading && displayedTab === 'iss' && (
               <AtmosphericEntryTransition key="entry-iss" tabKey="iss">
-                <section className="space-y-4">
+                <section className="space-y-6">
+                  {/* Lightweight 2D HTML5 Canvas ISS Orbital Tracker */}
+                  <IssTracker2D lang={lang} />
+
+                  {/* Multi-Satellite Orbit Tracking Suite */}
                   <ISSTracker />
                 </section>
               </AtmosphericEntryTransition>
@@ -764,7 +749,7 @@ export default function App() {
                     </div>
                   </div>
 
-                  <OpenRouterChat />
+                  <NasaAi lang={lang} />
                 </section>
               </AtmosphericEntryTransition>
             )}
@@ -779,7 +764,7 @@ export default function App() {
         className={`fixed bottom-24 sm:bottom-8 right-5 z-40 p-3 sm:px-4 sm:py-3 rounded-full flex items-center gap-2 shadow-2xl transition-all duration-300 ${
           activeTab === 'assistant'
             ? 'bg-gradient-to-r from-purple-600/90 to-indigo-600/90 text-white ring-2 ring-purple-400 scale-105 shadow-purple-500/50 backdrop-blur-xl'
-            : 'apple-liquid-glass text-purple-300 hover:text-white hover:scale-105 shadow-purple-950/40'
+            : 'bg-slate-900/90 border border-slate-800 text-purple-300 hover:text-white hover:scale-105 shadow-xl'
         }`}
         title="Open NASA AI Assistant"
       >
@@ -792,8 +777,8 @@ export default function App() {
         </span>
       </button>
 
-      {/* Cosmic Dashboard Footer with Apple Liquid Glass */}
-      <footer className="relative z-10 mt-16 pb-28 apple-liquid-glass rounded-b-none border-x-0 border-b-0 py-10 text-xs text-slate-300">
+      {/* Cosmic Dashboard Footer - Clean Cosmic Dark UI */}
+      <footer className="relative z-10 mt-16 pb-28 bg-slate-900/90 border-t border-slate-800 py-10 text-xs text-slate-300">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row items-center justify-between gap-6">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-full bg-blue-900/60 border border-cyan-400/40 flex items-center justify-center font-['Orbitron'] font-bold text-[11px] text-rose-500 shadow-md">
@@ -844,11 +829,34 @@ export default function App() {
         className="bottom-24 sm:bottom-24 right-5"
       />
 
-      {/* Responsive iOS-Style Bottom Navigation Bar with Spring Bounce Animation */}
-      <NASABottomBar
-        activeTab={activeTab}
-        onTabChange={(tabId: string) => handleTabSwitch(tabId as any)}
-      />
+      {/* Telemetry & Navigation Stacking: Single Fixed Footer Container */}
+      <div className="fixed bottom-0 left-0 right-0 z-50 flex flex-col items-center pointer-events-none">
+        {/* Floating Mission Control Telemetry Bar */}
+        <div className="pointer-events-auto mb-2 px-3 sm:px-4 py-1.5 rounded-full bg-slate-900/90 backdrop-blur-md border border-slate-800/80 shadow-2xl flex items-center gap-2.5 sm:gap-3 text-[10px] sm:text-[11px] font-mono select-none">
+          <span className="flex items-center gap-1.5 text-cyan-300 font-semibold">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+            </span>
+            DSN LIVE LINK
+          </span>
+          <span className="text-slate-600">|</span>
+          <span className="flex items-center gap-1 text-slate-300">
+            <Clock className="w-3 h-3 text-cyan-400" />
+            <LiveUtcClock />
+          </span>
+          <span className="hidden sm:inline text-slate-600">|</span>
+          <span className="hidden sm:inline text-slate-400">
+            ISS VELOCITY: <span className="text-cyan-300">27,580 KM/H</span> · ALT: <span className="text-cyan-300">418 KM</span>
+          </span>
+        </div>
+
+        {/* Responsive iOS-Style Bottom Navigation Bar with Spring Bounce Animation */}
+        <NASABottomBar
+          activeTab={activeTab}
+          onTabChange={(tabId: string) => handleTabSwitch(tabId as any)}
+        />
+      </div>
 
       {/* Single HTML Export / Copy Modal */}
       <ExportHtmlModal

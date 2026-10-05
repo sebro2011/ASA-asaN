@@ -26,7 +26,7 @@ interface SavedFavoritesProps {
   onNavigateToMission: (missionId: string) => void;
 }
 
-export const SavedFavorites: React.FC<SavedFavoritesProps> = ({
+export const SavedFavorites: React.FC<SavedFavoritesProps> = React.memo(({
   lang,
   onNavigateToApod,
   onNavigateToMission
@@ -369,4 +369,4 @@ export const SavedFavorites: React.FC<SavedFavoritesProps> = ({
       )}
     </div>
   );
-};
+});

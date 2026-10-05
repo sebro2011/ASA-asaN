@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, memo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { LiquidGlassCard } from './LiquidGlassCard.jsx';
 import { 
@@ -55,7 +55,7 @@ const DEFAULT_MARS_HOTSPOTS = [
   }
 ];
 
-export default function MarsImageTagger({
+function MarsImageTagger({
   imageUrl = 'https://images.unsplash.com/photo-1614728894747-a83421e2b9c9?auto=format&fit=crop&w=1600&q=85',
   hotspots = DEFAULT_MARS_HOTSPOTS,
   className = ''
@@ -210,3 +210,5 @@ export default function MarsImageTagger({
     </LiquidGlassCard>
   );
 }
+
+export default memo(MarsImageTagger);

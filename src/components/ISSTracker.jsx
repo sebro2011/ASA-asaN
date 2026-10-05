@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback, memo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Radio, 
@@ -267,7 +267,7 @@ function propagateSatellite(sat, date = new Date()) {
   return propagateTLE(sat, date);
 }
 
-export default function ISSTracker({ className = '' }) {
+function ISSTracker({ className = '' }) {
   const { i18n } = useTranslation();
   const currentLang = (i18n.language || 'en').slice(0, 2);
 
@@ -365,10 +365,10 @@ export default function ISSTracker({ className = '' }) {
     setLastUpdate(now);
   }, []);
 
-  // Polling interval: 5 seconds
+  // Polling interval: 45 seconds (optimized for 60FPS background efficiency)
   useEffect(() => {
     updateSatellitePositions();
-    const interval = setInterval(updateSatellitePositions, 5000);
+    const interval = setInterval(updateSatellitePositions, 45000);
     return () => clearInterval(interval);
   }, [updateSatellitePositions]);
 
@@ -1186,3 +1186,5 @@ export default function ISSTracker({ className = '' }) {
     </div>
   );
 }
+
+export default memo(ISSTracker);

@@ -1,30 +1,47 @@
 'use client';
 
 import React, { useState, useEffect, memo } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Sun, 
   AlertTriangle, 
-  ShieldAlert, 
   ShieldCheck, 
-  Activity, 
+  ShieldAlert, 
   Radio, 
   Zap, 
+  Compass, 
   Sliders, 
-  RefreshCw,
-  Compass
+  RefreshCw 
 } from 'lucide-react';
+import { fetchSpaceWeather } from '@/lib/nasaApi';
 
 /**
- * SolarAlertCard
- * Solar Weather AI Alert System mapping Kp-Index & Coronal Mass Ejections (CMEs)
- * to real-time space weather impact levels, aurora visibility, and grid mitigation tips.
+ * SolarWeather Component
+ * 
+ * Clean Cosmic Dark UI Space Weather Monitor:
+ * - Natural in-flow text overlays without any absolute background clipping bars
+ * - Description text and mitigation tips flow dynamically with full readability
+ * - Real-time planetary Kp-index and solar wind telemetry simulation
  */
-function SolarAlertCard({ initialKp = 3.5, className = '' }) {
+export function SolarWeather({ initialKp = 3.5, className = '', lang = 'en' }) {
   const [kpIndex, setKpIndex] = useState(initialKp);
-  const [solarFlareClass, setSolarFlareClass] = useState('C3.2');
   const [solarWindSpeed, setSolarWindSpeed] = useState(412);
   const [isLiveSimulating, setIsLiveSimulating] = useState(false);
+
+  // Fetch real-time space weather via central API pipeline on mount
+  useEffect(() => {
+    let mounted = true;
+    async function loadSpaceWeather() {
+      try {
+        const sw = await fetchSpaceWeather();
+        if (mounted && sw) {
+          if (typeof sw.kpIndex === 'number') setKpIndex(sw.kpIndex);
+          if (typeof sw.solarWindSpeedKmS === 'number') setSolarWindSpeed(sw.solarWindSpeedKmS);
+        }
+      } catch {}
+    }
+    loadSpaceWeather();
+    return () => { mounted = false; };
+  }, []);
 
   // Auto-simulate minor live telemetry drift every 45 seconds
   useEffect(() => {
@@ -46,16 +63,15 @@ function SolarAlertCard({ initialKp = 3.5, className = '' }) {
         level: 'Severe Alert (G3–G5)',
         status: 'Major Solar Storm',
         color: 'text-rose-400',
-        bgColor: 'border-rose-500/40',
-        neonGlow: 'shadow-[0_0_35px_rgba(244,63,94,0.3)]',
+        borderColor: 'border-rose-500/40',
         badgeColor: 'bg-rose-500 text-white',
         icon: ShieldAlert,
-        description: 'Major solar storm! High risk of satellite communications degradation, widespread HF radio blackouts, and electrical power grid voltage fluctuations.',
+        description: 'Major solar storm underway! High risk of satellite communications degradation, widespread high-frequency radio blackouts on the sunlit hemisphere, and electrical power grid voltage fluctuations across polar and temperate transmission corridors.',
         auroraVisibility: 'Mid-to-low latitudes (Down to ~45° geomagnetic latitude)',
         mitigationTips: [
           'Satellite operators: Enable payload safe mode & orbital drag corrections.',
-          'Power grid dispatchers: Activate reactive power reserves.',
-          'High-frequency radio: Reroute transpolar aviation communications.'
+          'Power grid dispatchers: Activate reactive power reserves and reduce transformer load.',
+          'High-frequency radio: Reroute transpolar commercial aviation communications.'
         ]
       };
     }
@@ -64,11 +80,10 @@ function SolarAlertCard({ initialKp = 3.5, className = '' }) {
         level: 'Moderate Watch (G1–G2)',
         status: 'Geomagnetic Storming',
         color: 'text-amber-400',
-        bgColor: 'border-amber-500/40',
-        neonGlow: 'shadow-[0_0_30px_rgba(245,158,11,0.25)]',
+        borderColor: 'border-amber-500/40',
         badgeColor: 'bg-amber-500 text-slate-950 font-bold',
         icon: AlertTriangle,
-        description: 'Moderate storming underway. Mild satellite orientation drag and auroral displays visible across higher temperate latitudes.',
+        description: 'Moderate geomagnetic storming underway. Mild low-Earth orbit satellite orientation drag and auroral displays visible across higher temperate latitudes.',
         auroraVisibility: 'High-latitude regions (Northern US, Scandinavia, Southern New Zealand)',
         mitigationTips: [
           'Monitor low-Earth orbit constellation telemetry.',
@@ -81,16 +96,15 @@ function SolarAlertCard({ initialKp = 3.5, className = '' }) {
       level: 'Nominal Condition (G0)',
       status: 'Quiet Space Weather',
       color: 'text-emerald-400',
-      bgColor: 'border-emerald-500/30',
-      neonGlow: 'shadow-[0_0_25px_rgba(16,185,129,0.15)]',
+      borderColor: 'border-slate-800',
       badgeColor: 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40',
       icon: ShieldCheck,
-      description: 'Quiet magnetospheric conditions. Solar wind speeds and magnetic flux are within nominal interplanetary baselines.',
-      auroraVisibility: 'Limited to extreme polar caps (Greenland, Svalbard)',
+      description: 'Quiet magnetospheric conditions. Solar wind speeds and interplanetary magnetic flux are within nominal baselines with stable transpolar radio propagation and zero satellite orbital perturbations.',
+      auroraVisibility: 'Limited to extreme polar caps (Greenland, Svalbard, Antarctica)',
       mitigationTips: [
-        'All orbital satellite transponders operating at standard margins.',
+        'All orbital satellite transponders operating at standard baseline.',
         'Ionospheric D-region absorption nominal.',
-        'Solar radiation storm levels at safe astronaut EVA baseline.'
+        'Solar radiation levels within safe astronaut EVA parameters.'
       ]
     };
   };
@@ -100,9 +114,9 @@ function SolarAlertCard({ initialKp = 3.5, className = '' }) {
 
   return (
     <div 
-      className={`bg-slate-900/90 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-4 font-sans ${weather.bgColor} ${className}`}
+      className={`bg-slate-900/90 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-4 font-sans text-slate-100 ${weather.borderColor} ${className}`}
     >
-      {/* Top Banner */}
+      {/* Top Banner - In-flow flex header */}
       <div className="flex items-center justify-between gap-3 flex-wrap border-b border-slate-800 pb-3">
         <div className="flex items-center gap-3">
           <div className="relative w-9 h-9 rounded-xl bg-gradient-to-tr from-amber-500 to-rose-600 p-0.5 flex items-center justify-center shadow-md shrink-0">
@@ -118,7 +132,7 @@ function SolarAlertCard({ initialKp = 3.5, className = '' }) {
           </div>
         </div>
 
-        {/* Live Kp Badge */}
+        {/* Live Kp Badge & Simulation Control */}
         <div className="flex items-center gap-2">
           <button
             type="button"
@@ -140,9 +154,9 @@ function SolarAlertCard({ initialKp = 3.5, className = '' }) {
         </div>
       </div>
 
-      {/* Main Stats Grid */}
+      {/* Main Telemetry Stats Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 font-mono text-xs">
-        <div className="p-3 rounded-xl bg-slate-950/60 border border-slate-800">
+        <div className="p-3.5 rounded-xl bg-slate-950/60 border border-slate-800">
           <span className="text-slate-400 block text-[10px] uppercase mb-0.5">Planetary Kp</span>
           <span className={`text-base font-bold font-['Orbitron'] ${weather.color}`}>
             {kpIndex.toFixed(1)} / 9.0
@@ -150,7 +164,7 @@ function SolarAlertCard({ initialKp = 3.5, className = '' }) {
           <span className="text-slate-500 block text-[10px] mt-0.5">({weather.level})</span>
         </div>
 
-        <div className="p-3 rounded-xl bg-slate-950/60 border border-slate-800">
+        <div className="p-3.5 rounded-xl bg-slate-950/60 border border-slate-800">
           <span className="text-slate-400 block text-[10px] uppercase mb-0.5">Solar Wind Speed</span>
           <span className="text-base font-bold font-['Orbitron'] text-cyan-300">
             {solarWindSpeed} km/s
@@ -158,7 +172,7 @@ function SolarAlertCard({ initialKp = 3.5, className = '' }) {
           <span className="text-slate-500 block text-[10px] mt-0.5">DSCOVR L1 Realtime</span>
         </div>
 
-        <div className="p-3 rounded-xl bg-slate-950/60 border border-slate-800">
+        <div className="p-3.5 rounded-xl bg-slate-950/60 border border-slate-800">
           <span className="text-slate-400 block text-[10px] uppercase mb-0.5">Solar Flare Class</span>
           <span className="text-base font-bold font-['Orbitron'] text-amber-300">
             {kpIndex > 6 ? 'X1.4 Major' : kpIndex > 4 ? 'M2.1 Moderate' : 'C3.2 Baseline'}
@@ -167,8 +181,8 @@ function SolarAlertCard({ initialKp = 3.5, className = '' }) {
         </div>
       </div>
 
-      {/* Clean In-Flow Primary Impact Description (No overlapping bars, 100% visible) */}
-      <div className="p-4 rounded-xl bg-slate-950/60 border border-slate-800 space-y-2">
+      {/* Natural In-Flow Description Box - 100% visible text without any absolute clipping bars */}
+      <div className="p-4 rounded-xl bg-slate-950/60 border border-slate-800 space-y-2.5">
         <div className="flex items-center justify-between text-[11px] font-mono text-slate-300">
           <span className="font-bold flex items-center gap-1.5 text-cyan-300">
             <Radio className="w-4 h-4 text-cyan-400" />
@@ -177,32 +191,33 @@ function SolarAlertCard({ initialKp = 3.5, className = '' }) {
           <span className="text-slate-400 font-mono text-[10px]">NOAA Space Weather Prediction</span>
         </div>
 
+        {/* Text flows naturally with unrestricted height */}
         <p className="text-slate-200 leading-relaxed font-sans text-xs sm:text-sm">
           {weather.description}
         </p>
 
         <div className="pt-2 border-t border-slate-800 flex items-center gap-2 text-indigo-300 font-mono text-xs">
           <Compass className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
-          <span>Aurora Zone: <strong className="text-white">{weather.auroraVisibility}</strong></span>
+          <span>Aurora Visibility Zone: <strong className="text-white">{weather.auroraVisibility}</strong></span>
         </div>
       </div>
 
-      {/* Mitigation Tips */}
-      <div className="p-3.5 rounded-xl bg-indigo-950/20 border border-indigo-500/20 space-y-1.5">
+      {/* Operational Mitigation Protocols - In-flow list */}
+      <div className="p-4 rounded-xl bg-indigo-950/20 border border-indigo-500/20 space-y-2">
         <span className="text-[11px] font-mono font-bold text-indigo-300 flex items-center gap-1.5 uppercase">
           <Zap className="w-3.5 h-3.5 text-indigo-400" />
           Operational Mitigation Protocols:
         </span>
-        <ul className="space-y-1 text-xs text-slate-300 font-mono list-disc list-inside">
+        <ul className="space-y-1.5 text-xs text-slate-300 font-mono list-disc list-inside">
           {weather.mitigationTips.map((tip, idx) => (
-            <li key={idx} className="leading-snug">
+            <li key={idx} className="leading-relaxed">
               <span className="text-slate-200">{tip}</span>
             </li>
           ))}
         </ul>
       </div>
 
-      {/* Interactive Kp Intensity Slider */}
+      {/* Manual Slider for Kp Index Testing */}
       <div className="pt-2 border-t border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs font-mono text-slate-400">
         <span className="flex items-center gap-1.5 text-slate-300">
           <Sliders className="w-3.5 h-3.5 text-cyan-400" />
@@ -230,4 +245,4 @@ function SolarAlertCard({ initialKp = 3.5, className = '' }) {
   );
 }
 
-export default memo(SolarAlertCard);
+export default memo(SolarWeather);

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, memo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { LiquidGlassCard } from './LiquidGlassCard.jsx';
 import { 
@@ -102,7 +102,7 @@ const SPACE_QUESTIONS = [
   }
 ];
 
-export default function SpaceQuizModule({ lang = 'en', className = '' }) {
+function SpaceQuizModule({ lang = 'en', className = '' }) {
   const [currentLang, setCurrentLang] = useState(lang);
   useEffect(() => {
     setCurrentLang(lang);
@@ -382,3 +382,5 @@ export default function SpaceQuizModule({ lang = 'en', className = '' }) {
     </LiquidGlassCard>
   );
 }
+
+export default memo(SpaceQuizModule);

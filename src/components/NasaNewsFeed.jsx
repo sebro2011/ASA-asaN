@@ -1,7 +1,15 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { VoiceSearchInput } from './VoiceSearchInput';
 import { buildNasaApodUrl } from '../utils/nasaApiClient';
+import { 
+  getCachedApod, 
+  setCachedApod, 
+  getCachedNews, 
+  setCachedNews, 
+  getMockApodFallback, 
+  getMockNewsFallback 
+} from '../lib/dbCache.js';
 import { 
   Sparkles, 
   Newspaper, 
@@ -59,7 +67,7 @@ const FALLBACK_NASA_NEWS = [
   }
 ];
 
-export default function NasaNewsFeed() {
+function NasaNewsFeed() {
   const { t, i18n } = useTranslation();
   const currentLang = (i18n.language || 'en').slice(0, 2);
 
@@ -77,9 +85,20 @@ export default function NasaNewsFeed() {
   const [translations, setTranslations] = useState({});
   const [translatingIds, setTranslatingIds] = useState(new Set());
 
-  // 1. Fetch NASA APOD (Astronomy Picture of the Day)
+  // 1. Fetch NASA APOD (Astronomy Picture of the Day) with IndexedDB Caching
   const fetchApod = async () => {
     setApodLoading(true);
+
+    // Check IndexedDB cache first: if under 6 hours old, serve instantly
+    try {
+      const cached = await getCachedApod('today');
+      if (cached && cached.isFresh && cached.data) {
+        setApod(cached.data);
+        setApodLoading(false);
+        return;
+      }
+    } catch {}
+
     let timeout;
     try {
       // Primary: NASA Open API
@@ -95,6 +114,7 @@ export default function NasaNewsFeed() {
       if (res.ok) {
         const data = await res.json();
         setApod(data);
+        setCachedApod(data.date || 'today', data);
         return;
       }
     } catch {
@@ -107,25 +127,44 @@ export default function NasaNewsFeed() {
       const internalRes = await fetch('/api/apod');
       if (internalRes.ok) {
         const json = await internalRes.json();
-        if (json.data) setApod(json.data);
+        if (json.data) {
+          setApod(json.data);
+          setCachedApod(json.data.date || 'today', json.data);
+          return;
+        }
       }
     } catch {
-      // Use static fallback
-      setApod({
-        title: 'Cosmic Latte: The Average Color of the Universe',
-        date: '2026-09-28',
-        explanation: 'Astronomers analyzed 200,000 galaxies to determine the average color emitted by stars and dust across the cosmos.',
-        url: 'https://images.unsplash.com/photo-1462331940025-496dfbfc7564?auto=format&fit=crop&w=1600&q=80',
-        media_type: 'image'
-      });
+      // Stale cache or localized mock space data fallback
+      try {
+        const staleCached = await getCachedApod('today');
+        if (staleCached && staleCached.data) {
+          setApod(staleCached.data);
+          return;
+        }
+      } catch {}
+
+      // Fallback gracefully to hardcoded Sinhala/Tamil/English mock space data
+      const mock = getMockApodFallback(currentLang);
+      setApod(mock);
     } finally {
       setApodLoading(false);
     }
   };
 
-  // 2. Fetch NASA RSS News Feed
+  // 2. Fetch NASA RSS News Feed with IndexedDB Caching
   const fetchNewsFeed = async () => {
     setNewsLoading(true);
+
+    // Check IndexedDB cache first: if under 6 hours old, serve instantly
+    try {
+      const cached = await getCachedNews(currentLang);
+      if (cached && cached.isFresh && Array.isArray(cached.data) && cached.data.length > 0) {
+        setNewsItems(cached.data);
+        setNewsLoading(false);
+        return;
+      }
+    } catch {}
+
     let timeout;
     try {
       const rssUrl = encodeURIComponent('https://www.nasa.gov/news-release/feed/');
@@ -161,6 +200,7 @@ export default function NasaNewsFeed() {
           });
 
           setNewsItems(parsed);
+          setCachedNews(currentLang, parsed);
           return;
         }
       }
@@ -170,14 +210,30 @@ export default function NasaNewsFeed() {
       if (timeout) clearTimeout(timeout);
     }
 
-    // Fallback news list
-    setNewsItems(FALLBACK_NASA_NEWS);
+    // Check for stale cache
+    try {
+      const staleNews = await getCachedNews(currentLang);
+      if (staleNews && Array.isArray(staleNews.data) && staleNews.data.length > 0) {
+        setNewsItems(staleNews.data);
+        setNewsLoading(false);
+        return;
+      }
+    } catch {}
+
+    // Fallback gracefully to hardcoded Sinhala/Tamil mock space news data if network fails and no cache exists
+    const mockNews = getMockNewsFallback(currentLang);
+    setNewsItems(mockNews || FALLBACK_NASA_NEWS);
     setNewsLoading(false);
   };
 
   useEffect(() => {
     fetchApod();
     fetchNewsFeed();
+    const interval = setInterval(() => {
+      fetchNewsFeed();
+      fetchApod();
+    }, 45000); // 45s throttled polling for 60FPS background efficiency
+    return () => clearInterval(interval);
   }, []);
 
   // 3. Dynamic Translation Handler (English -> Sinhala / Tamil)
@@ -588,3 +644,5 @@ function generateLocalNewsTranslation(title, description, lang) {
     return { title: t, description: d };
   }
 }
+
+export default memo(NasaNewsFeed);

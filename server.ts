@@ -1745,6 +1745,59 @@ const handleLocalSpaceChat = (req: express.Request, res: express.Response) => {
   });
 };
 
+// NASA AI Chat Endpoint with @google/genai SDK ('gemini-2.5-flash') & Trilingual Instructions
+const handleNasaAiEndpoint = async (req: express.Request, res: express.Response) => {
+  const { prompt, message, query, lang = 'en' } = req.body;
+  const userPrompt = (prompt || message || query || '').trim();
+
+  if (!userPrompt) {
+    return res.status(400).json({ error: 'Prompt is required' });
+  }
+
+  const SYSTEM_INSTRUCTIONS: Record<string, string> = {
+    en: 'You are the official NASA Astrophysics & Deep-Space Exploration AI Assistant. Provide scientifically accurate, inspiring, and accessible answers about NASA missions (ISS, Artemis, James Webb Space Telescope, Mars Rovers, Hubble), astronomy, and cosmology in English.',
+    si: 'ඔබ නාසා (NASA) ආයතනයේ නිල තාරකා භෞතික විද්‍යා සහ ගැඹුරු අභ්‍යවකාශ ගවේෂණ සහායකයා වේ. ජාත්‍යන්තර අභ්‍යවකාශ නැවතුම (ISS), ආටෙමිස් මෙහෙයුම, ජේම්ස් වෙබ් දුරේක්ෂය සහ අඟහරු රෝවර පිළිබඳ නිවැරදි විද්‍යාත්මක තොරතුරු ස්වභාවික සිංහල බසින් සපයන්න.',
+    ta: 'நீங்கள் நாசாவின் (NASA) அதிகாரப்பூர்வ வானியற்பியல் மற்றும் ஆழ விண்வெளி ஆய்வு நுண்ணறிவு உதவியாளர். சர்வதேச விண்வெளி நிலையம் (ISS), ஆர்ட்டெமிஸ் திட்டம், ஜேம்ஸ் வெப் தொலைநோக்கி மற்றும் செவ்வாய் ரோவர்கள் பற்றிய துல்லியமான அறிவியல் தகவல்களை எளிய மற்றும் தெளிவான தமிழில் வழங்கவும்.'
+  };
+
+  const targetInstruction = SYSTEM_INSTRUCTIONS[lang] || SYSTEM_INSTRUCTIONS.en;
+
+  if (process.env.GEMINI_API_KEY) {
+    try {
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: userPrompt,
+        config: {
+          systemInstruction: targetInstruction,
+          temperature: 0.7
+        }
+      });
+
+      const text = response.text;
+      if (text) {
+        return res.json({
+          text,
+          response: text,
+          model: 'gemini-2.5-flash',
+          lang
+        });
+      }
+    } catch (err: any) {
+      console.warn('[Gemini API] Fallback to local space engine:', err?.message);
+    }
+  }
+
+  const localResult = generateLocalSpaceResponse(userPrompt, lang);
+  return res.json({
+    text: localResult.text,
+    response: localResult.text,
+    model: 'nasa-local-engine',
+    lang: localResult.lang || lang,
+    suggestions: localResult.suggestions
+  });
+};
+
+app.post('/api/nasa-ai', handleNasaAiEndpoint);
 app.post('/api/openrouter/chat', handleLocalSpaceChat);
 app.post('/api/chat', handleLocalSpaceChat);
 

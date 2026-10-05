@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, memo } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { OrbitControls, PerspectiveCamera } from '@react-three/drei';
 import * as THREE from 'three';
@@ -173,12 +173,28 @@ function InteractivePlanetGlobe({ radius = 1.0, texture, glowColor = '#38bdf8', 
   );
 }
 
-export default function ExoplanetLab({ lang = 'en' }) {
+function ExoplanetLab({ lang = 'en' }) {
   const [exoplanets, setExoplanets] = useState([]);
   const [selectedPlanet, setSelectedPlanet] = useState(null);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [wireframe, setWireframe] = useState(false);
+
+  const containerRef = useRef(null);
+  const [isInView, setIsInView] = useState(true);
+
+  // Pause 3D animation loop when scrolled out of viewport
+  useEffect(() => {
+    if (!containerRef.current || typeof IntersectionObserver === 'undefined') return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        setIsInView(entry.isIntersecting);
+      },
+      { threshold: 0.05 }
+    );
+    observer.observe(containerRef.current);
+    return () => observer.disconnect();
+  }, []);
 
   // Fetch confirmed exoplanet targets from TAP API / Backend Proxy
   const fetchExoplanets = async () => {
@@ -352,7 +368,7 @@ export default function ExoplanetLab({ lang = 'en' }) {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         
         {/* 3D WebGL Viewport (Left/Top) */}
-        <div className="lg:col-span-7 rounded-3xl apple-liquid-glass p-6 sm:p-7 shadow-2xl flex flex-col justify-between relative overflow-hidden min-h-[480px]">
+        <div ref={containerRef} className="lg:col-span-7 rounded-3xl apple-liquid-glass p-6 sm:p-7 shadow-2xl flex flex-col justify-between relative overflow-hidden min-h-[480px]">
           
           {/* Top Scale Callout Header */}
           <div className="w-full flex items-center justify-between text-xs font-mono text-slate-300 z-10 mb-2">
@@ -377,7 +393,11 @@ export default function ExoplanetLab({ lang = 'en' }) {
               </div>
 
               <div className="w-full h-full cursor-grab active:cursor-grabbing">
-                <Canvas gl={{ antialias: true }}>
+                <Canvas
+                  frameloop={isInView ? 'always' : 'never'}
+                  dpr={[1, 1.2]}
+                  gl={{ powerPreference: 'high-performance', antialias: false }}
+                >
                   <PerspectiveCamera makeDefault position={[0, 0, 3.8]} fov={50} />
                   <ambientLight intensity={0.6} />
                   <directionalLight position={[10, 10, 8]} intensity={1.5} />
@@ -398,7 +418,11 @@ export default function ExoplanetLab({ lang = 'en' }) {
               </div>
 
               <div className="w-full h-full cursor-grab active:cursor-grabbing">
-                <Canvas gl={{ antialias: true }}>
+                <Canvas
+                  frameloop={isInView ? 'always' : 'never'}
+                  dpr={[1, 1.2]}
+                  gl={{ powerPreference: 'high-performance', antialias: false }}
+                >
                   <PerspectiveCamera makeDefault position={[0, 0, 3.8]} fov={50} />
                   <ambientLight intensity={0.6} />
                   <directionalLight position={[10, 10, 8]} intensity={1.5} />
@@ -538,3 +562,5 @@ export default function ExoplanetLab({ lang = 'en' }) {
     </div>
   );
 }
+
+export default memo(ExoplanetLab);

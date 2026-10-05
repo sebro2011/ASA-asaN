@@ -70,7 +70,7 @@ const TRENDING_GROUNDED_TOPICS = [
   { id: 'osiris-apex', name: { en: 'OSIRIS-APEX (Apophis)', si: 'ඔසිරිස්-ඇපෙක්ස් ඇපොෆිස්', ta: 'ஒசிரிஸ்-அபெக்ஸ்' }, query: 'OSIRIS-APEX asteroid Apophis mission NASA' },
 ];
 
-export const MissionsTimeline: React.FC<MissionsTimelineProps> = ({ lang, initialMissionId }) => {
+export const MissionsTimeline: React.FC<MissionsTimelineProps> = React.memo(({ lang, initialMissionId }) => {
   const t = translations[lang];
   const { isMissionSaved, toggleSaveMission } = useFavorites();
   const [selectedMissionId, setSelectedMissionId] = useState<string>(initialMissionId || SPACE_MISSIONS[0].id);
@@ -796,4 +796,4 @@ export const MissionsTimeline: React.FC<MissionsTimelineProps> = ({ lang, initia
       )}
     </div>
   );
-};
+});

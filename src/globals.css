@@ -10,116 +10,46 @@
 }
 
 /* =========================================================
-   Apple Exact Translucent Liquid Glass Design System
-   backdrop-blur-2xl bg-white/[0.03] border border-white/20 shadow-[inset_0_1px_1px_rgba(255,255,255,0.3)]
+   Clean Cosmic Dark UI Card Design System
+   bg-slate-900/90 border border-slate-800 rounded-2xl p-5 shadow-xl
+   Zero SVG displacement filters, zero distortion, 100% legibility
    ========================================================= */
 
-.apple-liquid-glass {
-  background: rgba(255, 255, 255, 0.03) !important;
-  backdrop-filter: blur(40px) saturate(210%);
-  -webkit-backdrop-filter: blur(40px) saturate(210%);
-  border: 1px solid rgba(255, 255, 255, 0.2) !important;
-  box-shadow: 
-    inset 0 1px 1px 0 rgba(255, 255, 255, 0.3),
-    0 20px 50px -12px rgba(0, 0, 0, 0.5);
-  border-radius: 1.5rem; /* rounded-3xl */
+.apple-liquid-glass,
+.liquid-glass,
+.liquid-glass-card,
+.cosmic-card {
+  background-color: rgba(15, 23, 42, 0.9) !important; /* bg-slate-900/90 */
+  border: 1px solid #1e293b !important; /* border-slate-800 */
+  border-radius: 1rem !important; /* rounded-2xl */
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.5) !important; /* shadow-xl */
   position: relative;
   overflow: hidden;
-  transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.apple-liquid-glass::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 1px;
-  background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.8) 25%, rgba(56, 189, 248, 0.95) 50%, rgba(236, 72, 153, 0.8) 75%, transparent 100%);
-  pointer-events: none;
-  z-index: 10;
-  border-top-left-radius: inherit;
-  border-top-right-radius: inherit;
-}
-
-.apple-liquid-glass:hover {
-  background: rgba(255, 255, 255, 0.065) !important;
-  border-color: rgba(255, 255, 255, 0.35) !important;
-  box-shadow: 
-    inset 0 1px 1px 0 rgba(255, 255, 255, 0.45),
-    0 24px 60px -12px rgba(6, 182, 212, 0.25);
-}
-
-/* Secondary & Pill Glass Variants */
-.liquid-glass {
-  background: rgba(255, 255, 255, 0.03) !important;
-  backdrop-filter: blur(36px) saturate(200%);
-  -webkit-backdrop-filter: blur(36px) saturate(200%);
-  border: 1px solid rgba(255, 255, 255, 0.2) !important;
-  box-shadow: inset 0 1px 1px 0 rgba(255, 255, 255, 0.25), 0 12px 40px 0 rgba(0, 0, 0, 0.4);
-  position: relative;
-  overflow: hidden;
-  border-radius: 1.5rem; /* rounded-3xl */
-}
-
-.liquid-glass-edge {
-  position: relative;
-}
-
-.liquid-glass-edge::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 1px;
-  background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.6) 30%, rgba(56, 189, 248, 0.8) 50%, rgba(255, 255, 255, 0.6) 70%, transparent 100%);
-  pointer-events: none;
-  z-index: 10;
-  border-top-left-radius: inherit;
-  border-top-right-radius: inherit;
-}
-
-.liquid-glass-hover {
-  transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.liquid-glass-hover:hover {
-  background: rgba(255, 255, 255, 0.07) !important;
-  border-color: rgba(255, 255, 255, 0.35) !important;
-  box-shadow: inset 0 1px 1px 0 rgba(255, 255, 255, 0.35), 0 16px 48px -8px rgba(6, 182, 212, 0.25);
-  transform: translateY(-2px);
+.apple-liquid-glass:hover,
+.liquid-glass-hover:hover,
+.cosmic-card:hover {
+  background-color: rgba(15, 23, 42, 0.95) !important;
+  border-color: #334155 !important; /* border-slate-700 */
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.6) !important;
 }
 
 .liquid-glass-pill {
-  background: rgba(255, 255, 255, 0.05) !important;
-  backdrop-filter: blur(24px) saturate(190%);
-  -webkit-backdrop-filter: blur(24px) saturate(190%);
-  border: 1px solid rgba(255, 255, 255, 0.2) !important;
-  box-shadow: inset 0 1px 1px 0 rgba(255, 255, 255, 0.2), 0 4px 20px 0 rgba(0, 0, 0, 0.25);
+  background-color: rgba(15, 23, 42, 0.9) !important;
+  border: 1px solid #1e293b !important;
+  border-radius: 9999px !important;
 }
 
-.liquid-glass-card {
-  background: rgba(255, 255, 255, 0.03) !important;
-  backdrop-filter: blur(40px) saturate(210%);
-  -webkit-backdrop-filter: blur(40px) saturate(210%);
-  border: 1px solid rgba(255, 255, 255, 0.2) !important;
-  box-shadow: inset 0 1px 1px 0 rgba(255, 255, 255, 0.3), 0 20px 50px -12px rgba(0, 0, 0, 0.5);
-  position: relative;
-  border-radius: 1.5rem; /* rounded-3xl */
-  overflow: hidden;
-}
-
-.liquid-glass-card::before {
-  content: '';
+.apple-liquid-glass-bg {
   position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 1px;
-  background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.75) 35%, rgba(56, 189, 248, 0.9) 50%, rgba(255, 255, 255, 0.75) 65%, transparent 100%);
+  inset: 0;
   pointer-events: none;
-  z-index: 10;
+  background-color: rgba(15, 23, 42, 0.9);
+  border: 1px solid #1e293b;
+  border-radius: inherit;
+  z-index: 0;
 }
 
 /* Sci-Fi HUD Corner Brackets */
@@ -170,51 +100,22 @@
   background: rgba(56, 189, 248, 0.5);
 }
 
-/* Animated Ambient Light Orb Keyframes */
-@keyframes orbFloat1 {
-  0%, 100% {
-    transform: translate(0px, 0px) scale(1);
+/* =========================================================
+   Mobile Viewport Performance Optimization (< 768px)
+   Disables expensive composite backdrop-filter passes on mobile
+   GPUs to guarantee rock-solid 60FPS scrolling and zero frame drops.
+   ========================================================= */
+@media (max-width: 768px) {
+  [class*="backdrop-blur"],
+  .backdrop-blur-sm,
+  .backdrop-blur,
+  .backdrop-blur-md,
+  .backdrop-blur-lg,
+  .backdrop-blur-xl,
+  .backdrop-blur-2xl,
+  .backdrop-blur-3xl {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    background-color: rgba(15, 23, 42, 0.96) !important;
   }
-  33% {
-    transform: translate(80px, 60px) scale(1.12);
-  }
-  66% {
-    transform: translate(-50px, 90px) scale(0.92);
-  }
-}
-
-@keyframes orbFloat2 {
-  0%, 100% {
-    transform: translate(0px, 0px) scale(1);
-  }
-  33% {
-    transform: translate(-70px, -60px) scale(0.95);
-  }
-  66% {
-    transform: translate(60px, -40px) scale(1.15);
-  }
-}
-
-@keyframes orbFloat3 {
-  0%, 100% {
-    transform: translate(0px, 0px) scale(1);
-  }
-  33% {
-    transform: translate(-60px, 70px) scale(1.08);
-  }
-  66% {
-    transform: translate(80px, -50px) scale(0.94);
-  }
-}
-
-.animate-orb-1 {
-  animation: orbFloat1 22s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
-}
-
-.animate-orb-2 {
-  animation: orbFloat2 26s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
-}
-
-.animate-orb-3 {
-  animation: orbFloat3 30s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
 }

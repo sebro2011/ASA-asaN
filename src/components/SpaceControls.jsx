@@ -28,6 +28,7 @@ export function SpaceControls({
   const [isXrSupported, setIsXrSupported] = useState(false);
   const [xrActive, setXrActive] = useState(false);
   const [showXrModal, setShowXrModal] = useState(false);
+  const xrSessionRef = React.useRef(null);
 
   useEffect(() => {
     if (typeof window !== 'undefined' && 'xr' in navigator) {
@@ -37,18 +38,48 @@ export function SpaceControls({
           .catch(() => setIsXrSupported(false));
       }
     }
+
+    return () => {
+      // Safe cleanup with proper null check
+      if (xrSessionRef.current) {
+        try {
+          if (typeof xrSessionRef.current.end === 'function') {
+            xrSessionRef.current.end().catch(() => {});
+          }
+        } catch (_) {}
+        xrSessionRef.current = null;
+      }
+    };
   }, []);
 
   const handleLaunchAR = async () => {
     if (typeof window === 'undefined') return;
 
-    if ('xr' in navigator && navigator.xr) {
+    // If session is already active, safely end it
+    if (xrSessionRef.current) {
+      try {
+        if (typeof xrSessionRef.current.end === 'function') {
+          await xrSessionRef.current.end().catch(() => {});
+        }
+      } catch (_) {}
+      xrSessionRef.current = null;
+      setXrActive(false);
+      return;
+    }
+
+    if ('xr' in navigator && navigator.xr && typeof navigator.xr.requestSession === 'function') {
       try {
         const session = await navigator.xr.requestSession('immersive-ar', {
           requiredFeatures: ['hit-test', 'local-floor']
         });
-        setXrActive(true);
-        session.addEventListener('end', () => setXrActive(false));
+        if (session) {
+          xrSessionRef.current = session;
+          setXrActive(true);
+          session.addEventListener('end', () => {
+            xrSessionRef.current = null;
+            setXrActive(false);
+          });
+        }
       } catch {
         setShowXrModal(true);
       }

@@ -3,8 +3,15 @@ import { motion } from 'framer-motion';
 import { SupportedLanguage, translations } from '../i18n/translations';
 import { useFavorites } from '../utils/favorites';
 import { buildNasaApodUrl } from '../utils/nasaApiClient';
+import { fetchApod } from '@/lib/nasaApi';
 import { CustomApodDatePicker } from './CustomApodDatePicker';
 import APODStoryteller from './APODStoryteller.jsx';
+import { 
+  getCachedApod, 
+  setCachedApod, 
+  getMockApodFallback, 
+  HARDCODED_MOCK_APOD 
+} from '../lib/dbCache.js';
 import { 
   Calendar, 
   Sparkles, 
@@ -151,7 +158,7 @@ function generateLocalTranslation(title: string, explanation: string, targetLang
   }
 }
 
-export const ApodViewer: React.FC<ApodViewerProps> = ({ 
+export const ApodViewer: React.FC<ApodViewerProps> = React.memo(({ 
   lang, 
   onOpenExportModal,
   initialDate 
@@ -184,7 +191,7 @@ export const ApodViewer: React.FC<ApodViewerProps> = ({
     }
   }, []);
 
-  // Multi-tier resilient APOD fetcher
+  // Multi-tier resilient APOD fetcher with IndexedDB 6-Hour Cache Layer
   const loadApod = async (date: string) => {
     setIsLoading(true);
     if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
@@ -192,59 +199,65 @@ export const ApodViewer: React.FC<ApodViewerProps> = ({
       setIsSpeaking(false);
     }
 
-    // Tier 1: Try local backend route
-    let timeout1: any;
+    // Step 0: Check IndexedDB first. If data exists and is under 6 hours old, serve instantly from cache without calling external APIs.
     try {
-      const controller = new AbortController();
-      timeout1 = setTimeout(() => {
-        try { controller.abort(new DOMException('Request timeout', 'AbortError')); } catch (_) {}
-      }, 4000);
-      const res = await fetch(`/api/apod${date ? `?date=${date}` : ''}`, {
-        headers: { Accept: 'application/json' },
-        signal: controller.signal
-      });
-
-      if (res.ok) {
-        const json = await res.json();
-        if (json.success && json.data) {
-          setApodData(json.data);
-          setIsLoading(false);
-          return;
-        }
+      const cached = await getCachedApod(date || 'today');
+      if (cached && cached.isFresh && cached.data) {
+        setApodData(cached.data as ApodData);
+        setIsLoading(false);
+        return;
       }
     } catch {
-      // Fall through to next tier
-    } finally {
-      if (timeout1) clearTimeout(timeout1);
+      // Ignore cache lookup failure and proceed to network
     }
 
-    // Tier 2: Try direct NASA Open API
-    let timeout2: any;
+    // Central NASA API Pipeline fetcher via @/lib/nasaApi
     try {
-      const controller = new AbortController();
-      timeout2 = setTimeout(() => {
-        try { controller.abort(new DOMException('Request timeout', 'AbortError')); } catch (_) {}
-      }, 4000);
-      const directUrl = buildNasaApodUrl(date);
-      const res = await fetch(directUrl, { signal: controller.signal });
-
-      if (res.ok) {
-        const data = await res.json();
-        if (data.title && data.url) {
-          setApodData(data);
-          setIsLoading(false);
-          return;
-        }
+      const data = await fetchApod(date);
+      if (data && data.title) {
+        setApodData(data as ApodData);
+        setIsLoading(false);
+        setCachedApod(date || data.date || 'today', data);
+        return;
       }
-    } catch {
-      // Fall through to next tier
-    } finally {
-      if (timeout2) clearTimeout(timeout2);
-    }
+    } catch {}
 
-    // Tier 3: Pre-seeded curated archival data
-    const fallback = FALLBACK_APOD_ENTRIES[date] || FALLBACK_APOD_ENTRIES.default;
+    // Check if stale cached data exists in IndexedDB before falling back to mock data
+    try {
+      const staleCached = await getCachedApod(date || 'today');
+      if (staleCached && staleCached.data) {
+        setApodData(staleCached.data as ApodData);
+        setIsLoading(false);
+        return;
+      }
+    } catch {}
+
+    // Tier 3: Fallback gracefully to hardcoded Sinhala/Tamil mock space data if network fails and no cache exists
+    const mockFallback = getMockApodFallback(lang) as ApodData;
+    const fallback = FALLBACK_APOD_ENTRIES[date] || mockFallback || FALLBACK_APOD_ENTRIES.default;
     setApodData(fallback);
+
+    // Pre-seed localized text translation if in Sinhala or Tamil
+    if (lang === 'si' && HARDCODED_MOCK_APOD.si) {
+      const cacheKey = `si:${fallback.title.slice(0, 30)}`;
+      setCachedTranslations(prev => ({
+        ...prev,
+        [cacheKey]: {
+          title: HARDCODED_MOCK_APOD.si.title,
+          explanation: HARDCODED_MOCK_APOD.si.explanation
+        }
+      }));
+    } else if (lang === 'ta' && HARDCODED_MOCK_APOD.ta) {
+      const cacheKey = `ta:${fallback.title.slice(0, 30)}`;
+      setCachedTranslations(prev => ({
+        ...prev,
+        [cacheKey]: {
+          title: HARDCODED_MOCK_APOD.ta.title,
+          explanation: HARDCODED_MOCK_APOD.ta.explanation
+        }
+      }));
+    }
+
     setIsLoading(false);
   };
 
@@ -690,4 +703,4 @@ export const ApodViewer: React.FC<ApodViewerProps> = ({
       )}
     </div>
   );
-};
+});

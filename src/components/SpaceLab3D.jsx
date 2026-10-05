@@ -500,7 +500,7 @@ function CameraGSAPController({ target, controlsRef }) {
 // ====================================================
 // 5. Main SpaceLab3D Component
 // ====================================================
-export default function SpaceLab3D({ lang = 'en' }) {
+function SpaceLab3D({ lang = 'en' }) {
   const [selectedTargetId, setSelectedTargetId] = useState('mars');
   const [autoRotate, setAutoRotate] = useState(true);
   const [atmosphereHaze, setAtmosphereHaze] = useState(true);
@@ -508,10 +508,25 @@ export default function SpaceLab3D({ lang = 'en' }) {
   const [sunIntensity, setSunIntensity] = useState(2.4);
   const [bloomEnabled, setBloomEnabled] = useState(true);
   const [hudExpanded, setHudExpanded] = useState(true);
-  const [dpr, setDpr] = useState(1.5);
   const [fpsStatus, setFpsStatus] = useState('60 FPS (Stable)');
+  const [dpr, setDpr] = useState(1.2);
 
   const controlsRef = useRef();
+  const containerRef = useRef(null);
+  const [isInView, setIsInView] = useState(true);
+
+  // Pause 3D animation loop when scrolled out of viewport
+  useEffect(() => {
+    if (!containerRef.current || typeof IntersectionObserver === 'undefined') return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        setIsInView(entry.isIntersecting);
+      },
+      { threshold: 0.05 }
+    );
+    observer.observe(containerRef.current);
+    return () => observer.disconnect();
+  }, []);
 
   const currentTarget =
     SPACE_TARGETS.find((t) => t.id === selectedTargetId) || SPACE_TARGETS[0];
@@ -542,18 +557,16 @@ export default function SpaceLab3D({ lang = 'en' }) {
   }, [currentTarget]);
 
   return (
-    <div className="relative w-full h-[720px] sm:h-[800px] rounded-3xl overflow-hidden border border-cyan-500/30 bg-slate-950 shadow-2xl flex flex-col justify-between selection:bg-cyan-500/30">
+    <div ref={containerRef} className="relative w-full h-[720px] sm:h-[800px] rounded-3xl overflow-hidden border border-cyan-500/30 bg-slate-950 shadow-2xl flex flex-col justify-between selection:bg-cyan-500/30">
       {/* 3D WebGL Canvas */}
       <div className="absolute inset-0 z-0">
         <Canvas
+          frameloop={isInView ? 'always' : 'never'}
           dpr={dpr}
           camera={{ position: [0, 3, 9.5], fov: 45 }}
           gl={{
-            antialias: true,
-            alpha: true,
             powerPreference: 'high-performance',
-            stencil: false,
-            depth: true
+            antialias: false
           }}
         >
           {/* Performance Monitor: Dynamically adjusts DPR & disables heavy effects if frame drops occur */}
@@ -592,8 +605,13 @@ export default function SpaceLab3D({ lang = 'en' }) {
           {/* Optimized Starfield (6,500 points with GPU twinkling) */}
           <DynamicStarfield count={6500} minRadius={85} maxRadius={360} driftSpeed={0.005} />
 
-          {/* Render Active Celestial Model */}
-          <Suspense fallback={null}>
+          {/* Render Active Celestial Model with 3D Placeholder Sphere Fallback */}
+          <Suspense fallback={
+            <mesh>
+              <sphereGeometry args={[2.4, 24, 24]} />
+              <meshStandardMaterial color="#0ea5e9" wireframe={true} />
+            </mesh>
+          }>
             <Float
               speed={currentTarget.type === 'spacecraft' ? 1.2 : 0.2}
               rotationIntensity={0.1}
@@ -834,3 +852,5 @@ export default function SpaceLab3D({ lang = 'en' }) {
     </div>
   );
 }
+
+export default memo(SpaceLab3D);

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef, useEffect, useMemo, Suspense } from 'react';
+import React, { useState, useRef, useEffect, useMemo, Suspense, memo } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { 
   OrbitControls, 
@@ -630,7 +630,7 @@ function CameraGSAPController({ target, controlsRef }) {
 // ----------------------------------------------------
 // 3. Main CelestialLab3D Component
 // ----------------------------------------------------
-export default function CelestialLab3D({ lang = 'en' }) {
+function CelestialLab3D({ lang = 'en' }) {
   const [selectedTargetId, setSelectedTargetId] = useState('earth');
   const [autoRotate, setAutoRotate] = useState(true);
   const [atmosphereGlow, setAtmosphereGlow] = useState(true);
@@ -640,6 +640,21 @@ export default function CelestialLab3D({ lang = 'en' }) {
   const [hudExpanded, setHudExpanded] = useState(true);
 
   const controlsRef = useRef();
+  const containerRef = useRef(null);
+  const [isInView, setIsInView] = useState(true);
+
+  // Pause 3D animation loop when scrolled out of viewport
+  useEffect(() => {
+    if (!containerRef.current || typeof IntersectionObserver === 'undefined') return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        setIsInView(entry.isIntersecting);
+      },
+      { threshold: 0.05 }
+    );
+    observer.observe(containerRef.current);
+    return () => observer.disconnect();
+  }, []);
 
   const currentTarget =
     TARGETS.find((t) => t.id === selectedTargetId) || TARGETS[0];
@@ -670,16 +685,17 @@ export default function CelestialLab3D({ lang = 'en' }) {
   };
 
   return (
-    <div className="relative w-full h-[700px] sm:h-[780px] rounded-3xl overflow-hidden border border-cyan-500/30 bg-slate-950 shadow-2xl flex flex-col justify-between selection:bg-cyan-500/30">
+    <div ref={containerRef} className="relative w-full h-[700px] sm:h-[780px] rounded-3xl overflow-hidden border border-cyan-500/30 bg-slate-950 shadow-2xl flex flex-col justify-between selection:bg-cyan-500/30">
       {/* 3D WebGL Canvas with Post-Processing */}
       <div className="absolute inset-0 z-0">
         <Canvas
+          frameloop={isInView ? 'always' : 'never'}
+          dpr={[1, 1.2]}
           shadows
           camera={{ position: [0, 4, 12], fov: 45 }}
           gl={{
-            antialias: true,
-            alpha: true,
             powerPreference: 'high-performance',
+            antialias: false,
             toneMapping: THREE.ACESFilmicToneMapping,
             toneMappingExposure: 1.25
           }}
@@ -708,8 +724,13 @@ export default function CelestialLab3D({ lang = 'en' }) {
           {/* Dynamic Twinkling Starfield using Three.js Points */}
           <DynamicStarfield count={9500} minRadius={85} maxRadius={380} driftSpeed={0.006} />
 
-          {/* Active Target Render */}
-          <Suspense fallback={null}>
+          {/* Active Target Render with 3D Placeholder Sphere Fallback */}
+          <Suspense fallback={
+            <mesh>
+              <sphereGeometry args={[2.5, 24, 24]} />
+              <meshStandardMaterial color="#38bdf8" wireframe={true} />
+            </mesh>
+          }>
             <Float
               speed={currentTarget.type === 'spacecraft' ? 1.6 : 0.3}
               rotationIntensity={0.15}
@@ -965,3 +986,5 @@ export default function CelestialLab3D({ lang = 'en' }) {
     </div>
   );
 }
+
+export default memo(CelestialLab3D);

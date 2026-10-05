@@ -1,8 +1,9 @@
 'use client';
 
-import React from 'react';
-import LiquidGlassFilter from './LiquidGlassFilter.jsx';
-
+/**
+ * DynamicLiquidFilter Component
+ * Clean Cosmic Dark UI: SVG displacement filters removed to guarantee zero distortion
+ */
 export default function DynamicLiquidFilter() {
-  return <LiquidGlassFilter />;
+  return null;
 }

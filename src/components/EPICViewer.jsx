@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, memo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { buildNasaEpicUrl } from '../utils/nasaApiClient';
 import { LiquidGlassCard } from './LiquidGlassCard.jsx';
@@ -24,7 +24,7 @@ import {
   Sliders
 } from 'lucide-react';
 
-export default function EPICViewer({ lang = 'en' }) {
+function EPICViewer({ lang = 'en' }) {
   const [frames, setFrames] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -441,3 +441,5 @@ export default function EPICViewer({ lang = 'en' }) {
     </div>
   );
 }
+
+export default memo(EPICViewer);

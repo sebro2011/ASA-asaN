@@ -8,7 +8,7 @@ interface NewsSectionProps {
   lang: SupportedLanguage;
 }
 
-export const NewsSection: React.FC<NewsSectionProps> = ({ lang }) => {
+export const NewsSection: React.FC<NewsSectionProps> = React.memo(({ lang }) => {
   const [viewMode, setViewMode] = useState<'historical' | 'live'>('historical');
 
   return (
@@ -65,4 +65,4 @@ export const NewsSection: React.FC<NewsSectionProps> = ({ lang }) => {
       )}
     </div>
   );
-};
+});

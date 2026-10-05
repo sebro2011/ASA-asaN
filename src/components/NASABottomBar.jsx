@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { memo } from 'react';
 import { motion } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
 import { Compass, Newspaper, Orbit, Rocket, Bot, BrainCircuit, Globe2, Heart } from 'lucide-react';
@@ -106,7 +106,7 @@ const PILL_SPRING_TRANSITION = {
  * @param {(tabId: string) => void} [props.onTabChange]
  * @param {string} [props.className='']
  */
-export default function NASABottomBar({
+function NASABottomBar({
   activeTab = 'apod',
   onTabChange = () => {},
   className = ''
@@ -127,7 +127,7 @@ export default function NASABottomBar({
   };
 
   return (
-    <div className={`fixed bottom-0 left-0 right-0 z-50 md:hidden pointer-events-auto ${className}`}>
+    <div className={`w-full md:hidden pointer-events-auto ${className}`}>
       {/* Cosmic Glassmorphism Container */}
       <nav className="bg-slate-950/90 backdrop-blur-xl border-t border-slate-800/80 px-3 pt-2 pb-safe shadow-[0_-12px_32px_rgba(0,0,0,0.8)]">
         <div className="flex items-center justify-around max-w-md mx-auto relative">
@@ -143,7 +143,7 @@ export default function NASABottomBar({
                 onClick={() => handleTabClick(tab.id)}
                 whileTap={{ scale: 0.78 }}
                 transition={TAP_SPRING_TRANSITION}
-                className="flex-1 flex flex-col items-center justify-center py-1.5 px-1 select-none focus:outline-none relative group touch-manipulation cursor-pointer z-10"
+                className="pointer-events-auto flex-1 flex flex-col items-center justify-center py-1.5 px-1 select-none focus:outline-none relative group touch-manipulation cursor-pointer z-10"
                 aria-label={label}
                 aria-current={isActive ? 'page' : undefined}
               >
@@ -213,3 +213,5 @@ export default function NASABottomBar({
     </div>
   );
 }
+
+export default memo(NASABottomBar);

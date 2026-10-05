@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, memo } from 'react';
 
 /**
  * Realistic stellar spectral colors (O, B, A, F, G, K, M classification)
@@ -15,18 +15,20 @@ const STAR_COLORS = [
 ];
 
 /**
- * High-Performance 60FPS Canvas Starfield & Meteor Particle Background
+ * High-Performance 60FPS Canvas Starfield with Subtle Motion Trails & Meteors
  * 
  * @param {Object} props
- * @param {number} [props.starCount=220] - Total star particle density
+ * @param {number} [props.starCount=240] - Total star particle density
  * @param {boolean} [props.enableMeteors=true] - Enable occasional shooting stars
- * @param {number} [props.speed=0.25] - Drift speed factor
+ * @param {number} [props.speed=0.35] - Drift speed factor
+ * @param {number} [props.trailFactor=1.2] - Trail length and warp streak multiplier
  * @param {string} [props.className='']
  */
-export default function CosmicStarfieldBackground({
-  starCount = 220,
+function CosmicStarfieldBackground({
+  starCount = 240,
   enableMeteors = true,
-  speed = 0.25,
+  speed = 0.35,
+  trailFactor = 1.2,
   className = ''
 }) {
   const canvasRef = useRef(null);
@@ -72,7 +74,7 @@ export default function CosmicStarfieldBackground({
 
     const initStars = () => {
       stars.length = 0;
-      const count = Math.floor((width * height) / 8000) || starCount;
+      const count = Math.floor((width * height) / 7500) || starCount;
 
       for (let i = 0; i < count; i++) {
         const depth = Math.random(); // 0 (far) to 1 (near)
@@ -80,25 +82,30 @@ export default function CosmicStarfieldBackground({
         
         let radius;
         if (sizeRand > 0.96) {
-          radius = Math.random() * 1.5 + 1.6; // Large bright anchor stars
+          radius = Math.random() * 1.4 + 1.5; // Large bright anchor stars
         } else if (sizeRand > 0.75) {
-          radius = Math.random() * 0.8 + 0.9;  // Medium stars
+          radius = Math.random() * 0.8 + 0.85; // Medium stars
         } else {
-          radius = Math.random() * 0.5 + 0.4;  // Distant background pinpricks
+          radius = Math.random() * 0.45 + 0.35; // Distant background pinpricks
         }
+
+        // Slight downward-diagonal forward drift direction simulating high-speed cosmic flight
+        const vx = (Math.random() - 0.5) * 0.12 * speed * (depth + 0.3);
+        const vy = (Math.random() * 0.35 + 0.25) * speed * (depth + 0.4);
 
         stars.push({
           x: Math.random() * width,
           y: Math.random() * height,
           radius,
-          baseAlpha: Math.random() * 0.5 + 0.3,
-          twinkleSpeed: Math.random() * 0.03 + 0.01,
+          baseAlpha: Math.random() * 0.45 + 0.35,
+          twinkleSpeed: Math.random() * 0.03 + 0.012,
           twinklePhase: Math.random() * Math.PI * 2,
           colorPrefix: STAR_COLORS[Math.floor(Math.random() * STAR_COLORS.length)],
-          vx: (Math.random() - 0.5) * 0.08 * speed * (depth + 0.2),
-          vy: (Math.random() * 0.15 + 0.05) * speed * (depth + 0.3),
-          depth: depth + 0.2,
-          hasGlow: sizeRand > 0.92
+          vx,
+          vy,
+          depth: depth + 0.25,
+          hasGlow: sizeRand > 0.90,
+          trailWeight: Math.random() * 0.5 + 0.75
         });
       }
     };
@@ -107,9 +114,9 @@ export default function CosmicStarfieldBackground({
       if (!enableMeteors) return;
       const startX = Math.random() * (width * 0.8);
       const startY = Math.random() * (height * 0.4);
-      const angle = Math.PI / 4 + (Math.random() - 0.5) * 0.2; // roughly ~45 degree diagonal trajectory
+      const angle = Math.PI / 4 + (Math.random() - 0.5) * 0.2; // ~45 degree diagonal trajectory
       const velocity = Math.random() * 9 + 11;
-      const length = Math.random() * 120 + 80;
+      const length = Math.random() * 130 + 90;
 
       meteors.push({
         x: startX,
@@ -126,8 +133,8 @@ export default function CosmicStarfieldBackground({
     };
 
     const handleMouseMove = (e) => {
-      targetMouseX = (e.clientX / width - 0.5) * 25;
-      targetMouseY = (e.clientY / height - 0.5) * 25;
+      targetMouseX = (e.clientX / width - 0.5) * 28;
+      targetMouseY = (e.clientY / height - 0.5) * 28;
     };
 
     window.addEventListener('resize', handleResize);
@@ -135,18 +142,18 @@ export default function CosmicStarfieldBackground({
     handleResize();
 
     let lastTime = performance.now();
+    let isRunning = true;
 
-    // 60FPS Render Loop
+    // 60FPS High-Speed Render Loop with Particle Trails
     const render = (currentTime) => {
-      if (document.hidden) {
-        animationFrameId = requestAnimationFrame(render);
+      if (!isRunning || document.hidden) {
         return;
       }
 
       const dt = Math.min((currentTime - lastTime) / 16.666, 2.5);
       lastTime = currentTime;
 
-      // Soft inertia parallax
+      // Soft inertia parallax with mouse
       mouseX += (targetMouseX - mouseX) * 0.04;
       mouseY += (targetMouseY - mouseY) * 0.04;
 
@@ -157,19 +164,19 @@ export default function CosmicStarfieldBackground({
         spawnMeteor();
       }
 
-      // Render & update stars
+      // Render & update stars with high-speed subtle trailing effect
       for (let i = 0; i < stars.length; i++) {
         const star = stars[i];
 
-        // Cosmic slow drift
+        // Cosmic forward drift
         star.x += star.vx * dt;
         star.y += star.vy * dt;
 
-        // Wrap around viewport edges
-        if (star.x < 0) star.x = width;
-        if (star.x > width) star.x = 0;
-        if (star.y < 0) star.y = height;
-        if (star.y > height) star.y = 0;
+        // Wrap around viewport edges seamlessly
+        if (star.x < -20) star.x = width + 20;
+        if (star.x > width + 20) star.x = -20;
+        if (star.y < -20) star.y = height + 20;
+        if (star.y > height + 20) star.y = -20;
 
         // Parallax offset based on star depth
         const drawX = star.x + mouseX * star.depth;
@@ -177,21 +184,49 @@ export default function CosmicStarfieldBackground({
 
         // Twinkle luminosity cycle
         star.twinklePhase += star.twinkleSpeed * dt;
-        const alpha = Math.max(0.15, Math.min(1, star.baseAlpha + Math.sin(star.twinklePhase) * 0.35));
+        const alpha = Math.max(0.18, Math.min(1, star.baseAlpha + Math.sin(star.twinklePhase) * 0.35));
 
-        // Draw soft radial glow for larger stars
+        // Effective velocity vector including parallax inertia
+        const effectiveVx = star.vx + (targetMouseX - mouseX) * 0.015 * star.depth;
+        const effectiveVy = star.vy + (targetMouseY - mouseY) * 0.015 * star.depth;
+        const speedMag = Math.hypot(effectiveVx, effectiveVy) || 0.01;
+
+        // Calculate subtle trailing streak length proportional to speed & depth
+        const trailLength = Math.max(
+          4,
+          (speedMag * 55 + star.radius * 2.8) * star.depth * star.trailWeight * trailFactor
+        );
+
+        const tailX = drawX - (effectiveVx / speedMag) * trailLength;
+        const tailY = drawY - (effectiveVy / speedMag) * trailLength;
+
+        // Draw subtle star motion trail gradient
+        const trailGrad = ctx.createLinearGradient(tailX, tailY, drawX, drawY);
+        trailGrad.addColorStop(0, `${star.colorPrefix}0)`);
+        trailGrad.addColorStop(0.5, `${star.colorPrefix}${alpha * 0.28})`);
+        trailGrad.addColorStop(1, `${star.colorPrefix}${alpha * 0.85})`);
+
+        ctx.strokeStyle = trailGrad;
+        ctx.lineWidth = Math.max(0.5, star.radius * 0.9);
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(tailX, tailY);
+        ctx.lineTo(drawX, drawY);
+        ctx.stroke();
+
+        // Draw soft radial glow for larger / foreground stars
         if (star.hasGlow) {
-          const glowGrad = ctx.createRadialGradient(drawX, drawY, 0, drawX, drawY, star.radius * 3.5);
-          glowGrad.addColorStop(0, `${star.colorPrefix}${alpha * 0.8})`);
-          glowGrad.addColorStop(0.4, `${star.colorPrefix}${alpha * 0.2})`);
+          const glowGrad = ctx.createRadialGradient(drawX, drawY, 0, drawX, drawY, star.radius * 3.8);
+          glowGrad.addColorStop(0, `${star.colorPrefix}${alpha * 0.85})`);
+          glowGrad.addColorStop(0.35, `${star.colorPrefix}${alpha * 0.25})`);
           glowGrad.addColorStop(1, 'rgba(0,0,0,0)');
           ctx.fillStyle = glowGrad;
           ctx.beginPath();
-          ctx.arc(drawX, drawY, star.radius * 3.5, 0, Math.PI * 2);
+          ctx.arc(drawX, drawY, star.radius * 3.8, 0, Math.PI * 2);
           ctx.fill();
         }
 
-        // Draw star core
+        // Draw star core head
         ctx.fillStyle = `${star.colorPrefix}${alpha})`;
         ctx.beginPath();
         ctx.arc(drawX, drawY, star.radius, 0, Math.PI * 2);
@@ -233,17 +268,38 @@ export default function CosmicStarfieldBackground({
         ctx.fill();
       }
 
-      animationFrameId = requestAnimationFrame(render);
+      if (isRunning) {
+        animationFrameId = requestAnimationFrame(render);
+      }
     };
 
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        if (animationFrameId) {
+          cancelAnimationFrame(animationFrameId);
+          animationFrameId = null;
+        }
+      } else {
+        lastTime = performance.now();
+        if (!animationFrameId) {
+          animationFrameId = requestAnimationFrame(render);
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
     animationFrameId = requestAnimationFrame(render);
 
     return () => {
-      cancelAnimationFrame(animationFrameId);
+      isRunning = false;
+      if (animationFrameId) {
+        cancelAnimationFrame(animationFrameId);
+      }
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('resize', handleResize);
       window.removeEventListener('mousemove', handleMouseMove);
     };
-  }, [starCount, enableMeteors, speed]);
+  }, [starCount, enableMeteors, speed, trailFactor]);
 
   return (
     <div className={`fixed inset-0 pointer-events-none z-0 overflow-hidden ${className}`}>
@@ -253,10 +309,12 @@ export default function CosmicStarfieldBackground({
         className="absolute inset-0 block w-full h-full"
       />
 
-      {/* Deep Space Cosmic Nebula Color Glows */}
-      <div className="absolute top-[-10%] left-[15%] w-[650px] h-[650px] bg-cyan-600/10 rounded-full blur-[140px] animate-pulse pointer-events-none" style={{ animationDuration: '8s' }} />
-      <div className="absolute top-[40%] right-[-10%] w-[700px] h-[700px] bg-indigo-600/10 rounded-full blur-[160px] pointer-events-none" />
-      <div className="absolute bottom-[-10%] left-[10%] w-[600px] h-[600px] bg-blue-600/10 rounded-full blur-[150px] pointer-events-none" />
+      {/* Deep Space Cosmic Nebula Color Glows - Hidden on mobile viewports for 60FPS */}
+      <div className="hidden md:block absolute top-[-10%] left-[15%] w-[650px] h-[650px] bg-cyan-600/10 rounded-full blur-[140px] animate-pulse pointer-events-none" style={{ animationDuration: '8s' }} />
+      <div className="hidden md:block absolute top-[40%] right-[-10%] w-[700px] h-[700px] bg-indigo-600/10 rounded-full blur-[160px] pointer-events-none" />
+      <div className="hidden md:block absolute bottom-[-10%] left-[10%] w-[600px] h-[600px] bg-blue-600/10 rounded-full blur-[150px] pointer-events-none" />
     </div>
   );
 }
+
+export default memo(CosmicStarfieldBackground);
