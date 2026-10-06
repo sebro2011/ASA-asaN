@@ -5,6 +5,12 @@ import TrilingualProvider from '../src/context/TrilingualProvider';
 export const metadata = {
   title: 'NASA Trilingual Space Exploration & APOD',
   description: 'Trilingual (Sinhala, Tamil, English) NASA space exploration app featuring real-time APOD with keyless AI dynamic translation, interactive 3D space visualizations, and crisp cosmic dark design.',
+  icons: {
+    icon: '/logo.png',
+    shortcut: '/logo.png',
+    apple: '/logo.png',
+  },
+  manifest: '/manifest.json',
 };
 
 export default function RootLayout({ children }) {

@@ -26,6 +26,7 @@ import {
   Rocket
 } from 'lucide-react';
 import { useFavorites } from '../utils/favorites';
+import { fetchNasaArchive } from '@/lib/nasaApi';
 
 // Available historical filter years
 const AVAILABLE_YEARS = [
@@ -138,22 +139,21 @@ export default function NASANewsExplorer({ className = '' }) {
 
   const t = UI[currentLang] || UI.en;
 
-  // Fetch articles from backend archive
+  // Fetch articles from central NASA API pipeline
   const fetchArchive = useCallback(async (targetPage = 1, append = false) => {
     if (targetPage === 1) setIsLoading(true);
     else setIsFetchingMore(true);
 
     try {
       const activeSearch = activeTopic || searchQuery;
-      const params = new URLSearchParams();
-      if (selectedYear) params.append('year', selectedYear);
-      if (activeSearch) params.append('q', activeSearch);
-      params.append('page', targetPage.toString());
-      params.append('limit', '8');
+      const data = await fetchNasaArchive({
+        year: selectedYear,
+        q: activeSearch,
+        page: targetPage,
+        limit: 8
+      });
 
-      const res = await fetch(`/api/nasa-archive?${params.toString()}`);
-      if (res.ok) {
-        const data = await res.json();
+      if (data && data.articles) {
         const incoming = data.articles || [];
         setTotalCount(data.total || incoming.length);
         setHasMore(data.hasMore ?? incoming.length >= 8);
@@ -169,7 +169,7 @@ export default function NASANewsExplorer({ className = '' }) {
         }
       }
     } catch (err) {
-      console.warn('Error fetching NASA archive:', err);
+      console.warn('Error fetching NASA archive via pipeline:', err);
     } finally {
       setIsLoading(false);
       setIsFetchingMore(false);

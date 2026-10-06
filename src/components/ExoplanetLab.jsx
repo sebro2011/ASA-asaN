@@ -3,6 +3,7 @@ import { Canvas, useFrame } from '@react-three/fiber';
 import { OrbitControls, PerspectiveCamera } from '@react-three/drei';
 import * as THREE from 'three';
 import { motion, AnimatePresence } from 'framer-motion';
+import { fetchExoplanets as fetchExoplanetsPipeline } from '@/lib/nasaApi';
 import { 
   Globe, 
   Sparkles, 
@@ -196,20 +197,17 @@ function ExoplanetLab({ lang = 'en' }) {
     return () => observer.disconnect();
   }, []);
 
-  // Fetch confirmed exoplanet targets from TAP API / Backend Proxy
+  // Fetch confirmed exoplanet targets from Central NASA API Pipeline
   const fetchExoplanets = async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/exoplanets');
-      if (res.ok) {
-        const json = await res.json();
-        if (json.success && json.exoplanets) {
-          setExoplanets(json.exoplanets);
-          setSelectedPlanet(json.exoplanets[0]);
-        }
+      const list = await fetchExoplanetsPipeline();
+      if (Array.isArray(list) && list.length > 0) {
+        setExoplanets(list);
+        setSelectedPlanet(list[0]);
       }
     } catch (err) {
-      console.warn('Exoplanet fetch error:', err);
+      console.warn('Exoplanet pipeline fetch error:', err);
     } finally {
       setLoading(false);
     }

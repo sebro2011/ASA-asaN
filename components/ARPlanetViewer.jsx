@@ -1,6 +1,9 @@
 'use client';
 
 import React, { useState, useEffect, useRef, memo } from 'react';
+import { Canvas } from '@react-three/fiber';
+import { OrbitControls } from '@react-three/drei';
+import { FallbackPlanet } from '../src/components/FallbackPlanet';
 import { 
   Glasses, 
   Smartphone, 
@@ -200,28 +203,36 @@ export function ARPlanetViewer({ className = '', lang = 'en' }) {
       {/* 3D Model Viewport with <model-viewer> and AR integration */}
       <div className="relative w-full h-[360px] sm:h-[460px] rounded-xl overflow-hidden border border-slate-800 bg-gradient-to-b from-[#030712] via-[#070f26] to-[#030712] flex items-center justify-center select-none shadow-inner">
         {hasModelError ? (
-          /* Error Boundary / Fallback 3D Visual Placeholder */
-          <div className="flex flex-col items-center justify-center p-6 text-center space-y-3 z-10">
-            <div className="w-24 h-24 rounded-full bg-cyan-950/60 border border-cyan-500/40 flex items-center justify-center animate-pulse shadow-lg shadow-cyan-500/20">
-              <div className="w-16 h-16 rounded-full border border-dashed border-cyan-400/60 flex items-center justify-center">
-                <Compass className="w-8 h-8 text-cyan-300 animate-spin" style={{ animationDuration: '12s' }} />
-              </div>
+          /* Error Boundary / Fallback 3D Planet Mesh Visualization */
+          <div className="relative w-full h-full flex flex-col items-center justify-center p-4">
+            <div className="absolute inset-0 z-0">
+              <Canvas
+                dpr={[1, 1.2]}
+                gl={{ powerPreference: 'high-performance', antialias: false }}
+                camera={{ position: [0, 0, 5], fov: 45 }}
+              >
+                <ambientLight intensity={0.5} />
+                <directionalLight position={[5, 5, 5]} intensity={1.2} />
+                <FallbackPlanet radius={1.7} color="#38bdf8" wireframe={true} />
+                <OrbitControls autoRotate autoRotateSpeed={1.5} enableZoom={false} />
+              </Canvas>
             </div>
-            <div className="space-y-1">
-              <p className="text-sm font-bold text-white font-['Orbitron']">
-                3D Planetary Model Active (Simulation Sphere)
+            
+            <div className="relative z-10 p-3 rounded-2xl bg-slate-950/80 backdrop-blur-md border border-cyan-500/30 text-center space-y-2 max-w-xs shadow-2xl">
+              <p className="text-xs font-bold text-white font-['Orbitron']">
+                3D Fallback Planet Active
               </p>
-              <p className="text-xs text-slate-400 font-mono">
-                Rendering procedural celestial fallback geometry
+              <p className="text-[10px] text-slate-400 font-mono">
+                Model URL unavailable • Rendering wireframe Mesh fallback
               </p>
+              <button
+                type="button"
+                onClick={() => setHasModelError(false)}
+                className="px-3 py-1 rounded-lg bg-cyan-600/30 text-cyan-300 font-mono text-[10px] font-bold border border-cyan-500/40 hover:bg-cyan-600/50 transition cursor-pointer"
+              >
+                RETRY GLB LOAD
+              </button>
             </div>
-            <button
-              type="button"
-              onClick={() => setHasModelError(false)}
-              className="px-3 py-1 rounded-lg bg-slate-800 text-xs font-mono text-cyan-300 border border-slate-700 hover:bg-slate-700"
-            >
-              Retry Model Load
-            </button>
           </div>
         ) : (
           /* Model-Viewer Component with ar-modes quick-look scene-viewer */

@@ -96,10 +96,23 @@ export default defineConfig(() => {
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),
+        three: path.resolve(__dirname, 'node_modules/three'),
+        '@react-three/fiber': path.resolve(__dirname, 'node_modules/@react-three/fiber'),
+        '@react-three/drei': path.resolve(__dirname, 'node_modules/@react-three/drei'),
         react: path.resolve(__dirname, 'node_modules/react'),
         'react-dom': path.resolve(__dirname, 'node_modules/react-dom'),
       },
-      dedupe: ['react', 'react-dom', 'react-i18next', 'framer-motion', 'three', '@react-three/fiber', '@react-three/drei'],
+      dedupe: [
+        'three',
+        '@react-three/fiber',
+        '@react-three/drei',
+        '@react-three/postprocessing',
+        'postprocessing',
+        'react',
+        'react-dom',
+        'react-i18next',
+        'framer-motion'
+      ],
     },
     optimizeDeps: {
       include: [
@@ -115,7 +128,17 @@ export default defineConfig(() => {
         '@react-three/fiber',
         '@react-three/drei',
       ],
-      dedupe: ['react', 'react-dom', 'react-i18next', 'framer-motion', 'three', '@react-three/fiber', '@react-three/drei'],
+      dedupe: [
+        'three',
+        '@react-three/fiber',
+        '@react-three/drei',
+        '@react-three/postprocessing',
+        'postprocessing',
+        'react',
+        'react-dom',
+        'react-i18next',
+        'framer-motion'
+      ],
     },
     server: {
       hmr: false,

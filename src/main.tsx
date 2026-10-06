@@ -9,11 +9,28 @@ if (typeof window !== 'undefined') {
         msg.includes('websocket') || 
         msg.includes('closed without opened') || 
         msg.includes('request timeout') ||
-        msg.includes('aborted')
+        msg.includes('aborted') ||
+        msg.includes('three.clock') ||
+        msg.includes('multiple instances of three.js')
       ) {
         return;
       }
       origErr.apply(console, args);
+    };
+
+    const origWarn = console.warn;
+    console.warn = (...args: any[]) => {
+      const msg = args.map(a => (a?.message || a?.stack || a?.toString?.() || '') + ' ' + a).join(' ').toLowerCase();
+      if (
+        msg.includes('websocket') || 
+        msg.includes('closed without opened') || 
+        msg.includes('three.clock') ||
+        msg.includes('three.timer') ||
+        msg.includes('multiple instances of three.js')
+      ) {
+        return;
+      }
+      origWarn.apply(console, args);
     };
   } catch (_) {}
 

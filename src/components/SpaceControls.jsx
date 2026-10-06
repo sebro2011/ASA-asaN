@@ -31,8 +31,8 @@ export function SpaceControls({
   const xrSessionRef = React.useRef(null);
 
   useEffect(() => {
-    if (typeof window !== 'undefined' && 'xr' in navigator) {
-      if (navigator.xr && typeof navigator.xr.isSessionSupported === 'function') {
+    if (typeof window !== 'undefined' && 'xr' in navigator && navigator.xr) {
+      if (typeof navigator.xr.isSessionSupported === 'function') {
         navigator.xr.isSessionSupported('immersive-ar')
           .then((supported) => setIsXrSupported(Boolean(supported)))
           .catch(() => setIsXrSupported(false));
@@ -40,12 +40,10 @@ export function SpaceControls({
     }
 
     return () => {
-      // Safe cleanup with proper null check
+      // Safe WebXR cleanup with optional chaining
       if (xrSessionRef.current) {
         try {
-          if (typeof xrSessionRef.current.end === 'function') {
-            xrSessionRef.current.end().catch(() => {});
-          }
+          xrSessionRef.current?.end?.()?.catch(() => {});
         } catch (_) {}
         xrSessionRef.current = null;
       }
@@ -58,16 +56,14 @@ export function SpaceControls({
     // If session is already active, safely end it
     if (xrSessionRef.current) {
       try {
-        if (typeof xrSessionRef.current.end === 'function') {
-          await xrSessionRef.current.end().catch(() => {});
-        }
+        await xrSessionRef.current?.end?.()?.catch(() => {});
       } catch (_) {}
       xrSessionRef.current = null;
       setXrActive(false);
       return;
     }
 
-    if ('xr' in navigator && navigator.xr && typeof navigator.xr.requestSession === 'function') {
+    if (typeof navigator !== 'undefined' && 'xr' in navigator && navigator.xr && typeof navigator.xr.requestSession === 'function') {
       try {
         const session = await navigator.xr.requestSession('immersive-ar', {
           requiredFeatures: ['hit-test', 'local-floor']

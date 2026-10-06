@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import AsteroidRiskBadge from './AsteroidRiskBadge.jsx';
 import AsteroidRiskGauge from './AsteroidRiskGauge.jsx';
 import { getNasaApiKey } from '../utils/nasaApiClient';
+import { fetchAsteroidsNeows } from '@/lib/nasaApi';
 import { 
   Radio, 
   AlertTriangle, 
@@ -187,46 +188,14 @@ function AsteroidRadar({ lang = 'en' }) {
     const endDate = formatYYYYMMDD(nextWeek);
     setDateRangeInfo({ start: startDate, end: endDate });
 
-    const apiKey = getNasaApiKey();
-    // Guaranteed HTTPS URL
-    const httpsApiUrl = `https://api.nasa.gov/neo/rest/v1/feed?start_date=${startDate}&end_date=${endDate}&api_key=${apiKey}`;
-
-    let rawNeoObj = null;
-
-    // Tier 1: Try local proxy route first (for full-stack dev)
+    // Central NASA API Pipeline fetch with automatic multi-tier caching & fallbacks
     try {
-      const res = await fetch(`/api/asteroids/neows?start_date=${startDate}&end_date=${endDate}`);
-      if (res.ok) {
-        const json = await res.json();
-        if (json.success && json.data?.near_earth_objects) {
-          rawNeoObj = json.data.near_earth_objects;
-          setIsFallback(Boolean(json.isFallback));
-        }
+      const neowsObj = await fetchAsteroidsNeows(startDate, endDate);
+      if (neowsObj && Object.keys(neowsObj).length > 0) {
+        rawNeoObj = neowsObj;
       }
-    } catch {}
-
-    // Tier 2: Try direct NASA Open API via HTTPS with fallback key
-    if (!rawNeoObj || Object.keys(rawNeoObj).length === 0) {
-      let timeout;
-      try {
-        const controller = new AbortController();
-        timeout = setTimeout(() => {
-          try { controller.abort(); } catch {}
-        }, 4500);
-
-        const directRes = await fetch(httpsApiUrl, { signal: controller.signal });
-        if (directRes.ok) {
-          const directJson = await directRes.json();
-          if (directJson.near_earth_objects && Object.keys(directJson.near_earth_objects).length > 0) {
-            rawNeoObj = directJson.near_earth_objects;
-            setIsFallback(false);
-          }
-        }
-      } catch (err) {
-        console.warn('NASA NeoWs API request failed or timed out:', err);
-      } finally {
-        if (timeout) clearTimeout(timeout);
-      }
+    } catch (err) {
+      console.warn('NASA NeoWs pipeline fallback:', err);
     }
 
     // Process Received Real-Time Objects

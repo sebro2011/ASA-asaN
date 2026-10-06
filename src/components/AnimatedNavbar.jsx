@@ -2,6 +2,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import Logo from './Logo';
 import { useTranslation } from 'react-i18next';
 import { 
   Compass, 
@@ -22,7 +23,8 @@ import {
   Share2,
   BrainCircuit,
   Target,
-  Globe
+  Globe,
+  Flame
 } from 'lucide-react';
 import { useFavorites } from '../utils/favorites';
 
@@ -85,6 +87,16 @@ export const NAV_ITEMS = [
       en: 'Landmark Missions',
       si: 'ඓතිහාසික මෙහෙයුම්',
       ta: 'வரலாற்றுப் பணிகள்'
+    }
+  },
+  {
+    id: 'launch',
+    icon: Flame,
+    badge: 'LIVE',
+    labels: {
+      en: 'Launch Sim',
+      si: 'දියත්කිරීම',
+      ta: 'ஏவுதல்'
     }
   },
   {
@@ -219,12 +231,7 @@ export default function AnimatedNavbar({
               onClick={() => handleTabClick('apod')}
               className="flex items-center gap-3 text-left group focus:outline-none"
             >
-              <div className="relative w-10 h-10 md:w-11 md:h-11 rounded-2xl bg-gradient-to-tr from-cyan-600 via-blue-600 to-indigo-600 p-[1.5px] shadow-lg shadow-cyan-500/25 group-hover:shadow-cyan-400/40 transition-shadow">
-                <div className="w-full h-full bg-slate-950 rounded-[14px] flex items-center justify-center overflow-hidden relative">
-                  <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-                  <Rocket className="w-5 h-5 text-cyan-400 group-hover:scale-110 group-hover:-translate-y-0.5 transition-transform" />
-                </div>
-              </div>
+              <Logo size="md" />
 
               <div>
                 <div className="flex items-center gap-1.5">
@@ -232,12 +239,12 @@ export default function AnimatedNavbar({
                     NASA
                   </span>
                   <span className="text-[10px] font-mono px-1.5 py-0.2 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
-                    EXP
+                    WEB APP
                   </span>
                 </div>
                 <div className="flex items-center gap-1.5 text-[10px] font-mono text-slate-400">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                  <span className="hidden sm:inline">LIVE FEED</span>
+                  <span className="hidden sm:inline">LIVE TELEMETRY</span>
                   <span className="sm:hidden">LIVE</span>
                 </div>
               </div>

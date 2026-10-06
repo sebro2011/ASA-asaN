@@ -34,6 +34,9 @@ import OpenRouterChat from './components/OpenRouterChat.jsx';
 import { CosmicAudioHeaderButton, SpaceAudioPlayer } from './components/SpaceAudioPlayer.jsx';
 import ARPlanetViewer from './components/ARPlanetViewer.jsx';
 import CosmicCalendar from './components/CosmicCalendar.jsx';
+import IssTelemetryIndicator from './components/IssTelemetryIndicator';
+import Logo from './components/Logo';
+import RocketLaunchSimulator from './components/RocketLaunchSimulator';
 import { useFavorites } from './utils/favorites';
 import { 
   Sparkles, 
@@ -57,10 +60,11 @@ import {
   MessageSquare,
   BrainCircuit,
   Award,
-  Target
+  Target,
+  Flame
 } from 'lucide-react';
 
-type TabKey = 'apod' | '3d' | 'asteroids' | 'epic' | 'exoplanets' | 'missions' | 'news' | 'saved' | 'assistant' | 'quiz' | 'iss';
+type TabKey = 'apod' | '3d' | 'asteroids' | 'epic' | 'exoplanets' | 'missions' | 'launch' | 'news' | 'saved' | 'assistant' | 'quiz' | 'iss';
 
 // Isolated, memoized live clock to completely eliminate full-page App re-renders every 1s
 const LiveUtcClock = React.memo(() => {
@@ -132,6 +136,8 @@ export default function App() {
       handleTabSwitch('apod');
     } else if (target === 'quiz') {
       handleTabSwitch('quiz');
+    } else if (target === 'launch' || target === 'rocket' || target === 'simulator') {
+      handleTabSwitch('launch');
     }
   };
 
@@ -165,7 +171,7 @@ export default function App() {
             </span>
             <span className="hidden md:inline text-slate-600">|</span>
             <span className="hidden md:inline text-slate-400">
-              ISS VELOCITY: <span className="text-cyan-300">27,580 KM/H</span> · ALT: <span className="text-cyan-300">418 KM</span>
+              <IssTelemetryIndicator />
             </span>
           </div>
 
@@ -201,7 +207,7 @@ export default function App() {
         
         {/* Sleek Hero Banner - Clean Cosmic Dark UI */}
         <section className="relative">
-          <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 sm:p-8 relative overflow-hidden shadow-xl">
+          <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 sm:p-8 relative overflow-hidden shadow-xl flex flex-col lg:flex-row items-center justify-between gap-6">
             <div className="relative z-10 max-w-3xl space-y-4">
               <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-slate-800/80 border border-slate-700/80 text-cyan-300 text-xs font-semibold">
                 <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
@@ -247,12 +253,26 @@ export default function App() {
                 />
               </div>
             </div>
+
+            {/* Glowing Hero App Badge Logo Container */}
+            <div className="hidden lg:flex flex-col items-center justify-center p-6 rounded-3xl bg-slate-950/50 border border-cyan-500/20 backdrop-blur-xl shadow-2xl relative shrink-0 group">
+              <div className="absolute inset-0 bg-cyan-500/10 rounded-3xl blur-2xl group-hover:bg-cyan-500/20 transition-all" />
+              <Logo size="xl" pulse={true} withGlow={true} />
+              <div className="mt-3 text-center">
+                <span className="font-['Orbitron'] font-black text-sm tracking-widest text-cyan-300">
+                  NASA WEB APP
+                </span>
+                <p className="text-[10px] font-mono text-slate-400">
+                  v2.5.0 • TRILINGUAL EDITION
+                </p>
+              </div>
+            </div>
           </div>
         </section>
 
         {/* Space Dashboard Multi-Card Grid Hub - Clean Cosmic Dark UI */}
         <section className="relative">
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-11 gap-3 sm:gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-12 gap-3 sm:gap-4">
             {/* Tile 1: APOD */}
             <motion.button
               whileHover={{ y: -4, scale: 1.02 }}
@@ -572,6 +592,35 @@ export default function App() {
                 </p>
               </div>
             </motion.button>
+
+            {/* Tile 12: Launch Sim Control Room */}
+            <motion.button
+              whileHover={{ y: -4, scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={() => handleTabSwitch('launch')}
+              className={`p-3.5 sm:p-4 rounded-2xl bg-slate-900/90 border border-slate-800 shadow-xl text-left transition-all duration-300 relative overflow-hidden flex flex-col justify-between ${
+                activeTab === 'launch'
+                  ? 'ring-2 ring-orange-400/80 shadow-[0_12px_36px_rgba(249,115,22,0.35)]'
+                  : 'hover:border-orange-500/50'
+              }`}
+            >
+              <div className="flex items-center justify-between w-full">
+                <div className="w-8 h-8 rounded-2xl bg-orange-500/20 border border-orange-500/40 flex items-center justify-center">
+                  <Flame className="w-4 h-4 text-orange-400 animate-pulse" />
+                </div>
+                <span className="text-[9px] font-mono px-1.5 py-0.5 rounded-full bg-orange-500/20 text-orange-300 border border-orange-500/30 font-bold">
+                  SIM
+                </span>
+              </div>
+              <div className="mt-2.5">
+                <h3 className="text-xs sm:text-sm font-bold text-white font-['Orbitron'] truncate">
+                  Launch Sim
+                </h3>
+                <p className="text-[10px] text-slate-300 mt-0.5 line-clamp-1">
+                  Control Room
+                </p>
+              </div>
+            </motion.button>
           </div>
         </section>
 
@@ -658,6 +707,31 @@ export default function App() {
                     </p>
                   </div>
 
+                  {/* Direct Link Banner to Rocket Launch Simulator */}
+                  <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-orange-500/10 via-amber-500/10 to-transparent border border-orange-500/30 flex items-center justify-between flex-wrap gap-4 shadow-xl">
+                    <div className="flex items-center gap-3.5">
+                      <div className="w-11 h-11 rounded-2xl bg-orange-500/20 border border-orange-500/40 flex items-center justify-center shrink-0">
+                        <Flame className="w-5 h-5 text-orange-400 animate-pulse" />
+                      </div>
+                      <div>
+                        <h4 className="text-sm sm:text-base font-bold text-white font-['Orbitron']">
+                          NASA Rocket Launch Control Simulator
+                        </h4>
+                        <p className="text-xs text-slate-400 font-mono mt-0.5">
+                          Launch Complex 39B • Telemetry, Propellant Safety & Mission Control Terminal
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleTabSwitch('launch')}
+                      className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-500 hover:to-amber-500 text-white font-mono text-xs font-bold transition shadow-lg shadow-orange-500/20 flex items-center gap-2 cursor-pointer"
+                    >
+                      <span>ENTER CONTROL ROOM</span>
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
+                  </div>
+
                   <MissionsTimeline 
                     lang={lang} 
                     initialMissionId={targetMissionId}
@@ -668,6 +742,26 @@ export default function App() {
 
                   {/* Solar Weather AI Alert System */}
                   <SolarWeather />
+                </section>
+              </AtmosphericEntryTransition>
+            )}
+
+            {!isTabLoading && displayedTab === 'launch' && (
+              <AtmosphericEntryTransition key="entry-launch" tabKey="launch">
+                <section className="space-y-6">
+                  <div className="border-b border-slate-800/80 pb-3 flex items-center justify-between flex-wrap gap-2">
+                    <div>
+                      <h2 className="text-xl sm:text-2xl font-bold text-white flex items-center gap-2.5 font-['Orbitron']">
+                        <Flame className="w-6 h-6 text-orange-400" />
+                        <span>NASA Rocket Launch Control Simulator</span>
+                      </h2>
+                      <p className="text-xs sm:text-sm text-slate-400 mt-1">
+                        KSC Launch Complex 39B • Interactive Propellant & Payload Telemetry Console
+                      </p>
+                    </div>
+                  </div>
+
+                  <RocketLaunchSimulator />
                 </section>
               </AtmosphericEntryTransition>
             )}
@@ -847,7 +941,7 @@ export default function App() {
           </span>
           <span className="hidden sm:inline text-slate-600">|</span>
           <span className="hidden sm:inline text-slate-400">
-            ISS VELOCITY: <span className="text-cyan-300">27,580 KM/H</span> · ALT: <span className="text-cyan-300">418 KM</span>
+            <IssTelemetryIndicator />
           </span>
         </div>
 

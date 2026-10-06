@@ -33,6 +33,7 @@ import { useTranslation } from 'react-i18next';
 import L from 'leaflet';
 import { propagateTLE } from '../utils/satelliteTracker.js';
 import { LiquidGlassCard } from './LiquidGlassCard.jsx';
+import { fetchIssLocation } from '@/lib/nasaApi';
 
 // Pre-seeded satellite definitions with authentic NORAD TLE data
 const INITIAL_SATELLITES = [
@@ -326,28 +327,18 @@ function ISSTracker({ className = '' }) {
       updatedPositions[s.id] = propagateSatellite(s, now);
     });
 
-    // If active satellite is ISS, attempt live NORAD real-time ping
-    let timeout;
+    // If active satellite is ISS, attempt live NORAD real-time ping via central pipeline
     try {
-      const controller = new AbortController();
-      timeout = setTimeout(() => {
-        try { controller.abort(new DOMException('Request timeout', 'AbortError')); } catch (_) {}
-      }, 3200);
-      const res = await fetch('/api/iss', { signal: controller.signal });
-      if (res.ok) {
-        const json = await res.json();
-        if (json.data && typeof json.data.latitude === 'number') {
-          updatedPositions.iss = {
-            latitude: Number(json.data.latitude),
-            longitude: Number(json.data.longitude),
-            altitude: Number(json.data.altitude),
-            velocity: Number(json.data.velocity)
-          };
-        }
+      const liveIss = await fetchIssLocation();
+      if (liveIss && typeof liveIss.latitude === 'number') {
+        updatedPositions.iss = {
+          latitude: Number(liveIss.latitude),
+          longitude: Number(liveIss.longitude),
+          altitude: Number(liveIss.altitude),
+          velocity: Number(liveIss.velocity)
+        };
       }
-    } catch {} finally {
-      if (timeout) clearTimeout(timeout);
-    }
+    } catch {}
 
     setSatPositions(updatedPositions);
 

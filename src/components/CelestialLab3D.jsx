@@ -9,6 +9,7 @@ import {
   Environment
 } from '@react-three/drei';
 import DynamicStarfield from './DynamicStarfield.jsx';
+import { FallbackPlanet, ModelErrorBoundary } from './FallbackPlanet.jsx';
 import { 
   EffectComposer, 
   Bloom, 
@@ -724,37 +725,34 @@ function CelestialLab3D({ lang = 'en' }) {
           {/* Dynamic Twinkling Starfield using Three.js Points */}
           <DynamicStarfield count={9500} minRadius={85} maxRadius={380} driftSpeed={0.006} />
 
-          {/* Active Target Render with 3D Placeholder Sphere Fallback */}
-          <Suspense fallback={
-            <mesh>
-              <sphereGeometry args={[2.5, 24, 24]} />
-              <meshStandardMaterial color="#38bdf8" wireframe={true} />
-            </mesh>
-          }>
-            <Float
-              speed={currentTarget.type === 'spacecraft' ? 1.6 : 0.3}
-              rotationIntensity={0.15}
-              floatIntensity={0.25}
-            >
-              {selectedTargetId === 'earth' ? (
-                <UltraEarth
-                  autoRotate={autoRotate}
-                  atmosphereGlow={atmosphereGlow}
-                  wireframe={wireframe}
-                />
-              ) : selectedTargetId === 'mars' ? (
-                <UltraMars
-                  autoRotate={autoRotate}
-                  atmosphereGlow={atmosphereGlow}
-                  wireframe={wireframe}
-                />
-              ) : selectedTargetId === 'moon' ? (
-                <UltraMoon autoRotate={autoRotate} wireframe={wireframe} />
-              ) : (
-                <UltraJWST autoRotate={autoRotate} wireframe={wireframe} />
-              )}
-            </Float>
-          </Suspense>
+          {/* Active Target Render with 3D Fallback Planet Error Boundary */}
+          <ModelErrorBoundary fallback={<FallbackPlanet radius={2.5} color="#38bdf8" wireframe={true} />}>
+            <Suspense fallback={<FallbackPlanet radius={2.5} color="#38bdf8" wireframe={true} />}>
+              <Float
+                speed={currentTarget.type === 'spacecraft' ? 1.6 : 0.3}
+                rotationIntensity={0.15}
+                floatIntensity={0.25}
+              >
+                {selectedTargetId === 'earth' ? (
+                  <UltraEarth
+                    autoRotate={autoRotate}
+                    atmosphereGlow={atmosphereGlow}
+                    wireframe={wireframe}
+                  />
+                ) : selectedTargetId === 'mars' ? (
+                  <UltraMars
+                    autoRotate={autoRotate}
+                    atmosphereGlow={atmosphereGlow}
+                    wireframe={wireframe}
+                  />
+                ) : selectedTargetId === 'moon' ? (
+                  <UltraMoon autoRotate={autoRotate} wireframe={wireframe} />
+                ) : (
+                  <UltraJWST autoRotate={autoRotate} wireframe={wireframe} />
+                )}
+              </Float>
+            </Suspense>
+          </ModelErrorBoundary>
 
           {/* Orbit Controls */}
           <OrbitControls

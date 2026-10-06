@@ -3,6 +3,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
+import Logo from './Logo';
 import { 
   Compass, 
   Orbit, 
@@ -17,7 +18,8 @@ import {
   Radio,
   Bookmark,
   Heart,
-  Bot
+  Bot,
+  Flame
 } from 'lucide-react';
 import { useFavorites } from '../utils/favorites';
 
@@ -50,6 +52,15 @@ const NAV_ITEMS = [
       en: 'Landmark Missions',
       si: 'ඓතිහාසික මෙහෙයුම්',
       ta: 'வரலாற்றுப் பணிகள்'
+    }
+  },
+  {
+    id: 'launch',
+    icon: Flame,
+    labels: {
+      en: 'Launch Sim',
+      si: 'දියත්කිරීම',
+      ta: 'ஏவுதல்'
     }
   },
   {
@@ -138,17 +149,12 @@ export default function FluidNavbar({
             onClick={() => onTabChange('apod')}
             className="flex items-center gap-3.5 cursor-pointer group select-none"
           >
-            <div className="relative w-11 h-11 rounded-full bg-gradient-to-br from-blue-700 via-blue-900 to-slate-950 p-0.5 border border-cyan-400/40 shadow-lg shadow-cyan-500/25 flex items-center justify-center overflow-hidden transition-transform duration-300 group-hover:scale-105">
-              <div className="absolute inset-0 bg-cyan-400/10 rounded-full animate-ping opacity-25" />
-              <span className="font-['Orbitron'] font-black text-xs text-rose-500 tracking-wider">
-                NASA
-              </span>
-            </div>
+            <Logo size="md" />
 
             <div>
               <div className="flex items-center gap-2">
                 <span className="font-['Orbitron'] font-bold text-base md:text-lg tracking-tight text-white group-hover:text-cyan-200 transition-colors">
-                  {currentLang === 'si' ? 'නාසා විශ්ව ගවේෂකය' : currentLang === 'ta' ? 'நாசா விண்வெளி ஆய்வு' : 'NASA Space Explorer'}
+                  {currentLang === 'si' ? 'නාසා විශ්ව ගවේෂකය' : currentLang === 'ta' ? 'நாசா விண்வெளி ஆய்வு' : 'NASA Web App'}
                 </span>
                 <span className="hidden lg:inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-cyan-500/15 text-cyan-300 border border-cyan-500/30">
                   <Radio className="w-2.5 h-2.5 text-cyan-400 animate-pulse" />

@@ -15,9 +15,10 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="NASALearn" />
     <link rel="manifest" href="/manifest.json" />
+    <link rel="icon" type="image/png" href="/logo.png" />
     <link rel="icon" type="image/svg+xml" href="/icon.svg" />
     <link rel="icon" type="image/x-icon" href="/favicon.ico" />
-    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="apple-touch-icon" href="/logo.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Sans+Sinhala:wght@400;500;600;700&family=Noto+Sans+Tamil:wght@400;500;600;700&family=Orbitron:wght@500;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -56,7 +57,10 @@
             if (
               fullMsg.indexOf('websocket') !== -1 ||
               fullMsg.indexOf('closed without opened') !== -1 ||
-              fullMsg.indexOf('failed to connect to websocket') !== -1
+              fullMsg.indexOf('failed to connect to websocket') !== -1 ||
+              fullMsg.indexOf('three.clock') !== -1 ||
+              fullMsg.indexOf('multiple instances of three.js') !== -1 ||
+              fullMsg.indexOf('three.timer') !== -1
             ) {
               return;
             }

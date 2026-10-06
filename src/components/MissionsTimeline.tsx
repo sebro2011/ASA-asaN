@@ -3,6 +3,7 @@ import { SupportedLanguage, translations } from '../i18n/translations';
 import { SPACE_MISSIONS, SpaceMission } from '../data/missions';
 import { useFavorites } from '../utils/favorites';
 import { VoiceSearchInput } from './VoiceSearchInput';
+import { fetchGroundedMissionSearch } from '@/lib/nasaApi';
 import { 
   Rocket, 
   Milestone, 
@@ -233,15 +234,9 @@ export const MissionsTimeline: React.FC<MissionsTimelineProps> = React.memo(({ l
     setShowGroundedSection(true);
 
     try {
-      const res = await fetch('/api/missions/grounded-search', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: queryTerm, lang })
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        setGroundedResult(data);
+      const data = await fetchGroundedMissionSearch(queryTerm, lang);
+      if (data && data.answer) {
+        setGroundedResult(data as GroundedSearchResult);
       } else {
         setGroundedResult({
           query: queryTerm,

@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import Logo from './Logo';
 import { 
   Globe, 
   ChevronDown, 
@@ -13,14 +14,15 @@ import {
   Download,
   Menu,
   X,
-  Radio
+  Radio,
+  Flame
 } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 
 interface NavbarProps {
-  activeTab: 'apod' | '3d' | 'missions' | 'news';
-  onTabChange: (tab: 'apod' | '3d' | 'missions' | 'news') => void;
+  activeTab: 'apod' | '3d' | 'missions' | 'news' | 'launch' | string;
+  onTabChange: (tab: any) => void;
   onOpenExportModal: () => void;
 }
 
@@ -110,12 +112,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             className="flex items-center gap-3.5 cursor-pointer group"
             onClick={() => onTabChange('apod')}
           >
-            <div className="relative w-11 h-11 rounded-full bg-radial from-blue-700 via-blue-900 to-slate-950 p-0.5 border border-cyan-400/40 shadow-lg shadow-cyan-500/25 flex items-center justify-center overflow-hidden transition-transform duration-300 group-hover:scale-105">
-              <div className="absolute inset-0 bg-cyan-400/10 rounded-full animate-ping opacity-25"></div>
-              <div className="font-['Orbitron'] font-black text-xs text-rose-500 tracking-wider">
-                NASA
-              </div>
-            </div>
+            <Logo size="md" />
 
             <div>
               <div className="flex items-center gap-2">
@@ -169,6 +166,18 @@ export const Navbar: React.FC<NavbarProps> = ({
             >
               <Rocket className="w-3.5 h-3.5" />
               <span>{t('navMissions')}</span>
+            </button>
+
+            <button
+              onClick={() => onTabChange('launch')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
+                activeTab === 'launch'
+                  ? 'bg-orange-600 text-white shadow-md shadow-orange-600/30'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+              }`}
+            >
+              <Flame className="w-3.5 h-3.5 text-orange-400" />
+              <span>Launch Sim</span>
             </button>
 
             <button

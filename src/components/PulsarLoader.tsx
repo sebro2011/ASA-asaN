@@ -2,8 +2,9 @@
 
 import React from 'react';
 import { motion } from 'framer-motion';
+import Logo from './Logo';
 import { SupportedLanguage } from '../i18n/translations';
-import { Sparkles, Radio, Orbit, Compass, Rocket, Newspaper, Bot, Bookmark } from 'lucide-react';
+import { Sparkles, Radio, Orbit, Compass, Rocket, Newspaper, Bot, Bookmark, Flame } from 'lucide-react';
 
 interface PulsarLoaderProps {
   targetTab: string;
@@ -11,6 +12,11 @@ interface PulsarLoaderProps {
 }
 
 const TAB_STATUS_MESSAGES: Record<string, Record<SupportedLanguage, { title: string; subtitle: string; icon: any }>> = {
+  launch: {
+    en: { title: 'Connecting to KSC Launch Complex 39B', subtitle: 'Initializing Rocket Launch Sequencer & Flight Telemetry Computers', icon: Flame },
+    si: { title: 'කෙනඩි අභ්‍යවකාශ මධ්‍යස්ථාන 39B දියත්කිරීමේ සංකීර්ණයට සම්බන්ධ වෙමින්', subtitle: 'රොකට් පියාසැරි පරිගණක හා ඉන්ධන සංවේදක පද්ධති සක්‍රිය කරයි', icon: Flame },
+    ta: { title: 'கென்னடி விண்வெளி மைய ஏவுதளத்துடன் இணைகிறது', subtitle: 'ராக்கெட் ஏவுதல் வரிசைமுறை மற்றும் தொலைநிலை அளவீட்டு கணிப்பொறிகள் துவங்குகின்றன', icon: Flame }
+  },
   apod: {
     en: { title: 'Aligning Deep Space Optical Sensors', subtitle: 'Retrieving NASA Astronomy Picture of the Day & Gemini AI Translation', icon: Compass },
     si: { title: 'ගැඹුරු අභ්‍යවකාශ නිරීක්ෂණ සංවේදක පෙළගස්වමින්', subtitle: 'නාසා දවසේ තාරකා ඡායාරූපය සහ Gemini AI පරිවර්තනය ලබාගනී', icon: Compass },
@@ -114,18 +120,24 @@ export default function PulsarLoader({ targetTab, lang = 'en' }: PulsarLoaderPro
           transition={{ repeat: Infinity, duration: 1.2, ease: 'easeInOut' }}
         />
 
-        {/* Ultra-Dense Spinning Pulsar Core */}
+        {/* NASA App Logo Core with Soft Pulsing Animation */}
         <motion.div
-          className="relative z-10 w-12 h-12 rounded-full bg-gradient-to-tr from-white via-cyan-200 to-blue-500 shadow-[0_0_30px_rgba(34,211,238,1),0_0_60px_rgba(99,102,241,0.8)] flex items-center justify-center p-0.5"
-          animate={{ rotate: 360, scale: [0.95, 1.08, 0.95] }}
+          className="relative z-10 flex items-center justify-center p-2 rounded-2xl bg-slate-950/80 backdrop-blur-md border border-cyan-400/50 shadow-[0_0_35px_rgba(34,211,238,0.9),0_0_70px_rgba(99,102,241,0.6)]"
+          animate={{ 
+            scale: [0.94, 1.06, 0.94],
+            boxShadow: [
+              '0 0 25px rgba(34,211,238,0.6), 0 0 50px rgba(99,102,241,0.4)',
+              '0 0 40px rgba(34,211,238,1), 0 0 80px rgba(99,102,241,0.7)',
+              '0 0 25px rgba(34,211,238,0.6), 0 0 50px rgba(99,102,241,0.4)'
+            ]
+          }}
           transition={{
-            rotate: { repeat: Infinity, duration: 1.5, ease: 'linear' },
-            scale: { repeat: Infinity, duration: 1.2, ease: 'easeInOut' }
+            repeat: Infinity,
+            duration: 2.2,
+            ease: 'easeInOut'
           }}
         >
-          <div className="w-full h-full rounded-full bg-gradient-to-br from-white via-cyan-100 to-cyan-300 flex items-center justify-center">
-            <div className="w-4 h-4 rounded-full bg-white shadow-[0_0_15px_rgba(255,255,255,1)]" />
-          </div>
+          <Logo size="md" priority={true} />
         </motion.div>
       </div>
 

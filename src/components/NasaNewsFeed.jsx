@@ -10,6 +10,7 @@ import {
   getMockApodFallback, 
   getMockNewsFallback 
 } from '../lib/dbCache.js';
+import { fetchApod as fetchApodPipeline, fetchNasaNews as fetchNewsPipeline, translateSpaceContent } from '@/lib/nasaApi';
 import { 
   Sparkles, 
   Newspaper, 
@@ -85,7 +86,7 @@ function NasaNewsFeed() {
   const [translations, setTranslations] = useState({});
   const [translatingIds, setTranslatingIds] = useState(new Set());
 
-  // 1. Fetch NASA APOD (Astronomy Picture of the Day) with IndexedDB Caching
+  // 1. Fetch NASA APOD (Astronomy Picture of the Day) with Central Pipeline
   const fetchApod = async () => {
     setApodLoading(true);
 
@@ -99,39 +100,12 @@ function NasaNewsFeed() {
       }
     } catch {}
 
-    let timeout;
     try {
-      // Primary: NASA Open API
-      const controller = new AbortController();
-      timeout = setTimeout(() => {
-        try { controller.abort(new DOMException('Request timeout', 'AbortError')); } catch (_) {}
-      }, 4000);
-      const directUrl = buildNasaApodUrl();
-      const res = await fetch(directUrl, {
-        signal: controller.signal
-      });
-
-      if (res.ok) {
-        const data = await res.json();
+      const data = await fetchApodPipeline();
+      if (data && data.title && data.url) {
         setApod(data);
         setCachedApod(data.date || 'today', data);
         return;
-      }
-    } catch {
-      // Secondary fallback
-    } finally {
-      if (timeout) clearTimeout(timeout);
-    }
-
-    try {
-      const internalRes = await fetch('/api/apod');
-      if (internalRes.ok) {
-        const json = await internalRes.json();
-        if (json.data) {
-          setApod(json.data);
-          setCachedApod(json.data.date || 'today', json.data);
-          return;
-        }
       }
     } catch {
       // Stale cache or localized mock space data fallback
@@ -143,7 +117,6 @@ function NasaNewsFeed() {
         }
       } catch {}
 
-      // Fallback gracefully to hardcoded Sinhala/Tamil/English mock space data
       const mock = getMockApodFallback(currentLang);
       setApod(mock);
     } finally {
@@ -151,7 +124,7 @@ function NasaNewsFeed() {
     }
   };
 
-  // 2. Fetch NASA RSS News Feed with IndexedDB Caching
+  // 2. Fetch NASA RSS News Feed with IndexedDB Caching & Central Pipeline
   const fetchNewsFeed = async () => {
     setNewsLoading(true);
 
@@ -165,62 +138,26 @@ function NasaNewsFeed() {
       }
     } catch {}
 
-    let timeout;
     try {
-      const rssUrl = encodeURIComponent('https://www.nasa.gov/news-release/feed/');
-      const endpoint = `https://api.rss2json.com/v1/api.json?rss_url=${rssUrl}`;
-      
-      const controller = new AbortController();
-      timeout = setTimeout(() => {
-        try { controller.abort(new DOMException('Request timeout', 'AbortError')); } catch (_) {}
-      }, 5000);
-      const res = await fetch(endpoint, { signal: controller.signal });
-
-      if (res.ok) {
-        const data = await res.json();
-        if (data.status === 'ok' && Array.isArray(data.items) && data.items.length > 0) {
-          const parsed = data.items.map((item, index) => {
-            // Extract clean description text by stripping HTML tags
-            const cleanDesc = (item.description || item.content || '')
-              .replace(/<[^>]*>?/gm, '')
-              .replace(/\s+/g, ' ')
-              .trim();
-
-            return {
-              guid: item.guid || item.link || `rss-${index}`,
-              title: item.title,
-              pubDate: item.pubDate,
-              link: item.link,
-              description: cleanDesc || 'Read full official press release at NASA.gov',
-              thumbnail: item.thumbnail || item.enclosure?.link || FALLBACK_NASA_NEWS[index % FALLBACK_NASA_NEWS.length].thumbnail,
-              category: Array.isArray(item.categories) && item.categories.length > 0 
-                ? item.categories[0] 
-                : 'Space Science'
-            };
-          });
-
-          setNewsItems(parsed);
-          setCachedNews(currentLang, parsed);
-          return;
-        }
-      }
-    } catch {
-      // Fallback below
-    } finally {
-      if (timeout) clearTimeout(timeout);
-    }
-
-    // Check for stale cache
-    try {
-      const staleNews = await getCachedNews(currentLang);
-      if (staleNews && Array.isArray(staleNews.data) && staleNews.data.length > 0) {
-        setNewsItems(staleNews.data);
+      const articles = await fetchNewsPipeline();
+      if (Array.isArray(articles) && articles.length > 0) {
+        const formatted = articles.map((item, index) => ({
+          guid: item.id || `news-${index}`,
+          title: item.title,
+          pubDate: item.date || 'October 2026',
+          link: item.url || 'https://www.nasa.gov',
+          description: item.summary || item.description || '',
+          thumbnail: item.image || item.thumbnail || FALLBACK_NASA_NEWS[index % FALLBACK_NASA_NEWS.length].thumbnail,
+          category: item.category || 'Space Science'
+        }));
+        setNewsItems(formatted);
+        setCachedNews(currentLang, formatted);
         setNewsLoading(false);
         return;
       }
     } catch {}
 
-    // Fallback gracefully to hardcoded Sinhala/Tamil mock space news data if network fails and no cache exists
+    // Fallback gracefully to hardcoded Sinhala/Tamil mock space news data
     const mockNews = getMockNewsFallback(currentLang);
     setNewsItems(mockNews || FALLBACK_NASA_NEWS);
     setNewsLoading(false);
@@ -253,29 +190,17 @@ function NasaNewsFeed() {
         setTranslatingIds(prev => new Set(prev).add(item.guid));
 
         try {
-          // Attempt backend Gemini translation
-          const res = await fetch('/api/translate', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              title: item.title,
-              explanation: item.description,
-              targetLang: currentLang
-            })
-          });
-
-          if (res.ok) {
-            const json = await res.json();
-            if (json.data && json.data.title) {
-              setTranslations(prev => ({
-                ...prev,
-                [key]: {
-                  title: json.data.title,
-                  description: json.data.explanation
-                }
-              }));
-              continue;
-            }
+          // Attempt backend translation via central pipeline
+          const data = await translateSpaceContent(item.title, item.description, currentLang);
+          if (data && data.title) {
+            setTranslations(prev => ({
+              ...prev,
+              [key]: {
+                title: data.title,
+                description: data.explanation
+              }
+            }));
+            continue;
           }
         } catch {
           // Use smart local scientific translation generator

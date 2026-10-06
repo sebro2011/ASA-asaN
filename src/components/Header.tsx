@@ -1,4 +1,5 @@
 import React from 'react';
+import Logo from './Logo';
 import { SupportedLanguage, translations } from '../i18n/translations';
 import { Sparkles, Globe, FileCode, Orbit, Rocket, Newspaper, Compass } from 'lucide-react';
 
@@ -25,12 +26,7 @@ export const Header: React.FC<HeaderProps> = ({
         <div className="flex items-center justify-between h-20 gap-4">
           {/* Logo & Brand */}
           <div className="flex items-center gap-3.5 cursor-pointer" onClick={() => onTabChange('apod')}>
-            <div className="relative w-11 h-11 rounded-full bg-radial from-blue-700 via-blue-900 to-slate-950 p-0.5 border border-cyan-400/40 shadow-lg shadow-cyan-500/25 flex items-center justify-center overflow-hidden group">
-              <div className="absolute inset-0 bg-cyan-400/10 rounded-full animate-ping opacity-25"></div>
-              <div className="font-['Orbitron'] font-black text-xs text-rose-500 tracking-wider">
-                NASA
-              </div>
-            </div>
+            <Logo size="md" />
 
             <div>
               <div className="flex items-center gap-2">

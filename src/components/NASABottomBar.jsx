@@ -3,7 +3,7 @@
 import React, { memo } from 'react';
 import { motion } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
-import { Compass, Newspaper, Orbit, Rocket, Bot, BrainCircuit, Globe2, Heart } from 'lucide-react';
+import { Compass, Newspaper, Orbit, Rocket, Bot, BrainCircuit, Globe2, Heart, Flame } from 'lucide-react';
 
 /**
  * Navigation Tabs with Trilingual Labels
@@ -16,6 +16,15 @@ const TABS = [
       en: 'APOD',
       si: 'ඡායාරූප',
       ta: 'படம்'
+    }
+  },
+  {
+    id: 'launch',
+    icon: Flame,
+    labels: {
+      en: 'Launch',
+      si: 'දියත්කිරීම',
+      ta: 'ஏவுதல்'
     }
   },
   {

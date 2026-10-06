@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import Logo from './Logo';
 import { 
   Rocket, 
   Compass, 
@@ -11,7 +12,8 @@ import {
   Check, 
   Menu, 
   X,
-  Bot
+  Bot,
+  Flame
 } from 'lucide-react';
 
 /**
@@ -25,6 +27,16 @@ const NAV_ITEMS = [
       en: 'APOD',
       si: 'දවසේ ඡායාරූපය',
       ta: 'வானியல் படம்'
+    }
+  },
+  {
+    id: 'launch',
+    icon: Flame,
+    badge: 'SIM',
+    labels: {
+      en: 'Launch Sim',
+      si: 'දියත්කිරීම',
+      ta: 'ஏவுதல்'
     }
   },
   {
@@ -120,7 +132,7 @@ export default function Navbar({
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16 sm:h-20 gap-4">
           
-          {/* Logo & Branding: NASA Space Explorer with Rocket Icon */}
+          {/* Logo & Branding: NASA Space Explorer with Logo Component */}
           <div 
             onClick={() => handleNavClick('apod')}
             className="flex items-center gap-3 cursor-pointer select-none group"
@@ -128,11 +140,7 @@ export default function Navbar({
             tabIndex={0}
             onKeyDown={(e) => e.key === 'Enter' && handleNavClick('apod')}
           >
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-cyan-600 to-blue-600 p-0.5 flex items-center justify-center shadow-lg shadow-cyan-900/30 group-hover:scale-105 transition-transform duration-200">
-              <div className="w-full h-full bg-slate-950 rounded-[10px] flex items-center justify-center">
-                <Rocket className="w-5 h-5 text-cyan-400 -rotate-45 group-hover:text-cyan-300 transition-colors" />
-              </div>
-            </div>
+            <Logo size="md" />
 
             <div>
               <div className="flex items-center gap-2">

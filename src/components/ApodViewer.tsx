@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import { SupportedLanguage, translations } from '../i18n/translations';
 import { useFavorites } from '../utils/favorites';
 import { buildNasaApodUrl } from '../utils/nasaApiClient';
-import { fetchApod } from '@/lib/nasaApi';
+import { fetchApod, translateSpaceContent } from '@/lib/nasaApi';
 import { CustomApodDatePicker } from './CustomApodDatePicker';
 import APODStoryteller from './APODStoryteller.jsx';
 import { 
@@ -272,46 +272,21 @@ export const ApodViewer: React.FC<ApodViewerProps> = React.memo(({
     const cacheKey = `${lang}:${apodData.title.slice(0, 30)}`;
     if (cachedTranslations[cacheKey]) return;
 
-    // Trigger dynamic translation with fallback
+    // Trigger dynamic translation via central pipeline with fallback
     const performTranslation = async () => {
       setIsTranslating(true);
-      let timeout: any;
       try {
-        const controller = new AbortController();
-        timeout = setTimeout(() => {
-          try { controller.abort(); } catch (_) {}
-        }, 5000);
-
-        try {
-          const res = await fetch('/api/translate', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              title: apodData.title,
-              explanation: apodData.explanation,
-              targetLang: lang
-            }),
-            signal: controller.signal
-          });
-
-          if (res.ok) {
-            const json = await res.json();
-            if (json.success && json.data) {
-              setCachedTranslations(prev => ({
-                ...prev,
-                [cacheKey]: json.data
-              }));
-              setIsTranslating(false);
-              return;
-            }
-          }
-        } catch {
-          // Graceful fallback below
+        const transData = await translateSpaceContent(apodData.title, apodData.explanation, lang);
+        if (transData && transData.title) {
+          setCachedTranslations(prev => ({
+            ...prev,
+            [cacheKey]: transData
+          }));
+          setIsTranslating(false);
+          return;
         }
       } catch {
-        // Fallback translation
-      } finally {
-        if (timeout) clearTimeout(timeout);
+        // Fallback below
       }
 
       try {

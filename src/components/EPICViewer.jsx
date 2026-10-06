@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef, memo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { buildNasaEpicUrl } from '../utils/nasaApiClient';
 import { LiquidGlassCard } from './LiquidGlassCard.jsx';
+import { fetchEpicEarthImagery } from '@/lib/nasaApi';
 import { 
   Play, 
   Pause, 
@@ -34,49 +35,29 @@ function EPICViewer({ lang = 'en' }) {
   const [activeTab, setActiveTab] = useState('image'); // 'image' | 'telemetry'
   const timerRef = useRef(null);
 
-  // Fetch live NASA EPIC Earth frames with multiple resilient fallback tiers
+  // Fetch live NASA EPIC Earth frames with central API pipeline
   const fetchEpicData = async () => {
     setLoading(true);
     let loadedFrames = null;
 
-    // Tier 1: Try local proxy route
     try {
-      const res = await fetch('/api/epic');
-      if (res.ok) {
-        const json = await res.json();
-        if (json.success && json.frames && json.frames.length > 0) {
-          loadedFrames = json.frames;
-        }
+      const pipelineFrames = await fetchEpicEarthImagery();
+      if (Array.isArray(pipelineFrames) && pipelineFrames.length > 0) {
+        loadedFrames = pipelineFrames.map(item => ({
+          id: item.identifier || item.id || `epic-${item.imageName || item.image}`,
+          caption: item.caption || 'DSCOVR EPIC Natural Color Earth Observation',
+          imageName: item.imageName || item.image,
+          date: item.date,
+          pngUrl: item.imageUrl || item.pngUrl,
+          thumbUrl: item.imageUrl || item.thumbUrl,
+          centroid_coordinates: item.centroidCoords || item.centroid_coordinates || { lat: 0, lon: 0 },
+          sun_j2000_position: item.sunPos || item.sun_j2000_position || { x: 0, y: 0, z: 0 },
+          dscovr_j2000_position: item.dscovrPos || item.dscovr_j2000_position || { x: 0, y: 0, z: 0 },
+          lunar_distance: item.distanceKm || item.lunar_distance || '1,500,000 km'
+        }));
       }
-    } catch {}
-
-    // Tier 2: Try direct NASA API with safe environment key / DEMO_KEY
-    if (!loadedFrames || loadedFrames.length === 0) {
-      try {
-        const directUrl = buildNasaEpicUrl();
-        const directRes = await fetch(directUrl);
-        if (directRes.ok) {
-          const directData = await directRes.json();
-          if (Array.isArray(directData) && directData.length > 0) {
-            loadedFrames = directData.slice(0, 12).map((item) => {
-              const dateStr = (item.date || '').split(' ')[0] || '2026-09-30';
-              const [year, month, day] = dateStr.split('-');
-              return {
-                id: item.identifier || `epic-${item.image}`,
-                caption: item.caption || 'DSCOVR EPIC Natural Color Earth Observation',
-                imageName: item.image,
-                date: item.date,
-                pngUrl: `https://epic.gsfc.nasa.gov/archive/natural/${year}/${month}/${day}/png/${item.image}.png`,
-                thumbUrl: `https://epic.gsfc.nasa.gov/archive/natural/${year}/${month}/${day}/thumbs/${item.image}.jpg`,
-                centroid_coordinates: item.centroid_coordinates || { lat: 0, lon: 0 },
-                sun_j2000_position: item.sun_j2000_position || { x: 0, y: 0, z: 0 },
-                dscovr_j2000_position: item.dscovr_j2000_position || { x: 0, y: 0, z: 0 },
-                lunar_distance: item.lunar_distance || '3.9 LD'
-              };
-            });
-          }
-        }
-      } catch {}
+    } catch (err) {
+      console.warn('NASA EPIC pipeline fallback:', err);
     }
 
     // Tier 3: Curated Astronomical Fallback

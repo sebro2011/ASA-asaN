@@ -12,6 +12,7 @@ import {
   Environment
 } from '@react-three/drei';
 import DynamicStarfield from './DynamicStarfield.jsx';
+import { FallbackPlanet, ModelErrorBoundary } from './FallbackPlanet.jsx';
 import { 
   EffectComposer, 
   Bloom, 
@@ -562,7 +563,7 @@ function SpaceLab3D({ lang = 'en' }) {
       <div className="absolute inset-0 z-0">
         <Canvas
           frameloop={isInView ? 'always' : 'never'}
-          dpr={dpr}
+          dpr={[1, 1.2]}
           camera={{ position: [0, 3, 9.5], fov: 45 }}
           gl={{
             powerPreference: 'high-performance',
@@ -572,7 +573,7 @@ function SpaceLab3D({ lang = 'en' }) {
           {/* Performance Monitor: Dynamically adjusts DPR & disables heavy effects if frame drops occur */}
           <PerformanceMonitor
             onIncline={() => {
-              setDpr(1.5);
+              setDpr(1.2);
               setFpsStatus('60 FPS (Peak)');
             }}
             onDecline={() => {
@@ -605,31 +606,28 @@ function SpaceLab3D({ lang = 'en' }) {
           {/* Optimized Starfield (6,500 points with GPU twinkling) */}
           <DynamicStarfield count={6500} minRadius={85} maxRadius={360} driftSpeed={0.005} />
 
-          {/* Render Active Celestial Model with 3D Placeholder Sphere Fallback */}
-          <Suspense fallback={
-            <mesh>
-              <sphereGeometry args={[2.4, 24, 24]} />
-              <meshStandardMaterial color="#0ea5e9" wireframe={true} />
-            </mesh>
-          }>
-            <Float
-              speed={currentTarget.type === 'spacecraft' ? 1.2 : 0.2}
-              rotationIntensity={0.1}
-              floatIntensity={0.15}
-            >
-              {selectedTargetId === 'mars' ? (
-                <MarsModel
-                  autoRotate={autoRotate}
-                  atmosphereHaze={atmosphereHaze}
-                  wireframe={wireframe}
-                />
-              ) : selectedTargetId === 'moon' ? (
-                <MoonModel autoRotate={autoRotate} wireframe={wireframe} />
-              ) : (
-                <JWSTModel autoRotate={autoRotate} wireframe={wireframe} />
-              )}
-            </Float>
-          </Suspense>
+          {/* Render Active Celestial Model with 3D Fallback Planet Error Boundary */}
+          <ModelErrorBoundary fallback={<FallbackPlanet radius={2.4} color="#0ea5e9" wireframe={true} />}>
+            <Suspense fallback={<FallbackPlanet radius={2.4} color="#0ea5e9" wireframe={true} />}>
+              <Float
+                speed={currentTarget.type === 'spacecraft' ? 1.2 : 0.2}
+                rotationIntensity={0.1}
+                floatIntensity={0.15}
+              >
+                {selectedTargetId === 'mars' ? (
+                  <MarsModel
+                    autoRotate={autoRotate}
+                    atmosphereHaze={atmosphereHaze}
+                    wireframe={wireframe}
+                  />
+                ) : selectedTargetId === 'moon' ? (
+                  <MoonModel autoRotate={autoRotate} wireframe={wireframe} />
+                ) : (
+                  <JWSTModel autoRotate={autoRotate} wireframe={wireframe} />
+                )}
+              </Float>
+            </Suspense>
+          </ModelErrorBoundary>
 
           {/* Orbit Controls with Damping */}
           <OrbitControls
