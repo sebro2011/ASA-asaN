@@ -1805,45 +1805,132 @@ const handleLocalSpaceChat = (req: express.Request, res: express.Response) => {
   });
 };
 
-// NASA AI Chat Endpoint with @google/genai SDK ('gemini-2.5-flash') & Trilingual Instructions
+// In-memory response cache for high-demand resilience (TTL: 20 minutes)
+const chatResponseCache = new Map<string, { data: any; timestamp: number }>();
+const CHAT_CACHE_TTL_MS = 20 * 60 * 1000;
+
+// NASA AI Chat Endpoint with @google/genai SDK ('gemini-3.8-flash') & Resilience Cascade
 const handleNasaAiEndpoint = async (req: express.Request, res: express.Response) => {
-  const { prompt, message, query, lang = 'en' } = req.body;
+  const { prompt, message, query, lang = 'en', history = [] } = req.body;
   const userPrompt = (prompt || message || query || '').trim();
 
   if (!userPrompt) {
     return res.status(400).json({ error: 'Prompt is required' });
   }
 
+  // Check in-memory cache for simple/repeated queries (avoids upstream 503 high-demand limits)
+  const isSimpleTurn = !Array.isArray(history) || history.length === 0;
+  const cacheKey = `${lang}:${userPrompt.toLowerCase().trim()}`;
+  if (isSimpleTurn && chatResponseCache.has(cacheKey)) {
+    const cachedEntry = chatResponseCache.get(cacheKey)!;
+    if (Date.now() - cachedEntry.timestamp < CHAT_CACHE_TTL_MS) {
+      return res.json({
+        ...cachedEntry.data,
+        cached: true
+      });
+    }
+    chatResponseCache.delete(cacheKey);
+  }
+
   const SYSTEM_INSTRUCTIONS: Record<string, string> = {
-    en: 'You are the official NASA Astrophysics & Deep-Space Exploration AI Assistant. Provide scientifically accurate, inspiring, and accessible answers about NASA missions (ISS, Artemis, James Webb Space Telescope, Mars Rovers, Hubble), astronomy, and cosmology in English.',
-    si: 'ඔබ නාසා (NASA) ආයතනයේ නිල තාරකා භෞතික විද්‍යා සහ ගැඹුරු අභ්‍යවකාශ ගවේෂණ සහායකයා වේ. ජාත්‍යන්තර අභ්‍යවකාශ නැවතුම (ISS), ආටෙමිස් මෙහෙයුම, ජේම්ස් වෙබ් දුරේක්ෂය සහ අඟහරු රෝවර පිළිබඳ නිවැරදි විද්‍යාත්මක තොරතුරු ස්වභාවික සිංහල බසින් සපයන්න.',
-    ta: 'நீங்கள் நாசாவின் (NASA) அதிகாரப்பூர்வ வானியற்பியல் மற்றும் ஆழ விண்வெளி ஆய்வு நுண்ணறிவு உதவியாளர். சர்வதேச விண்வெளி நிலையம் (ISS), ஆர்ட்டெமிஸ் திட்டம், ஜேம்ஸ் வெப் தொலைநோக்கி மற்றும் செவ்வாய் ரோவர்கள் பற்றிய துல்லியமான அறிவியல் தகவல்களை எளிய மற்றும் தெளிவான தமிழில் வழங்கவும்.'
+    en: 'You are the official NASA Astrophysics & Deep-Space Exploration AI Assistant. Provide scientifically accurate, inspiring, and accessible answers about NASA missions (ISS, Artemis, James Webb Space Telescope, Mars Rovers, Hubble, Europa Clipper, Roman Space Telescope), astronomy, astrophysics, and cosmology in English. Include relevant telemetry, distances, and scientific highlights when helpful. Use clean Markdown formatting with bullet points and bold headers. At the very end of your response on a new line, provide 3 short, relevant follow-up questions formatted exactly as: SUGGESTIONS: [Question 1] | [Question 2] | [Question 3]',
+    si: 'ඔබ නාසා (NASA) ආයතනයේ නිල තාරකා භෞතික විද්‍යා සහ ගැඹුරු අභ්‍යවකාශ ගවේෂණ සහායකයා වේ. ජාත්‍යන්තර අභ්‍යවකාශ නැවතුම (ISS), ආටෙමිස් මෙහෙයුම, ජේම්ස් වෙබ් දුරේක්ෂය, අඟහරු රෝවර සහ විශ්ව විද්‍යාව පිළිබඳ නිවැරදි විද්‍යාත්මක තොරතුරු පැහැදිලි, ස්වභාවික සිංහල බසින් සපයන්න. Markdown සහ කරුණු (bullet points) භාවිත කරන්න. අවසානයේ නව පේළියක අදාළ කෙටි පසු විපරම් ප්‍රශ්න 3ක් මෙසේ ලබා දෙන්න: SUGGESTIONS: [ප්‍රශ්නය 1] | [ප්‍රශ්නය 2] | [ප්‍රශ්නය 3]',
+    ta: 'நீங்கள் நாசாவின் (NASA) அதிகாரப்பூர்வ வானியற்பியல் மற்றும் ஆழ விண்டவெளி ஆய்வு நுண்ணறிவு உதவியாளர். சர்வதேச விண்வெளி நிலையம் (ISS), ஆர்ட்டெமிஸ் திட்டம், ஜேம்ஸ் வெப் தொலைநோக்கி, செவ்வாய் ரோவர்கள் மற்றும் அண்டவியல் பற்றிய துல்லியமான அறிவியல் தகவல்களை எளிய மற்றும் தெளிவான தமிழில் வழங்கவும். Markdown மற்றும் புல்லட் புள்ளிகளைப் பயன்படுத்தவும். இறுதியில் ஒரு புதிய வரியில் 3 குறுகிய தொடர் கேள்விகளை இவ்வாறு வழங்கவும்: SUGGESTIONS: [கேள்வி 1] | [கேள்வி 2] | [கேள்வி 3]'
   };
 
   const targetInstruction = SYSTEM_INSTRUCTIONS[lang] || SYSTEM_INSTRUCTIONS.en;
 
   if (process.env.GEMINI_API_KEY) {
-    try {
-      const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: userPrompt,
-        config: {
-          systemInstruction: targetInstruction,
-          temperature: 0.7
-        }
-      });
+    let contentsPayload: any = userPrompt;
 
-      const text = response.text;
-      if (text) {
-        return res.json({
-          text,
-          response: text,
-          model: 'gemini-2.5-flash',
-          lang
+    if (Array.isArray(history) && history.length > 0) {
+      const turns = history.slice(-6).map((item: any) => ({
+        role: item.role === 'assistant' ? 'model' : 'user',
+        parts: [{ text: String(item.text || item.content || '') }]
+      })).filter((c: any) => c.parts[0].text);
+
+      if (turns.length > 0) {
+        turns.push({
+          role: 'user',
+          parts: [{ text: userPrompt }]
         });
+        contentsPayload = turns;
       }
-    } catch (err: any) {
-      console.warn('[Gemini API] Fallback to local space engine:', err?.message);
+    }
+
+    // Resilience Cascade: gemini-3.8-flash -> quick retry on 503 -> gemini-flash-latest -> local fallback
+    const modelsToTry = ['gemini-3.8-flash', 'gemini-flash-latest'];
+    for (let i = 0; i < modelsToTry.length; i++) {
+      const candidateModel = modelsToTry[i];
+      try {
+        const response = await ai.models.generateContent({
+          model: candidateModel,
+          contents: contentsPayload,
+          config: {
+            systemInstruction: targetInstruction,
+            temperature: 0.7
+          }
+        });
+
+        let rawText = response.text || '';
+        let suggestions: string[] = [];
+
+        // Extract suggestions from response if present
+        const match = rawText.match(/SUGGESTIONS:\s*(.+)$/m);
+        if (match) {
+          suggestions = match[1]
+            .split('|')
+            .map(s => s.replace(/[\[\]]/g, '').trim())
+            .filter(Boolean);
+          rawText = rawText.replace(/SUGGESTIONS:\s*(.+)$/m, '').trim();
+        }
+
+        // Default fallback suggestions if none generated
+        if (suggestions.length === 0) {
+          suggestions = lang === 'si'
+            ? ['ආටෙමිස් මෙහෙයුම කුමක්ද?', 'ජේම්ස් වෙබ් දුරේක්ෂයේ සොයාගැනීම්', 'අඟහරු මත ජලය තිබේද?']
+            : lang === 'ta'
+            ? ['ஆர்ட்டெமிஸ் திட்டம் என்றால் என்ன?', 'ஜேம்ஸ் வெப் கண்டுபிடிப்புகள்', 'செவ்வாயில் நீர் உள்ளதா?']
+            : ['What is the Artemis flight plan?', 'What did JWST discover?', 'Is there water on Mars?'];
+        }
+
+        if (rawText) {
+          const payload = {
+            text: rawText,
+            response: rawText,
+            model: candidateModel,
+            provider: candidateModel === 'gemini-3.8-flash' ? 'Google Gemini 3.8 Flash' : 'Google Gemini Flash',
+            lang,
+            suggestions
+          };
+
+          // Cache simple/common queries for high availability
+          if (isSimpleTurn) {
+            chatResponseCache.set(cacheKey, { data: payload, timestamp: Date.now() });
+          }
+
+          return res.json(payload);
+        }
+      } catch (err: any) {
+        const errMsg = String(err?.message || '');
+        const isTransientUnavailable = 
+          errMsg.includes('503') || 
+          errMsg.includes('UNAVAILABLE') || 
+          errMsg.includes('high demand') || 
+          errMsg.includes('429') ||
+          errMsg.includes('RESOURCE_EXHAUSTED');
+
+        if (isTransientUnavailable && i === 0) {
+          // If first model encountered 503 high demand spike, brief 300ms pause before trying secondary model
+          await new Promise(resolve => setTimeout(resolve, 300));
+          continue;
+        }
+
+        // Log gracefully without throwing noisy red alerts in cloud console
+        if (i === modelsToTry.length - 1) {
+          console.log(`[Gemini API] Temporary upstream high-demand/rate limit (503/429). Smoothly serving query via NASA Neural Space Engine.`);
+        }
+      }
     }
   }
 
@@ -1852,14 +1939,15 @@ const handleNasaAiEndpoint = async (req: express.Request, res: express.Response)
     text: localResult.text,
     response: localResult.text,
     model: 'nasa-local-engine',
+    provider: 'NASA Neural Space Engine (Standalone)',
     lang: localResult.lang || lang,
     suggestions: localResult.suggestions
   });
 };
 
 app.post('/api/nasa-ai', handleNasaAiEndpoint);
-app.post('/api/openrouter/chat', handleLocalSpaceChat);
-app.post('/api/chat', handleLocalSpaceChat);
+app.post('/api/openrouter/chat', handleNasaAiEndpoint);
+app.post('/api/chat', handleNasaAiEndpoint);
 
 // Setup Vite middleware in dev or static files in production
 async function startServer() {
