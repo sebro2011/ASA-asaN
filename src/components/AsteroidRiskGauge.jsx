@@ -12,7 +12,8 @@ import { LiquidGlassCard } from './LiquidGlassCard.jsx';
  * Glassmorphic SVG radial gauge rendering the deterministic 0-100% PHA risk score.
  */
 export function AsteroidRiskGauge({ asteroid, className = '' }) {
-  const { lang, t } = useTrilingual();
+  const trilingual = useTrilingual ? useTrilingual() : null;
+  const lang = trilingual?.lang || 'en';
 
   const assessment = useMemo(() => {
     return calculateAsteroidRisk(asteroid);

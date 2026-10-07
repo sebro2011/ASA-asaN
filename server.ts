@@ -168,7 +168,11 @@ app.get('/api/apod', async (req, res) => {
 app.get('/api/asteroids/neows', async (req, res) => {
   const nasaApiKey = process.env.NEXT_PUBLIC_NASA_API_KEY || process.env.NASA_API_KEY || 'DEMO_KEY';
   const todayStr = new Date().toISOString().split('T')[0];
-  const url = `https://api.nasa.gov/neo/rest/v1/feed?start_date=${todayStr}&api_key=${nasaApiKey}`;
+  const startDate = (req.query.start_date as string) || todayStr;
+  const endDate = (req.query.end_date as string) || '';
+  const url = endDate
+    ? `https://api.nasa.gov/neo/rest/v1/feed?start_date=${encodeURIComponent(startDate)}&end_date=${encodeURIComponent(endDate)}&api_key=${nasaApiKey}`
+    : `https://api.nasa.gov/neo/rest/v1/feed?start_date=${encodeURIComponent(startDate)}&api_key=${nasaApiKey}`;
 
   let timeout: any;
   try {
