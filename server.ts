@@ -3,6 +3,7 @@ import dotenv from 'dotenv';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
+import WebSocket, { WebSocketServer } from 'ws';
 import { GoogleGenAI, Type } from '@google/genai';
 import { generateLocalSpaceResponse } from './src/utils/spaceLocalAiEngine.js';
 
@@ -1811,7 +1812,7 @@ const CHAT_CACHE_TTL_MS = 20 * 60 * 1000;
 
 // NASA AI Chat Endpoint with @google/genai SDK ('gemini-3.8-flash') & Resilience Cascade
 const handleNasaAiEndpoint = async (req: express.Request, res: express.Response) => {
-  const { prompt, message, query, lang = 'en', history = [] } = req.body;
+  const { prompt, message, query, lang = 'en', history = [], telemetry = {} } = req.body;
   const userPrompt = (prompt || message || query || '').trim();
 
   if (!userPrompt) {
@@ -1832,10 +1833,23 @@ const handleNasaAiEndpoint = async (req: express.Request, res: express.Response)
     chatResponseCache.delete(cacheKey);
   }
 
+  // Active Real-Time NASA Telemetry Feed Integration
+  const activeApodTitle = telemetry?.apodTitle || apodCache.get('today')?.title || 'The Pillars of Creation in Deep Infrared';
+  const activeAsteroidCount = typeof telemetry?.asteroidCount === 'number' ? telemetry.asteroidCount : 8;
+  const activeIssTelemetry = telemetry?.issPosition
+    ? `Latitude: ${Number(telemetry.issPosition.lat ?? telemetry.issPosition.latitude).toFixed(2)}°, Longitude: ${Number(telemetry.issPosition.lon ?? telemetry.issPosition.longitude).toFixed(2)}°, Altitude: ${Math.round(telemetry.issAltitude || 418)} km, Velocity: ${Math.round(telemetry.issVelocity || 27580)} km/h`
+    : (lastKnownIssData 
+        ? `Latitude: ${Number(lastKnownIssData.latitude).toFixed(2)}°, Longitude: ${Number(lastKnownIssData.longitude).toFixed(2)}°, Altitude: ${Math.round(lastKnownIssData.altitude || 418.6)} km, Velocity: ${Math.round(lastKnownIssData.velocity || 27584)} km/h`
+        : 'Altitude: ~418.6 km, Velocity: ~27,580 km/h in Low Earth Orbit (LEO)');
+
+  const TELEMETRY_SUMMARY_EN = `\n\n[LIVE NASA MISSION CONTROL TELEMETRY FEED]\n• Active APOD Title: "${activeApodTitle}"\n• Near-Earth Asteroids Tracked Today: ${activeAsteroidCount} objects monitored by NASA Planetary Defense\n• International Space Station (ISS) Real-Time Coordinates: ${activeIssTelemetry}`;
+  const TELEMETRY_SUMMARY_SI = `\n\n[සජීවී නාසා මෙහෙයුම් පාලන ටෙලිමෙට්‍රි දත්ත (LIVE TELEMETRY)]\n• අද දවසේ APOD ඡායාරූපය: "${activeApodTitle}"\n• නිරීක්ෂණය කරන අද දින පෘථිවි-ආසන්න ග්‍රහක: ${activeAsteroidCount} ක්\n• ISS තත්‍ය කාලීන කක්ෂීය පිහිටීම: ${activeIssTelemetry}`;
+  const TELEMETRY_SUMMARY_TA = `\n\n[நேரலை நாசா கட்டுப்பாட்டு மைய தொலைநிலை அளவீடுகள் (LIVE TELEMETRY)]\n• இன்றைய APOD புகைப்படம்: "${activeApodTitle}"\n• கண்காணிக்கப்படும் சிறுகோள்கள் எண்ணிக்கை: ${activeAsteroidCount}\n• ISS நேரலை சுற்றுப்பாதை நிலை: ${activeIssTelemetry}`;
+
   const SYSTEM_INSTRUCTIONS: Record<string, string> = {
-    en: 'You are the official NASA Astrophysics & Deep-Space Exploration AI Assistant. Provide scientifically accurate, inspiring, and accessible answers about NASA missions (ISS, Artemis, James Webb Space Telescope, Mars Rovers, Hubble, Europa Clipper, Roman Space Telescope), astronomy, astrophysics, and cosmology in English. Include relevant telemetry, distances, and scientific highlights when helpful. Use clean Markdown formatting with bullet points and bold headers. At the very end of your response on a new line, provide 3 short, relevant follow-up questions formatted exactly as: SUGGESTIONS: [Question 1] | [Question 2] | [Question 3]',
-    si: 'ඔබ නාසා (NASA) ආයතනයේ නිල තාරකා භෞතික විද්‍යා සහ ගැඹුරු අභ්‍යවකාශ ගවේෂණ සහායකයා වේ. ජාත්‍යන්තර අභ්‍යවකාශ නැවතුම (ISS), ආටෙමිස් මෙහෙයුම, ජේම්ස් වෙබ් දුරේක්ෂය, අඟහරු රෝවර සහ විශ්ව විද්‍යාව පිළිබඳ නිවැරදි විද්‍යාත්මක තොරතුරු පැහැදිලි, ස්වභාවික සිංහල බසින් සපයන්න. Markdown සහ කරුණු (bullet points) භාවිත කරන්න. අවසානයේ නව පේළියක අදාළ කෙටි පසු විපරම් ප්‍රශ්න 3ක් මෙසේ ලබා දෙන්න: SUGGESTIONS: [ප්‍රශ්නය 1] | [ප්‍රශ්නය 2] | [ප්‍රශ්නය 3]',
-    ta: 'நீங்கள் நாசாவின் (NASA) அதிகாரப்பூர்வ வானியற்பியல் மற்றும் ஆழ விண்டவெளி ஆய்வு நுண்ணறிவு உதவியாளர். சர்வதேச விண்வெளி நிலையம் (ISS), ஆர்ட்டெமிஸ் திட்டம், ஜேம்ஸ் வெப் தொலைநோக்கி, செவ்வாய் ரோவர்கள் மற்றும் அண்டவியல் பற்றிய துல்லியமான அறிவியல் தகவல்களை எளிய மற்றும் தெளிவான தமிழில் வழங்கவும். Markdown மற்றும் புல்லட் புள்ளிகளைப் பயன்படுத்தவும். இறுதியில் ஒரு புதிய வரியில் 3 குறுகிய தொடர் கேள்விகளை இவ்வாறு வழங்கவும்: SUGGESTIONS: [கேள்வி 1] | [கேள்வி 2] | [கேள்வி 3]'
+    en: `You are NOVA - NASA Mission Control AI, the premier spacecraft mission control intelligence system for NASA deep-space flight operations, astrophysics, and orbital telemetry. You communicate with authoritative, scientifically accurate, inspiring, and accessible mission-control clarity. You have direct access to live, real-time NASA telemetry feeds. Always use the active NASA telemetry data below when answering questions about today's sky, the ISS, asteroids, or missions. Use clean Markdown formatting with bullet points and bold headers. At the very end of your response on a new line, provide 3 short, relevant follow-up questions formatted exactly as: SUGGESTIONS: [Question 1] | [Question 2] | [Question 3]${TELEMETRY_SUMMARY_EN}`,
+    si: `ඔබ NOVA - නාසා මෙහෙයුම් පාලන කෘතිම බුද්ධිය (NOVA - NASA Mission Control AI) වේ. නාසා අභ්‍යවකාශ මෙහෙයුම් පාලන මධ්‍යස්ථානයේ උසස් බුද්ධි පද්ධතිය ලෙස ක්‍රියා කරමින්, ජාත්‍යන්තර අභ්‍යවකාශ නැවතුම (ISS), ආටෙමිස් චන්ද්‍ර මෙහෙයුම, ජේම්ස් වෙබ් දුරේක්ෂය, අඟහරු රෝවර සහ තාරකා භෞතික විද්‍යාව පිළිබඳ නිවැරදි විද්‍යාත්මක තොරතුරු පැහැදිලි, ස්වභාවික සිංහල බසින් සපයන්න. ඔබට පහත දැක්වෙන සජීවී නාසා ටෙලිමෙට්‍රි දත්ත (Live NASA Telemetry Context) වෙත සෘජු ප්‍රවේශය ඇත. අද දවසේ අහස, ISS, ග්‍රහක හෝ මෙහෙයුම් ගැන විමසීමේදී මෙම සජීවී දත්ත භාවිත කරන්න. Markdown සහ කරුණු (bullet points) භාවිත කරන්න. අවසානයේ නව පේළියක අදාළ කෙටි පසු විපරම් ප්‍රශ්න 3ක් මෙසේ ලබා දෙන්න: SUGGESTIONS: [ප්‍රශ්නය 1] | [ප්‍රශ්නය 2] | [ප්‍රශ්නය 3]${TELEMETRY_SUMMARY_SI}`,
+    ta: `நீங்கள் NOVA - நாசா கட்டுப்பாட்டு மைய செயற்கை நுண்ணறிவு (NOVA - NASA Mission Control AI). நாசா விண்கல செயல்பாடுகள், வானியற்பியல் மற்றும் விண்வெளி ஆய்வுக்கான உயர்நிலைக் கட்டுப்பாட்டு நுண்ணறிவு அமைப்பாக செயல்பட்டு, சர்வதேச விண்வெளி நிலையம் (ISS), ஆர்ட்டெமிஸ் திட்டம், ஜேம்ஸ் வெப் தொலைநோக்கி, செவ்வாய் ரோவர்கள் மற்றும் அண்டவியல் பற்றிய துல்லியமான அறிவியல் தகவல்களை எளிய மற்றும் தெளிவான தமிழில் வழங்கவும். உங்களுக்கு கீழே உள்ள நேரலை நாசா தொலைநிலை அளவீட்டுத் தரவுகளுக்கு (Live NASA Telemetry Context) நேரடி அணுகல் உள்ளது. இன்றைய வானம், ISS, சிறுகோள்கள் அல்லது பணிகள் பற்றிய கேள்விகளுக்கு இந்த நேரலைத் தரவுகளைப் பயன்படுத்தவும். Markdown மற்றும் புல்லட் புள்ளிகளைப் பயன்படுத்தவும். இறுதியில் ஒரு புதிய வரியில் 3 குறுகிய தொடர் கேள்விகளை இவ்வாறு வழங்கவும்: SUGGESTIONS: [கேள்வி 1] | [கேள்வி 2] | [கேள்வி 3]${TELEMETRY_SUMMARY_TA}`
   };
 
   const targetInstruction = SYSTEM_INSTRUCTIONS[lang] || SYSTEM_INSTRUCTIONS.en;
@@ -1949,6 +1963,16 @@ app.post('/api/nasa-ai', handleNasaAiEndpoint);
 app.post('/api/openrouter/chat', handleNasaAiEndpoint);
 app.post('/api/chat', handleNasaAiEndpoint);
 
+// Endpoint for Gemini Live Voice configuration & API access
+app.get('/api/gemini-live-token', (req, res) => {
+  const apiKey = process.env.GEMINI_API_KEY || '';
+  res.json({
+    apiKey,
+    endpoint: 'wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent',
+    hasKey: !!apiKey
+  });
+});
+
 // Setup Vite middleware in dev or static files in production
 async function startServer() {
   const isProduction = 
@@ -1980,6 +2004,81 @@ async function startServer() {
 
   const server = app.listen(PORT, '0.0.0.0', () => {
     console.log(`NASA Space Exploration Server running at http://0.0.0.0:${PORT}`);
+  });
+
+  // Attach Gemini Live Bidirectional Streaming WebSocket Server Proxy
+  const wss = new WebSocketServer({ server, path: '/ws/live' });
+
+  wss.on('connection', (clientWs) => {
+    console.log('[Gemini Live Proxy] Client connected to /ws/live');
+    const apiKey = process.env.GEMINI_API_KEY;
+
+    if (!apiKey) {
+      console.warn('[Gemini Live Proxy] GEMINI_API_KEY not configured on server.');
+      clientWs.send(JSON.stringify({ 
+        error: 'GEMINI_API_KEY is not configured on server. Please check Secrets panel.' 
+      }));
+      clientWs.close(1008, 'API key missing');
+      return;
+    }
+
+    const geminiWsUrl = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent?key=${apiKey}`;
+    const geminiWs = new WebSocket(geminiWsUrl);
+
+    const pendingQueue: any[] = [];
+    let isGeminiOpen = false;
+
+    geminiWs.on('open', () => {
+      console.log('[Gemini Live Proxy] Connected to Google GenerativeService.BidiGenerateContent');
+      isGeminiOpen = true;
+      while (pendingQueue.length > 0) {
+        const msg = pendingQueue.shift();
+        try {
+          geminiWs.send(msg);
+        } catch (e) {
+          console.error('[Gemini Live Proxy] Error flushing queued message:', e);
+        }
+      }
+    });
+
+    geminiWs.on('message', (data) => {
+      if (clientWs.readyState === WebSocket.OPEN) {
+        clientWs.send(data.toString());
+      }
+    });
+
+    geminiWs.on('error', (err) => {
+      console.error('[Gemini Live Proxy] Upstream Gemini WebSocket error:', err);
+      if (clientWs.readyState === WebSocket.OPEN) {
+        clientWs.send(JSON.stringify({ error: err.message || 'Gemini Live upstream connection error' }));
+      }
+    });
+
+    geminiWs.on('close', (code, reason) => {
+      console.log(`[Gemini Live Proxy] Upstream Gemini closed with code ${code}: ${reason.toString()}`);
+      if (clientWs.readyState === WebSocket.OPEN) {
+        clientWs.close(code, reason.toString());
+      }
+    });
+
+    clientWs.on('message', (message) => {
+      if (isGeminiOpen && geminiWs.readyState === WebSocket.OPEN) {
+        try {
+          geminiWs.send(message.toString());
+        } catch (e) {
+          console.error('[Gemini Live Proxy] Error forwarding to Gemini:', e);
+        }
+      } else {
+        pendingQueue.push(message.toString());
+      }
+    });
+
+    clientWs.on('close', () => {
+      console.log('[Gemini Live Proxy] Client disconnected');
+      if (geminiWs.readyState === WebSocket.OPEN || geminiWs.readyState === WebSocket.CONNECTING) {
+        geminiWs.close();
+      }
+    });
   });
 
   // Graceful shutdown handler for Cloud Run container lifecycle

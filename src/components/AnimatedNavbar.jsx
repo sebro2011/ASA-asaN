@@ -1,16 +1,15 @@
 'use client';
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Logo from './Logo';
 import { useTranslation } from 'react-i18next';
+import { useTelemetrySync } from '../hooks/useTelemetrySync';
 import { 
   Compass, 
   Orbit, 
   Rocket, 
   Newspaper, 
-  ChevronDown, 
-  Check, 
   Sparkles,
   Menu,
   X,
@@ -186,24 +185,33 @@ export default function AnimatedNavbar({
   const currentLang = (i18n.language || 'en').slice(0, 2);
   const { totalCount } = useFavorites();
 
-  const [langDropdownOpen, setLangDropdownOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const dropdownRef = useRef(null);
 
-  // Close language dropdown on outside click
+  // Real-time telemetry sync status and periodic live pulse synced with live data stream
+  const { isOnline, isSyncing } = useTelemetrySync();
+  const [isTelemetryPulse, setIsTelemetryPulse] = useState(false);
+
   useEffect(() => {
-    function handleClickOutside(event) {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
-        setLangDropdownOpen(false);
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    // 3.5s communication heartbeat cycle matching live telemetry packet intervals
+    const interval = setInterval(() => {
+      setIsTelemetryPulse(true);
+      const timer = setTimeout(() => {
+        setIsTelemetryPulse(false);
+      }, 1100);
+      return () => clearTimeout(timer);
+    }, 3500);
+
+    return () => clearInterval(interval);
   }, []);
+
+  useEffect(() => {
+    if (isSyncing) {
+      setIsTelemetryPulse(true);
+    }
+  }, [isSyncing]);
 
   const handleLanguageChange = (code) => {
     i18n.changeLanguage(code);
-    setLangDropdownOpen(false);
     setMobileMenuOpen(false);
   };
 
@@ -215,12 +223,10 @@ export default function AnimatedNavbar({
     }
   };
 
-  const currentLangObj = LANGUAGES.find(l => l.code === currentLang) || LANGUAGES[0];
-
   return (
-    <header className={`sticky top-0 z-50 w-full bg-slate-950/80 backdrop-blur-xl border-b border-cyan-500/20 shadow-2xl transition-all ${className}`}>
+    <header className={`sticky top-0 z-50 w-full bg-[#030718]/92 backdrop-blur-2xl border-b border-cyan-500/20 shadow-[0_12px_32px_rgba(0,0,0,0.7)] transition-all ${className}`}>
       {/* Subtle top neon ambient bar */}
-      <div className="h-[2px] w-full bg-gradient-to-r from-transparent via-cyan-500 to-transparent opacity-80" />
+      <div className="h-[2px] w-full bg-gradient-to-r from-transparent via-cyan-400 to-transparent opacity-85" />
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16 md:h-20 gap-4">
@@ -242,10 +248,78 @@ export default function AnimatedNavbar({
                     WEB APP
                   </span>
                 </div>
-                <div className="flex items-center gap-1.5 text-[10px] font-mono text-slate-400">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                  <span className="hidden sm:inline">LIVE TELEMETRY</span>
-                  <span className="sm:hidden">LIVE</span>
+                <div 
+                  className={`flex items-center gap-1.5 text-[10px] font-mono px-2 py-0.5 rounded-full border transition-all duration-700 select-none ${
+                    !isOnline
+                      ? 'bg-amber-500/10 border-amber-500/30 text-amber-300 shadow-[0_0_8px_rgba(245,158,11,0.25)]'
+                      : isSyncing
+                        ? 'bg-cyan-500/15 border-cyan-500/40 text-cyan-200 shadow-[0_0_10px_rgba(6,182,212,0.3)]'
+                        : isTelemetryPulse
+                          ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300 shadow-[0_0_12px_rgba(16,185,129,0.3)] ring-1 ring-emerald-400/30'
+                          : 'bg-slate-900/60 border-slate-800/80 text-slate-400'
+                  }`}
+                  title={
+                    !isOnline 
+                      ? 'Offline Telemetry Cached' 
+                      : isSyncing 
+                        ? 'Syncing Live Telemetry Packets' 
+                        : 'Active High-Frequency Telemetry Stream (3.5s interval)'
+                  }
+                >
+                  {/* Status Beacon LED with Live Pulse Ripple */}
+                  <span className="relative flex h-2 w-2 items-center justify-center shrink-0">
+                    {isOnline && (
+                      <span 
+                        className={`absolute inline-flex h-full w-full rounded-full transition-opacity duration-500 ${
+                          isSyncing 
+                            ? 'bg-cyan-400 animate-ping opacity-75' 
+                            : isTelemetryPulse 
+                              ? 'bg-emerald-400 animate-ping opacity-90' 
+                              : 'opacity-0'
+                        }`} 
+                      />
+                    )}
+                    <span 
+                      className={`relative inline-flex rounded-full h-1.5 w-1.5 transition-all duration-500 ${
+                        !isOnline
+                          ? 'bg-amber-400 shadow-[0_0_6px_#f59e0b]'
+                          : isSyncing
+                            ? 'bg-cyan-400 shadow-[0_0_8px_#22d3ee] animate-pulse'
+                            : isTelemetryPulse
+                              ? 'bg-emerald-300 shadow-[0_0_10px_#34d399]'
+                              : 'bg-emerald-400 shadow-[0_0_4px_#10b981]'
+                      }`} 
+                    />
+                  </span>
+
+                  {/* Telemetry Span with Synchronized Color-Pulsing & Glow Animation */}
+                  <span 
+                    className={`hidden sm:inline font-semibold tracking-wider transition-all duration-700 ${
+                      !isOnline
+                        ? 'text-amber-400 drop-shadow-[0_0_6px_rgba(245,158,11,0.5)]'
+                        : isSyncing
+                          ? 'text-cyan-300 drop-shadow-[0_0_8px_rgba(34,211,238,0.7)] animate-pulse'
+                          : isTelemetryPulse
+                            ? 'text-emerald-300 drop-shadow-[0_0_8px_rgba(52,211,153,0.8)] scale-[1.02]'
+                            : 'text-slate-400 group-hover:text-slate-300'
+                    }`}
+                  >
+                    {isSyncing ? 'SYNCING TELEMETRY' : isOnline ? 'LIVE TELEMETRY' : 'OFFLINE CACHED'}
+                  </span>
+
+                  <span 
+                    className={`sm:hidden font-semibold tracking-wider transition-all duration-700 ${
+                      !isOnline
+                        ? 'text-amber-400'
+                        : isSyncing
+                          ? 'text-cyan-300'
+                          : isTelemetryPulse
+                            ? 'text-emerald-300 drop-shadow-[0_0_8px_rgba(52,211,153,0.8)]'
+                            : 'text-slate-400'
+                    }`}
+                  >
+                    {isSyncing ? 'SYNC' : isOnline ? 'LIVE' : 'OFFLINE'}
+                  </span>
                 </div>
               </div>
             </button>
@@ -310,74 +384,8 @@ export default function AnimatedNavbar({
             })}
           </nav>
 
-          {/* Right Action Tools: Language Switcher & Export */}
+          {/* Right Action Tools: Mobile Toggle */}
           <div className="flex items-center gap-2 sm:gap-3">
-            
-            {/* Trilingual Language Dropdown */}
-            <div className="relative" ref={dropdownRef}>
-              <button
-                onClick={() => setLangDropdownOpen(!langDropdownOpen)}
-                className="flex items-center gap-2 px-3 py-1.5 md:py-2 rounded-xl bg-slate-900/80 hover:bg-slate-800/90 border border-slate-800 text-xs font-semibold text-slate-200 transition shadow-sm hover:border-cyan-500/40"
-                aria-label="Change Language"
-                aria-expanded={langDropdownOpen}
-              >
-                <span className="text-sm">{currentLangObj.flag}</span>
-                <span className="font-mono text-xs hidden sm:inline">{currentLangObj.nativeName}</span>
-                <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 ${langDropdownOpen ? 'rotate-180 text-cyan-400' : ''}`} />
-              </button>
-
-              <AnimatePresence>
-                {langDropdownOpen && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 8, scale: 0.95 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    exit={{ opacity: 0, y: 8, scale: 0.95 }}
-                    transition={{ duration: 0.15 }}
-                    className="absolute right-0 mt-2 w-48 rounded-2xl bg-slate-900/95 border border-cyan-500/30 shadow-2xl backdrop-blur-2xl p-1.5 z-50"
-                  >
-                    <div className="px-2.5 py-1.5 text-[10px] font-mono text-slate-400 uppercase tracking-wider border-b border-slate-800">
-                      Select Language / භාෂාව
-                    </div>
-                    {LANGUAGES.map((l) => {
-                      const isSelected = l.code === currentLang;
-                      return (
-                        <button
-                          key={l.code}
-                          onClick={() => handleLanguageChange(l.code)}
-                          className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium transition ${
-                            isSelected
-                              ? 'bg-cyan-500/20 text-cyan-200 border border-cyan-500/40'
-                              : 'text-slate-300 hover:bg-slate-800/70 hover:text-white'
-                          }`}
-                        >
-                          <div className="flex items-center gap-2.5">
-                            <span className="text-base">{l.flag}</span>
-                            <div className="text-left">
-                              <div className="font-semibold">{l.nativeName}</div>
-                              <div className="text-[10px] text-slate-400 font-mono">{l.label}</div>
-                            </div>
-                          </div>
-                          {isSelected && <Check className="w-3.5 h-3.5 text-cyan-400" />}
-                        </button>
-                      );
-                    })}
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
-
-            {/* Export HTML / Share Report Button */}
-            {onOpenExportModal && (
-              <button
-                onClick={onOpenExportModal}
-                className="hidden sm:flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white text-xs font-semibold shadow-md shadow-cyan-600/30 transition hover:scale-105 active:scale-95"
-                title="Export HTML / Report"
-              >
-                <FileCode className="w-3.5 h-3.5" />
-                <span className="font-['Orbitron'] text-[11px] tracking-wider">EXPORT</span>
-              </button>
-            )}
-
             {/* Mobile Hamburger Menu Toggle */}
             <div className="lg:hidden">
               <button

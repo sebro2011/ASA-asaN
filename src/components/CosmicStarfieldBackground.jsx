@@ -61,51 +61,52 @@ function CosmicStarfieldBackground({
     const handleResize = () => {
       width = window.innerWidth;
       height = window.innerHeight;
-      dpr = Math.min(window.devicePixelRatio || 1, 2);
+      // Cap DPR to 1 to eliminate multi-megapixel canvas fill-rate lag on high-DPI/Retina screens
+      dpr = 1;
 
-      canvas.width = width * dpr;
-      canvas.height = height * dpr;
+      canvas.width = width;
+      canvas.height = height;
       canvas.style.width = `${width}px`;
       canvas.style.height = `${height}px`;
 
-      ctx.scale(dpr, dpr);
       initStars();
     };
 
     const initStars = () => {
       stars.length = 0;
-      const count = Math.floor((width * height) / 7500) || starCount;
+      // High-performance star density (capped at 95 on desktop, 45 on mobile)
+      const count = Math.min(Math.floor((width * height) / 16000) || 60, width < 768 ? 45 : 95);
 
       for (let i = 0; i < count; i++) {
         const depth = Math.random(); // 0 (far) to 1 (near)
         const sizeRand = Math.random();
         
         let radius;
-        if (sizeRand > 0.96) {
-          radius = Math.random() * 1.4 + 1.5; // Large bright anchor stars
-        } else if (sizeRand > 0.75) {
-          radius = Math.random() * 0.8 + 0.85; // Medium stars
+        if (sizeRand > 0.94) {
+          radius = Math.random() * 1.2 + 1.3; // Large bright anchor stars
+        } else if (sizeRand > 0.70) {
+          radius = Math.random() * 0.6 + 0.75; // Medium stars
         } else {
-          radius = Math.random() * 0.45 + 0.35; // Distant background pinpricks
+          radius = Math.random() * 0.4 + 0.35; // Distant background pinpricks
         }
 
         // Slight downward-diagonal forward drift direction simulating high-speed cosmic flight
-        const vx = (Math.random() - 0.5) * 0.12 * speed * (depth + 0.3);
-        const vy = (Math.random() * 0.35 + 0.25) * speed * (depth + 0.4);
+        const vx = (Math.random() - 0.5) * 0.1 * speed * (depth + 0.3);
+        const vy = (Math.random() * 0.3 + 0.2) * speed * (depth + 0.4);
 
         stars.push({
           x: Math.random() * width,
           y: Math.random() * height,
           radius,
           baseAlpha: Math.random() * 0.45 + 0.35,
-          twinkleSpeed: Math.random() * 0.03 + 0.012,
+          twinkleSpeed: Math.random() * 0.025 + 0.01,
           twinklePhase: Math.random() * Math.PI * 2,
           colorPrefix: STAR_COLORS[Math.floor(Math.random() * STAR_COLORS.length)],
           vx,
           vy,
           depth: depth + 0.25,
-          hasGlow: sizeRand > 0.90,
-          trailWeight: Math.random() * 0.5 + 0.75
+          hasGlow: sizeRand > 0.92,
+          trailWeight: Math.random() * 0.4 + 0.6
         });
       }
     };
@@ -200,29 +201,20 @@ function CosmicStarfieldBackground({
         const tailX = drawX - (effectiveVx / speedMag) * trailLength;
         const tailY = drawY - (effectiveVy / speedMag) * trailLength;
 
-        // Draw subtle star motion trail gradient
-        const trailGrad = ctx.createLinearGradient(tailX, tailY, drawX, drawY);
-        trailGrad.addColorStop(0, `${star.colorPrefix}0)`);
-        trailGrad.addColorStop(0.5, `${star.colorPrefix}${alpha * 0.28})`);
-        trailGrad.addColorStop(1, `${star.colorPrefix}${alpha * 0.85})`);
-
-        ctx.strokeStyle = trailGrad;
-        ctx.lineWidth = Math.max(0.5, star.radius * 0.9);
+        // Draw star motion trail streak (high-speed batched stroke without gradient object allocation)
+        ctx.strokeStyle = `${star.colorPrefix}${alpha * 0.45})`;
+        ctx.lineWidth = Math.max(0.5, star.radius * 0.85);
         ctx.lineCap = 'round';
         ctx.beginPath();
         ctx.moveTo(tailX, tailY);
         ctx.lineTo(drawX, drawY);
         ctx.stroke();
 
-        // Draw soft radial glow for larger / foreground stars
+        // Draw soft ambient glow for bright foreground stars (fast dual-arc pass, zero GC gradient churn)
         if (star.hasGlow) {
-          const glowGrad = ctx.createRadialGradient(drawX, drawY, 0, drawX, drawY, star.radius * 3.8);
-          glowGrad.addColorStop(0, `${star.colorPrefix}${alpha * 0.85})`);
-          glowGrad.addColorStop(0.35, `${star.colorPrefix}${alpha * 0.25})`);
-          glowGrad.addColorStop(1, 'rgba(0,0,0,0)');
-          ctx.fillStyle = glowGrad;
+          ctx.fillStyle = `${star.colorPrefix}${alpha * 0.18})`;
           ctx.beginPath();
-          ctx.arc(drawX, drawY, star.radius * 3.8, 0, Math.PI * 2);
+          ctx.arc(drawX, drawY, star.radius * 2.8, 0, Math.PI * 2);
           ctx.fill();
         }
 
@@ -309,10 +301,12 @@ function CosmicStarfieldBackground({
         className="absolute inset-0 block w-full h-full"
       />
 
-      {/* Deep Space Cosmic Nebula Color Glows - Hidden on mobile viewports for 60FPS */}
-      <div className="hidden md:block absolute top-[-10%] left-[15%] w-[650px] h-[650px] bg-cyan-600/10 rounded-full blur-[140px] animate-pulse pointer-events-none" style={{ animationDuration: '8s' }} />
-      <div className="hidden md:block absolute top-[40%] right-[-10%] w-[700px] h-[700px] bg-indigo-600/10 rounded-full blur-[160px] pointer-events-none" />
-      <div className="hidden md:block absolute bottom-[-10%] left-[10%] w-[600px] h-[600px] bg-blue-600/10 rounded-full blur-[150px] pointer-events-none" />
+      {/* Deep Space Cosmic Nebula & Planetary Atmospheric Horizon Lighting - 100% GPU shader-accelerated without compositor filter blur */}
+      <div className="absolute top-0 inset-x-0 h-96 bg-gradient-to-b from-[#010409] via-cyan-950/10 to-transparent pointer-events-none" />
+      <div className="hidden md:block absolute -top-32 left-1/2 -translate-x-1/2 w-[1200px] h-[400px] bg-[radial-gradient(ellipse_at_center,rgba(56,189,248,0.08),transparent_70%)] pointer-events-none" />
+      <div className="hidden md:block absolute top-[25%] left-[-5%] w-[650px] h-[650px] bg-[radial-gradient(circle_at_center,rgba(6,182,212,0.07),transparent_70%)] pointer-events-none" />
+      <div className="hidden md:block absolute top-[55%] right-[-5%] w-[700px] h-[700px] bg-[radial-gradient(circle_at_center,rgba(59,130,246,0.07),transparent_70%)] pointer-events-none" />
+      <div className="hidden md:block absolute bottom-[-10%] left-[20%] w-[750px] h-[450px] bg-[radial-gradient(circle_at_center,rgba(6,182,212,0.06),transparent_70%)] pointer-events-none" />
     </div>
   );
 }

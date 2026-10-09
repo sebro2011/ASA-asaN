@@ -15,7 +15,7 @@ export const Space3DViewer: React.FC<Space3DViewerProps> = React.memo(({ lang })
   return (
     <div className="w-full space-y-6">
       {/* Sub-navigation mode switcher */}
-      <div className="flex flex-wrap items-center justify-between gap-3 apple-liquid-glass p-4 sm:p-5 rounded-3xl">
+      <div className="flex flex-wrap items-center justify-between gap-3 apple-liquid-glass p-4 sm:p-5 rounded-2xl">
         <div className="flex items-center gap-2.5">
           <div className="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-ping" />
           <span className="text-xs font-mono text-cyan-300 font-semibold uppercase tracking-wider">

@@ -1,11 +1,11 @@
 'use client';
 
-import React, { useState, useRef, useEffect } from 'react';
-import { motion, useMotionValue, useTransform, animate } from 'framer-motion';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { motion, useMotionValue, useTransform, useSpring, animate } from 'framer-motion';
 import { ChevronRight, Sparkles, Check, Rocket } from 'lucide-react';
 
 /**
- * SlideToAction - iOS-style Drag-to-Unlock / Slide to Action
+ * SlideToAction - iOS-style Drag-to-Unlock / Slide to Action with Magnetic Hover & Dynamic Glow
  * 
  * @param {Object} props
  * @param {() => void} props.onSuccess - Callback triggered when slide threshold is reached
@@ -28,12 +28,48 @@ export default function SlideToAction({
   const [isUnlocked, setIsUnlocked] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [maxDrag, setMaxDrag] = useState(240);
+  const [isHovered, setIsHovered] = useState(false);
+  const [mousePos, setMousePos] = useState({ x: 120, y: 28 });
 
   const containerRef = useRef(null);
   const knobRef = useRef(null);
 
   // Motion value tracking the knob X position
   const x = useMotionValue(0);
+
+  // Magnetic card shift motion values with spring smoothing
+  const magneticRawX = useMotionValue(0);
+  const magneticRawY = useMotionValue(0);
+  const smoothMagneticX = useSpring(magneticRawX, { stiffness: 320, damping: 22 });
+  const smoothMagneticY = useSpring(magneticRawY, { stiffness: 320, damping: 22 });
+
+  // Mouse hover coordinate handler to shift subtle colored glow gradient & apply magnetic pull
+  const handleMouseMove = useCallback((e) => {
+    if (!containerRef.current) return;
+    const rect = containerRef.current.getBoundingClientRect();
+    const currentX = e.clientX - rect.left;
+    const currentY = e.clientY - rect.top;
+
+    setMousePos({ x: currentX, y: currentY });
+
+    if (!isDragging && !isUnlocked) {
+      // Normalized offset from center (-1 to 1)
+      const normX = ((currentX / rect.width) - 0.5) * 2;
+      const normY = ((currentY / rect.height) - 0.5) * 2;
+      magneticRawX.set(normX * 6);
+      magneticRawY.set(normY * 4);
+    }
+  }, [isDragging, isUnlocked, magneticRawX, magneticRawY]);
+
+  const handleMouseEnter = useCallback(() => {
+    setIsHovered(true);
+  }, []);
+
+  const handleMouseLeave = useCallback(() => {
+    setIsHovered(false);
+    magneticRawX.set(0);
+    magneticRawY.set(0);
+  }, [magneticRawX, magneticRawY]);
 
   // Measure container and knob width to determine exact maximum draggable range
   useEffect(() => {
@@ -139,18 +175,64 @@ export default function SlideToAction({
   };
 
   return (
-    <div
+    <motion.div
       ref={containerRef}
+      onMouseMove={handleMouseMove}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+      style={{
+        x: smoothMagneticX,
+        y: smoothMagneticY,
+      }}
       className={`relative w-full max-w-sm h-14 select-none rounded-full overflow-hidden p-1.5 transition-all duration-300 ${
         isUnlocked
           ? 'bg-emerald-950/70 border border-emerald-400/50 shadow-lg shadow-emerald-500/20'
-          : 'bg-slate-950/80 border border-cyan-500/30 shadow-xl shadow-cyan-950/40 backdrop-blur-xl'
+          : 'bg-slate-950/80 border border-cyan-500/30 shadow-xl shadow-cyan-950/40 backdrop-blur-xl hover:border-cyan-400/60'
       } ${className}`}
     >
       {/* Outer ambient glow reacting to drag progress */}
       <motion.div
         className="absolute inset-0 rounded-full bg-gradient-to-r from-cyan-600/30 via-blue-600/20 to-emerald-500/30 pointer-events-none"
         style={{ opacity: trackGlowOpacity }}
+      />
+
+      {/* Dynamic Magnetic Mouse-Following Colored Glow Gradient */}
+      <div
+        className="pointer-events-none absolute inset-0 rounded-full transition-opacity duration-300 z-10 overflow-hidden"
+        style={{
+          opacity: isHovered && !isUnlocked ? 1 : 0,
+        }}
+      >
+        {/* Diffused colored gradient aura shifting with cursor */}
+        <div
+          className="absolute w-52 h-52 -translate-x-1/2 -translate-y-1/2 rounded-full pointer-events-none blur-xl transition-transform duration-75 ease-out"
+          style={{
+            left: `${mousePos.x}px`,
+            top: `${mousePos.y}px`,
+            background: 'radial-gradient(circle, rgba(34, 211, 238, 0.45) 0%, rgba(59, 130, 246, 0.28) 35%, rgba(168, 85, 247, 0.15) 60%, transparent 80%)'
+          }}
+        />
+        {/* Concentrated radial core following mouse coordinates */}
+        <div
+          className="absolute inset-0 rounded-full pointer-events-none"
+          style={{
+            background: `radial-gradient(130px circle at ${mousePos.x}px ${mousePos.y}px, rgba(34, 211, 238, 0.32) 0%, rgba(59, 130, 246, 0.14) 40%, transparent 75%)`
+          }}
+        />
+      </div>
+
+      {/* Dynamic magnetic border glow reacting to cursor position */}
+      <div
+        className="pointer-events-none absolute inset-0 rounded-full z-20 transition-opacity duration-300"
+        style={{
+          opacity: isHovered && !isUnlocked ? 1 : 0,
+          background: `radial-gradient(90px circle at ${mousePos.x}px ${mousePos.y}px, rgba(34, 211, 238, 0.6), transparent 70%)`,
+          mask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)',
+          maskComposite: 'exclude',
+          WebkitMask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)',
+          WebkitMaskComposite: 'xor',
+          padding: '1px'
+        }}
       />
 
       {/* Dynamic progress fill bar trailing behind the knob */}
@@ -224,6 +306,6 @@ export default function SlideToAction({
           )
         )}
       </motion.div>
-    </div>
+    </motion.div>
   );
 }

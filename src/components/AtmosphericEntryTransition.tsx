@@ -40,27 +40,19 @@ export const AtmosphericEntryTransition: React.FC<AtmosphericEntryTransitionProp
       key={tabKey}
       initial={{ 
         opacity: 0, 
-        y: 35, 
-        scale: 0.96,
-        filter: 'blur(6px)'
+        y: 16
       }}
       animate={{ 
         opacity: 1, 
-        y: 0, 
-        scale: 1,
-        filter: 'blur(0px)'
+        y: 0
       }}
       exit={{ 
         opacity: 0, 
-        y: -25, 
-        scale: 0.97,
-        filter: 'blur(4px)'
+        y: -12
       }}
       transition={{ 
-        type: 'spring', 
-        stiffness: 280, 
-        damping: 24, 
-        mass: 0.8 
+        duration: 0.22,
+        ease: 'easeOut'
       }}
       className={`relative w-full overflow-visible ${className}`}
     >

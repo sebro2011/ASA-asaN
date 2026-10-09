@@ -49,7 +49,7 @@ export const Logo: React.FC<LogoProps> = ({
       tabIndex={onClick ? 0 : undefined}
     >
       <div 
-        className={`relative flex items-center justify-center shrink-0 transition-transform duration-300 hover:scale-105 ${glowClass} ${pulseClass}`}
+        className={`relative flex items-center justify-center shrink-0 transition-transform duration-300 group-hover:scale-105 hover:scale-105 ${glowClass} ${pulseClass}`}
         style={{ width: customDimension, height: customDimension }}
       >
         {!hasError ? (
@@ -61,13 +61,13 @@ export const Logo: React.FC<LogoProps> = ({
             loading={priority ? 'eager' : 'lazy'}
             decoding="async"
             onError={() => setHasError(true)}
-            className="w-full h-full object-contain filter drop-shadow-[0_0_12px_rgba(34,211,238,0.3)] rounded-xl"
+            className="w-full h-full object-contain filter drop-shadow-[0_0_12px_rgba(34,211,238,0.3)] rounded-xl transition-all duration-300 ease-out transform group-hover:scale-110 group-hover:drop-shadow-[0_0_22px_rgba(56,189,248,0.85)] group-hover:brightness-110 hover:scale-110 hover:drop-shadow-[0_0_22px_rgba(56,189,248,0.85)] hover:brightness-110"
           />
         ) : (
           /* High-Fidelity SVG Fallback matching NASA Web App Rocket Badge */
           <svg
             viewBox="0 0 100 100"
-            className="w-full h-full drop-shadow-[0_0_12px_rgba(34,211,238,0.4)]"
+            className="w-full h-full drop-shadow-[0_0_12px_rgba(34,211,238,0.4)] transition-all duration-300 ease-out transform group-hover:scale-110 group-hover:drop-shadow-[0_0_22px_rgba(56,189,248,0.85)] hover:scale-110"
             fill="none"
             xmlns="http://www.w3.org/2000/svg"
           >

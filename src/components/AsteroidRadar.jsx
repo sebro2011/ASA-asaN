@@ -932,131 +932,238 @@ function AsteroidRadar({ lang = 'en' }) {
         )}
       </AnimatePresence>
 
-      {/* Main Grid: Radar Screen (Left) + Asteroid Controls & Feed (Right) */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      {/* Main Grid: Radar Screen & Threat Detail Column (Left) + Asteroid Controls & Feed (Right) */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         
-        {/* Radar Circular Target Visualizer */}
-        <div className="lg:col-span-6 rounded-3xl apple-liquid-glass p-6 sm:p-7 shadow-2xl flex flex-col items-center justify-between relative overflow-hidden min-h-[460px]">
-          {/* Ambient Radar Grid Background */}
-          <div className="w-full flex items-center justify-between text-[11px] font-mono text-slate-300 z-10 w-full mb-2">
-            <span className="flex items-center gap-1.5 text-cyan-400 font-bold">
-              <Target className="w-3.5 h-3.5" />
-              EARTH CENTERED RADAR
-            </span>
-            <span className="text-slate-400 text-[10px] hidden sm:inline">
-              {t.radarLegend}
-            </span>
+        {/* Left Column: Structured Flexbox Container wrapping Earth Centered Radar and Threat Detail Card */}
+        <div className="lg:col-span-6 flex flex-col gap-6">
+          
+          {/* Earth Centered Radar Visualizer Card */}
+          <div className="w-full rounded-2xl apple-liquid-glass p-5 sm:p-7 shadow-2xl flex flex-col items-center justify-between relative overflow-hidden min-h-[480px]">
+            {/* Dedicated Radar Scope Header Bar - Fully decoupled from blips and callouts */}
+            <div className="w-full px-4 py-3 rounded-2xl bg-[#060b1e]/90 border border-cyan-500/25 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-[11px] font-mono text-slate-300 relative z-20 shadow-md">
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse shadow-[0_0_8px_#22d3ee]" />
+                <span className="flex items-center gap-1.5 text-cyan-300 font-bold tracking-wider">
+                  <Target className="w-3.5 h-3.5 text-cyan-400" />
+                  EARTH CENTERED RADAR
+                </span>
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-cyan-500/15 border border-cyan-500/30 text-cyan-300">
+                  7-DAY NEO RANGE
+                </span>
+              </div>
+              <span className="text-slate-400 text-[10px] hidden sm:inline font-mono">
+                {t.radarLegend}
+              </span>
+            </div>
+
+            {/* Radar Screen Sphere Container with dedicated vertical spacing */}
+            <div className="relative w-[280px] h-[280px] sm:w-[350px] sm:h-[350px] rounded-full border-2 border-cyan-500/40 apple-liquid-glass shadow-[0_0_50px_rgba(6,182,212,0.2)] flex items-center justify-center my-6 overflow-hidden shrink-0">
+              
+              {/* Concentric Distance Rings */}
+              <div className="absolute w-[80%] h-[80%] rounded-full border border-dashed border-cyan-500/30 flex items-center justify-start pl-2">
+                <span className="text-[9px] font-mono text-cyan-400/70 font-semibold">5 LD</span>
+              </div>
+              <div className="absolute w-[60%] h-[60%] rounded-full border border-cyan-500/25 flex items-center justify-start pl-2">
+                <span className="text-[9px] font-mono text-cyan-400/70 font-semibold">2.5 LD</span>
+              </div>
+              <div className="absolute w-[38%] h-[38%] rounded-full border border-dashed border-cyan-500/30 flex items-center justify-start pl-2">
+                <span className="text-[9px] font-mono text-cyan-400/70 font-semibold">1 LD</span>
+              </div>
+
+              {/* Radar Crosshairs Axis */}
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                <div className="w-full h-[1px] bg-cyan-500/30" />
+                <div className="h-full w-[1px] bg-cyan-500/30 absolute" />
+              </div>
+
+              {/* Central Earth Hub */}
+              <div className="relative w-7 h-7 rounded-full bg-gradient-to-tr from-cyan-600 via-blue-600 to-indigo-500 border-2 border-white shadow-[0_0_20px_rgba(6,182,212,0.8)] z-20 flex items-center justify-center">
+                <Globe className="w-4 h-4 text-white animate-pulse" />
+              </div>
+
+              {/* Rotating Radar Sweep Beam */}
+              <motion.div
+                animate={{ rotate: 360 }}
+                transition={{ repeat: Infinity, duration: 8, ease: "linear" }}
+                className="absolute inset-0 rounded-full pointer-events-none z-10"
+                style={{
+                  background: 'conic-gradient(from 0deg, rgba(6, 182, 212, 0.45) 0deg, rgba(6, 182, 212, 0.08) 45deg, transparent 90deg, transparent 360deg)'
+                }}
+              />
+
+              {/* Asteroids Plotted on Radar Target Grid */}
+              {!loading && filteredAsteroids.map((ast, idx) => {
+                const maxScaleKm = 28000000;
+                const normalizedDist = Math.min(1, Math.max(0.12, ast.rawKmDistance / maxScaleKm));
+                const radiusPx = normalizedDist * 140;
+
+                const angleDeg = (idx * 48 + (parseInt(String(ast.id).replace(/\D/g, '')) || idx * 37)) % 360;
+                const angleRad = (angleDeg * Math.PI) / 180;
+
+                const x = Math.cos(angleRad) * radiusPx;
+                const y = Math.sin(angleRad) * radiusPx;
+
+                const isSelected = selectedAsteroid?.id === ast.id;
+                const threat = getAsteroidThreatInfo(ast);
+
+                return (
+                  <div
+                    key={ast.id}
+                    onClick={() => handleSelectAsteroid(ast)}
+                    style={{
+                      left: '50%',
+                      top: '50%',
+                      transform: `translate(calc(-50% + ${x.toFixed(1)}px), calc(-50% + ${y.toFixed(1)}px))`
+                    }}
+                    className="absolute z-20 cursor-pointer group"
+                  >
+                    {/* Glowing Radar Blip: Red Badge if diameter exceeds threshold or close approach */}
+                    <div className="relative flex items-center justify-center">
+                      {threat.isRedThreat ? (
+                        <>
+                          <div className="absolute w-7 h-7 rounded-full bg-rose-500/50 animate-ping" />
+                          <div className="absolute w-5 h-5 rounded-full bg-rose-600/30 animate-pulse" />
+                          <div className={`w-3.5 h-3.5 rounded-full bg-rose-500 border-2 border-white shadow-[0_0_15px_#ef4444] transition-transform ${isSelected ? 'scale-150 ring-4 ring-rose-500/70' : 'group-hover:scale-125'}`} />
+                        </>
+                      ) : (
+                        <>
+                          <div className="absolute w-4 h-4 rounded-full bg-emerald-500/25 animate-pulse" />
+                          <div className={`w-2.5 h-2.5 rounded-full bg-emerald-400 border border-white shadow-[0_0_10px_#10b981] transition-transform ${isSelected ? 'scale-150 ring-4 ring-emerald-500/50' : 'group-hover:scale-125'}`} />
+                        </>
+                      )}
+                    </div>
+
+                    {/* Hover Callout Tag with Threat Level */}
+                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 px-3 py-1.5 rounded-xl apple-liquid-glass text-[10px] font-mono text-white whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none shadow-2xl border border-white/20 z-30">
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-bold text-white">{ast.name}</span>
+                        <span className={`px-1.5 py-0.2 rounded font-black ${threat.isRedThreat ? 'bg-rose-500/30 text-rose-300 border border-rose-500/60' : 'bg-emerald-500/20 text-emerald-300'}`}>
+                          {threat.level}
+                        </span>
+                      </div>
+                      <div className="text-[9px] text-slate-300">
+                        Dist: {ast.lunarDistance} LD • Diam: ~{ast.avgDiameterMeters}m
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Status Pills with proper vertical spacing and z-index to avoid bleeding */}
+            <div className="w-full flex items-center justify-between text-xs font-mono text-slate-300 pt-4 mt-2 border-t border-slate-800/80 flex-wrap gap-2.5 relative z-10">
+              <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-900/90 border border-rose-500/40 text-rose-300 shadow-sm">
+                <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-ping" />
+                <span className="font-bold">
+                  Red Threat Level: {asteroids.filter(a => getAsteroidThreatInfo(a).isRedThreat).length}
+                </span>
+              </div>
+              <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-900/90 border border-emerald-500/40 text-emerald-300 shadow-sm">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-400" />
+                <span>
+                  Safe Orbit: {asteroids.filter(a => !getAsteroidThreatInfo(a).isRedThreat).length}
+                </span>
+              </div>
+            </div>
           </div>
 
-          {/* Radar Screen Sphere Container */}
-          <div className="relative w-[300px] h-[300px] sm:w-[360px] sm:h-[360px] rounded-full border-2 border-cyan-500/40 apple-liquid-glass shadow-[0_0_50px_rgba(6,182,212,0.2)] flex items-center justify-center my-4 overflow-hidden">
-            
-            {/* Concentric Distance Rings */}
-            <div className="absolute w-[80%] h-[80%] rounded-full border border-dashed border-cyan-500/30 flex items-center justify-start pl-2">
-              <span className="text-[9px] font-mono text-cyan-400/70 font-semibold">5 LD</span>
-            </div>
-            <div className="absolute w-[60%] h-[60%] rounded-full border border-cyan-500/25 flex items-center justify-start pl-2">
-              <span className="text-[9px] font-mono text-cyan-400/70 font-semibold">2.5 LD</span>
-            </div>
-            <div className="absolute w-[38%] h-[38%] rounded-full border border-dashed border-cyan-500/30 flex items-center justify-start pl-2">
-              <span className="text-[9px] font-mono text-cyan-400/70 font-semibold">1 LD</span>
-            </div>
+          {/* Threat Detail Card (Threat Assessment Card) */}
+          {(() => {
+            const activeThreatAst = selectedAsteroid || filteredAsteroids.find(a => getAsteroidThreatInfo(a).isRedThreat) || filteredAsteroids[0];
+            if (!activeThreatAst) return null;
+            const threat = getAsteroidThreatInfo(activeThreatAst);
+            const isTargetActive = selectedAsteroid?.id === activeThreatAst.id;
 
-            {/* Radar Crosshairs Axis */}
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-              <div className="w-full h-[1px] bg-cyan-500/30" />
-              <div className="h-full w-[1px] bg-cyan-500/30 absolute" />
-            </div>
+            return (
+              <div className="bg-slate-950/95 backdrop-blur-2xl border border-slate-800/80 z-20 relative shadow-2xl rounded-2xl p-5 sm:p-6 space-y-4 hover:border-cyan-500/50 hover:shadow-[0_0_25px_rgba(34,211,238,0.15)] transition-all duration-300">
+                {/* Header with Title and Target Status - Clean responsive flow */}
+                <div className="flex flex-col sm:flex-row sm:items-start md:items-center justify-between gap-3 border-b border-slate-800/80 pb-3.5">
+                  <div className="flex items-start sm:items-center gap-3 min-w-0 flex-1">
+                    <div className={`p-2.5 rounded-2xl shrink-0 mt-0.5 sm:mt-0 ${threat.isRedThreat ? 'bg-rose-500/20 text-rose-400 border border-rose-500/40 shadow-[0_0_12px_rgba(244,63,94,0.3)]' : 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/40'}`}>
+                      {threat.isRedThreat ? <AlertOctagon className="w-5 h-5 animate-pulse" /> : <ShieldCheck className="w-5 h-5" />}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-[10px] font-mono text-slate-400 uppercase tracking-wider block">
+                          {t.threatAssessmentTitle}
+                        </span>
+                        {isTargetActive && (
+                          <span className="px-2 py-0.5 rounded-full text-[9px] font-mono font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shrink-0">
+                            ACTIVE TARGET
+                          </span>
+                        )}
+                      </div>
+                      <h3 className="font-['Orbitron'] font-bold text-white text-base sm:text-lg truncate">
+                        {activeThreatAst.name}
+                      </h3>
+                      <p className="text-[11px] font-mono text-slate-400">
+                        JPL SPK-ID: {activeThreatAst.id} • Approach: {activeThreatAst.closeApproachDate}
+                      </p>
+                    </div>
+                  </div>
 
-            {/* Central Earth Hub */}
-            <div className="relative w-7 h-7 rounded-full bg-gradient-to-tr from-cyan-600 via-blue-600 to-indigo-500 border-2 border-white shadow-[0_0_20px_rgba(6,182,212,0.8)] z-20 flex items-center justify-center">
-              <Globe className="w-4 h-4 text-white animate-pulse" />
-            </div>
-
-            {/* Rotating Radar Sweep Beam */}
-            <motion.div
-              animate={{ rotate: 360 }}
-              transition={{ repeat: Infinity, duration: 8, ease: "linear" }}
-              className="absolute inset-0 rounded-full pointer-events-none z-10"
-              style={{
-                background: 'conic-gradient(from 0deg, rgba(6, 182, 212, 0.45) 0deg, rgba(6, 182, 212, 0.08) 45deg, transparent 90deg, transparent 360deg)'
-              }}
-            />
-
-            {/* Asteroids Plotted on Radar Target Grid */}
-            {!loading && filteredAsteroids.map((ast, idx) => {
-              const maxScaleKm = 28000000;
-              const normalizedDist = Math.min(1, Math.max(0.12, ast.rawKmDistance / maxScaleKm));
-              const radiusPx = normalizedDist * 140;
-
-              const angleDeg = (idx * 48 + (parseInt(String(ast.id).replace(/\D/g, '')) || idx * 37)) % 360;
-              const angleRad = (angleDeg * Math.PI) / 180;
-
-              const x = Math.cos(angleRad) * radiusPx;
-              const y = Math.sin(angleRad) * radiusPx;
-
-              const isSelected = selectedAsteroid?.id === ast.id;
-              const threat = getAsteroidThreatInfo(ast);
-
-              return (
-                <div
-                  key={ast.id}
-                  onClick={() => handleSelectAsteroid(ast)}
-                  style={{
-                    left: '50%',
-                    top: '50%',
-                    transform: `translate(calc(-50% + ${x.toFixed(1)}px), calc(-50% + ${y.toFixed(1)}px))`
-                  }}
-                  className="absolute z-20 cursor-pointer group"
-                >
-                  {/* Glowing Radar Blip: Red Badge if diameter exceeds threshold or close approach */}
-                  <div className="relative flex items-center justify-center">
-                    {threat.isRedThreat ? (
-                      <>
-                        <div className="absolute w-7 h-7 rounded-full bg-rose-500/50 animate-ping" />
-                        <div className="absolute w-5 h-5 rounded-full bg-rose-600/30 animate-pulse" />
-                        <div className={`w-3.5 h-3.5 rounded-full bg-rose-500 border-2 border-white shadow-[0_0_15px_#ef4444] transition-transform ${isSelected ? 'scale-150 ring-4 ring-rose-500/70' : 'group-hover:scale-125'}`} />
-                      </>
-                    ) : (
-                      <>
-                        <div className="absolute w-4 h-4 rounded-full bg-emerald-500/25 animate-pulse" />
-                        <div className={`w-2.5 h-2.5 rounded-full bg-emerald-400 border border-white shadow-[0_0_10px_#10b981] transition-transform ${isSelected ? 'scale-150 ring-4 ring-emerald-500/50' : 'group-hover:scale-125'}`} />
-                      </>
+                  <div className="flex items-center gap-2 shrink-0 self-start sm:self-auto">
+                    <span className={`px-3 py-1 rounded-full text-xs font-mono font-black uppercase tracking-wider ${threat.isRedThreat ? 'bg-rose-500 text-white shadow-lg shadow-rose-900/60 animate-pulse' : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'}`}>
+                      {threat.level}
+                    </span>
+                    {selectedAsteroid && (
+                      <button
+                        type="button"
+                        onClick={() => setSelectedAsteroid(null)}
+                        className="p-1.5 rounded-xl bg-slate-900 text-slate-400 hover:text-white border border-slate-800 transition cursor-pointer"
+                        title="Deselect Target"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
                     )}
                   </div>
+                </div>
 
-                  {/* Hover Callout Tag with Threat Level */}
-                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 px-3 py-1.5 rounded-xl apple-liquid-glass text-[10px] font-mono text-white whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none shadow-2xl border border-white/20 z-30">
-                    <div className="flex items-center gap-1.5">
-                      <span className="font-bold text-white">{ast.name}</span>
-                      <span className={`px-1.5 py-0.2 rounded font-black ${threat.isRedThreat ? 'bg-rose-500/30 text-rose-300 border border-rose-500/60' : 'bg-emerald-500/20 text-emerald-300'}`}>
-                        {threat.level}
+                {/* Threat Criteria Breakdown Grid */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 font-mono text-xs">
+                  <div className={`p-3 rounded-2xl border ${threat.isDiameterExceeded ? 'bg-rose-500/10 border-rose-500/50 text-rose-200' : 'bg-slate-900/60 border-slate-800 text-slate-300'}`}>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-[10px] text-slate-400 uppercase">Diameter Criterion (≥ 140m)</span>
+                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${threat.isDiameterExceeded ? 'bg-rose-500/20 text-rose-400 border border-rose-500/40' : 'bg-emerald-500/10 text-emerald-400'}`}>
+                        {threat.isDiameterExceeded ? 'EXCEEDED' : 'PASS'}
                       </span>
                     </div>
-                    <div className="text-[9px] text-slate-300">
-                      Dist: {ast.lunarDistance} LD • Diam: ~{ast.avgDiameterMeters}m
+                    <p className="font-bold text-sm">~{activeThreatAst.avgDiameterMeters} meters</p>
+                    <p className="text-[10px] text-slate-400 mt-0.5">Threshold: 140m (Catastrophic regional impact limit)</p>
+                  </div>
+
+                  <div className={`p-3 rounded-2xl border ${threat.isCloseApproach ? 'bg-rose-500/10 border-rose-500/50 text-rose-200' : 'bg-slate-900/60 border-slate-800 text-slate-300'}`}>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-[10px] text-slate-400 uppercase">Close Approach (≤ 10 LD)</span>
+                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${threat.isCloseApproach ? 'bg-rose-500/20 text-rose-400 border border-rose-500/40' : 'bg-emerald-500/10 text-emerald-400'}`}>
+                        {threat.isCloseApproach ? 'CLOSE' : 'PASS'}
+                      </span>
                     </div>
+                    <p className="font-bold text-sm">{activeThreatAst.lunarDistance} Lunar Distances</p>
+                    <p className="text-[10px] text-slate-400 mt-0.5">Miss Distance: {activeThreatAst.missDistanceKm} km</p>
                   </div>
                 </div>
-              );
-            })}
-          </div>
 
-          {/* Radar Telemetry Footer Strip */}
-          <div className="w-full flex items-center justify-between text-xs font-mono text-slate-300 pt-3 border-t border-white/10 flex-wrap gap-2">
-            <div className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-ping" />
-              <span className="text-rose-300 font-bold">
-                Red Threat Level: {asteroids.filter(a => getAsteroidThreatInfo(a).isRedThreat).length}
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-400" />
-              <span className="text-emerald-300">
-                Safe Orbit: {asteroids.filter(a => !getAsteroidThreatInfo(a).isRedThreat).length}
-              </span>
-            </div>
-          </div>
+                {/* Physical Telemetry Row & Action */}
+                <div className="flex items-center justify-between pt-2 border-t border-slate-800/80 flex-wrap gap-2 text-xs font-mono">
+                  <div className="flex items-center gap-3 text-slate-300 flex-wrap">
+                    <span>Velocity: <span className="text-amber-400 font-bold">{activeThreatAst.velocityKmh} km/h</span></span>
+                    <span className="hidden sm:inline">•</span>
+                    <span>Scale: <span className="text-indigo-300">{getSizeComparison(activeThreatAst.avgDiameterMeters)}</span></span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedAsteroid(activeThreatAst)}
+                    className="px-3.5 py-1.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-mono font-bold text-xs transition shadow-md flex items-center gap-1.5 cursor-pointer ml-auto"
+                  >
+                    <Target className="w-3.5 h-3.5" />
+                    <span>View Dossier</span>
+                  </button>
+                </div>
+              </div>
+            );
+          })()}
         </div>
 
         {/* Asteroids Feed List & Filtering Controls */}
@@ -1261,7 +1368,7 @@ function AsteroidRadar({ lang = 'en' }) {
               {(() => {
                 const threat = getAsteroidThreatInfo(selectedAsteroid);
                 return (
-                  <div className={`p-4 sm:p-5 rounded-3xl border transition-all ${threat.isRedThreat ? 'bg-rose-950/30 border-rose-500/70 shadow-[0_0_25px_rgba(244,63,94,0.3)]' : 'bg-emerald-950/20 border-emerald-500/40'} space-y-3`}>
+                  <div className={`p-4 sm:p-5 rounded-3xl bg-slate-950/95 backdrop-blur-xl border border-slate-800 relative z-10 shadow-2xl space-y-3 ${threat.isRedThreat ? 'ring-1 ring-rose-500/50 shadow-[0_0_25px_rgba(244,63,94,0.25)]' : 'ring-1 ring-emerald-500/30'}`}>
                     <div className="flex items-center justify-between flex-wrap gap-2">
                       <div className="flex items-center gap-2.5">
                         <div className={`p-2 rounded-xl ${threat.isRedThreat ? 'bg-rose-500/20 text-rose-400' : 'bg-emerald-500/20 text-emerald-400'}`}>

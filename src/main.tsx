@@ -42,7 +42,9 @@ if (typeof window !== 'undefined') {
       reasonStr.includes('aborted') || 
       reasonStr.includes('aborterror') ||
       reasonStr.includes('timeout') ||
-      reasonStr.includes('request timeout')
+      reasonStr.includes('request timeout') ||
+      reasonStr.includes('session configuration is not supported') ||
+      reasonStr.includes('notsupportederror')
     ) {
       event.preventDefault();
       event.stopPropagation();
@@ -58,6 +60,8 @@ if (typeof window !== 'undefined') {
       msg.includes('aborterror') || 
       msg.includes('timeout') ||
       msg.includes('request timeout') ||
+      msg.includes('session configuration is not supported') ||
+      msg.includes('notsupportederror') ||
       event.filename?.includes('vite')
     ) {
       event.preventDefault();

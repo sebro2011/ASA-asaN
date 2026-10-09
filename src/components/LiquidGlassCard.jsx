@@ -29,13 +29,14 @@ export function LiquidGlassCard({
   };
 
   const containerClasses = `
-    bg-slate-900/90
-    border border-slate-800
+    bg-slate-950/80
+    backdrop-blur-xl
+    border border-slate-800/80
     rounded-2xl
-    shadow-xl
+    shadow-2xl
     relative
     overflow-hidden
-    ${hoverable ? 'transition-all duration-200 hover:-translate-y-0.5 hover:border-slate-700' : ''}
+    ${hoverable ? 'transition-all duration-300 hover:border-cyan-500/50 hover:shadow-[0_0_25px_rgba(34,211,238,0.15)]' : ''}
     ${brackets ? 'hud-brackets' : ''}
     ${glowStyles[glow] || ''}
     ${onClick ? 'cursor-pointer' : ''}

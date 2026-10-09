@@ -31,6 +31,8 @@ import OfflineIndicator from './components/OfflineIndicator';
 import { ExportHtmlModal } from './components/ExportHtmlModal';
 import NasaAi from './components/NasaAi.jsx';
 import OpenRouterChat from './components/OpenRouterChat.jsx';
+import GeminiChatWidget from './components/GeminiChatWidget.jsx';
+import GeminiLiveVoice from './components/GeminiLiveVoice.jsx';
 import { CosmicAudioHeaderButton, SpaceAudioPlayer } from './components/SpaceAudioPlayer.jsx';
 import ARPlanetViewer from './components/ARPlanetViewer.jsx';
 import CosmicCalendar from './components/CosmicCalendar.jsx';
@@ -83,6 +85,74 @@ const LiveUtcClock = React.memo(() => {
   return <span>{time}</span>;
 });
 
+// Micro-interaction container for dashboard tile icons with impact scale and pulse shockwave
+const TileImpactIcon = ({
+  isImpacted,
+  impactId,
+  colorClass,
+  badgeBg,
+  badgeBorder,
+  children
+}: {
+  isImpacted: boolean;
+  impactId: number;
+  colorClass: string;
+  badgeBg: string;
+  badgeBorder: string;
+  children: React.ReactNode;
+}) => {
+  return (
+    <motion.div
+      animate={
+        isImpacted
+          ? {
+              scale: [1, 1.16, 0.94, 1.05, 1],
+            }
+          : { scale: 1 }
+      }
+      transition={{ duration: 0.5, ease: 'easeOut' }}
+      className={`w-8 h-8 rounded-2xl ${badgeBg} ${badgeBorder} flex items-center justify-center relative overflow-visible ${colorClass}`}
+    >
+      {/* Shockwave ripple when clicked */}
+      {isImpacted && (
+        <motion.span
+          key={`shockwave-${impactId}`}
+          initial={{ scale: 0.8, opacity: 0.95 }}
+          animate={{ scale: 2.2, opacity: 0 }}
+          transition={{ duration: 0.55, ease: 'easeOut' }}
+          className="absolute inset-0 rounded-2xl border-2 border-current pointer-events-none"
+        />
+      )}
+      {/* Impact pulse and scale on the icon itself */}
+      <motion.div
+        key={isImpacted ? `icon-impact-${impactId}` : 'icon-idle'}
+        animate={
+          isImpacted
+            ? {
+                scale: [1, 1.48, 0.86, 1.16, 1],
+                rotate: [0, -8, 8, -4, 0],
+                filter: [
+                  'drop-shadow(0 0 0px currentColor)',
+                  'drop-shadow(0 0 12px currentColor)',
+                  'drop-shadow(0 0 4px currentColor)',
+                  'drop-shadow(0 0 0px currentColor)'
+                ]
+              }
+            : { scale: 1, rotate: 0 }
+        }
+        transition={{
+          duration: 0.5,
+          times: [0, 0.25, 0.5, 0.75, 1],
+          ease: 'easeOut'
+        }}
+        className="flex items-center justify-center relative z-10"
+      >
+        {children}
+      </motion.div>
+    </motion.div>
+  );
+};
+
 export default function App() {
   const { t, i18n } = useTranslation();
   const lang = (i18n.language || 'en').slice(0, 2) as SupportedLanguage;
@@ -92,7 +162,20 @@ export default function App() {
   const [targetApodDate, setTargetApodDate] = useState<string | undefined>(undefined);
   const [targetMissionId, setTargetMissionId] = useState<string | undefined>(undefined);
   const [isExportModalOpen, setIsExportModalOpen] = useState<boolean>(false);
+  const [isLiveVoiceModalOpen, setIsLiveVoiceModalOpen] = useState<boolean>(false);
+  const [impactTile, setImpactTile] = useState<TabKey | null>(null);
+  const [impactId, setImpactId] = useState<number>(0);
   const { totalCount, savedApods, savedMissionIds } = useFavorites();
+
+  const triggerTileImpact = (tab: TabKey) => {
+    setImpactTile(tab);
+    setImpactId((prev) => prev + 1);
+  };
+
+  const handleTileClick = (tab: TabKey) => {
+    triggerTileImpact(tab);
+    handleTabSwitch(tab);
+  };
 
   // Sync HTML title & lang
   useEffect(() => {
@@ -100,21 +183,17 @@ export default function App() {
   }, [lang]);
 
   const handleTabSwitch = (tab: TabKey) => {
-    if (tab === activeTab && !isTabLoading) return;
+    triggerTileImpact(tab);
+    if (tab === activeTab) return;
 
     setActiveTab(tab);
-    setIsTabLoading(true);
+    setDisplayedTab(tab);
+    setIsTabLoading(false);
 
     const element = document.getElementById('main-tab-content');
     if (element) {
       element.scrollIntoView({ behavior: 'smooth' });
     }
-
-    // Trigger glowing pulsar animation transition
-    setTimeout(() => {
-      setDisplayedTab(tab);
-      setIsTabLoading(false);
-    }, 420);
   };
 
   // Voice Navigation command dispatcher
@@ -146,7 +225,7 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-[#030712] text-slate-100 flex flex-col font-sans selection:bg-cyan-500/30 selection:text-cyan-200 relative overflow-x-hidden">
+    <div className="min-h-screen bg-[#010409] text-slate-100 flex flex-col font-sans selection:bg-cyan-500/30 selection:text-cyan-200 relative overflow-x-hidden">
       {/* High-Performance 60FPS Cosmic Starfield & Meteor Particle Background */}
       <CosmicStarfieldBackground starCount={240} enableMeteors={true} speed={0.28} />
 
@@ -154,7 +233,7 @@ export default function App() {
       <FloatingLanguageSwitcher />
 
       {/* Mission Control Live Telemetry Top Strip */}
-      <div className="relative z-50 bg-slate-900/90 border-b border-slate-800/80 py-2 px-4 text-[11px] font-mono text-slate-300">
+      <div className="relative z-50 bg-[#010409]/90 border-b border-slate-800/60 py-2 px-4 text-[11px] font-mono text-slate-300">
         <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-4 flex-wrap">
             <span className="flex items-center gap-1.5 text-cyan-300 font-semibold">
@@ -179,8 +258,18 @@ export default function App() {
             {/* Ambient Planetary Soundscape Mute/Unmute Cosmic Button */}
             <CosmicAudioHeaderButton lang={lang} />
 
+            {/* Gemini Live Bidi Real-Time Voice Button in Mission Control Header */}
+            <button
+              onClick={() => setIsLiveVoiceModalOpen(true)}
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-cyan-950/80 hover:bg-cyan-900 border border-cyan-500/50 hover:border-cyan-400 text-cyan-300 font-mono text-[11px] font-bold shadow-[0_0_15px_rgba(6,182,212,0.3)] transition hover:scale-105 active:scale-95 cursor-pointer"
+              title="Open Gemini Live Bidi Voice Link (16kHz PCM In • 24kHz PCM Out)"
+            >
+              <Radio className="w-3.5 h-3.5 text-cyan-400 animate-pulse" />
+              <span className="hidden sm:inline">LIVE VOICE</span>
+            </button>
+
             <span className="hidden lg:inline text-slate-400">
-              AI ENGINE: <span className="text-emerald-300 font-semibold">GEMINI 2.5 FLASH</span>
+              AI ENGINE: <span className="text-emerald-300 font-semibold">GEMINI 3.8 LIVE</span>
             </span>
             {/* PWA In-App Install Button */}
             <PWAInstallButton lang={lang} />
@@ -205,20 +294,29 @@ export default function App() {
       {/* Main Content Dashboard Container */}
       <main className="relative z-10 flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-40 space-y-8">
         
-        {/* Sleek Hero Banner - Clean Cosmic Dark UI */}
+        {/* Sleek Hero Banner - Deep Dark Space UI with Spacious Gradient Overlay */}
         <section className="relative">
-          <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 sm:p-8 relative overflow-hidden shadow-xl flex flex-col lg:flex-row items-center justify-between gap-6">
-            <div className="relative z-10 max-w-3xl space-y-4">
-              <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-slate-800/80 border border-slate-700/80 text-cyan-300 text-xs font-semibold">
+          <div className="bg-gradient-to-b from-[#010409] via-[#020817] to-[#010409] border border-slate-800/80 rounded-2xl p-6 sm:p-8 md:p-10 relative overflow-hidden shadow-2xl flex flex-col lg:flex-row items-center justify-between gap-8">
+            
+            {/* Subtle atmospheric blue gradient accents */}
+            <div className="absolute -bottom-24 -right-24 w-[480px] h-[480px] rounded-full bg-radial from-cyan-500/10 via-blue-600/5 to-transparent blur-3xl pointer-events-none" />
+            <div className="absolute -top-32 left-1/4 w-96 h-96 rounded-full bg-radial from-sky-400/10 to-transparent blur-3xl pointer-events-none" />
+
+            <div className="relative z-10 max-w-3xl space-y-5">
+              <div className="inline-flex items-center gap-2.5 px-3.5 py-1.5 rounded-full bg-slate-950/80 border border-slate-800/80 font-mono text-cyan-400 text-xs font-semibold shadow-inner">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75" />
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-cyan-400" />
+                </span>
                 <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
-                <span>
+                <span className="tracking-wide">
                   {lang === 'en' && 'Real-Time NASA Feed & Keyless AI Dynamic Translation'}
                   {lang === 'si' && 'නාසා සජීවී දත්ත සහ Keyless AI ස්වභාවික සිංහල පරිවර්තනය'}
                   {lang === 'ta' && 'நாசா நேரலை தரவு & Keyless AI துல்லிய தமிழ் மொழிபெயர்ப்பு'}
                 </span>
               </div>
 
-              <h1 className="text-2xl sm:text-4xl md:text-5xl font-black text-white tracking-tight leading-tight font-['Orbitron']">
+              <h1 className="text-3xl sm:text-4xl md:text-5xl font-serif tracking-tight text-white leading-[1.15]">
                 {lang === 'en' && (
                   <>Explore the Cosmos in <span className="bg-gradient-to-r from-cyan-400 via-sky-300 to-blue-500 bg-clip-text text-transparent">Three Languages</span></>
                 )}
@@ -254,15 +352,15 @@ export default function App() {
               </div>
             </div>
 
-            {/* Glowing Hero App Badge Logo Container */}
-            <div className="hidden lg:flex flex-col items-center justify-center p-6 rounded-3xl bg-slate-950/50 border border-cyan-500/20 backdrop-blur-xl shadow-2xl relative shrink-0 group">
-              <div className="absolute inset-0 bg-cyan-500/10 rounded-3xl blur-2xl group-hover:bg-cyan-500/20 transition-all" />
+            {/* Glowing Hero Planetary App Badge Logo Container */}
+            <div className="hidden lg:flex flex-col items-center justify-center p-7 rounded-2xl bg-slate-950/80 border border-slate-800/80 backdrop-blur-xl shadow-2xl relative shrink-0 group">
+              <div className="absolute inset-0 bg-cyan-500/10 rounded-2xl blur-2xl group-hover:bg-cyan-500/20 transition-all pointer-events-none" />
               <Logo size="xl" pulse={true} withGlow={true} />
-              <div className="mt-3 text-center">
-                <span className="font-['Orbitron'] font-black text-sm tracking-widest text-cyan-300">
+              <div className="mt-3.5 text-center">
+                <span className="font-['Orbitron'] font-black text-sm tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-white via-cyan-200 to-cyan-400">
                   NASA WEB APP
                 </span>
-                <p className="text-[10px] font-mono text-slate-400">
+                <p className="text-[10px] font-mono text-cyan-400 mt-0.5">
                   v2.5.0 • TRILINGUAL EDITION
                 </p>
               </div>
@@ -270,26 +368,35 @@ export default function App() {
           </div>
         </section>
 
-        {/* Space Dashboard Multi-Card Grid Hub - Clean Cosmic Dark UI */}
+        {/* Space Dashboard Multi-Card Grid Hub - Glassmorphic Slate with Glowing Hover */}
         <section className="relative">
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-12 gap-3 sm:gap-4">
             {/* Tile 1: APOD */}
             <motion.button
               whileHover={{ y: -4, scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              onClick={() => handleTabSwitch('apod')}
-              className={`p-3.5 sm:p-4 rounded-2xl bg-slate-900/90 border border-slate-800 shadow-xl text-left transition-all duration-300 relative overflow-hidden flex flex-col justify-between ${
+              whileTap={{ scale: 0.95 }}
+              onClick={() => handleTileClick('apod')}
+              className={`p-3.5 sm:p-4 rounded-2xl bg-slate-950/80 backdrop-blur-xl border border-slate-800/80 text-left hover:border-cyan-500/50 hover:shadow-[0_0_25px_rgba(34,211,238,0.15)] transition-all duration-300 relative overflow-hidden flex flex-col justify-between shadow-xl ${
                 activeTab === 'apod'
-                  ? 'ring-2 ring-cyan-400/80 shadow-[0_12px_36px_rgba(6,182,212,0.35)]'
-                  : 'hover:border-cyan-500/50'
+                  ? 'border-cyan-400/80 ring-2 ring-cyan-400/80 shadow-[0_0_25px_rgba(34,211,238,0.25)]'
+                  : ''
               }`}
             >
+              {activeTab === 'apod' && (
+                <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-cyan-400 via-sky-400 to-blue-500" />
+              )}
               <div className="flex items-center justify-between w-full">
-                <div className="w-8 h-8 rounded-2xl bg-cyan-500/20 border border-cyan-500/40 flex items-center justify-center">
+                <TileImpactIcon
+                  isImpacted={impactTile === 'apod'}
+                  impactId={impactId}
+                  colorClass="text-cyan-300"
+                  badgeBg="bg-cyan-500/20"
+                  badgeBorder="border border-cyan-500/40"
+                >
                   <Compass className="w-4 h-4 text-cyan-300" />
-                </div>
+                </TileImpactIcon>
                 <span className="text-[9px] font-mono px-1.5 py-0.5 rounded-full bg-cyan-500/15 text-cyan-300 border border-cyan-500/30">
-                  DAILY
+                  SYS.01
                 </span>
               </div>
               <div className="mt-2.5">
@@ -305,20 +412,29 @@ export default function App() {
             {/* Tile 2: 3D Space Lab */}
             <motion.button
               whileHover={{ y: -4, scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              onClick={() => handleTabSwitch('3d')}
-              className={`p-3.5 sm:p-4 rounded-2xl bg-slate-900/90 border border-slate-800 shadow-xl text-left transition-all duration-300 relative overflow-hidden flex flex-col justify-between ${
+              whileTap={{ scale: 0.95 }}
+              onClick={() => handleTileClick('3d')}
+              className={`p-3.5 sm:p-4 rounded-2xl bg-slate-950/80 backdrop-blur-xl border border-slate-800/80 text-left hover:border-cyan-500/50 hover:shadow-[0_0_25px_rgba(34,211,238,0.15)] transition-all duration-300 relative overflow-hidden flex flex-col justify-between shadow-xl ${
                 activeTab === '3d'
-                  ? 'ring-2 ring-blue-400/80 shadow-[0_12px_36px_rgba(59,130,246,0.35)]'
-                  : 'hover:border-blue-500/50'
+                  ? 'border-blue-400/80 ring-2 ring-blue-400/80 shadow-[0_0_25px_rgba(59,130,246,0.25)]'
+                  : ''
               }`}
             >
+              {activeTab === '3d' && (
+                <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-cyan-400 via-sky-400 to-blue-500" />
+              )}
               <div className="flex items-center justify-between w-full">
-                <div className="w-8 h-8 rounded-2xl bg-blue-500/20 border border-blue-500/40 flex items-center justify-center">
+                <TileImpactIcon
+                  isImpacted={impactTile === '3d'}
+                  impactId={impactId}
+                  colorClass="text-blue-300"
+                  badgeBg="bg-blue-500/20"
+                  badgeBorder="border border-blue-500/40"
+                >
                   <Orbit className="w-4 h-4 text-blue-300" />
-                </div>
+                </TileImpactIcon>
                 <span className="text-[9px] font-mono px-1.5 py-0.5 rounded-full bg-blue-500/15 text-blue-300 border border-blue-500/30">
-                  3D
+                  SYS.02
                 </span>
               </div>
               <div className="mt-2.5">
@@ -334,20 +450,29 @@ export default function App() {
             {/* Tile 3: Asteroid Radar */}
             <motion.button
               whileHover={{ y: -4, scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              onClick={() => handleTabSwitch('asteroids')}
-              className={`p-3.5 sm:p-4 rounded-2xl bg-slate-900/90 border border-slate-800 shadow-xl text-left transition-all duration-300 relative overflow-hidden flex flex-col justify-between ${
+              whileTap={{ scale: 0.95 }}
+              onClick={() => handleTileClick('asteroids')}
+              className={`p-3.5 sm:p-4 rounded-2xl bg-slate-950/80 backdrop-blur-xl border border-slate-800/80 text-left hover:border-cyan-500/50 hover:shadow-[0_0_25px_rgba(34,211,238,0.15)] transition-all duration-300 relative overflow-hidden flex flex-col justify-between shadow-xl ${
                 activeTab === 'asteroids'
-                  ? 'ring-2 ring-rose-400/80 shadow-[0_12px_36px_rgba(244,63,94,0.35)]'
-                  : 'hover:border-rose-500/50'
+                  ? 'border-rose-400/80 ring-2 ring-rose-400/80 shadow-[0_0_25px_rgba(244,63,94,0.25)]'
+                  : ''
               }`}
             >
+              {activeTab === 'asteroids' && (
+                <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-cyan-400 via-sky-400 to-blue-500" />
+              )}
               <div className="flex items-center justify-between w-full">
-                <div className="w-8 h-8 rounded-2xl bg-rose-500/20 border border-rose-500/40 flex items-center justify-center">
+                <TileImpactIcon
+                  isImpacted={impactTile === 'asteroids'}
+                  impactId={impactId}
+                  colorClass="text-rose-300"
+                  badgeBg="bg-rose-500/20"
+                  badgeBorder="border border-rose-500/40"
+                >
                   <Target className="w-4 h-4 text-rose-300" />
-                </div>
+                </TileImpactIcon>
                 <span className="text-[9px] font-mono px-1.5 py-0.5 rounded-full bg-rose-500/15 text-rose-300 border border-rose-500/30">
-                  LIVE
+                  SYS.03
                 </span>
               </div>
               <div className="mt-2.5">
@@ -363,20 +488,29 @@ export default function App() {
             {/* Tile 4: EPIC Earth */}
             <motion.button
               whileHover={{ y: -4, scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              onClick={() => handleTabSwitch('epic')}
-              className={`p-3.5 sm:p-4 rounded-2xl bg-slate-900/90 border border-slate-800 shadow-xl text-left transition-all duration-300 relative overflow-hidden flex flex-col justify-between ${
+              whileTap={{ scale: 0.95 }}
+              onClick={() => handleTileClick('epic')}
+              className={`p-3.5 sm:p-4 rounded-2xl bg-slate-950/80 backdrop-blur-xl border border-slate-800/80 text-left hover:border-cyan-500/50 hover:shadow-[0_0_25px_rgba(34,211,238,0.15)] transition-all duration-300 relative overflow-hidden flex flex-col justify-between shadow-xl ${
                 activeTab === 'epic'
-                  ? 'ring-2 ring-emerald-400/80 shadow-[0_12px_36px_rgba(16,185,129,0.35)]'
-                  : 'hover:border-emerald-500/50'
+                  ? 'border-emerald-400/80 ring-2 ring-emerald-400/80 shadow-[0_0_25px_rgba(16,185,129,0.25)]'
+                  : ''
               }`}
             >
+              {activeTab === 'epic' && (
+                <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-cyan-400 via-sky-400 to-blue-500" />
+              )}
               <div className="flex items-center justify-between w-full">
-                <div className="w-8 h-8 rounded-2xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center">
+                <TileImpactIcon
+                  isImpacted={impactTile === 'epic'}
+                  impactId={impactId}
+                  colorClass="text-emerald-300"
+                  badgeBg="bg-emerald-500/20"
+                  badgeBorder="border border-emerald-500/40"
+                >
                   <Globe2 className="w-4 h-4 text-emerald-300" />
-                </div>
+                </TileImpactIcon>
                 <span className="text-[9px] font-mono px-1.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
-                  L1
+                  SYS.04
                 </span>
               </div>
               <div className="mt-2.5">
@@ -392,20 +526,29 @@ export default function App() {
             {/* Tile 5: Exoplanet Lab */}
             <motion.button
               whileHover={{ y: -4, scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              onClick={() => handleTabSwitch('exoplanets')}
-              className={`p-3.5 sm:p-4 rounded-2xl bg-slate-900/90 border border-slate-800 shadow-xl text-left transition-all duration-300 relative overflow-hidden flex flex-col justify-between ${
+              whileTap={{ scale: 0.95 }}
+              onClick={() => handleTileClick('exoplanets')}
+              className={`p-3.5 sm:p-4 rounded-2xl bg-slate-950/80 backdrop-blur-xl border border-slate-800/80 text-left hover:border-cyan-500/50 hover:shadow-[0_0_25px_rgba(34,211,238,0.15)] transition-all duration-300 relative overflow-hidden flex flex-col justify-between shadow-xl ${
                 activeTab === 'exoplanets'
-                  ? 'ring-2 ring-violet-400/80 shadow-[0_12px_36px_rgba(139,92,246,0.35)]'
-                  : 'hover:border-violet-500/50'
+                  ? 'border-violet-400/80 ring-2 ring-violet-400/80 shadow-[0_0_25px_rgba(139,92,246,0.25)]'
+                  : ''
               }`}
             >
+              {activeTab === 'exoplanets' && (
+                <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-cyan-400 via-sky-400 to-blue-500" />
+              )}
               <div className="flex items-center justify-between w-full">
-                <div className="w-8 h-8 rounded-2xl bg-violet-500/20 border border-violet-500/40 flex items-center justify-center">
+                <TileImpactIcon
+                  isImpacted={impactTile === 'exoplanets'}
+                  impactId={impactId}
+                  colorClass="text-violet-300"
+                  badgeBg="bg-violet-500/20"
+                  badgeBorder="border border-violet-500/40"
+                >
                   <Sparkles className="w-4 h-4 text-violet-300" />
-                </div>
+                </TileImpactIcon>
                 <span className="text-[9px] font-mono px-1.5 py-0.5 rounded-full bg-violet-500/15 text-violet-300 border border-violet-500/30">
-                  3D LAB
+                  SYS.05
                 </span>
               </div>
               <div className="mt-2.5">
@@ -421,20 +564,29 @@ export default function App() {
             {/* Tile 6: Landmark Missions */}
             <motion.button
               whileHover={{ y: -4, scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              onClick={() => handleTabSwitch('missions')}
-              className={`p-3.5 sm:p-4 rounded-2xl bg-slate-900/90 border border-slate-800 shadow-xl text-left transition-all duration-300 relative overflow-hidden flex flex-col justify-between ${
+              whileTap={{ scale: 0.95 }}
+              onClick={() => handleTileClick('missions')}
+              className={`p-3.5 sm:p-4 rounded-2xl bg-slate-950/80 backdrop-blur-xl border border-slate-800/80 text-left hover:border-cyan-500/50 hover:shadow-[0_0_25px_rgba(34,211,238,0.15)] transition-all duration-300 relative overflow-hidden flex flex-col justify-between shadow-xl ${
                 activeTab === 'missions'
-                  ? 'ring-2 ring-amber-400/80 shadow-[0_12px_36px_rgba(245,158,11,0.35)]'
-                  : 'hover:border-amber-500/50'
+                  ? 'border-amber-400/80 ring-2 ring-amber-400/80 shadow-[0_0_25px_rgba(245,158,11,0.25)]'
+                  : ''
               }`}
             >
+              {activeTab === 'missions' && (
+                <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-cyan-400 via-sky-400 to-blue-500" />
+              )}
               <div className="flex items-center justify-between w-full">
-                <div className="w-8 h-8 rounded-2xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center">
+                <TileImpactIcon
+                  isImpacted={impactTile === 'missions'}
+                  impactId={impactId}
+                  colorClass="text-amber-300"
+                  badgeBg="bg-amber-500/20"
+                  badgeBorder="border border-amber-500/40"
+                >
                   <Rocket className="w-4 h-4 text-amber-300" />
-                </div>
+                </TileImpactIcon>
                 <span className="text-[9px] font-mono px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30">
-                  FLIGHT
+                  SYS.06
                 </span>
               </div>
               <div className="mt-2.5">
@@ -450,20 +602,29 @@ export default function App() {
             {/* Tile 7: NASA News */}
             <motion.button
               whileHover={{ y: -4, scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              onClick={() => handleTabSwitch('news')}
-              className={`p-3.5 sm:p-4 rounded-2xl bg-slate-900/90 border border-slate-800 shadow-xl text-left transition-all duration-300 relative overflow-hidden flex flex-col justify-between ${
+              whileTap={{ scale: 0.95 }}
+              onClick={() => handleTileClick('news')}
+              className={`p-3.5 sm:p-4 rounded-2xl bg-slate-950/80 backdrop-blur-xl border border-slate-800/80 text-left hover:border-cyan-500/50 hover:shadow-[0_0_25px_rgba(34,211,238,0.15)] transition-all duration-300 relative overflow-hidden flex flex-col justify-between shadow-xl ${
                 activeTab === 'news'
-                  ? 'ring-2 ring-teal-400/80 shadow-[0_12px_36px_rgba(20,184,166,0.35)]'
-                  : 'hover:border-teal-500/50'
+                  ? 'border-teal-400/80 ring-2 ring-teal-400/80 shadow-[0_0_25px_rgba(20,184,166,0.25)]'
+                  : ''
               }`}
             >
+              {activeTab === 'news' && (
+                <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-cyan-400 via-sky-400 to-blue-500" />
+              )}
               <div className="flex items-center justify-between w-full">
-                <div className="w-8 h-8 rounded-2xl bg-teal-500/20 border border-teal-500/40 flex items-center justify-center">
+                <TileImpactIcon
+                  isImpacted={impactTile === 'news'}
+                  impactId={impactId}
+                  colorClass="text-teal-300"
+                  badgeBg="bg-teal-500/20"
+                  badgeBorder="border border-teal-500/40"
+                >
                   <Newspaper className="w-4 h-4 text-teal-300" />
-                </div>
+                </TileImpactIcon>
                 <span className="text-[9px] font-mono px-1.5 py-0.5 rounded-full bg-teal-500/15 text-teal-300 border border-teal-500/30">
-                  LIVE
+                  SYS.07
                 </span>
               </div>
               <div className="mt-2.5">
@@ -479,20 +640,29 @@ export default function App() {
             {/* Tile 8: Space Trivia Quiz */}
             <motion.button
               whileHover={{ y: -4, scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              onClick={() => handleTabSwitch('quiz')}
-              className={`p-3.5 sm:p-4 rounded-2xl bg-slate-900/90 border border-slate-800 shadow-xl text-left transition-all duration-300 relative overflow-hidden flex flex-col justify-between ${
+              whileTap={{ scale: 0.95 }}
+              onClick={() => handleTileClick('quiz')}
+              className={`p-3.5 sm:p-4 rounded-2xl bg-slate-950/80 backdrop-blur-xl border border-slate-800/80 text-left hover:border-cyan-500/50 hover:shadow-[0_0_25px_rgba(34,211,238,0.15)] transition-all duration-300 relative overflow-hidden flex flex-col justify-between shadow-xl ${
                 activeTab === 'quiz'
-                  ? 'ring-2 ring-cyan-400/80 shadow-[0_12px_36px_rgba(6,182,212,0.35)]'
-                  : 'hover:border-cyan-500/50'
+                  ? 'border-cyan-400/80 ring-2 ring-cyan-400/80 shadow-[0_0_25px_rgba(6,182,212,0.25)]'
+                  : ''
               }`}
             >
+              {activeTab === 'quiz' && (
+                <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-cyan-400 via-sky-400 to-blue-500" />
+              )}
               <div className="flex items-center justify-between w-full">
-                <div className="w-8 h-8 rounded-2xl bg-cyan-500/20 border border-cyan-500/40 flex items-center justify-center">
+                <TileImpactIcon
+                  isImpacted={impactTile === 'quiz'}
+                  impactId={impactId}
+                  colorClass="text-cyan-300"
+                  badgeBg="bg-cyan-500/20"
+                  badgeBorder="border border-cyan-500/40"
+                >
                   <BrainCircuit className="w-4 h-4 text-cyan-300" />
-                </div>
+                </TileImpactIcon>
                 <span className="text-[9px] font-mono px-1.5 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 font-bold">
-                  QUIZ
+                  SYS.08
                 </span>
               </div>
               <div className="mt-2.5">
@@ -508,21 +678,30 @@ export default function App() {
             {/* Tile 9: ISS Tracker */}
             <motion.button
               whileHover={{ y: -4, scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              onClick={() => handleTabSwitch('iss')}
-              className={`p-3.5 sm:p-4 rounded-2xl bg-slate-900/90 border border-slate-800 shadow-xl text-left transition-all duration-300 relative overflow-hidden flex flex-col justify-between ${
+              whileTap={{ scale: 0.95 }}
+              onClick={() => handleTileClick('iss')}
+              className={`p-3.5 sm:p-4 rounded-2xl bg-slate-950/80 backdrop-blur-xl border border-slate-800/80 text-left hover:border-cyan-500/50 hover:shadow-[0_0_25px_rgba(34,211,238,0.15)] transition-all duration-300 relative overflow-hidden flex flex-col justify-between shadow-xl ${
                 activeTab === 'iss'
-                  ? 'ring-2 ring-indigo-400/80 shadow-[0_12px_36px_rgba(99,102,241,0.35)]'
-                  : 'hover:border-indigo-500/50'
+                  ? 'border-indigo-400/80 ring-2 ring-indigo-400/80 shadow-[0_0_25px_rgba(99,102,241,0.25)]'
+                  : ''
               }`}
             >
+              {activeTab === 'iss' && (
+                <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-cyan-400 via-sky-400 to-blue-500" />
+              )}
               <div className="flex items-center justify-between w-full">
-                <div className="w-8 h-8 rounded-2xl bg-indigo-500/20 border border-indigo-500/40 flex items-center justify-center">
+                <TileImpactIcon
+                  isImpacted={impactTile === 'iss'}
+                  impactId={impactId}
+                  colorClass="text-indigo-300"
+                  badgeBg="bg-indigo-500/20"
+                  badgeBorder="border border-indigo-500/40"
+                >
                   <Globe2 className="w-4 h-4 text-indigo-300 animate-spin" style={{ animationDuration: '30s' }} />
-                </div>
+                </TileImpactIcon>
                 <span className="text-[9px] font-mono px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-bold flex items-center gap-1">
                   <span className="w-1 h-1 rounded-full bg-emerald-400 animate-ping" />
-                  ORBIT
+                  SYS.09
                 </span>
               </div>
               <div className="mt-2.5">
@@ -538,20 +717,29 @@ export default function App() {
             {/* Tile 10: AI Assistant */}
             <motion.button
               whileHover={{ y: -4, scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              onClick={() => handleTabSwitch('assistant')}
-              className={`p-3.5 sm:p-4 rounded-2xl bg-slate-900/90 border border-slate-800 shadow-xl text-left transition-all duration-300 relative overflow-hidden flex flex-col justify-between ${
+              whileTap={{ scale: 0.95 }}
+              onClick={() => handleTileClick('assistant')}
+              className={`p-3.5 sm:p-4 rounded-2xl bg-slate-950/80 backdrop-blur-xl border border-slate-800/80 text-left hover:border-cyan-500/50 hover:shadow-[0_0_25px_rgba(34,211,238,0.15)] transition-all duration-300 relative overflow-hidden flex flex-col justify-between shadow-xl ${
                 activeTab === 'assistant'
-                  ? 'ring-2 ring-purple-400/80 shadow-[0_12px_36px_rgba(168,85,247,0.35)]'
-                  : 'hover:border-purple-500/50'
+                  ? 'border-purple-400/80 ring-2 ring-purple-400/80 shadow-[0_0_25px_rgba(168,85,247,0.25)]'
+                  : ''
               }`}
             >
+              {activeTab === 'assistant' && (
+                <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-cyan-400 via-sky-400 to-blue-500" />
+              )}
               <div className="flex items-center justify-between w-full">
-                <div className="w-8 h-8 rounded-2xl bg-purple-500/20 border border-purple-500/40 flex items-center justify-center">
+                <TileImpactIcon
+                  isImpacted={impactTile === 'assistant'}
+                  impactId={impactId}
+                  colorClass="text-purple-300"
+                  badgeBg="bg-purple-500/20"
+                  badgeBorder="border border-purple-500/40"
+                >
                   <Bot className="w-4 h-4 text-purple-300" />
-                </div>
+                </TileImpactIcon>
                 <span className="text-[9px] font-mono px-1.5 py-0.5 rounded-full bg-purple-500/15 text-purple-300 border border-purple-500/30">
-                  AI
+                  SYS.10
                 </span>
               </div>
               <div className="mt-2.5">
@@ -567,18 +755,27 @@ export default function App() {
             {/* Tile 11: Saved Favorites */}
             <motion.button
               whileHover={{ y: -4, scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              onClick={() => handleTabSwitch('saved')}
-              className={`p-3.5 sm:p-4 rounded-2xl bg-slate-900/90 border border-slate-800 shadow-xl text-left transition-all duration-300 relative overflow-hidden flex flex-col justify-between ${
+              whileTap={{ scale: 0.95 }}
+              onClick={() => handleTileClick('saved')}
+              className={`p-3.5 sm:p-4 rounded-2xl bg-slate-950/80 backdrop-blur-xl border border-slate-800/80 text-left hover:border-cyan-500/50 hover:shadow-[0_0_25px_rgba(34,211,238,0.15)] transition-all duration-300 relative overflow-hidden flex flex-col justify-between shadow-xl ${
                 activeTab === 'saved'
-                  ? 'ring-2 ring-pink-400/80 shadow-[0_12px_36px_rgba(244,63,94,0.35)]'
-                  : 'hover:border-pink-500/50'
+                  ? 'border-pink-400/80 ring-2 ring-pink-400/80 shadow-[0_0_25px_rgba(244,63,94,0.25)]'
+                  : ''
               }`}
             >
+              {activeTab === 'saved' && (
+                <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-cyan-400 via-sky-400 to-blue-500" />
+              )}
               <div className="flex items-center justify-between w-full">
-                <div className="w-8 h-8 rounded-2xl bg-pink-500/20 border border-pink-500/40 flex items-center justify-center">
+                <TileImpactIcon
+                  isImpacted={impactTile === 'saved'}
+                  impactId={impactId}
+                  colorClass="text-pink-400"
+                  badgeBg="bg-pink-500/20"
+                  badgeBorder="border border-pink-500/40"
+                >
                   <Heart className={`w-4 h-4 ${totalCount > 0 ? 'text-pink-400 fill-pink-500/40' : 'text-pink-400'}`} />
-                </div>
+                </TileImpactIcon>
                 <span className="text-[9px] font-mono px-1.5 py-0.5 rounded-full bg-pink-500/20 text-pink-300 border border-pink-500/30 font-bold">
                   {totalCount}
                 </span>
@@ -596,20 +793,29 @@ export default function App() {
             {/* Tile 12: Launch Sim Control Room */}
             <motion.button
               whileHover={{ y: -4, scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              onClick={() => handleTabSwitch('launch')}
-              className={`p-3.5 sm:p-4 rounded-2xl bg-slate-900/90 border border-slate-800 shadow-xl text-left transition-all duration-300 relative overflow-hidden flex flex-col justify-between ${
+              whileTap={{ scale: 0.95 }}
+              onClick={() => handleTileClick('launch')}
+              className={`p-3.5 sm:p-4 rounded-2xl bg-slate-950/80 backdrop-blur-xl border border-slate-800/80 text-left hover:border-cyan-500/50 hover:shadow-[0_0_25px_rgba(34,211,238,0.15)] transition-all duration-300 relative overflow-hidden flex flex-col justify-between shadow-xl ${
                 activeTab === 'launch'
-                  ? 'ring-2 ring-orange-400/80 shadow-[0_12px_36px_rgba(249,115,22,0.35)]'
-                  : 'hover:border-orange-500/50'
+                  ? 'border-orange-400/80 ring-2 ring-orange-400/80 shadow-[0_0_25px_rgba(249,115,22,0.25)]'
+                  : ''
               }`}
             >
+              {activeTab === 'launch' && (
+                <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-cyan-400 via-sky-400 to-blue-500" />
+              )}
               <div className="flex items-center justify-between w-full">
-                <div className="w-8 h-8 rounded-2xl bg-orange-500/20 border border-orange-500/40 flex items-center justify-center">
+                <TileImpactIcon
+                  isImpacted={impactTile === 'launch'}
+                  impactId={impactId}
+                  colorClass="text-orange-400"
+                  badgeBg="bg-orange-500/20"
+                  badgeBorder="border border-orange-500/40"
+                >
                   <Flame className="w-4 h-4 text-orange-400 animate-pulse" />
-                </div>
+                </TileImpactIcon>
                 <span className="text-[9px] font-mono px-1.5 py-0.5 rounded-full bg-orange-500/20 text-orange-300 border border-orange-500/30 font-bold">
-                  SIM
+                  SYS.12
                 </span>
               </div>
               <div className="mt-2.5">
@@ -831,16 +1037,27 @@ export default function App() {
             {!isTabLoading && displayedTab === 'assistant' && (
               <AtmosphericEntryTransition key="entry-assistant" tabKey="assistant">
                 <section className="space-y-4">
-                  <div className="border-b border-slate-800/80 pb-3 flex items-center justify-between flex-wrap gap-2">
+                  <div className="border-b border-slate-800/80 pb-3 flex items-center justify-between flex-wrap gap-3">
                     <div>
                       <h2 className="text-xl sm:text-2xl font-bold text-white flex items-center gap-2.5 font-['Orbitron']">
-                        <Bot className="w-6 h-6 text-purple-400" />
-                        <span>NASA Astrophysics AI Assistant</span>
+                        <Bot className="w-6 h-6 text-cyan-400" />
+                        <span>NOVA - NASA Mission Control AI</span>
                       </h2>
                       <p className="text-xs sm:text-sm text-slate-400 mt-1">
                         NASA Deep Space Intelligence & Mission Assistant • Fluent in English, සිංහල, and தமிழ்
                       </p>
                     </div>
+
+                    {/* Gemini Live Real-Time Bidi Voice Comms Launcher */}
+                    <button
+                      onClick={() => setIsLiveVoiceModalOpen(true)}
+                      className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-gradient-to-r from-cyan-600/30 via-blue-600/30 to-indigo-600/30 hover:from-cyan-500/40 hover:to-blue-500/40 border border-cyan-400/50 hover:border-cyan-300 text-cyan-200 font-mono text-xs font-bold shadow-[0_0_20px_rgba(6,182,212,0.3)] transition hover:scale-105 active:scale-95 cursor-pointer"
+                    >
+                      <Radio className="w-4 h-4 text-cyan-400 animate-pulse" />
+                      <span>
+                        {lang === 'si' ? 'Gemini Live හඬ සබඳතාව' : lang === 'ta' ? 'Gemini Live குரல் இணைப்பு' : 'Gemini Live Voice Comms'}
+                      </span>
+                    </button>
                   </div>
 
                   <NasaAi lang={lang} />
@@ -851,25 +1068,18 @@ export default function App() {
         </div>
       </main>
 
-      {/* Floating AI Assistant Quick Trigger (Desktop & Mobile) */}
-      <button
-        type="button"
-        onClick={() => handleTabSwitch('assistant')}
-        className={`fixed bottom-24 sm:bottom-8 right-5 z-40 p-3 sm:px-4 sm:py-3 rounded-full flex items-center gap-2 shadow-2xl transition-all duration-300 ${
-          activeTab === 'assistant'
-            ? 'bg-gradient-to-r from-purple-600/90 to-indigo-600/90 text-white ring-2 ring-purple-400 scale-105 shadow-purple-500/50 backdrop-blur-xl'
-            : 'bg-slate-900/90 border border-slate-800 text-purple-300 hover:text-white hover:scale-105 shadow-xl'
-        }`}
-        title="Open NASA AI Assistant"
-      >
-        <div className="relative">
-          <Bot className="w-5 h-5 text-purple-300" />
-          <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-        </div>
-        <span className="hidden sm:inline text-xs font-bold font-['Orbitron'] tracking-wider">
-          NASA AI
-        </span>
-      </button>
+      {/* Glassmorphic Floating Gemini AI Chat Terminal (Desktop & Mobile) */}
+      <GeminiChatWidget 
+        lang={lang} 
+        onNavigateToTab={(tabId: string) => handleTabSwitch(tabId as any)} 
+      />
+
+      {/* Gemini Live Real-Time Bidi Voice Comms Modal */}
+      <GeminiLiveVoice
+        lang={lang}
+        isOpen={isLiveVoiceModalOpen}
+        onClose={() => setIsLiveVoiceModalOpen(false)}
+      />
 
       {/* Cosmic Dashboard Footer - Clean Cosmic Dark UI */}
       <footer className="relative z-10 mt-16 pb-28 bg-slate-900/90 border-t border-slate-800 py-10 text-xs text-slate-300">

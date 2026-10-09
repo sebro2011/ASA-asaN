@@ -4,6 +4,7 @@ import { SPACE_MISSIONS, SpaceMission } from '../data/missions';
 import { useFavorites } from '../utils/favorites';
 import { VoiceSearchInput } from './VoiceSearchInput';
 import { fetchGroundedMissionSearch } from '@/lib/nasaApi';
+import { MissionsAnalytics } from './MissionsAnalytics';
 import { 
   Rocket, 
   Milestone, 
@@ -30,7 +31,8 @@ import {
   Compass,
   Telescope,
   Atom,
-  Flame
+  Flame,
+  BarChart3
 } from 'lucide-react';
 
 interface MissionsTimelineProps {
@@ -79,6 +81,7 @@ export const MissionsTimeline: React.FC<MissionsTimelineProps> = React.memo(({ l
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [searchExecutionMs, setSearchExecutionMs] = useState<number>(1.2);
   const [activeChipId, setActiveChipId] = useState<string>('all');
+  const [subTab, setSubTab] = useState<'timeline' | 'analytics'>('timeline');
 
   // Google Search Grounding state
   const [isGroundedSearching, setIsGroundedSearching] = useState<boolean>(false);
@@ -303,8 +306,61 @@ export const MissionsTimeline: React.FC<MissionsTimelineProps> = React.memo(({ l
   return (
     <div className="w-full space-y-6">
       
-      {/* Search Header Bar with Real-Time Millisecond Execution Badge */}
-      <div className="bg-slate-900/80 p-4 sm:p-5 rounded-3xl border border-cyan-500/25 backdrop-blur-xl shadow-2xl space-y-4">
+      {/* Missions Module Sub-Navigation Switcher: Explorer Timeline vs Analytics */}
+      <div className="bg-slate-950/80 p-2 sm:p-2.5 rounded-2xl border border-slate-800/80 backdrop-blur-xl shadow-xl flex items-center justify-between gap-3 flex-wrap hover:border-cyan-500/50 hover:shadow-[0_0_25px_rgba(34,211,238,0.15)] transition-all duration-300">
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            onClick={() => setSubTab('timeline')}
+            className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold font-mono flex items-center gap-2 transition-all cursor-pointer ${
+              subTab === 'timeline'
+                ? 'bg-gradient-to-r from-cyan-600 to-blue-600 text-white shadow-lg shadow-cyan-600/30 border border-cyan-400/60'
+                : 'bg-slate-900/60 text-slate-400 hover:text-white hover:bg-slate-800/60 border border-slate-800'
+            }`}
+          >
+            <Rocket className="w-4 h-4 text-cyan-300" />
+            <span>
+              {lang === 'si'
+                ? 'මෙහෙයුම් කාලරේඛාව සහ අදියර'
+                : lang === 'ta'
+                ? 'பணிகள் காலவரிசை & படிகள்'
+                : 'Mission Explorer & Timeline'}
+            </span>
+          </button>
+
+          <button
+            onClick={() => setSubTab('analytics')}
+            className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold font-mono flex items-center gap-2 transition-all cursor-pointer relative ${
+              subTab === 'analytics'
+                ? 'bg-gradient-to-r from-cyan-600 to-blue-600 text-white shadow-lg shadow-cyan-600/30 border border-cyan-400/60'
+                : 'bg-slate-900/60 text-slate-400 hover:text-white hover:bg-slate-800/60 border border-slate-800'
+            }`}
+          >
+            <BarChart3 className="w-4 h-4 text-cyan-300" />
+            <span>
+              {lang === 'si'
+                ? 'ඓතිහාසික විශ්ලේෂණ (Analytics)'
+                : lang === 'ta'
+                ? 'வரலாற்றுப் பகுப்பாய்வு (Analytics)'
+                : 'Mission Analytics & Trends'}
+            </span>
+            <span className="px-1.5 py-0.5 rounded-full text-[9px] font-mono bg-cyan-400 text-slate-950 font-bold ml-0.5 shadow-sm">
+              RECHARTS
+            </span>
+          </button>
+        </div>
+
+        <div className="hidden md:flex items-center gap-2 text-xs font-mono text-slate-400 pr-2">
+          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+          <span>NASA HISTORICAL FLIGHT ARCHIVES</span>
+        </div>
+      </div>
+
+      {subTab === 'analytics' ? (
+        <MissionsAnalytics lang={lang} />
+      ) : (
+        <>
+          {/* Search Header Bar with Real-Time Millisecond Execution Badge */}
+          <div className="bg-slate-950/80 p-4 sm:p-5 rounded-2xl border border-slate-800/80 backdrop-blur-xl shadow-2xl space-y-4 hover:border-cyan-500/50 hover:shadow-[0_0_25px_rgba(34,211,238,0.15)] transition-all duration-300">
         <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
           <div className="flex-1 max-w-xl">
             <VoiceSearchInput
@@ -645,7 +701,7 @@ export const MissionsTimeline: React.FC<MissionsTimelineProps> = React.memo(({ l
 
       {/* Main Mission Display Card */}
       {currentMission && (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 apple-liquid-glass rounded-3xl p-6 sm:p-8 shadow-2xl">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 apple-liquid-glass rounded-2xl p-6 sm:p-8 shadow-2xl">
           {/* Left Column: Mission Overview & Facts */}
           <div className="lg:col-span-5 space-y-5">
             <div className="relative rounded-3xl overflow-hidden apple-liquid-glass aspect-video group">
@@ -788,6 +844,8 @@ export const MissionsTimeline: React.FC<MissionsTimelineProps> = React.memo(({ l
             </div>
           </div>
         </div>
+      )}
+        </>
       )}
     </div>
   );

@@ -366,7 +366,7 @@ function ExoplanetLab({ lang = 'en' }) {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         
         {/* 3D WebGL Viewport (Left/Top) */}
-        <div ref={containerRef} className="lg:col-span-7 rounded-3xl apple-liquid-glass p-6 sm:p-7 shadow-2xl flex flex-col justify-between relative overflow-hidden min-h-[480px]">
+        <div ref={containerRef} className="lg:col-span-7 rounded-2xl apple-liquid-glass p-6 sm:p-7 shadow-2xl flex flex-col justify-between relative overflow-hidden min-h-[480px]">
           
           {/* Top Scale Callout Header */}
           <div className="w-full flex items-center justify-between text-xs font-mono text-slate-300 z-10 mb-2">
@@ -385,7 +385,7 @@ function ExoplanetLab({ lang = 'en' }) {
           <div className="grid grid-cols-2 gap-4 w-full my-auto h-[320px] relative">
             
             {/* Viewport 1: Earth Reference */}
-            <div className="relative rounded-3xl apple-liquid-glass overflow-hidden flex flex-col justify-between p-3.5">
+            <div className="relative rounded-2xl apple-liquid-glass overflow-hidden flex flex-col justify-between p-3.5">
               <div className="absolute top-2 left-3 z-10 text-[10px] font-mono text-slate-300 font-bold apple-liquid-glass px-2.5 py-0.5 rounded-lg border-white/10">
                 {t.earthRef}
               </div>
@@ -410,7 +410,7 @@ function ExoplanetLab({ lang = 'en' }) {
             </div>
 
             {/* Viewport 2: Target Exoplanet */}
-            <div className="relative rounded-3xl apple-liquid-glass overflow-hidden flex flex-col justify-between p-3.5">
+            <div className="relative rounded-2xl apple-liquid-glass overflow-hidden flex flex-col justify-between p-3.5">
               <div className="absolute top-2 left-3 z-10 text-[10px] font-mono text-cyan-300 font-bold apple-liquid-glass px-2.5 py-0.5 rounded-lg border-cyan-500/30">
                 {selectedPlanet?.pl_name || t.targetExo}
               </div>
@@ -451,7 +451,7 @@ function ExoplanetLab({ lang = 'en' }) {
         <div className="lg:col-span-5 space-y-4">
           
           {/* Target Exoplanet Presets Bar */}
-          <div className="p-5 rounded-3xl apple-liquid-glass space-y-3 shadow-xl">
+          <div className="p-5 rounded-2xl apple-liquid-glass space-y-3 shadow-xl">
             <div className="relative">
               <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
               <input
@@ -484,7 +484,7 @@ function ExoplanetLab({ lang = 'en' }) {
 
           {/* Habitability Spec Sheet Cards */}
           {selectedPlanet && (
-            <div className="p-6 rounded-3xl apple-liquid-glass space-y-4 shadow-xl">
+            <div className="p-6 rounded-2xl apple-liquid-glass space-y-4 shadow-xl">
               
               <div className="flex items-center justify-between border-b border-white/10 pb-3">
                 <div>

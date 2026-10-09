@@ -65,9 +65,31 @@ export function SpaceControls({
 
     if (typeof navigator !== 'undefined' && 'xr' in navigator && navigator.xr && typeof navigator.xr.requestSession === 'function') {
       try {
-        const session = await navigator.xr.requestSession('immersive-ar', {
-          requiredFeatures: ['hit-test', 'local-floor']
-        });
+        // Pre-check if immersive-ar is truly supported on current hardware
+        const isSupported = typeof navigator.xr.isSessionSupported === 'function'
+          ? await navigator.xr.isSessionSupported('immersive-ar').catch(() => false)
+          : false;
+
+        if (!isSupported) {
+          setShowXrModal(true);
+          return;
+        }
+
+        let session = null;
+        try {
+          // Use optionalFeatures rather than requiredFeatures so missing hit-test or local-floor does not throw NotSupportedError
+          session = await navigator.xr.requestSession('immersive-ar', {
+            optionalFeatures: ['hit-test', 'local-floor']
+          });
+        } catch (_) {
+          // Graceful fallback to plain session
+          try {
+            session = await navigator.xr.requestSession('immersive-ar');
+          } catch {
+            session = null;
+          }
+        }
+
         if (session) {
           xrSessionRef.current = session;
           setXrActive(true);
@@ -75,6 +97,8 @@ export function SpaceControls({
             xrSessionRef.current = null;
             setXrActive(false);
           });
+        } else {
+          setShowXrModal(true);
         }
       } catch {
         setShowXrModal(true);

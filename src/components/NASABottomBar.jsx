@@ -138,7 +138,7 @@ function NASABottomBar({
   return (
     <div className={`w-full md:hidden pointer-events-auto ${className}`}>
       {/* Cosmic Glassmorphism Container */}
-      <nav className="bg-slate-950/90 backdrop-blur-xl border-t border-slate-800/80 px-3 pt-2 pb-safe shadow-[0_-12px_32px_rgba(0,0,0,0.8)]">
+      <nav className="bg-[#030718]/94 backdrop-blur-2xl border-t border-cyan-500/20 px-3 pt-2 pb-safe shadow-[0_-12px_32px_rgba(0,0,0,0.9)]">
         <div className="flex items-center justify-around max-w-md mx-auto relative">
           {TABS.map((tab) => {
             const Icon = tab.icon;

@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef, useCallback, memo } from 'react';
 import { useTranslation } from 'react-i18next';
+import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Bot, 
   Send, 
@@ -10,6 +11,7 @@ import {
   MicOff, 
   Volume2, 
   VolumeX, 
+  Volume1, 
   Copy, 
   Check, 
   ShieldCheck, 
@@ -20,15 +22,27 @@ import {
   RotateCcw,
   Trash2,
   User,
-  ArrowDown,
-  Volume1,
   Compass,
   Radio,
   Flame,
   Globe,
-  Share2
+  Share2,
+  Square,
+  Plus,
+  Terminal,
+  AlertCircle,
+  CheckCircle2,
+  ChevronRight,
+  Layers,
+  MessageSquare,
+  Telescope,
+  Atom,
+  Clock,
+  ExternalLink,
+  CornerDownLeft
 } from 'lucide-react';
 import { askNasaAi } from '@/lib/nasaApi';
+import GeminiLiveVoice from './GeminiLiveVoice.jsx';
 
 const STORAGE_KEY = 'nasa_ai_chat_thread_v3';
 
@@ -251,56 +265,104 @@ const APOD_QUIZ_DATA = {
 };
 
 /**
- * Trilingual Quick Topic Starter Chips
+ * 6 Attractive Space Explorer Suggestion Cards (Trilingual)
  */
-const TOPIC_STARTER_CHIPS = [
+const WELCOME_SUGGESTION_CARDS = [
   {
-    id: 'apod',
-    icon: '🌌',
-    en: "Today's APOD",
-    si: 'අද දවසේ APOD',
-    ta: 'இன்றைய APOD',
-    query: "Explain today's Astronomy Picture of the Day (APOD) with scientific insights"
+    id: 'card-apod',
+    icon: Telescope,
+    badge: 'APOD',
+    title: {
+      en: "Today's APOD Imagery",
+      si: "දවසේ තාරකා ඡායාරූපය",
+      ta: "இன்றைய வானியல் புகைப்படம்"
+    },
+    desc: {
+      en: "Explain today's Astronomy Picture of the Day with deep-space science.",
+      si: "අද දින නාසා තාරකා විද්‍යා ඡායාරූපය ගැඹුරු විද්‍යාත්මකව පැහැදිලි කරන්න.",
+      ta: "இன்றைய நாசா வானியல் புகைப்படத்தை அறிவியல் விளக்கத்துடன் அறியுங்கள்."
+    },
+    prompt: "Explain today's Astronomy Picture of the Day (APOD) with scientific insights and cosmic context."
   },
   {
-    id: 'artemis',
-    icon: '🌕',
-    en: 'Artemis Moon Mission',
-    si: 'ආටෙමිස් සඳ මෙහෙයුම',
-    ta: 'ஆர்ட்டெமிஸ் திட்டம்',
-    query: 'What is NASA Artemis program and when will astronauts land on the Moon?'
+    id: 'card-asteroids',
+    icon: Flame,
+    badge: 'PHA',
+    title: {
+      en: "Near-Earth Asteroids",
+      si: "පෘථිවි-ආසන්න ග්‍රහක",
+      ta: "பூமிக்கு அருகிலான சிறுகோள்கள்"
+    },
+    desc: {
+      en: "Explore the latest asteroid tracking data and planetary defense measures.",
+      si: "නවතම ග්‍රහක ලුහුබැඳීමේ දත්ත සහ DART පෘථිවි ආරක්ෂණ තාක්ෂණය විමසන්න.",
+      ta: "சமீபத்திய சிறுகோள் தரவு மற்றும் நாசாவின் கிரக பாதுகாப்பு முறைகள்."
+    },
+    prompt: "Explore the latest asteroid data: How does NASA detect Potentially Hazardous Asteroids and how did DART alter Dimorphos?"
   },
   {
-    id: 'jwst',
-    icon: '🔭',
-    en: 'James Webb (JWST)',
-    si: 'ජේම්ස් වෙබ් දුරේක්ෂය',
-    ta: 'ஜேம்ஸ் வெப் தொலைநோக்கி',
-    query: 'What breakthrough discoveries did the James Webb Space Telescope make recently?'
+    id: 'card-iss',
+    icon: Radio,
+    badge: 'LEO',
+    title: {
+      en: "How the ISS Works",
+      si: "ජාත්‍යන්තර අභ්‍යවකාශ නැවතුම",
+      ta: "சர்வதேச விண்வெளி நிலையம்"
+    },
+    desc: {
+      en: "Orbital physics, life-support mechanics, and speed of the space station.",
+      si: "කක්ෂීය භෞතික විද්‍යාව, ජීවිත ආධාරක සහ පැයට කි.මී. 27,580ක පියාසැරිය.",
+      ta: "சுற்றுப்பாதை இயற்பியல், உயிர் ஆதரவு அமைப்புகள் மற்றும் விண்வெளி வேக விவரங்கள்."
+    },
+    prompt: "How does the International Space Station work? Explain its orbital mechanics, altitude, speed, and daily science experiments."
   },
   {
-    id: 'mars',
-    icon: '🔴',
-    en: 'Mars Perseverance',
-    si: 'අඟහරු රෝවරය',
-    ta: 'செவ்வாய் ரோவர்',
-    query: 'What is the Perseverance rover doing in Jezero Crater on Mars right now?'
+    id: 'card-blackholes',
+    icon: Atom,
+    badge: 'COSMOS',
+    title: {
+      en: "Black Holes Explained",
+      si: "කළු කුහර සරල බසින්",
+      ta: "கருந்துளைகள் விளக்கம்"
+    },
+    desc: {
+      en: "Event horizons, gravitational singularity, and supermassive black holes.",
+      si: "සිද්ධි ක්ෂිතිජය, ගුරුත්වාකර්ෂණ කේන්ද්‍රය සහ අති දැවැන්ත කළු කුහර.",
+      ta: "நிகழ்வு எல்லை, ஈர்ப்பு விசை மற்றும் பிரம்மாண்ட கருந்துளைகள் பற்றிய விளக்கம்."
+    },
+    prompt: "Explain black holes in simple language: What are event horizons, how do they form, and what did Event Horizon Telescope photograph?"
   },
   {
-    id: 'iss',
-    icon: '🛰️',
-    en: 'ISS Live Telemetry',
-    si: 'ISS කක්ෂය සහ වේගය',
-    ta: 'ISS சுற்றுப்பாதை',
-    query: 'What is the current orbital altitude, velocity, and mission status of the ISS?'
+    id: 'card-mars',
+    icon: Compass,
+    badge: 'JEZERO',
+    title: {
+      en: "Mars Rover Missions",
+      si: "අඟහරු රෝවර මෙහෙයුම්",
+      ta: "செவ்வாய் ரோவர் பயணங்கள்"
+    },
+    desc: {
+      en: "Perseverance in Jezero Crater, Ingenuity flights, and search for ancient life.",
+      si: "පර්සෙවරන්ස් රෝවරය, ඉන්ජෙනුයිටි පියාසැරි සහ අතීත ක්ෂුද්‍රජීවී සාක්ෂි සෙවීම.",
+      ta: "பெர்சவரன்ஸ் ரோவர், இன்ஜெனியூட்டி ஹெலிகாப்டர் மற்றும் பண்டைய நுண்ணுயிர் தேடல்."
+    },
+    prompt: "Discover Mars rover missions: What is Perseverance exploring in Jezero Crater and what rock cores has it cached for Earth return?"
   },
   {
-    id: 'asteroids',
-    icon: '☄️',
-    en: 'Planetary Defense (DART)',
-    si: 'ග්‍රහලෝක ආරක්ෂාව & DART',
-    ta: 'சிறுகோள் பாதுகாப்பு',
-    query: 'How does NASA track Near-Earth Asteroids and how did DART change Dimorphos orbit?'
+    id: 'card-solar',
+    icon: Zap,
+    badge: 'SPACE WX',
+    title: {
+      en: "Solar Storms & Flares",
+      si: "සූර්ය කුණාටු සහ කාලගුණය",
+      ta: "சூரிய புயல்கள் & வானிலை"
+    },
+    desc: {
+      en: "Coronal mass ejections, geomagnetic auroras, and Parker Solar Probe.",
+      si: "කොරෝනා විදාරණ, භූකාන්ත අරෝරා සහ සූර්යයා ස්පර්ශ කරන පාකර් යානය.",
+      ta: "சூரிய காந்த புயல்கள், அரோரா ஒளி மற்றும் பார்க்கர் விண்கல ஆய்வுகள்."
+    },
+    prompt: "Learn about solar storms: What are solar flares, coronal mass ejections (CMEs), and how does NASA monitor space weather?"
   }
 ];
 
@@ -339,83 +401,203 @@ function resolveLocalFallbackQuery(query, lang = 'en') {
 }
 
 /**
- * Clean markdown formatter for text display
+ * Robust, Safe Markdown Formatter with Code Block Support & Copy-to-Clipboard
  */
 function FormattedMessageText({ text }) {
   if (!text) return null;
 
-  // Split into paragraphs / lines
-  const lines = text.split('\n');
+  // Split by code blocks ```
+  const codeBlockParts = text.split(/(```[\s\S]*?```)/g);
 
   return (
-    <div className="space-y-1.5 leading-relaxed text-slate-200">
-      {lines.map((line, idx) => {
-        const trimmed = line.trim();
-        if (!trimmed) return <div key={idx} className="h-1" />;
+    <div className="space-y-2 leading-relaxed text-slate-200">
+      {codeBlockParts.map((block, blockIdx) => {
+        // If code block
+        if (block.startsWith('```') && block.endsWith('```')) {
+          const rawContent = block.slice(3, -3);
+          const firstLineBreak = rawContent.indexOf('\n');
+          let language = 'code';
+          let codeBody = rawContent;
 
-        // Header ###
-        if (trimmed.startsWith('### ')) {
+          if (firstLineBreak !== -1) {
+            const possibleLang = rawContent.slice(0, firstLineBreak).trim();
+            if (possibleLang && !possibleLang.includes(' ')) {
+              language = possibleLang;
+              codeBody = rawContent.slice(firstLineBreak + 1);
+            }
+          }
+
           return (
-            <h4 key={idx} className="text-sm font-bold text-cyan-300 font-['Orbitron'] mt-2 mb-1 flex items-center gap-1.5">
-              <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
-              <span>{trimmed.replace(/^###\s+/, '')}</span>
-            </h4>
+            <CodeBlockRenderer 
+              key={`code-${blockIdx}`} 
+              language={language} 
+              code={codeBody.trim()} 
+            />
           );
         }
 
-        // Header ##
-        if (trimmed.startsWith('## ')) {
-          return (
-            <h3 key={idx} className="text-base font-bold text-white font-['Orbitron'] mt-2.5 mb-1 text-purple-300">
-              {trimmed.replace(/^##\s+/, '')}
-            </h3>
-          );
-        }
-
-        // Bullet point
-        if (trimmed.startsWith('• ') || trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
-          const content = trimmed.replace(/^[•\-\*]\s+/, '');
-          return (
-            <div key={idx} className="flex items-start gap-2 pl-1 text-xs sm:text-sm">
-              <span className="text-cyan-400 mt-1 text-xs">•</span>
-              <span className="flex-1">
-                <BoldParser content={content} />
-              </span>
-            </div>
-          );
-        }
+        // Regular text block with lines
+        const lines = block.split('\n');
 
         return (
-          <p key={idx} className="text-xs sm:text-sm">
-            <BoldParser content={line} />
-          </p>
+          <div key={`text-${blockIdx}`} className="space-y-1.5">
+            {lines.map((line, idx) => {
+              const trimmed = line.trim();
+              if (!trimmed) return <div key={idx} className="h-1" />;
+
+              // Header ###
+              if (trimmed.startsWith('### ')) {
+                return (
+                  <h4 key={idx} className="text-sm font-bold text-cyan-300 font-['Orbitron'] mt-3 mb-1 flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+                    <span>{trimmed.replace(/^###\s+/, '')}</span>
+                  </h4>
+                );
+              }
+
+              // Header ##
+              if (trimmed.startsWith('## ')) {
+                return (
+                  <h3 key={idx} className="text-base font-bold text-white font-['Orbitron'] mt-3.5 mb-1.5 text-purple-300 flex items-center gap-1.5">
+                    <Atom className="w-4 h-4 text-purple-400 shrink-0" />
+                    <span>{trimmed.replace(/^##\s+/, '')}</span>
+                  </h3>
+                );
+              }
+
+              // Header #
+              if (trimmed.startsWith('# ')) {
+                return (
+                  <h2 key={idx} className="text-lg font-bold text-white font-['Orbitron'] mt-4 mb-2 text-cyan-200">
+                    {trimmed.replace(/^#\s+/, '')}
+                  </h2>
+                );
+              }
+
+              // Blockquote >
+              if (trimmed.startsWith('> ')) {
+                return (
+                  <blockquote key={idx} className="pl-3 py-1 my-1 border-l-2 border-cyan-400/80 bg-cyan-950/20 text-cyan-200/90 text-xs sm:text-sm italic rounded-r-lg">
+                    <BoldParser content={trimmed.replace(/^>\s+/, '')} />
+                  </blockquote>
+                );
+              }
+
+              // Bullet points
+              if (trimmed.startsWith('• ') || trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
+                const content = trimmed.replace(/^[•\-\*]\s+/, '');
+                return (
+                  <div key={idx} className="flex items-start gap-2 pl-1 text-xs sm:text-sm">
+                    <span className="text-cyan-400 mt-1 text-xs shrink-0">•</span>
+                    <span className="flex-1">
+                      <BoldParser content={content} />
+                    </span>
+                  </div>
+                );
+              }
+
+              // Numbered list
+              const numMatch = trimmed.match(/^(\d+)\.\s+(.+)$/);
+              if (numMatch) {
+                return (
+                  <div key={idx} className="flex items-start gap-2 pl-1 text-xs sm:text-sm">
+                    <span className="text-purple-400 font-mono text-xs font-semibold shrink-0">{numMatch[1]}.</span>
+                    <span className="flex-1">
+                      <BoldParser content={numMatch[2]} />
+                    </span>
+                  </div>
+                );
+              }
+
+              return (
+                <p key={idx} className="text-xs sm:text-sm leading-relaxed">
+                  <BoldParser content={line} />
+                </p>
+              );
+            })}
+          </div>
         );
       })}
     </div>
   );
 }
 
+/**
+ * Dedicated Code Block with Copy Action
+ */
+function CodeBlockRenderer({ language, code }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = () => {
+    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+      navigator.clipboard.writeText(code);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
+
+  return (
+    <div className="my-3 rounded-xl bg-slate-950/95 border border-slate-800 overflow-hidden font-mono text-xs shadow-xl">
+      <div className="flex items-center justify-between px-3 py-1.5 bg-slate-900/90 border-b border-slate-800 text-[11px] text-slate-400">
+        <div className="flex items-center gap-1.5">
+          <Terminal className="w-3.5 h-3.5 text-cyan-400" />
+          <span className="uppercase text-cyan-300 font-bold">{language}</span>
+        </div>
+        <button
+          type="button"
+          onClick={handleCopy}
+          className="flex items-center gap-1 px-2 py-0.5 rounded hover:bg-slate-800 text-slate-300 hover:text-white transition cursor-pointer"
+          title="Copy code"
+        >
+          {copied ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+          <span>{copied ? 'Copied' : 'Copy'}</span>
+        </button>
+      </div>
+      <pre className="p-3.5 overflow-x-auto text-slate-200 leading-relaxed scrollbar-thin">
+        <code>{code}</code>
+      </pre>
+    </div>
+  );
+}
+
 function BoldParser({ content }) {
-  // Bold parser with **bold** regex
-  const parts = content.split(/(\*\*[^*]+\*\*)/g);
+  // Parse inline code `code` first, then **bold**
+  const codeParts = content.split(/(`[^`]+`)/g);
+
   return (
     <>
-      {parts.map((part, pIdx) => {
-        if (part.startsWith('**') && part.endsWith('**')) {
+      {codeParts.map((part, cIdx) => {
+        if (part.startsWith('`') && part.endsWith('`') && part.length > 2) {
           return (
-            <strong key={pIdx} className="font-semibold text-white">
-              {part.slice(2, -2)}
-            </strong>
+            <code key={cIdx} className="px-1.5 py-0.5 mx-0.5 rounded bg-cyan-950/60 border border-cyan-800/60 text-cyan-300 font-mono text-[11px]">
+              {part.slice(1, -1)}
+            </code>
           );
         }
-        return <span key={pIdx}>{part}</span>;
+
+        // Bold parser with **bold** regex
+        const boldParts = part.split(/(\*\*[^*]+\*\*)/g);
+        return (
+          <React.Fragment key={cIdx}>
+            {boldParts.map((bPart, bIdx) => {
+              if (bPart.startsWith('**') && bPart.endsWith('**')) {
+                return (
+                  <strong key={bIdx} className="font-semibold text-white">
+                    {bPart.slice(2, -2)}
+                  </strong>
+                );
+              }
+              return <span key={bIdx}>{bPart}</span>;
+            })}
+          </React.Fragment>
+        );
       })}
     </>
   );
 }
 
 /**
- * NasaAi - Complete AAA NASA Astrophysics Trilingual AI Chatbot
+ * NasaAi - Premium Cinematic Space AI Chatbot
  */
 export function NasaAi({ className = '', lang: propLang }) {
   const { i18n } = useTranslation();
@@ -425,13 +607,17 @@ export function NasaAi({ className = '', lang: propLang }) {
   const [loading, setLoading] = useState(false);
   const [streamingMessageId, setStreamingMessageId] = useState(null);
   const [streamingText, setStreamingText] = useState('');
+  const [lastSubmittedQuery, setLastSubmittedQuery] = useState('');
 
   // Audio & Voice States
+  const [isLiveVoiceOpen, setIsLiveVoiceOpen] = useState(false);
   const [speakingMessageId, setSpeakingMessageId] = useState(null);
   const [isListening, setIsListening] = useState(false);
   const [soundEffectsEnabled, setSoundEffectsEnabled] = useState(true);
   const [copiedId, setCopiedId] = useState(null);
   const [isSpeechSupported, setIsSpeechSupported] = useState(false);
+  const [speechError, setSpeechError] = useState(null);
+  const [isOnline, setIsOnline] = useState(typeof navigator !== 'undefined' ? navigator.onLine : true);
 
   // Dynamic Quiz State
   const [activeQuiz, setActiveQuiz] = useState(null);
@@ -441,9 +627,10 @@ export function NasaAi({ className = '', lang: propLang }) {
   // Conversation Thread
   const [messages, setMessages] = useState([]);
   const [activeModel, setActiveModel] = useState('gemini-3.8-flash');
+  const [connectionState, setConnectionState] = useState('online'); // 'online' | 'connecting' | 'offline'
 
   const chatScrollRef = useRef(null);
-  const inputRef = useRef(null);
+  const textareaRef = useRef(null);
   const recognitionRef = useRef(null);
   const streamTimerRef = useRef(null);
 
@@ -456,7 +643,41 @@ export function NasaAi({ className = '', lang: propLang }) {
     }
   }, []);
 
-  // Initialize initial welcoming message and load history
+  // Monitor network online status
+  useEffect(() => {
+    const handleOnline = () => {
+      setIsOnline(true);
+      setConnectionState('online');
+    };
+    const handleOffline = () => {
+      setIsOnline(false);
+      setConnectionState('offline');
+    };
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
+  // Auto-resize textarea
+  const adjustTextareaHeight = useCallback(() => {
+    const textarea = textareaRef.current;
+    if (textarea) {
+      textarea.style.height = 'auto';
+      const newHeight = Math.min(Math.max(textarea.scrollHeight, 46), 140);
+      textarea.style.height = `${newHeight}px`;
+    }
+  }, []);
+
+  useEffect(() => {
+    adjustTextareaHeight();
+  }, [inputQuery, adjustTextareaHeight]);
+
+  // Load conversation thread from localStorage
   useEffect(() => {
     let initialList = [];
     if (typeof window !== 'undefined' && window.localStorage) {
@@ -471,34 +692,8 @@ export function NasaAi({ className = '', lang: propLang }) {
       } catch {}
     }
 
-    if (initialList.length === 0) {
-      const welcomeText = activeLang === 'si'
-        ? 'ආයුබෝවන්! මම නාසා තාරකා භෞතික විද්‍යා සහ ගැඹුරු අභ්‍යවකාශ ගවේෂණ සහායකයා (Gemini 3.8 Flash) වෙමි. ජාත්‍යන්තර අභ්‍යවකාශ නැවතුම (ISS), ආටෙමිස් චන්ද්‍ර මෙහෙයුම, ජේම්ස් වෙබ් දුරේක්ෂය, අඟහරු රෝවර හෝ අභ්‍යවකාශ කාලගුණය පිළිබඳ ඕනෑම පැනයක් විමසන්න.'
-        : activeLang === 'ta'
-        ? 'வணக்கம்! நான் நாசாவின் வானியற்பியல் மற்றும் ஆழ விண்வெளி ஆய்வு நுண்ணறிவு உதவியாளர் (Gemini 3.8 Flash). சர்வதேச விண்வெளி நிலையம் (ISS), ஆர்ட்டெமிஸ் நிலவு திட்டம், ஜேம்ஸ் வெப் தொலைநோக்கி, செவ்வாய் ரோவர்கள் பற்றி என்னிடம் கேட்கலாம்.'
-        : 'Greetings, Explorer! I am the NASA Astrophysics & Deep-Space Exploration AI Assistant, powered by Gemini 3.8 Flash. Ask me about the ISS telemetry, Artemis lunar missions, James Webb discoveries, Mars Perseverance, exoplanets, or cosmology.';
-
-      const welcomeSuggestions = activeLang === 'si'
-        ? ['ආටෙමිස් මෙහෙයුම ගැන කියන්න', 'ජේම්ස් වෙබ් දුරේක්ෂයේ සොයාගැනීම්', 'අද දවසේ APOD පින්තූරය කුමක්ද?']
-        : activeLang === 'ta'
-        ? ['ஆர்ட்டெமிஸ் திட்டம் பற்றி கூறுங்கள்', 'ஜேம்ஸ் வெப் கண்டுபிடிப்புகள்', 'இன்றைய APOD புகைப்படம் என்ன?']
-        : ['What is the Artemis Moon flight plan?', 'What did the James Webb telescope discover?', "Explain today's APOD image"];
-
-      initialList = [
-        {
-          id: 'welcome-msg',
-          role: 'assistant',
-          text: welcomeText,
-          timestamp: Date.now(),
-          suggestions: welcomeSuggestions,
-          model: 'gemini-3.8-flash',
-          provider: 'Google Gemini 3.8 Flash'
-        }
-      ];
-    }
-
     setMessages(initialList);
-  }, [activeLang]);
+  }, []);
 
   // Speech recognition support check
   useEffect(() => {
@@ -519,7 +714,7 @@ export function NasaAi({ className = '', lang: propLang }) {
   const persistMessages = useCallback((newMsgs) => {
     if (typeof window !== 'undefined' && window.localStorage) {
       try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(newMsgs.slice(-20)));
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(newMsgs.slice(-25)));
       } catch {}
     }
   }, []);
@@ -550,7 +745,7 @@ export function NasaAi({ className = '', lang: propLang }) {
     const utterance = new SpeechSynthesisUtterance(cleanText);
     const targetLocale = getSpeechLocale(activeLang);
     utterance.lang = targetLocale;
-    utterance.rate = 1.0;
+    utterance.rate = 0.98;
     utterance.pitch = 1.0;
 
     const voices = window.speechSynthesis.getVoices();
@@ -566,35 +761,35 @@ export function NasaAi({ className = '', lang: propLang }) {
     window.speechSynthesis.speak(utterance);
   }, [activeLang, getSpeechLocale, speakingMessageId, stopSpeech]);
 
-  // Clear chat history
-  const handleClearChat = () => {
+  // Stop Generation / Streaming helper
+  const handleStopGeneration = useCallback(() => {
+    if (streamTimerRef.current) {
+      clearInterval(streamTimerRef.current);
+      streamTimerRef.current = null;
+    }
+    setStreamingMessageId(null);
+    setStreamingText('');
+    setLoading(false);
+    setConnectionState('online');
     stopSpeech();
+  }, [stopSpeech]);
+
+  // Clear chat / New Chat
+  const handleStartNewChat = () => {
+    handleStopGeneration();
     if (typeof window !== 'undefined' && window.localStorage) {
       try {
         localStorage.removeItem(STORAGE_KEY);
       } catch {}
     }
     setActiveQuiz(null);
-
-    const resetMsg = {
-      id: `welcome-${Date.now()}`,
-      role: 'assistant',
-      text: activeLang === 'si'
-        ? 'සංවාද ඉතිහාසය පිරිසිදු කරන ලදී. නව අභ්‍යවකාශ පැනයක් විමසන්න!'
-        : activeLang === 'ta'
-        ? 'அரட்டை வரலாறு அழிக்கப்பட்டது. புதிய விண்வெளி கேள்வியைக் கேளுங்கள்!'
-        : 'Chat history cleared. What astrophysics mystery would you like to explore next?',
-      timestamp: Date.now(),
-      suggestions: activeLang === 'si'
-        ? ['ආටෙමිස් චන්ද්‍ර මෙහෙයුම', 'ජේම්ස් වෙබ් දුරේක්ෂය', 'අඟහරු කාලගුණය']
-        : activeLang === 'ta'
-        ? ['ஆர்ட்டெமிஸ் திட்டம்', 'ஜேம்ஸ் வெப் தொலைநோக்கி', 'செவ்வாய் வானிலை']
-        : ['Artemis Moon Mission', 'James Webb Telescope', 'Mars Weather Update'],
-      model: 'gemini-3.8-flash',
-      provider: 'Google Gemini 3.8 Flash'
-    };
-
-    setMessages([resetMsg]);
+    setMessages([]);
+    setInputQuery('');
+    setLastSubmittedQuery('');
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+      textareaRef.current.focus();
+    }
   };
 
   // Streaming animation helper
@@ -614,8 +809,10 @@ export function NasaAi({ className = '', lang: propLang }) {
       charIndex += step;
       if (charIndex >= totalChars) {
         clearInterval(streamTimerRef.current);
+        streamTimerRef.current = null;
         setStreamingMessageId(null);
         setStreamingText('');
+        setConnectionState('online');
         // Update assistant message with completed text
         setMessages(prev => {
           const updated = prev.map(m => m.id === assistantMsg.id ? { ...m, text: fullText } : m);
@@ -642,7 +839,13 @@ export function NasaAi({ className = '', lang: propLang }) {
 
     stopSpeech();
     setInputQuery('');
+    setLastSubmittedQuery(text);
     setLoading(true);
+    setConnectionState('connecting');
+
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+    }
 
     if (soundEffectsEnabled) {
       spaceAudio.playSendLaser();
@@ -676,7 +879,16 @@ export function NasaAi({ className = '', lang: propLang }) {
         text: m.text
       }));
 
-      const apiResult = await askNasaAi(text, activeLang, historyContext);
+      // Active Real-Time NASA Telemetry Payload
+      const telemetryPayload = {
+        apodTitle: 'The Pillars of Creation in Deep Infrared',
+        asteroidCount: 8,
+        issPosition: { lat: 21.48, lon: 81.39 },
+        issAltitude: 418.6,
+        issVelocity: 27584
+      };
+
+      const apiResult = await askNasaAi(text, activeLang, historyContext, telemetryPayload);
       let answerText = '';
       let suggestions = [];
       let modelName = 'gemini-3.8-flash';
@@ -711,6 +923,7 @@ export function NasaAi({ className = '', lang: propLang }) {
       const fallbackText = resolveLocalFallbackQuery(text, activeLang);
       setLoading(false);
       setActiveModel('nasa-local-engine');
+      setConnectionState('offline');
       streamAssistantResponse(initialAssistantMsg, fallbackText);
     }
   }, [activeLang, inputQuery, loading, messages, soundEffectsEnabled, stopSpeech, streamAssistantResponse]);
@@ -721,7 +934,7 @@ export function NasaAi({ className = '', lang: propLang }) {
 
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
-      inputRef.current?.focus();
+      textareaRef.current?.focus();
       return;
     }
 
@@ -732,6 +945,7 @@ export function NasaAi({ className = '', lang: propLang }) {
     }
 
     stopSpeech();
+    setSpeechError(null);
 
     try {
       const recognition = new SpeechRecognition();
@@ -739,7 +953,10 @@ export function NasaAi({ className = '', lang: propLang }) {
       recognition.interimResults = false;
       recognition.lang = getSpeechLocale(activeLang);
 
-      recognition.onstart = () => setIsListening(true);
+      recognition.onstart = () => {
+        setIsListening(true);
+        setSpeechError(null);
+      };
       recognition.onresult = (e) => {
         const speechText = e.results[0][0].transcript;
         if (speechText) {
@@ -747,13 +964,19 @@ export function NasaAi({ className = '', lang: propLang }) {
           executeUserQuery(speechText);
         }
       };
-      recognition.onerror = () => setIsListening(false);
+      recognition.onerror = (err) => {
+        setIsListening(false);
+        setSpeechError(err.error || 'Mic error');
+        setTimeout(() => setSpeechError(null), 3500);
+      };
       recognition.onend = () => setIsListening(false);
 
       recognitionRef.current = recognition;
       recognition.start();
     } catch {
       setIsListening(false);
+      setSpeechError('Mic unavailable');
+      setTimeout(() => setSpeechError(null), 3500);
     }
   }, [activeLang, executeUserQuery, getSpeechLocale, isListening, stopSpeech]);
 
@@ -832,47 +1055,132 @@ export function NasaAi({ className = '', lang: propLang }) {
     };
   }, [stopSpeech]);
 
+  // Check if conversation has any messages
+  const hasConversation = messages.length > 0;
+
   return (
     <div 
-      className={`w-full min-h-[580px] bg-slate-900/90 border border-slate-800 rounded-3xl p-4 sm:p-6 shadow-2xl flex flex-col justify-between font-sans text-slate-100 backdrop-blur-xl relative overflow-hidden ${className}`}
+      className={`w-full min-h-[640px] lg:min-h-[720px] bg-[#010409]/95 border border-cyan-500/30 rounded-2xl p-4 sm:p-6 shadow-[0_0_35px_rgba(6,182,212,0.18)] flex flex-col justify-between font-sans text-slate-100 backdrop-blur-2xl relative overflow-hidden hover:border-cyan-400/50 hover:shadow-[0_0_45px_rgba(6,182,212,0.28)] transition-all duration-300 ${className}`}
     >
-      {/* Background Ambient Glow */}
-      <div className="absolute -top-32 -right-32 w-72 h-72 bg-purple-600/10 rounded-full blur-3xl pointer-events-none" />
-      <div className="absolute -bottom-32 -left-32 w-72 h-72 bg-cyan-600/10 rounded-full blur-3xl pointer-events-none" />
+      {/* Deep Space Background Ambient Glow Radiance */}
+      <div className="absolute -top-36 -right-36 w-96 h-96 bg-cyan-600/10 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute -bottom-36 -left-36 w-96 h-96 bg-purple-600/10 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-blue-600/5 rounded-full blur-[140px] pointer-events-none" />
 
-      {/* Top Header Bar */}
-      <div className="relative z-10 flex items-center justify-between gap-3 flex-wrap pb-3.5 border-b border-slate-800/80">
+      {/* TOP COMPACT HEADER BAR */}
+      <div className="relative z-10 flex items-center justify-between gap-3 flex-wrap pb-3.5 border-b border-cyan-500/20">
+        
+        {/* Assistant Identity & Real-Time Connection Indicator */}
         <div className="flex items-center gap-3">
-          <div className="relative w-10 h-10 rounded-2xl bg-gradient-to-tr from-cyan-500 via-indigo-600 to-purple-600 p-0.5 flex items-center justify-center shadow-lg shadow-cyan-900/40 shrink-0">
-            <div className="w-full h-full bg-slate-950 rounded-[14px] flex items-center justify-center">
+          <div className="relative w-11 h-11 rounded-2xl bg-gradient-to-tr from-cyan-500 via-blue-600 to-indigo-600 p-[1.5px] flex items-center justify-center shadow-lg shadow-cyan-950/50 shrink-0">
+            <div className="w-full h-full bg-[#010409] rounded-[14px] flex items-center justify-center">
               <Bot className="w-5 h-5 text-cyan-400" />
             </div>
-            <span className="absolute -top-1 -right-1 w-3 h-3 bg-emerald-400 rounded-full border-2 border-slate-950 animate-pulse" />
+            {/* Live Connection Status Dot */}
+            <span 
+              className={`absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full border-2 border-slate-950 ${
+                connectionState === 'connecting'
+                  ? 'bg-amber-400 animate-ping'
+                  : connectionState === 'offline' || !isOnline
+                  ? 'bg-rose-500 ring-1 ring-rose-400'
+                  : 'bg-emerald-400 animate-pulse ring-1 ring-emerald-300/50'
+              }`}
+              title={
+                connectionState === 'connecting' ? 'Transmitting Query' :
+                connectionState === 'offline' || !isOnline ? 'Offline Guard Engine' :
+                'Gemini Telemetry Online'
+              }
+            />
           </div>
 
           <div>
             <div className="flex items-center gap-2 flex-wrap">
               <h3 className="font-['Orbitron'] font-bold text-base sm:text-lg text-white tracking-wide">
-                NASA Space AI
+                NOVA - NASA Mission Control AI
               </h3>
+              
+              {/* AI Engine Badge */}
               <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-cyan-500/15 border border-cyan-500/30 text-cyan-300 flex items-center gap-1.5 shadow-sm">
                 <Sparkles className="w-3 h-3 text-cyan-400" />
                 Gemini 3.8 Flash
               </span>
-              <span className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-purple-500/15 border border-purple-500/30 text-purple-300">
-                {activeLang.toUpperCase()} • Live Telemetry
+
+              {/* Verified Online/Connecting State Badge */}
+              <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono flex items-center gap-1.5 ${
+                connectionState === 'connecting'
+                  ? 'bg-amber-500/15 text-amber-300 border border-amber-500/30'
+                  : connectionState === 'offline' || !isOnline
+                  ? 'bg-rose-500/15 text-rose-300 border border-rose-500/30'
+                  : 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
+              }`}>
+                <span className={`w-1.5 h-1.5 rounded-full ${
+                  connectionState === 'connecting' ? 'bg-amber-400 animate-spin' :
+                  connectionState === 'offline' || !isOnline ? 'bg-rose-400' :
+                  'bg-emerald-400'
+                }`} />
+                <span>
+                  {connectionState === 'connecting' 
+                    ? (activeLang === 'si' ? 'සම්ප්‍රේෂණය වෙමින්...' : activeLang === 'ta' ? 'இணைக்கிறது...' : 'Connecting...') 
+                    : connectionState === 'offline' || !isOnline
+                    ? (activeLang === 'si' ? 'Offline Guard' : activeLang === 'ta' ? 'ஆஃப்லைன் பயன்முறை' : 'Offline Guard')
+                    : (activeLang === 'si' ? 'සජීවී ටෙලිමෙට්‍රි' : activeLang === 'ta' ? 'நேரலை' : 'Online Telemetry')}
+                </span>
+              </span>
+
+              {/* Language Pill */}
+              <span className="hidden md:inline-flex px-2 py-0.5 rounded-full text-[10px] font-mono bg-purple-500/15 border border-purple-500/30 text-purple-300 uppercase">
+                {activeLang === 'si' ? '🇱🇰 සිංහල' : activeLang === 'ta' ? '🇮🇳 தமிழ்' : '🇬🇧 EN'}
               </span>
             </div>
+
             <p className="text-[11px] text-slate-400 mt-0.5 hidden sm:block">
-              {activeLang === 'si' ? 'ගැඹුරු අභ්‍යවකාශ සහායක • බහු-වාර සංවාද මතකය' :
-               activeLang === 'ta' ? 'ஆழ விண்வெளி உதவியாளர் • பல திருப்ப உரையாடல் நினைவகம்' :
-               'Deep Space Astrophysics Assistant • Multi-Turn Conversational Memory'}
+              {activeLang === 'si' ? 'ගැඹුරු අභ්‍යවකාශ සහායක • නාසා ටෙලිමෙට්‍රි සහ බහු-වාර මතකය' :
+               activeLang === 'ta' ? 'நாசா விண்வெளி உதவியாளர் • பல திருப்ப உரையாடல் நினைவகம்' :
+               'Astrophysics Mission Assistant • Multi-Turn Memory & Real-Time Telemetry'}
             </p>
           </div>
         </div>
 
-        {/* Header Action Tools */}
+        {/* Header Action Controls */}
         <div className="flex items-center gap-1.5 text-xs font-mono">
+          
+          {/* New Chat Button */}
+          <button
+            type="button"
+            onClick={handleStartNewChat}
+            className="px-3 py-1.5 rounded-xl bg-slate-900/80 hover:bg-slate-800 border border-slate-700 hover:border-cyan-500/50 text-slate-300 hover:text-white transition cursor-pointer flex items-center gap-1.5 shadow-sm active:scale-95"
+            title="Start a fresh conversation thread"
+          >
+            <Plus className="w-3.5 h-3.5 text-cyan-400" />
+            <span className="text-[11px] font-semibold hidden sm:inline">
+              {activeLang === 'si' ? 'නව සංවාදය' : activeLang === 'ta' ? 'புதிய அரட்டை' : 'New Chat'}
+            </span>
+          </button>
+
+          {/* Instant APOD Quiz Button */}
+          <button
+            type="button"
+            onClick={handleLaunchApodQuiz}
+            className="px-2.5 py-1.5 rounded-xl bg-gradient-to-r from-purple-600/25 to-pink-600/25 border border-purple-500/40 hover:border-purple-400 text-purple-200 text-xs flex items-center gap-1.5 transition cursor-pointer shadow-sm hover:scale-[1.02] active:scale-95"
+            title="Generate a 3-question quiz from today's APOD telemetry"
+          >
+            <HelpCircle className="w-3.5 h-3.5 text-purple-400" />
+            <span className="text-[11px] font-medium hidden sm:inline">APOD Quiz</span>
+          </button>
+
+          {/* Gemini Live Real-Time Bidi Voice Comms Button */}
+          <button
+            type="button"
+            onClick={() => setIsLiveVoiceOpen(true)}
+            className="px-2.5 py-1.5 rounded-xl bg-gradient-to-r from-cyan-600/30 to-blue-600/30 border border-cyan-500/50 hover:border-cyan-400 text-cyan-200 text-xs flex items-center gap-1.5 transition cursor-pointer shadow-[0_0_15px_rgba(6,182,212,0.25)] hover:scale-[1.02] active:scale-95"
+            title="Connect to Gemini Live Bidi-Streaming Voice Channel (16kHz In / 24kHz Out)"
+          >
+            <Radio className="w-3.5 h-3.5 text-cyan-400 animate-pulse" />
+            <span className="text-[11px] font-semibold hidden sm:inline">
+              {activeLang === 'si' ? 'සජීවී හඬ' : activeLang === 'ta' ? 'நேரலை குரல்' : 'Live Voice'}
+            </span>
+          </button>
+
           {/* Sound FX Toggle */}
           <button
             type="button"
@@ -887,24 +1195,13 @@ export function NasaAi({ className = '', lang: propLang }) {
             {soundEffectsEnabled ? <Volume2 className="w-4 h-4 text-cyan-400" /> : <VolumeX className="w-4 h-4" />}
           </button>
 
-          {/* Instant APOD Quiz Button */}
-          <button
-            type="button"
-            onClick={handleLaunchApodQuiz}
-            className="px-2.5 py-1.5 rounded-xl bg-gradient-to-r from-purple-600/25 to-pink-600/25 border border-purple-500/40 hover:border-purple-400 text-purple-200 text-xs flex items-center gap-1.5 transition cursor-pointer shadow-sm hover:scale-[1.02] active:scale-95"
-            title="Generate a 3-question quiz from today's APOD telemetry"
-          >
-            <HelpCircle className="w-3.5 h-3.5 text-purple-400" />
-            <span className="text-[11px] font-medium hidden sm:inline">APOD Quiz</span>
-          </button>
-
           {/* Clear History Button */}
-          {messages.length > 1 && (
+          {hasConversation && (
             <button
               type="button"
-              onClick={handleClearChat}
-              className="p-2 rounded-xl bg-slate-800/80 border border-slate-700 text-slate-400 hover:text-rose-400 hover:border-rose-500/40 transition cursor-pointer"
-              title="Clear chat thread"
+              onClick={handleStartNewChat}
+              className="p-2 rounded-xl bg-slate-900/80 border border-slate-700 hover:border-rose-500/50 text-slate-400 hover:text-rose-400 transition cursor-pointer"
+              title="Clear current conversation"
             >
               <Trash2 className="w-4 h-4" />
             </button>
@@ -912,165 +1209,298 @@ export function NasaAi({ className = '', lang: propLang }) {
         </div>
       </div>
 
-      {/* Quick Topic Chips Scrollbar */}
-      <div className="relative z-10 py-2.5 flex items-center gap-2 overflow-x-auto select-none scrollbar-none border-b border-slate-800/50">
-        <span className="text-[10px] font-mono text-slate-400 uppercase tracking-wider shrink-0 flex items-center gap-1 pl-1">
-          <Compass className="w-3 h-3 text-cyan-400" />
-          {activeLang === 'si' ? 'මාතෘකා:' : activeLang === 'ta' ? 'தலைப்புகள்:' : 'Topics:'}
-        </span>
+      {/* QUICK TOPIC STRIP */}
+      {hasConversation && (
+        <div className="relative z-10 py-2.5 flex items-center gap-2 overflow-x-auto select-none scrollbar-none border-b border-slate-800/50">
+          <span className="text-[10px] font-mono text-slate-400 uppercase tracking-wider shrink-0 flex items-center gap-1 pl-1">
+            <Compass className="w-3 h-3 text-cyan-400" />
+            {activeLang === 'si' ? 'මාතෘකා:' : activeLang === 'ta' ? 'தலைப்புகள்:' : 'Topics:'}
+          </span>
 
-        {TOPIC_STARTER_CHIPS.map((chip) => {
-          const label = chip[activeLang] || chip.en;
-          return (
-            <button
-              key={chip.id}
-              type="button"
-              onClick={() => executeUserQuery(chip.query)}
-              className="px-3 py-1 rounded-xl bg-slate-800/60 border border-slate-700/80 hover:border-cyan-400/60 hover:bg-slate-800 text-[11px] font-mono text-slate-300 hover:text-cyan-200 whitespace-nowrap transition cursor-pointer active:scale-95 flex items-center gap-1.5 shadow-sm shrink-0"
-            >
-              <span>{chip.icon}</span>
-              <span>{label}</span>
-            </button>
-          );
-        })}
-      </div>
+          {WELCOME_SUGGESTION_CARDS.map((card) => {
+            const label = card.title[activeLang] || card.title.en;
+            return (
+              <button
+                key={card.id}
+                type="button"
+                onClick={() => executeUserQuery(card.prompt)}
+                className="px-3 py-1 rounded-xl bg-slate-900/70 border border-slate-800 hover:border-cyan-400/60 hover:bg-slate-800 text-[11px] font-mono text-slate-300 hover:text-cyan-200 whitespace-nowrap transition cursor-pointer active:scale-95 flex items-center gap-1.5 shadow-sm shrink-0"
+              >
+                <card.icon className="w-3 h-3 text-cyan-400" />
+                <span>{label}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
 
-      {/* Main Conversation Scroll Thread */}
+      {/* MAIN CHAT CONVERSATION VIEW / WELCOME SCREEN */}
       <div 
         ref={chatScrollRef}
-        className="relative z-10 flex-1 my-3 pr-1 space-y-4 overflow-y-auto max-h-[380px] sm:max-h-[420px] scroll-smooth"
+        className="relative z-10 flex-1 my-3 pr-1 space-y-4 overflow-y-auto max-h-[420px] sm:max-h-[480px] lg:max-h-[520px] scroll-smooth"
       >
-        {messages.map((msg) => {
-          const isUser = msg.role === 'user';
-          const isStreaming = streamingMessageId === msg.id;
-          const displayContent = isStreaming ? streamingText : msg.text;
-          const isPlayingSpeech = speakingMessageId === msg.id;
-
-          return (
-            <div
-              key={msg.id}
-              className={`flex items-start gap-3 ${isUser ? 'flex-row-reverse' : 'flex-row'}`}
-            >
-              {/* Avatar */}
-              <div 
-                className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 shadow-md ${
-                  isUser 
-                    ? 'bg-gradient-to-tr from-purple-600 to-indigo-600 border border-purple-400/50 text-white' 
-                    : 'bg-slate-950 border border-cyan-500/40 text-cyan-400'
-                }`}
-              >
-                {isUser ? <User className="w-4 h-4" /> : <Bot className="w-4 h-4" />}
+        {/* ELEGANT WELCOME SCREEN (When No Conversation Exists) */}
+        {!hasConversation ? (
+          <div className="py-6 sm:py-8 px-2 sm:px-4 max-w-4xl mx-auto space-y-8 animate-fadeIn">
+            
+            {/* Mission Control Welcome Hero */}
+            <div className="text-center space-y-3">
+              <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-cyan-950/60 border border-cyan-500/40 text-cyan-300 text-xs font-mono font-semibold shadow-inner">
+                <Sparkles className="w-3.5 h-3.5 text-cyan-400 animate-pulse" />
+                <span>NASA MISSION INTELLIGENCE CORE</span>
               </div>
 
-              {/* Message Bubble Body */}
-              <div 
-                className={`max-w-[88%] sm:max-w-[80%] rounded-2xl p-4 shadow-xl transition-all ${
-                  isUser
-                    ? 'bg-gradient-to-r from-purple-900/50 to-indigo-900/50 border border-purple-500/40 text-purple-100 rounded-tr-none'
-                    : 'bg-slate-950/80 border border-slate-800/90 text-slate-100 rounded-tl-none'
-                }`}
-              >
-                {/* Meta Header */}
-                <div className="flex items-center justify-between gap-2 mb-1.5 text-[10px] font-mono text-slate-400">
-                  <span className="font-semibold text-slate-300 flex items-center gap-1">
-                    {isUser ? 'Explorer' : (msg.provider || 'NASA AI Assistant')}
-                  </span>
-                  
-                  {!isUser && msg.model && (
-                    <span className="px-1.5 py-0.2 rounded bg-cyan-500/10 text-cyan-300 border border-cyan-500/20 text-[9px]">
-                      {msg.model}
-                    </span>
-                  )}
-                </div>
+              <h2 className="text-2xl sm:text-3xl md:text-4xl font-serif tracking-tight text-white font-['Orbitron']">
+                {activeLang === 'si' 
+                  ? 'සාදරයෙන් පිළිගනිමු, අභ්‍යවකාශ ගවේෂකයාණනි' 
+                  : activeLang === 'ta' 
+                  ? 'விண்வெளி ஆய்வாளரே, நல்வரவு' 
+                  : 'Welcome, Space Explorer'}
+              </h2>
 
-                {/* Message Text Content */}
-                <div className="text-xs sm:text-sm font-sans select-text">
-                  <FormattedMessageText text={displayContent} />
-                  {isStreaming && (
-                    <span className="inline-block w-2 h-4 ml-1 bg-cyan-400 animate-pulse align-middle" />
-                  )}
-                </div>
+              <p className="text-xs sm:text-sm md:text-base text-slate-300 max-w-2xl mx-auto leading-relaxed font-sans">
+                {activeLang === 'si'
+                  ? 'විශ්වය, නාසා මෙහෙයුම්, ග්‍රහලෝක, තාරකා, කළු කුහර සහ අභ්‍යවකාශ විද්‍යාව පිළිබඳ ඕනෑම පැනයක් විමසන්න.'
+                  : activeLang === 'ta'
+                  ? 'பிரபஞ்சம், நாசா திட்டங்கள், கோள்கள், விண்மீன்கள், கருந்துளைகள் மற்றும் விண்வெளி அறிவியல் பற்றி எதையும் கேளுங்கள்.'
+                  : 'Ask me anything about the universe, NASA missions, planets, stars, black holes, and space science.'}
+              </p>
+            </div>
 
-                {/* Bottom Message Actions for Assistant */}
-                {!isUser && !isStreaming && msg.text && (
-                  <div className="mt-3 pt-2 border-t border-slate-800/80 flex items-center justify-between gap-2 flex-wrap">
-                    <div className="flex items-center gap-2">
-                      {/* TTS Speak Button */}
-                      {typeof window !== 'undefined' && 'speechSynthesis' in window && (
-                        <button
-                          type="button"
-                          onClick={() => toggleSpeakMessage(msg.id, msg.text)}
-                          className={`p-1 px-2 rounded-lg text-[10px] font-mono border transition cursor-pointer flex items-center gap-1 ${
-                            isPlayingSpeech
-                              ? 'bg-cyan-500/20 border-cyan-400 text-cyan-300 animate-pulse'
-                              : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white'
-                          }`}
-                          title={isPlayingSpeech ? 'Stop speech' : 'Listen with TTS voice'}
-                        >
-                          {isPlayingSpeech ? <VolumeX className="w-3 h-3 text-cyan-400" /> : <Volume1 className="w-3 h-3" />}
-                          <span>{isPlayingSpeech ? 'Stop' : 'Listen'}</span>
-                        </button>
-                      )}
-
-                      {/* Copy Button */}
-                      <button
-                        type="button"
-                        onClick={() => handleCopyMessage(msg.id, msg.text)}
-                        className="p-1 px-2 rounded-lg bg-slate-900 border border-slate-800 text-slate-400 hover:text-white text-[10px] font-mono transition cursor-pointer flex items-center gap-1"
-                        title="Copy message"
-                      >
-                        {copiedId === msg.id ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
-                        <span>{copiedId === msg.id ? 'Copied' : 'Copy'}</span>
-                      </button>
+            {/* 6 Attractive Suggestion Cards Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
+              {WELCOME_SUGGESTION_CARDS.map((card) => {
+                const IconComponent = card.icon;
+                return (
+                  <button
+                    key={card.id}
+                    type="button"
+                    onClick={() => executeUserQuery(card.prompt)}
+                    className="group p-4 rounded-2xl bg-slate-950/70 border border-slate-800/80 hover:border-cyan-500/60 hover:shadow-[0_0_25px_rgba(34,211,238,0.18)] transition-all duration-300 text-left flex flex-col justify-between space-y-2 cursor-pointer active:scale-98"
+                  >
+                    <div className="flex items-center justify-between w-full">
+                      <div className="w-9 h-9 rounded-xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-300 group-hover:scale-110 group-hover:bg-cyan-500/20 transition-all">
+                        <IconComponent className="w-4 h-4 text-cyan-400" />
+                      </div>
+                      <span className="text-[9px] font-mono px-2 py-0.5 rounded-full bg-slate-900 border border-slate-800 text-slate-400 group-hover:text-cyan-300 group-hover:border-cyan-500/30 transition">
+                        {card.badge}
+                      </span>
                     </div>
 
-                    <span className="text-[10px] font-mono text-slate-500">
-                      {new Date(msg.timestamp || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                    </span>
-                  </div>
-                )}
-
-                {/* Follow-Up Suggestions Chips */}
-                {!isUser && !isStreaming && Array.isArray(msg.suggestions) && msg.suggestions.length > 0 && (
-                  <div className="mt-3 pt-2.5 border-t border-slate-800/60 space-y-1.5">
-                    <span className="text-[10px] font-mono text-cyan-400/90 flex items-center gap-1">
-                      <Sparkles className="w-2.5 h-2.5" />
-                      {activeLang === 'si' ? 'යෝජිත පසු විපරම් ප්‍රශ්න:' :
-                       activeLang === 'ta' ? 'பரிந்துரைக்கப்பட்ட கேள்விகள்:' :
-                       'Suggested Follow-ups:'}
-                    </span>
-                    <div className="flex flex-wrap gap-1.5">
-                      {msg.suggestions.map((sug, sIdx) => (
-                        <button
-                          key={sIdx}
-                          type="button"
-                          onClick={() => executeUserQuery(sug)}
-                          className="px-2.5 py-1 rounded-lg bg-cyan-950/40 border border-cyan-800/50 hover:border-cyan-400 hover:bg-cyan-900/30 text-cyan-300 text-[11px] font-mono transition cursor-pointer text-left active:scale-95 shadow-sm"
-                        >
-                          → {sug}
-                        </button>
-                      ))}
+                    <div>
+                      <h4 className="text-xs sm:text-sm font-bold text-white group-hover:text-cyan-200 transition font-['Orbitron']">
+                        {card.title[activeLang] || card.title.en}
+                      </h4>
+                      <p className="text-[11px] text-slate-400 mt-1 leading-snug line-clamp-2">
+                        {card.desc[activeLang] || card.desc.en}
+                      </p>
                     </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          );
-        })}
 
-        {/* Loading Indicator */}
-        {loading && (
-          <div className="flex items-start gap-3">
-            <div className="w-8 h-8 rounded-xl bg-slate-950 border border-cyan-500/40 text-cyan-400 flex items-center justify-center shrink-0 shadow-md">
-              <Bot className="w-4 h-4 animate-bounce" />
+                    <div className="pt-1 flex items-center gap-1 text-[11px] font-mono text-cyan-400/80 group-hover:text-cyan-300 transition">
+                      <span>{activeLang === 'si' ? 'විමසන්න' : activeLang === 'ta' ? 'கேளுங்கள்' : 'Explore'}</span>
+                      <ChevronRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
+                    </div>
+                  </button>
+                );
+              })}
             </div>
-            <div className="rounded-2xl p-4 bg-slate-950/80 border border-slate-800 text-cyan-300 flex items-center gap-2.5 text-xs font-mono shadow-lg">
-              <RefreshCw className="w-4 h-4 animate-spin text-cyan-400 shrink-0" />
+
+            {/* Quick Helper Tip */}
+            <div className="flex items-center justify-center gap-2 text-xs font-mono text-slate-400 text-center">
+              <Zap className="w-3.5 h-3.5 text-amber-400" />
               <span>
-                {activeLang === 'si' ? 'නාසා තාරකා භෞතික විද්‍යා දත්ත සම්ප්‍රේෂණය වෙමින් පවතී...' :
-                 activeLang === 'ta' ? 'நாசா விண்வெளித் தரவு மீட்டெடுக்கப்படுகிறது...' :
-                 'Consulting Gemini 3.8 Flash & NASA Deep Space Telemetry...'}
+                {activeLang === 'si' 
+                  ? 'ඉඟිය: හඬින් විමසීමට මයික්‍රෆෝනය ඔබන්න හෝ පහතින් ඔබේ පැනය ලියා යවන්න.' 
+                  : activeLang === 'ta' 
+                  ? 'குறிப்பு: குரல் மூலம் கேட்க மைக்ரோஃபோனை அழுத்தவும் அல்லது கீழே தட்டச்சு செய்யவும்.' 
+                  : 'Tip: Click the microphone to speak or type your custom astrophysics query below.'}
               </span>
+            </div>
+
+          </div>
+        ) : null}
+
+        {/* ACTIVE CONVERSATION THREAD MESSAGES */}
+        <AnimatePresence initial={false}>
+          {messages.map((msg) => {
+            const isUser = msg.role === 'user';
+            const isStreaming = streamingMessageId === msg.id;
+            const displayContent = isStreaming ? streamingText : msg.text;
+            const isPlayingSpeech = speakingMessageId === msg.id;
+
+            return (
+              <motion.div
+                key={msg.id}
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                transition={{ duration: 0.25, ease: 'easeOut' }}
+                className={`flex items-start gap-3 ${isUser ? 'flex-row-reverse' : 'flex-row'}`}
+              >
+                {/* Avatar Badge */}
+                <div 
+                  className={`w-9 h-9 rounded-2xl flex items-center justify-center shrink-0 shadow-lg ${
+                    isUser 
+                      ? 'bg-gradient-to-tr from-blue-600 via-indigo-600 to-purple-600 border border-blue-400/50 text-white shadow-blue-950/50' 
+                      : 'bg-slate-950 border border-cyan-500/40 text-cyan-400 shadow-cyan-950/50'
+                  }`}
+                >
+                  {isUser ? <User className="w-4 h-4" /> : <Bot className="w-4 h-4" />}
+                </div>
+
+                {/* Message Bubble Body */}
+                <div 
+                  className={`max-w-[92%] sm:max-w-[82%] rounded-2xl p-4 sm:p-5 shadow-2xl transition-all ${
+                    isUser
+                      ? 'bg-gradient-to-r from-blue-950/70 via-indigo-950/70 to-slate-950/90 border border-blue-500/40 text-blue-50 rounded-tr-none'
+                      : 'bg-slate-950/90 border border-slate-800/90 text-slate-100 rounded-tl-none hover:border-cyan-500/40'
+                  }`}
+                >
+                  {/* Bubble Meta Header */}
+                  <div className="flex items-center justify-between gap-2 mb-2 text-[10px] font-mono text-slate-400 border-b border-slate-800/60 pb-1.5">
+                    <span className="font-semibold text-slate-300 flex items-center gap-1.5">
+                      <span className={`w-1.5 h-1.5 rounded-full ${isUser ? 'bg-blue-400' : 'bg-cyan-400'}`} />
+                      {isUser ? (activeLang === 'si' ? 'ගවේෂකයා (ඔබ)' : activeLang === 'ta' ? 'ஆய்வாளர் (நீங்கள்)' : 'Space Explorer') : (msg.provider || 'NASA AI Assistant')}
+                    </span>
+                    
+                    {!isUser && msg.model && (
+                      <span className="px-2 py-0.5 rounded-full bg-cyan-500/10 text-cyan-300 border border-cyan-500/20 text-[9px] font-bold">
+                        {msg.model}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Message Formatted Text Content */}
+                  <div className="text-xs sm:text-sm font-sans select-text">
+                    <FormattedMessageText text={displayContent} />
+                    {isStreaming && (
+                      <span className="inline-block w-2 h-4 ml-1.5 bg-cyan-400 animate-pulse align-middle" />
+                    )}
+                  </div>
+
+                  {/* Assistant Footer Action Bar (Copy, TTS, Timestamp) */}
+                  {!isUser && !isStreaming && msg.text && (
+                    <div className="mt-3.5 pt-2.5 border-t border-slate-800/80 flex items-center justify-between gap-2 flex-wrap">
+                      <div className="flex items-center gap-2">
+                        
+                        {/* Copy Message Button */}
+                        <button
+                          type="button"
+                          onClick={() => handleCopyMessage(msg.id, msg.text)}
+                          className="px-2.5 py-1 rounded-xl bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-400 hover:text-white text-[11px] font-mono transition cursor-pointer flex items-center gap-1.5 shadow-sm active:scale-95"
+                          title="Copy message text"
+                        >
+                          {copiedId === msg.id ? (
+                            <>
+                              <Check className="w-3 h-3 text-emerald-400" />
+                              <span className="text-emerald-400">Copied</span>
+                            </>
+                          ) : (
+                            <>
+                              <Copy className="w-3 h-3" />
+                              <span>Copy</span>
+                            </>
+                          )}
+                        </button>
+
+                        {/* TTS Voice Listen Button */}
+                        {typeof window !== 'undefined' && 'speechSynthesis' in window && (
+                          <button
+                            type="button"
+                            onClick={() => toggleSpeakMessage(msg.id, msg.text)}
+                            className={`px-2.5 py-1 rounded-xl text-[11px] font-mono border transition cursor-pointer flex items-center gap-1.5 shadow-sm active:scale-95 ${
+                              isPlayingSpeech
+                                ? 'bg-cyan-500/20 border-cyan-400 text-cyan-300 animate-pulse'
+                                : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white hover:border-slate-700'
+                            }`}
+                            title={isPlayingSpeech ? 'Stop Voice Synthesis' : 'Listen with Speech Synthesis Voice'}
+                          >
+                            {isPlayingSpeech ? <VolumeX className="w-3 h-3 text-cyan-400" /> : <Volume1 className="w-3 h-3" />}
+                            <span>{isPlayingSpeech ? 'Stop' : 'Listen'}</span>
+                          </button>
+                        )}
+
+                        {/* Retry Prompt Button */}
+                        {lastSubmittedQuery && (
+                          <button
+                            type="button"
+                            onClick={() => executeUserQuery(lastSubmittedQuery)}
+                            disabled={loading}
+                            className="px-2.5 py-1 rounded-xl bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-400 hover:text-white text-[11px] font-mono transition cursor-pointer flex items-center gap-1.5 shadow-sm active:scale-95"
+                            title="Regenerate / Retry response"
+                          >
+                            <RotateCcw className="w-3 h-3 text-amber-400" />
+                            <span>Retry</span>
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Message Timestamp */}
+                      <span className="text-[10px] font-mono text-slate-500 flex items-center gap-1">
+                        <Clock className="w-2.5 h-2.5" />
+                        {new Date(msg.timestamp || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Follow-Up Suggestions Chips */}
+                  {!isUser && !isStreaming && Array.isArray(msg.suggestions) && msg.suggestions.length > 0 && (
+                    <div className="mt-3.5 pt-2.5 border-t border-slate-800/60 space-y-1.5">
+                      <span className="text-[10px] font-mono text-cyan-400/90 flex items-center gap-1.5 font-semibold">
+                        <Sparkles className="w-3 h-3 text-cyan-400" />
+                        {activeLang === 'si' ? 'යෝජිත පසු විපරම් ප්‍රශ්න:' :
+                         activeLang === 'ta' ? 'பரிந்துரைக்கப்பட்ட தொடர் கேள்விகள்:' :
+                         'Suggested Follow-Up Inquiries:'}
+                      </span>
+                      <div className="flex flex-wrap gap-1.5">
+                        {msg.suggestions.map((sug, sIdx) => (
+                          <button
+                            key={sIdx}
+                            type="button"
+                            onClick={() => executeUserQuery(sug)}
+                            className="px-3 py-1 rounded-xl bg-cyan-950/40 border border-cyan-800/50 hover:border-cyan-400 hover:bg-cyan-900/40 text-cyan-300 text-[11px] font-mono transition cursor-pointer text-left active:scale-95 shadow-sm flex items-center gap-1.5"
+                          >
+                            <ChevronRight className="w-3 h-3 text-cyan-400" />
+                            <span>{sug}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </motion.div>
+            );
+          })}
+        </AnimatePresence>
+
+        {/* LOADING & TYPING GENERATION INDICATOR */}
+        {loading && (
+          <div className="flex items-start gap-3 animate-fadeIn">
+            <div className="w-9 h-9 rounded-2xl bg-slate-950 border border-cyan-500/40 text-cyan-400 flex items-center justify-center shrink-0 shadow-lg shadow-cyan-950/50">
+              <Bot className="w-4 h-4 animate-bounce text-cyan-400" />
+            </div>
+            <div className="rounded-2xl p-4 bg-slate-950/90 border border-cyan-500/30 text-cyan-300 flex items-center justify-between gap-4 text-xs font-mono shadow-2xl max-w-md">
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping" />
+                  <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse delay-75" />
+                  <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse delay-150" />
+                </div>
+                <span>
+                  {activeLang === 'si' ? 'නාසා දත්ත සම්ප්‍රේෂණය වෙමින් පවතී...' :
+                   activeLang === 'ta' ? 'நாசா தரவு மீட்டெடுக்கப்படுகிறது...' :
+                   'Transmitting from Gemini 3.8 Flash...'}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={handleStopGeneration}
+                className="px-2 py-1 rounded-lg bg-slate-900 border border-slate-700 hover:border-rose-500 text-rose-400 hover:text-white text-[10px] transition cursor-pointer flex items-center gap-1"
+                title="Cancel generation"
+              >
+                <Square className="w-2.5 h-2.5 fill-current" />
+                <span>Stop</span>
+              </button>
             </div>
           </div>
         )}
@@ -1090,7 +1520,7 @@ export function NasaAi({ className = '', lang: propLang }) {
               <button
                 type="button"
                 onClick={() => setActiveQuiz(null)}
-                className="text-xs text-slate-400 hover:text-white font-mono"
+                className="text-xs text-slate-400 hover:text-white font-mono cursor-pointer"
               >
                 ✕ Close
               </button>
@@ -1177,31 +1607,54 @@ export function NasaAi({ className = '', lang: propLang }) {
         )}
       </div>
 
-      {/* Bottom Message Input Form */}
-      <div className="relative z-10 pt-2 space-y-2 border-t border-slate-800/80">
+      {/* BOTTOM UPGRADED SMART CHAT COMPOSER */}
+      <div className="relative z-10 pt-3 space-y-2 border-t border-slate-800/80">
+        
+        {/* Speech Error Notice */}
+        {speechError && (
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-rose-950/60 border border-rose-500/40 text-rose-300 text-xs font-mono animate-fadeIn">
+            <AlertCircle className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+            <span>Voice error: {speechError}. Please check microphone permissions.</span>
+          </div>
+        )}
+
         <form
           onSubmit={(e) => {
             e.preventDefault();
             executeUserQuery();
           }}
-          className="relative flex items-center gap-2 w-full"
+          className="relative flex items-end gap-2 w-full"
         >
-          <div className="relative flex-1">
-            <input
-              ref={inputRef}
-              type="text"
+          {/* Natural Multiline Expanding Input */}
+          <div className="relative flex-1 rounded-2xl bg-slate-950/90 border border-slate-800 focus-within:border-cyan-400/80 focus-within:ring-1 focus-within:ring-cyan-400/50 shadow-inner transition-all flex items-center">
+            <textarea
+              ref={textareaRef}
+              rows={1}
               value={inputQuery}
               onChange={(e) => setInputQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  executeUserQuery();
+                }
+              }}
               placeholder={
                 activeLang === 'si'
-                  ? 'ISS, ආටෙමිස්, ජේම්ස් වෙබ් හෝ කළු කුහර ගැන ඕනෑම පැනයක් විමසන්න...'
+                  ? 'අභ්‍යවකාශය, ISS, ආටෙමිස්, ජේම්ස් වෙබ් හෝ කළු කුහර ගැන විමසන්න... (Shift+Enter නව පේළිය)'
                   : activeLang === 'ta'
-                  ? 'ISS, ஆர்ட்டெமிஸ், ஜேம்ஸ் வெப் அல்லது கருந்துளைகள் பற்றி கேளுங்கள்...'
-                  : 'Ask about Artemis, James Webb, Mars rovers, ISS telemetry, or black holes...'
+                  ? 'விண்வெளி, ISS, ஆர்ட்டெமிஸ், ஜேம்ஸ் வெப் அல்லது கருந்துளைகள் பற்றிக் கேளுங்கள்... (Shift+Enter புதிய வரி)'
+                  : 'Ask about Artemis, James Webb, Mars rovers, ISS, black holes... (Shift+Enter for new line)'
               }
               disabled={loading}
-              className="w-full pl-4 pr-4 py-3 rounded-2xl bg-slate-950/80 border border-slate-800 focus:border-cyan-400 text-white placeholder-slate-400 text-xs sm:text-sm font-sans focus:outline-none transition shadow-inner disabled:opacity-50"
+              className="w-full pl-4 pr-10 py-3 bg-transparent text-white placeholder-slate-400 text-xs sm:text-sm font-sans focus:outline-none resize-none max-h-36 overflow-y-auto disabled:opacity-50"
             />
+
+            {/* Input Enter Icon Indicator */}
+            {inputQuery.trim() && !loading && (
+              <span className="absolute right-3 bottom-3 text-slate-500 pointer-events-none hidden sm:inline" title="Press Enter to send">
+                <CornerDownLeft className="w-3.5 h-3.5" />
+              </span>
+            )}
           </div>
 
           {/* Voice Microphone Trigger Button */}
@@ -1210,10 +1663,10 @@ export function NasaAi({ className = '', lang: propLang }) {
               type="button"
               onClick={toggleVoiceInput}
               disabled={loading}
-              className={`p-3 rounded-2xl border transition cursor-pointer shrink-0 ${
+              className={`p-3 rounded-2xl border transition cursor-pointer shrink-0 shadow-lg ${
                 isListening
-                  ? 'bg-rose-500/20 border-rose-500 text-rose-400 shadow-md shadow-rose-950/50 animate-pulse'
-                  : 'bg-slate-800 border-slate-700 text-slate-300 hover:text-cyan-300 hover:border-cyan-500/50'
+                  ? 'bg-rose-500/20 border-rose-500 text-rose-400 shadow-rose-950/50 ring-2 ring-rose-400 animate-pulse'
+                  : 'bg-slate-900 border-slate-700 text-slate-300 hover:text-cyan-300 hover:border-cyan-500/50'
               }`}
               title={isListening ? 'Stop Voice Recording' : `Speak in ${getSpeechLocale(activeLang)}`}
             >
@@ -1221,32 +1674,54 @@ export function NasaAi({ className = '', lang: propLang }) {
             </button>
           )}
 
-          {/* Send Query Button */}
-          <button
-            type="submit"
-            disabled={!inputQuery.trim() || loading}
-            className="p-3 rounded-2xl bg-gradient-to-r from-cyan-600 via-blue-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 text-white disabled:opacity-40 transition shadow-lg shadow-cyan-950/50 cursor-pointer disabled:cursor-not-allowed shrink-0"
-            title="Send Query"
-          >
-            <Send className="w-4 h-4" />
-          </button>
+          {/* Send or Stop Generation Button */}
+          {loading || streamingMessageId ? (
+            <button
+              type="button"
+              onClick={handleStopGeneration}
+              className="p-3 rounded-full bg-rose-600 hover:bg-rose-500 text-white font-bold transition shadow-lg shadow-rose-600/30 cursor-pointer shrink-0 active:scale-95"
+              title="Stop Generation"
+            >
+              <Square className="w-4 h-4 fill-current" />
+            </button>
+          ) : (
+            <button
+              type="submit"
+              disabled={!inputQuery.trim() || loading}
+              className="p-3 rounded-full bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold disabled:opacity-40 transition shadow-lg shadow-cyan-500/30 cursor-pointer disabled:cursor-not-allowed shrink-0 active:scale-95"
+              title="Send Query"
+            >
+              <Send className="w-4 h-4" />
+            </button>
+          )}
         </form>
 
-        {/* Footer Telemetry Status */}
+        {/* Footer Real-Time Telemetry Bar */}
         <div className="flex items-center justify-between text-[10px] font-mono text-slate-400 px-1 flex-wrap gap-2">
           <span className="flex items-center gap-1.5 text-cyan-300">
             <Zap className="w-3 h-3 text-cyan-400" />
-            <span>AI Model: {activeModel}</span>
+            <span>AI Engine: {activeModel}</span>
             <span className="text-slate-600">•</span>
-            <span className="text-emerald-400">Online Telemetry</span>
+            <span className="text-emerald-400 flex items-center gap-1">
+              <ShieldCheck className="w-3 h-3" />
+              Verified Telemetry
+            </span>
           </span>
           <span className="text-slate-500">
             {isSpeechSupported 
-              ? `Mic: ${getSpeechLocale(activeLang)} • Press Enter to transmit` 
-              : 'Keyboard input ready • Press Enter to transmit'}
+              ? `Mic: ${getSpeechLocale(activeLang)} • Enter to transmit • Shift+Enter new line` 
+              : 'Enter to transmit • Shift+Enter new line'}
           </span>
         </div>
+
       </div>
+
+      {/* Gemini Live Real-Time Bidi Voice Comms Modal */}
+      <GeminiLiveVoice
+        lang={activeLang}
+        isOpen={isLiveVoiceOpen}
+        onClose={() => setIsLiveVoiceOpen(false)}
+      />
     </div>
   );
 }

@@ -9,7 +9,7 @@
     <meta property="og:description" content="Trilingual (Sinhala, Tamil, English) NASA space exploration app featuring real-time APOD with Gemini AI dynamic translation, interactive 3D space visualizations, live NASA news, and space missions timeline." />
     <meta property="og:type" content="website" />
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="theme-color" content="#0B0F19" />
+    <meta name="theme-color" content="#010409" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
@@ -21,7 +21,7 @@
     <link rel="apple-touch-icon" href="/logo.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Sans+Sinhala:wght@400;500;600;700&family=Noto+Sans+Tamil:wght@400;500;600;700&family=Orbitron:wght@500;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Sans+Sinhala:wght@400;500;600;700&family=Noto+Sans+Tamil:wght@400;500;600;700&family=Orbitron:wght@500;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
     <script>
       (function() {
@@ -41,9 +41,11 @@
               fullMsg.indexOf('failed to connect to websocket') !== -1 ||
               fullMsg.indexOf('request timeout') !== -1 ||
               fullMsg.indexOf('aborterror') !== -1 ||
-              fullMsg.indexOf('aborted') !== -1
+              fullMsg.indexOf('aborted') !== -1 ||
+              fullMsg.indexOf('reading stylesheet') !== -1 ||
+              fullMsg.indexOf('cors issue') !== -1
             ) {
-              return; // Silently suppress harmless Vite dev websocket notices
+              return; // Silently suppress harmless Vite dev websocket notices & cross-origin stylesheet warnings
             }
             return origConsoleError.apply(console, arguments);
           };
@@ -60,7 +62,9 @@
               fullMsg.indexOf('failed to connect to websocket') !== -1 ||
               fullMsg.indexOf('three.clock') !== -1 ||
               fullMsg.indexOf('multiple instances of three.js') !== -1 ||
-              fullMsg.indexOf('three.timer') !== -1
+              fullMsg.indexOf('three.timer') !== -1 ||
+              fullMsg.indexOf('reading stylesheet') !== -1 ||
+              fullMsg.indexOf('cors issue') !== -1
             ) {
               return;
             }

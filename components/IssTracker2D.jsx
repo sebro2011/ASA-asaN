@@ -553,7 +553,7 @@ export function IssTracker2D({ className = '', lang = 'en' }) {
   return (
     <div 
       ref={containerRef}
-      className={`bg-slate-900/90 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-4 font-sans text-slate-100 ${className}`}
+      className={`bg-slate-950/80 backdrop-blur-xl border border-slate-800/80 rounded-2xl p-5 shadow-2xl space-y-4 font-sans text-slate-100 hover:border-cyan-500/50 hover:shadow-[0_0_25px_rgba(34,211,238,0.15)] transition-all duration-300 ${className}`}
     >
       {/* Header Bar */}
       <div className="flex items-center justify-between gap-3 flex-wrap border-b border-slate-800 pb-3">

@@ -15,7 +15,7 @@ interface IssTelemetryIndicatorProps {
  *  - Yellow: 2-5s update latency (Standard rate / slight lag)
  *  - Blinking Red: > 5s update latency (Stale packet / reconnecting)
  */
-export const IssTelemetryIndicator: React.FC<IssTelemetryIndicatorProps> = ({
+export const IssTelemetryIndicator: React.FC<IssTelemetryIndicatorProps> = React.memo(({
   showAlt = true,
   className = ''
 }) => {
@@ -66,24 +66,24 @@ export const IssTelemetryIndicator: React.FC<IssTelemetryIndicatorProps> = ({
     isMountedRef.current = true;
     updateTelemetry();
 
-    // Fetch new telemetry packet every 3.5 seconds
+    // Fetch new telemetry packet every 4 seconds
     const fetchInterval = setInterval(() => {
       updateTelemetry();
-    }, 3500);
+    }, 4000);
 
-    // High-resolution latency clock (updates every 200ms based on elapsed time since last packet)
+    // Latency ticker updates every 1000ms instead of 200ms
     const latencyTicker = setInterval(() => {
       const elapsedSec = (Date.now() - lastFetchTimeRef.current) / 1000;
       setLatency(elapsedSec);
 
-      if (elapsedSec < 2.0) {
+      if (elapsedSec < 2.5) {
         setStatus('green');
-      } else if (elapsedSec <= 5.0) {
+      } else if (elapsedSec <= 5.5) {
         setStatus('yellow');
       } else {
         setStatus('red');
       }
-    }, 200);
+    }, 1000);
 
     return () => {
       isMountedRef.current = false;
@@ -142,6 +142,6 @@ export const IssTelemetryIndicator: React.FC<IssTelemetryIndicatorProps> = ({
       </span>
     </span>
   );
-};
+});
 
 export default IssTelemetryIndicator;

@@ -859,7 +859,7 @@ export function AaaRocketLaunch({
   return (
     <div 
       ref={containerRef}
-      className={`relative w-full h-[620px] sm:h-[720px] rounded-3xl overflow-hidden border border-cyan-500/30 bg-slate-950 shadow-2xl flex flex-col justify-between selection:bg-cyan-500/30 ${className}`}
+      className={`relative w-full h-[620px] sm:h-[720px] rounded-2xl overflow-hidden border border-slate-800/80 bg-slate-950/90 shadow-2xl flex flex-col justify-between selection:bg-cyan-500/30 hover:border-cyan-500/40 hover:shadow-[0_0_25px_rgba(34,211,238,0.15)] transition-all duration-300 ${className}`}
     >
       {/* ===================================================== */}
       {/* 3D WEBGL CANVAS VIEWPORT */}
@@ -1097,7 +1097,7 @@ export function AaaRocketLaunch({
       <div className="relative z-10 p-4 sm:p-6 flex flex-col md:flex-row items-stretch md:items-end justify-between gap-4 pointer-events-none">
         
         {/* Left Flight Metrics Array */}
-        <div className="pointer-events-auto bg-slate-950/85 backdrop-blur-xl border border-cyan-500/30 rounded-3xl p-4 sm:p-5 shadow-2xl space-y-4 max-w-lg w-full">
+        <div className="pointer-events-auto bg-slate-950/85 backdrop-blur-xl border border-slate-800/80 rounded-2xl p-4 sm:p-5 shadow-2xl space-y-4 max-w-lg w-full">
           
           {/* Primary Telemetry Grid */}
           <div className="grid grid-cols-3 gap-3">
