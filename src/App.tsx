@@ -20,6 +20,7 @@ import IssTracker2D from './components/IssTracker2D.jsx';
 import AsteroidRadar from './components/AsteroidRadar.jsx';
 import EPICViewer from './components/EPICViewer.jsx';
 import ExoplanetLab from './components/ExoplanetLab.jsx';
+import EarthIntelligenceLab from './components/EarthIntelligenceLab.jsx';
 import FloatingVoiceControl from './components/FloatingVoiceControl.jsx';
 import SolarWeather from './components/SolarWeather.jsx';
 import SpaceQuizModule from './components/SpaceQuizModule.jsx';
@@ -62,10 +63,11 @@ import {
   BrainCircuit,
   Award,
   Target,
-  Flame
+  Flame,
+  Leaf
 } from 'lucide-react';
 
-type TabKey = 'apod' | '3d' | 'asteroids' | 'epic' | 'exoplanets' | 'missions' | 'launch' | 'news' | 'saved' | 'assistant' | 'quiz' | 'iss';
+type TabKey = 'apod' | '3d' | 'asteroids' | 'epic' | 'exoplanets' | 'earth' | 'missions' | 'launch' | 'news' | 'saved' | 'assistant' | 'quiz' | 'iss';
 
 // Isolated, memoized live clock to completely eliminate full-page App re-renders every 1s
 const LiveUtcClock = React.memo(() => {
@@ -208,6 +210,8 @@ export default function App() {
       handleTabSwitch('epic');
     } else if (target === 'exoplanets') {
       handleTabSwitch('exoplanets');
+    } else if (target === 'earth' || target === 'earthlab' || target === 'climate' || target === 'weather') {
+      handleTabSwitch('earth');
     } else if (target === 'asteroids') {
       handleTabSwitch('asteroids');
     } else if (target === 'apod') {
@@ -240,6 +244,7 @@ export default function App() {
       'news',
       'quiz',
       'iss',
+      'earth',
       'assistant'
     ];
 
@@ -916,6 +921,44 @@ export default function App() {
                 </p>
               </div>
             </motion.button>
+
+            {/* Tile 13: Earth Intelligence Lab */}
+            <motion.button
+              whileHover={{ y: -4, scale: 1.02 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={() => handleTileClick('earth')}
+              className={`p-3.5 sm:p-4 rounded-2xl bg-slate-950/80 backdrop-blur-xl border border-slate-800/80 text-left hover:border-cyan-500/50 hover:shadow-[0_0_25px_rgba(34,211,238,0.15)] transition-all duration-300 relative overflow-hidden flex flex-col justify-between shadow-xl ${
+                activeTab === 'earth'
+                  ? 'border-lime-400/80 ring-2 ring-lime-400/80 shadow-[0_0_25px_rgba(132,204,22,0.25)]'
+                  : ''
+              }`}
+            >
+              {activeTab === 'earth' && (
+                <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-cyan-400 via-sky-400 to-blue-500" />
+              )}
+              <div className="flex items-center justify-between w-full">
+                <TileImpactIcon
+                  isImpacted={impactTile === 'earth'}
+                  impactId={impactId}
+                  colorClass="text-lime-300"
+                  badgeBg="bg-lime-500/20"
+                  badgeBorder="border border-lime-500/40"
+                >
+                  <Leaf className="w-4 h-4 text-lime-300" />
+                </TileImpactIcon>
+                <span className="text-[9px] font-mono px-1.5 py-0.5 rounded-full bg-lime-500/15 text-lime-300 border border-lime-500/30">
+                  SYS.13
+                </span>
+              </div>
+              <div className="mt-2.5">
+                <h3 className="text-xs sm:text-sm font-bold text-white font-['Orbitron'] truncate">
+                  {t('navEarthLab')}
+                </h3>
+                <p className="text-[10px] text-slate-300 mt-0.5 line-clamp-1">
+                  Climate Archive
+                </p>
+              </div>
+            </motion.button>
           </div>
         </section>
 
@@ -986,6 +1029,24 @@ export default function App() {
             {!isTabLoading && displayedTab === 'exoplanets' && (
               <AtmosphericEntryTransition key="entry-exoplanets" tabKey="exoplanets">
                 <ExoplanetLab lang={lang} />
+              </AtmosphericEntryTransition>
+            )}
+
+            {!isTabLoading && displayedTab === 'earth' && (
+              <AtmosphericEntryTransition key="entry-earth" tabKey="earth">
+                <section className="space-y-6">
+                  <div className="border-b border-slate-800/80 pb-3">
+                    <h2 className="text-lg sm:text-xl md:text-2xl lg:text-3xl font-bold text-white flex items-center gap-2 sm:gap-2.5 font-['Orbitron']">
+                      <Leaf className="w-5 h-5 sm:w-6 sm:h-6 text-lime-400 shrink-0" />
+                      <span>{t('earthHeading')}</span>
+                    </h2>
+                    <p className="text-xs sm:text-sm text-slate-400 mt-1">
+                      {t('earthSubheading')}
+                    </p>
+                  </div>
+
+                  <EarthIntelligenceLab lang={lang} />
+                </section>
               </AtmosphericEntryTransition>
             )}
 
