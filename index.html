@@ -27,7 +27,13 @@
       (function() {
         if (typeof window === 'undefined') return;
 
-        // 1. Intercept console.error to silence Vite HMR WebSocket connection failure messages in no-HMR sandboxes
+        // Quiet Lit dev mode logs
+        window.litDisableDevMode = true;
+        if (typeof globalThis !== 'undefined') {
+          globalThis.litDisableDevMode = true;
+        }
+
+        // 1. Intercept console.error to silence Vite HMR WebSocket connection failure messages and benign warnings
         try {
           var origConsoleError = console.error;
           console.error = function() {
@@ -43,9 +49,12 @@
               fullMsg.indexOf('aborterror') !== -1 ||
               fullMsg.indexOf('aborted') !== -1 ||
               fullMsg.indexOf('reading stylesheet') !== -1 ||
-              fullMsg.indexOf('cors issue') !== -1
+              fullMsg.indexOf('cors issue') !== -1 ||
+              fullMsg.indexOf('lit is in dev mode') !== -1 ||
+              fullMsg.indexOf('scheduled an update while an update was already in progress') !== -1 ||
+              fullMsg.indexOf('msg/dev-mode') !== -1
             ) {
-              return; // Silently suppress harmless Vite dev websocket notices & cross-origin stylesheet warnings
+              return; // Silently suppress harmless Vite dev websocket notices & Lit dev logs
             }
             return origConsoleError.apply(console, arguments);
           };
@@ -64,7 +73,10 @@
               fullMsg.indexOf('multiple instances of three.js') !== -1 ||
               fullMsg.indexOf('three.timer') !== -1 ||
               fullMsg.indexOf('reading stylesheet') !== -1 ||
-              fullMsg.indexOf('cors issue') !== -1
+              fullMsg.indexOf('cors issue') !== -1 ||
+              fullMsg.indexOf('lit is in dev mode') !== -1 ||
+              fullMsg.indexOf('scheduled an update while an update was already in progress') !== -1 ||
+              fullMsg.indexOf('msg/dev-mode') !== -1
             ) {
               return;
             }

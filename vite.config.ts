@@ -7,8 +7,12 @@ import { VitePWA } from 'vite-plugin-pwa';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-export default defineConfig(() => {
+export default defineConfig(({ mode }) => {
+  const isProduction = mode === 'production' || process.env.NODE_ENV === 'production';
   return {
+    define: {
+      'process.env.NODE_ENV': JSON.stringify(isProduction ? 'production' : (process.env.NODE_ENV || 'production')),
+    },
     plugins: [
       react(), 
       tailwindcss(),

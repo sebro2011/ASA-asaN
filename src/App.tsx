@@ -4,12 +4,11 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { SupportedLanguage } from './i18n/translations';
 import AnimatedNavbar from './components/AnimatedNavbar.jsx';
 import CosmicStarfieldBackground from './components/CosmicStarfieldBackground.jsx';
-import FloatingLanguageSwitcher from './components/FloatingLanguageSwitcher';
 import AmbientSoundscapeControl from './components/AmbientSoundscapeControl';
 import PulsarLoader from './components/PulsarLoader';
 import AtmosphericEntryTransition from './components/AtmosphericEntryTransition';
-import SlideToAction from './components/SlideToAction.jsx';
-import NASABottomBar from './components/NASABottomBar.jsx';
+import HeroBackgroundEarth from './components/HeroBackgroundEarth';
+import NASABottomBar from './components/NASABottomBar';
 import { ApodViewer } from './components/ApodViewer';
 import { Space3DViewer } from './components/Space3DViewer';
 import { MissionsTimeline } from './components/MissionsTimeline';
@@ -224,13 +223,87 @@ export default function App() {
     window.dispatchEvent(new CustomEvent('nasa-camera-action', { detail: { action } }));
   };
 
+  // iOS-style Horizontal touch-swipe navigation across content tabs (mobile / tablet < 1024px)
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    let touchStartX = 0;
+    let touchStartY = 0;
+    let touchStartTime = 0;
+    let shouldIgnore = false;
+
+    const navTabsSequence: TabKey[] = [
+      'apod',
+      'launch',
+      '3d',
+      'missions',
+      'news',
+      'quiz',
+      'iss',
+      'assistant'
+    ];
+
+    const handleTouchStart = (e: TouchEvent) => {
+      if (window.innerWidth >= 1024 || !e.touches || e.touches.length !== 1) return;
+
+      const target = e.target as HTMLElement | null;
+      // Exclude interactive elements: 3D canvas (OrbitControls), inputs, textareas, buttons, and modals
+      if (
+        target?.closest('canvas') ||
+        target?.closest('input') ||
+        target?.closest('textarea') ||
+        target?.closest('select') ||
+        target?.closest('button') ||
+        target?.closest('[data-no-swipe]') ||
+        target?.closest('.no-swipe') ||
+        target?.closest('[role="dialog"]')
+      ) {
+        shouldIgnore = true;
+        return;
+      }
+
+      shouldIgnore = false;
+      touchStartX = e.touches[0].clientX;
+      touchStartY = e.touches[0].clientY;
+      touchStartTime = Date.now();
+    };
+
+    const handleTouchEnd = (e: TouchEvent) => {
+      if (shouldIgnore || window.innerWidth >= 1024) return;
+      if (!e.changedTouches || e.changedTouches.length !== 1) return;
+
+      const touchEndX = e.changedTouches[0].clientX;
+      const touchEndY = e.changedTouches[0].clientY;
+      const deltaX = touchEndX - touchStartX;
+      const deltaY = touchEndY - touchStartY;
+      const elapsed = Date.now() - touchStartTime;
+
+      // Deliberate horizontal swipe
+      if (elapsed < 450 && Math.abs(deltaX) > 65 && Math.abs(deltaX) > Math.abs(deltaY) * 1.5) {
+        const currentIndex = navTabsSequence.indexOf(activeTab);
+        if (currentIndex !== -1) {
+          if (deltaX < -65 && currentIndex < navTabsSequence.length - 1) {
+            handleTabSwitch(navTabsSequence[currentIndex + 1]);
+          } else if (deltaX > 65 && currentIndex > 0) {
+            handleTabSwitch(navTabsSequence[currentIndex - 1]);
+          }
+        }
+      }
+    };
+
+    window.addEventListener('touchstart', handleTouchStart, { passive: true });
+    window.addEventListener('touchend', handleTouchEnd, { passive: true });
+
+    return () => {
+      window.removeEventListener('touchstart', handleTouchStart);
+      window.removeEventListener('touchend', handleTouchEnd);
+    };
+  }, [activeTab]);
+
   return (
-    <div className="min-h-screen bg-[#010409] text-slate-100 flex flex-col font-sans selection:bg-cyan-500/30 selection:text-cyan-200 relative overflow-x-hidden">
+    <div className="min-h-screen bg-[#010409] text-slate-100 flex flex-col font-sans selection:bg-cyan-500/30 selection:text-cyan-200 relative overflow-x-hidden pb-24 lg:pb-0">
       {/* High-Performance 60FPS Cosmic Starfield & Meteor Particle Background */}
       <CosmicStarfieldBackground starCount={240} enableMeteors={true} speed={0.28} />
-
-      {/* Floating Trilingual Language Switcher (Top-Right) */}
-      <FloatingLanguageSwitcher />
 
       {/* Mission Control Live Telemetry Top Strip */}
       <div className="relative z-50 bg-[#010409]/90 border-b border-slate-800/60 py-2 px-4 text-[11px] font-mono text-slate-300">
@@ -292,31 +365,34 @@ export default function App() {
       />
 
       {/* Main Content Dashboard Container */}
-      <main className="relative z-10 flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-40 space-y-8">
+      <main className="relative z-10 flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 pt-4 sm:pt-6 pb-24 space-y-6 sm:space-y-8">
         
-        {/* Sleek Hero Banner - Deep Dark Space UI with Spacious Gradient Overlay */}
+        {/* Sleek Hero Banner - Deep Dark Space UI with Embedded 3D Earth Background */}
         <section className="relative">
-          <div className="bg-gradient-to-b from-[#010409] via-[#020817] to-[#010409] border border-slate-800/80 rounded-2xl p-6 sm:p-8 md:p-10 relative overflow-hidden shadow-2xl flex flex-col lg:flex-row items-center justify-between gap-8">
+          <div className="bg-gradient-to-b from-[#010409] via-[#020817] to-[#010409] border border-slate-800/80 rounded-2xl py-10 sm:py-12 md:py-14 px-6 sm:px-8 md:px-10 relative overflow-hidden shadow-2xl flex flex-col lg:flex-row items-center justify-between gap-6 sm:gap-8 min-h-[420px] md:min-h-[460px]">
             
-            {/* Subtle atmospheric blue gradient accents */}
-            <div className="absolute -bottom-24 -right-24 w-[480px] h-[480px] rounded-full bg-radial from-cyan-500/10 via-blue-600/5 to-transparent blur-3xl pointer-events-none" />
-            <div className="absolute -top-32 left-1/4 w-96 h-96 rounded-full bg-radial from-sky-400/10 to-transparent blur-3xl pointer-events-none" />
+            {/* Embedded Auto-Rotating 3D Earth Background with Atmospheric Glow & Mouse Parallax */}
+            <HeroBackgroundEarth />
 
-            <div className="relative z-10 max-w-3xl space-y-5">
-              <div className="inline-flex items-center gap-2.5 px-3.5 py-1.5 rounded-full bg-slate-950/80 border border-slate-800/80 font-mono text-cyan-400 text-xs font-semibold shadow-inner">
-                <span className="relative flex h-2 w-2">
+            {/* Subtle atmospheric blue gradient accents */}
+            <div className="absolute -bottom-24 -right-24 w-[480px] h-[480px] rounded-full bg-radial from-cyan-500/10 via-blue-600/5 to-transparent blur-3xl pointer-events-none z-[1]" />
+            <div className="absolute -top-32 left-1/4 w-96 h-96 rounded-full bg-radial from-sky-400/10 to-transparent blur-3xl pointer-events-none z-[1]" />
+
+            <div className="relative z-10 max-w-3xl space-y-4 sm:space-y-5">
+              <div className="inline-flex items-center gap-2 px-3 py-1 sm:px-3.5 sm:py-1.5 rounded-full bg-slate-950/80 border border-slate-800/80 font-mono text-cyan-400 text-[11px] sm:text-xs font-semibold shadow-inner max-w-full overflow-hidden text-ellipsis backdrop-blur-md">
+                <span className="relative flex h-2 w-2 shrink-0">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75" />
                   <span className="relative inline-flex rounded-full h-2 w-2 bg-cyan-400" />
                 </span>
-                <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
-                <span className="tracking-wide">
+                <Sparkles className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+                <span className="tracking-wide truncate">
                   {lang === 'en' && 'Real-Time NASA Feed & Keyless AI Dynamic Translation'}
                   {lang === 'si' && 'නාසා සජීවී දත්ත සහ Keyless AI ස්වභාවික සිංහල පරිවර්තනය'}
                   {lang === 'ta' && 'நாசா நேரலை தரவு & Keyless AI துல்லிய தமிழ் மொழிபெயர்ப்பு'}
                 </span>
               </div>
 
-              <h1 className="text-3xl sm:text-4xl md:text-5xl font-serif tracking-tight text-white leading-[1.15]">
+              <h1 className="text-2xl sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-serif tracking-tight text-white leading-[1.12] drop-shadow-md">
                 {lang === 'en' && (
                   <>Explore the Cosmos in <span className="bg-gradient-to-r from-cyan-400 via-sky-300 to-blue-500 bg-clip-text text-transparent">Three Languages</span></>
                 )}
@@ -328,32 +404,45 @@ export default function App() {
                 )}
               </h1>
 
-              <p className="text-xs sm:text-sm md:text-base text-slate-300 leading-relaxed max-w-2xl font-sans">
+              <p className="text-xs sm:text-sm md:text-base lg:text-lg text-slate-300 leading-relaxed max-w-2xl font-sans drop-shadow-sm">
                 {lang === 'en' && 'Astronomy Picture of the Day (APOD), interactive 3D celestial mechanics, landmark spaceflight breakdowns from Apollo to Artemis, and live deep-space discoveries translated dynamically on-the-fly.'}
                 {lang === 'si' && 'නාසා ආයතනයේ දවසේ තාරකා විද්‍යා ඡායාරූපය (APOD), ත්‍රිමාන (3D) අභ්‍යවකාශ ආකෘති, ඇපලෝ සිට ආටෙමිස් දක්වා ඓතිහාසික චන්ද්‍ර මෙහෙයුම් සහ සජීවී විද්‍යා පුවත් එකම වේදිකාවකින්.'}
                 {lang === 'ta' && 'நாசாவின் நாளின் வானியல் புகைப்படம் (APOD), 3D கோளப் பார்வை, வரலாற்று விண்வெளி பயணங்களின் விரிவான தகவல்கள் மற்றும் நேரலைச் செய்திகள்.'}
               </p>
 
-              {/* Slide To Action Quick Launcher */}
-              <div className="pt-2 max-w-sm">
-                <SlideToAction
-                  label={
-                    lang === 'si' ? 'ගවේෂණය සඳහා අදින්න' :
-                    lang === 'ta' ? 'ஆராய ஸ்லைடு செய்யவும்' :
-                    'Slide to Explore 3D Lab'
-                  }
-                  successLabel={
-                    lang === 'si' ? '3D අභ්‍යවකාශගාරය විවෘතයි' :
-                    lang === 'ta' ? '3D ஆய்வகம் திறக்கப்பட்டது' :
-                    '3D Space Lab Launched!'
-                  }
-                  onSuccess={() => handleTabSwitch('3d')}
-                />
+              {/* Fast Direct Exploration Action Triggers (Replaces legacy slider with high-efficiency 1-click CTA) */}
+              <div className="pt-2 flex flex-wrap items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => handleTabSwitch('3d')}
+                  className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-semibold text-xs sm:text-sm flex items-center gap-2 shadow-lg shadow-cyan-500/25 hover:shadow-cyan-500/40 transition-all cursor-pointer group active:scale-[0.98]"
+                >
+                  <Orbit className="w-4 h-4 text-cyan-200 group-hover:rotate-45 transition-transform" />
+                  <span>
+                    {lang === 'si' ? '3D අභ්‍යවකාශගාරය අරඹන්න' :
+                     lang === 'ta' ? '3D ஆய்வகத்தை தொடங்கு' :
+                     'Launch 3D Space Lab'}
+                  </span>
+                  <ChevronRight className="w-3.5 h-3.5 text-cyan-200/80 group-hover:translate-x-0.5 transition-transform" />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleTabSwitch('missions')}
+                  className="px-4 py-2.5 rounded-xl bg-slate-900/80 hover:bg-slate-800 border border-slate-700/80 hover:border-cyan-500/50 text-slate-200 hover:text-white font-medium text-xs sm:text-sm flex items-center gap-2 transition-all cursor-pointer backdrop-blur-md active:scale-[0.98]"
+                >
+                  <Rocket className="w-4 h-4 text-cyan-400" />
+                  <span>
+                    {lang === 'si' ? 'ඓතිහාසික මෙහෙයුම්' :
+                     lang === 'ta' ? 'வரலாற்றுப் பயணங்கள்' :
+                     'Landmark Missions'}
+                  </span>
+                </button>
               </div>
             </div>
 
-            {/* Glowing Hero Planetary App Badge Logo Container */}
-            <div className="hidden lg:flex flex-col items-center justify-center p-7 rounded-2xl bg-slate-950/80 border border-slate-800/80 backdrop-blur-xl shadow-2xl relative shrink-0 group">
+            {/* Glowing Hero Planetary App Badge Logo Container - Translucent Glass reveals Earth behind */}
+            <div className="hidden lg:flex flex-col items-center justify-center p-7 rounded-2xl bg-slate-950/60 border border-slate-800/80 backdrop-blur-md shadow-2xl relative shrink-0 group z-10">
               <div className="absolute inset-0 bg-cyan-500/10 rounded-2xl blur-2xl group-hover:bg-cyan-500/20 transition-all pointer-events-none" />
               <Logo size="xl" pulse={true} withGlow={true} />
               <div className="mt-3.5 text-center">
@@ -370,7 +459,7 @@ export default function App() {
 
         {/* Space Dashboard Multi-Card Grid Hub - Glassmorphic Slate with Glowing Hover */}
         <section className="relative">
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-12 gap-3 sm:gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-12 gap-2.5 sm:gap-3 md:gap-4">
             {/* Tile 1: APOD */}
             <motion.button
               whileHover={{ y: -4, scale: 1.02 }}
@@ -842,8 +931,8 @@ export default function App() {
                 <section className="space-y-4">
                   <div className="border-b border-slate-800/80 pb-3 flex items-center justify-between flex-wrap gap-2">
                     <div>
-                      <h2 className="text-xl sm:text-2xl font-bold text-white flex items-center gap-2.5 font-['Orbitron']">
-                        <Compass className="w-6 h-6 text-cyan-400" />
+                      <h2 className="text-lg sm:text-xl md:text-2xl lg:text-3xl font-bold text-white flex items-center gap-2 sm:gap-2.5 font-['Orbitron']">
+                        <Compass className="w-5 h-5 sm:w-6 sm:h-6 text-cyan-400 shrink-0" />
                         <span>{t('apodHeading')}</span>
                       </h2>
                       <p className="text-xs sm:text-sm text-slate-400 mt-1">
@@ -865,8 +954,8 @@ export default function App() {
               <AtmosphericEntryTransition key="entry-3d" tabKey="3d">
                 <section className="space-y-6">
                   <div className="border-b border-slate-800/80 pb-3">
-                    <h2 className="text-xl sm:text-2xl font-bold text-white flex items-center gap-2.5 font-['Orbitron']">
-                      <Orbit className="w-6 h-6 text-cyan-400" />
+                    <h2 className="text-lg sm:text-xl md:text-2xl lg:text-3xl font-bold text-white flex items-center gap-2 sm:gap-2.5 font-['Orbitron']">
+                      <Orbit className="w-5 h-5 sm:w-6 sm:h-6 text-cyan-400 shrink-0" />
                       <span>{t('visualizerHeading')}</span>
                     </h2>
                     <p className="text-xs sm:text-sm text-slate-400 mt-1">
@@ -904,8 +993,8 @@ export default function App() {
               <AtmosphericEntryTransition key="entry-missions" tabKey="missions">
                 <section className="space-y-6">
                   <div className="border-b border-slate-800/80 pb-3">
-                    <h2 className="text-xl sm:text-2xl font-bold text-white flex items-center gap-2.5 font-['Orbitron']">
-                      <Rocket className="w-6 h-6 text-cyan-400" />
+                    <h2 className="text-lg sm:text-xl md:text-2xl lg:text-3xl font-bold text-white flex items-center gap-2 sm:gap-2.5 font-['Orbitron']">
+                      <Rocket className="w-5 h-5 sm:w-6 sm:h-6 text-cyan-400 shrink-0" />
                       <span>{t('missionsHeading')}</span>
                     </h2>
                     <p className="text-xs sm:text-sm text-slate-400 mt-1">
@@ -957,8 +1046,8 @@ export default function App() {
                 <section className="space-y-6">
                   <div className="border-b border-slate-800/80 pb-3 flex items-center justify-between flex-wrap gap-2">
                     <div>
-                      <h2 className="text-xl sm:text-2xl font-bold text-white flex items-center gap-2.5 font-['Orbitron']">
-                        <Flame className="w-6 h-6 text-orange-400" />
+                      <h2 className="text-lg sm:text-xl md:text-2xl lg:text-3xl font-bold text-white flex items-center gap-2 sm:gap-2.5 font-['Orbitron']">
+                        <Flame className="w-5 h-5 sm:w-6 sm:h-6 text-orange-400 shrink-0" />
                         <span>NASA Rocket Launch Control Simulator</span>
                       </h2>
                       <p className="text-xs sm:text-sm text-slate-400 mt-1">
@@ -976,8 +1065,8 @@ export default function App() {
               <AtmosphericEntryTransition key="entry-news" tabKey="news">
                 <section className="space-y-6">
                   <div className="border-b border-slate-800/80 pb-3">
-                    <h2 className="text-xl sm:text-2xl font-bold text-white flex items-center gap-2.5 font-['Orbitron']">
-                      <Newspaper className="w-6 h-6 text-cyan-400" />
+                    <h2 className="text-lg sm:text-xl md:text-2xl lg:text-3xl font-bold text-white flex items-center gap-2 sm:gap-2.5 font-['Orbitron']">
+                      <Newspaper className="w-5 h-5 sm:w-6 sm:h-6 text-cyan-400 shrink-0" />
                       <span>{t('newsHeading')}</span>
                     </h2>
                     <p className="text-xs sm:text-sm text-slate-400 mt-1">
@@ -1039,8 +1128,8 @@ export default function App() {
                 <section className="space-y-4">
                   <div className="border-b border-slate-800/80 pb-3 flex items-center justify-between flex-wrap gap-3">
                     <div>
-                      <h2 className="text-xl sm:text-2xl font-bold text-white flex items-center gap-2.5 font-['Orbitron']">
-                        <Bot className="w-6 h-6 text-cyan-400" />
+                      <h2 className="text-lg sm:text-xl md:text-2xl lg:text-3xl font-bold text-white flex items-center gap-2 sm:gap-2.5 font-['Orbitron']">
+                        <Bot className="w-5 h-5 sm:w-6 sm:h-6 text-cyan-400 shrink-0" />
                         <span>NOVA - NASA Mission Control AI</span>
                       </h2>
                       <p className="text-xs sm:text-sm text-slate-400 mt-1">
@@ -1130,37 +1219,14 @@ export default function App() {
         onNavigate={handleVoiceNavigate}
         onCameraAction={handleVoiceCameraAction}
         lang={lang === 'si' ? 'si-LK' : lang === 'ta' ? 'ta-IN' : 'en-US'}
-        className="bottom-24 sm:bottom-24 right-5"
+        className="bottom-24 sm:bottom-24 right-4 sm:right-6 lg:bottom-8"
       />
 
-      {/* Telemetry & Navigation Stacking: Single Fixed Footer Container */}
-      <div className="fixed bottom-0 left-0 right-0 z-50 flex flex-col items-center pointer-events-none">
-        {/* Floating Mission Control Telemetry Bar */}
-        <div className="pointer-events-auto mb-2 px-3 sm:px-4 py-1.5 rounded-full bg-slate-900/90 backdrop-blur-md border border-slate-800/80 shadow-2xl flex items-center gap-2.5 sm:gap-3 text-[10px] sm:text-[11px] font-mono select-none">
-          <span className="flex items-center gap-1.5 text-cyan-300 font-semibold">
-            <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
-            </span>
-            DSN LIVE LINK
-          </span>
-          <span className="text-slate-600">|</span>
-          <span className="flex items-center gap-1 text-slate-300">
-            <Clock className="w-3 h-3 text-cyan-400" />
-            <LiveUtcClock />
-          </span>
-          <span className="hidden sm:inline text-slate-600">|</span>
-          <span className="hidden sm:inline text-slate-400">
-            <IssTelemetryIndicator />
-          </span>
-        </div>
-
-        {/* Responsive iOS-Style Bottom Navigation Bar with Spring Bounce Animation */}
-        <NASABottomBar
-          activeTab={activeTab}
-          onTabChange={(tabId: string) => handleTabSwitch(tabId as any)}
-        />
-      </div>
+      {/* iOS-Style Floating Glassmorphic Bottom Navigation Bar (Mobile & Tablet) */}
+      <NASABottomBar
+        activeTab={activeTab}
+        onTabChange={(tabId: string) => handleTabSwitch(tabId as any)}
+      />
 
       {/* Single HTML Export / Copy Modal */}
       <ExportHtmlModal

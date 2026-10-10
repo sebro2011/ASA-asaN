@@ -7,11 +7,13 @@ declare global {
         React.HTMLAttributes<HTMLElement> & {
           src?: string;
           'ios-src'?: string;
+          poster?: string;
           alt?: string;
           ar?: boolean;
           'ar-modes'?: string;
           'ar-scale'?: string;
           'camera-controls'?: boolean;
+          'camera-orbit'?: string;
           'auto-rotate'?: boolean;
           'auto-rotate-delay'?: string | number;
           'rotation-per-second'?: string;

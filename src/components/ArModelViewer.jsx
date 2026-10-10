@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef, memo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback, memo } from 'react';
 import { 
   Glasses, 
   Smartphone, 
@@ -26,7 +26,29 @@ import {
 } from 'lucide-react';
 
 /**
- * Curated NASA & Aerospace GLB 3D Models Catalog with Verified URLs
+ * Static constants defined OUTSIDE the component render cycle
+ * to prevent re-scheduling updates after render completion
+ */
+const MODEL_VIEWER_STYLE = Object.freeze({
+  width: '100%',
+  height: '100%',
+  outline: 'none'
+});
+
+const STATIC_CONFIG = Object.freeze({
+  defaultCameraOrbit: '0deg 75deg 105%',
+  defaultPoster: 'https://modelviewer.dev/shared-assets/models/Astronaut.webp',
+  arModes: 'webxr scene-viewer quick-look',
+  autoRotateDelay: '1000',
+  rotationPerSecond: '25deg',
+  shadowIntensity: '1.2',
+  shadowSoftness: '0.8',
+  environmentImage: 'neutral',
+  touchAction: 'pan-y'
+});
+
+/**
+ * Curated NASA & Aerospace GLB 3D Models Catalog with Verified URLs & Memoized Posters
  */
 export const DEFAULT_AR_MODELS = [
   {
@@ -36,6 +58,8 @@ export const DEFAULT_AR_MODELS = [
     nameTa: 'ஆர்ட்டெமிஸ் நிலவு விண்வெளி வீரர்',
     src: 'https://modelviewer.dev/shared-assets/models/Astronaut.glb',
     iosSrc: 'https://modelviewer.dev/shared-assets/models/Astronaut.usdz',
+    poster: 'https://modelviewer.dev/shared-assets/models/Astronaut.webp',
+    cameraOrbit: '0deg 75deg 105%',
     alt: 'NASA Extravehicular Mobility Unit (EMU) Spacesuit in 3D AR',
     category: 'Crewed Spaceflight',
     scale: '1 1 1',
@@ -48,6 +72,8 @@ export const DEFAULT_AR_MODELS = [
     nameTa: 'விண்வெளி ஆய்வு தலைக்கவசம்',
     src: 'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Assets/main/Models/DamagedHelmet/glTF-Binary/DamagedHelmet.glb',
     iosSrc: '',
+    poster: '',
+    cameraOrbit: '0deg 75deg 105%',
     alt: 'Aerospace Composite Deep Space Helmet in 3D AR',
     category: 'Materials & Avionics',
     scale: '1 1 1',
@@ -60,6 +86,8 @@ export const DEFAULT_AR_MODELS = [
     nameTa: 'தானியங்கி கிரக ஆய்வு வாகனம்',
     src: 'https://modelviewer.dev/shared-assets/models/RobotExpressive.glb',
     iosSrc: '',
+    poster: '',
+    cameraOrbit: '0deg 75deg 105%',
     alt: 'Autonomous Exploration Robotic Probe in 3D AR',
     category: 'Robotic Exploration',
     scale: '0.8 0.8 0.8',
@@ -68,14 +96,93 @@ export const DEFAULT_AR_MODELS = [
 ];
 
 /**
+ * Isolated & Memoized Model-Viewer Canvas Sub-Component
+ * Ensures props/attributes passed to <model-viewer> (src, poster, exposure, camera-orbit, style)
+ * are memoized or defined outside the component render cycle to prevent re-scheduling updates.
+ */
+const StableModelViewerCanvas = memo(function StableModelViewerCanvas({
+  src,
+  iosSrc,
+  poster,
+  alt,
+  ar,
+  arModes,
+  cameraControls,
+  cameraOrbit,
+  autoRotate,
+  exposure,
+  viewerRef,
+  onError
+}) {
+  // Bind native error listener safely via useEffect so no dynamic inline handler props trigger Lit updates
+  useEffect(() => {
+    const el = viewerRef?.current;
+    if (!el) return;
+
+    const handleViewerError = (e) => {
+      if (onError) onError(e);
+    };
+
+    el.addEventListener('error', handleViewerError);
+    return () => {
+      el.removeEventListener('error', handleViewerError);
+    };
+  }, [viewerRef, src, onError]);
+
+  return (
+    <model-viewer
+      ref={viewerRef}
+      src={src}
+      ios-src={iosSrc || undefined}
+      poster={poster || undefined}
+      alt={alt}
+      ar={ar}
+      ar-modes={arModes}
+      camera-controls={cameraControls}
+      camera-orbit={cameraOrbit}
+      auto-rotate={autoRotate}
+      auto-rotate-delay={STATIC_CONFIG.autoRotateDelay}
+      rotation-per-second={STATIC_CONFIG.rotationPerSecond}
+      shadow-intensity={STATIC_CONFIG.shadowIntensity}
+      shadow-softness={STATIC_CONFIG.shadowSoftness}
+      exposure={exposure}
+      environment-image={STATIC_CONFIG.environmentImage}
+      touch-action={STATIC_CONFIG.touchAction}
+      style={MODEL_VIEWER_STYLE}
+    >
+      {/* Elevated AR launch button with slot="ar-button" */}
+      <button
+        slot="ar-button"
+        className="absolute bottom-5 right-5 z-20 px-4 py-2.5 rounded-2xl bg-gradient-to-r from-cyan-500 via-blue-600 to-indigo-600 hover:from-cyan-400 hover:to-indigo-500 text-white font-mono text-xs font-bold shadow-2xl shadow-cyan-500/40 border border-cyan-300/40 flex items-center gap-2 cursor-pointer transition transform hover:scale-105 active:scale-95 backdrop-blur-md"
+      >
+        <Camera className="w-4 h-4 text-cyan-200" />
+        <span>PROJECT IN REAL SPACE (AR)</span>
+      </button>
+
+      {/* AR Guidance Prompt Overlay with slot="ar-prompt" */}
+      <div
+        slot="ar-prompt"
+        className="absolute bottom-20 left-1/2 -translate-x-1/2 z-20 px-4 py-2 rounded-2xl bg-slate-950/90 border border-cyan-500/40 text-cyan-200 text-xs font-mono shadow-2xl pointer-events-none flex items-center gap-2 backdrop-blur-md whitespace-nowrap"
+      >
+        <Sparkles className="w-3.5 h-3.5 text-cyan-400 animate-spin" />
+        <span>Point camera at a flat ground surface and move device gently</span>
+      </div>
+    </model-viewer>
+  );
+});
+
+/**
  * ArModelViewer Component
  * 
  * Complies with WebXR and Google Model-Viewer specifications:
  * 1. SSR-safe dynamic loading of `@google/model-viewer` inside useEffect.
- * 2. `<model-viewer>` attributes:
+ * 2. <model-viewer> attributes:
  *    - `ar`
  *    - `ar-modes="webxr scene-viewer quick-look"`
  *    - `camera-controls`
+ *    - `camera-orbit` (memoized)
+ *    - `poster` (memoized)
+ *    - `exposure` (memoized)
  *    - `auto-rotate`
  *    - dynamic `src` prop for `.glb` models
  * 3. Elevated AR launch button with `slot="ar-button"` for camera projection.
@@ -83,9 +190,11 @@ export const DEFAULT_AR_MODELS = [
 export function ArModelViewer({
   src,
   iosSrc,
+  poster,
+  cameraOrbit,
   alt = 'NASA 3D Space Model in Augmented Reality',
   ar = true,
-  arModes = 'webxr scene-viewer quick-look',
+  arModes = STATIC_CONFIG.arModes,
   cameraControls = true,
   autoRotate = true,
   className = '',
@@ -104,16 +213,52 @@ export function ArModelViewer({
 
   const modelViewerRef = useRef(null);
 
-  // Determine active model source: prop > custom > catalog
-  const currentModelSrc = src || (isCustomActive && customSrc ? customSrc : selectedModel.src);
-  const currentIosSrc = iosSrc || (isCustomActive ? '' : selectedModel.iosSrc);
-  const currentAlt = alt || selectedModel.alt;
+  // Memoized props and attributes passed to <model-viewer> to prevent re-scheduling updates
+  const memoizedSrc = useMemo(() => {
+    return src || (isCustomActive && customSrc ? customSrc : selectedModel.src);
+  }, [src, isCustomActive, customSrc, selectedModel.src]);
+
+  const memoizedIosSrc = useMemo(() => {
+    return iosSrc || (isCustomActive ? '' : selectedModel.iosSrc);
+  }, [iosSrc, isCustomActive, selectedModel.iosSrc]);
+
+  const memoizedPoster = useMemo(() => {
+    return poster || (!isCustomActive ? selectedModel.poster : '') || '';
+  }, [poster, isCustomActive, selectedModel.poster]);
+
+  const memoizedAlt = useMemo(() => {
+    return alt || selectedModel.alt || 'NASA 3D Space Model';
+  }, [alt, selectedModel.alt]);
+
+  const memoizedExposure = useMemo(() => {
+    return exposure.toFixed(2);
+  }, [exposure]);
+
+  const memoizedCameraOrbit = useMemo(() => {
+    return cameraOrbit || (!isCustomActive ? selectedModel.cameraOrbit : null) || STATIC_CONFIG.defaultCameraOrbit;
+  }, [cameraOrbit, isCustomActive, selectedModel.cameraOrbit]);
+
+  const memoizedArModes = useMemo(() => {
+    return arModes || STATIC_CONFIG.arModes;
+  }, [arModes]);
+
+  // Stable error handler callback
+  const handleModelError = useCallback(() => {
+    console.warn('[model-viewer] Failed to load GLB model:', memoizedSrc);
+    setHasModelError(true);
+  }, [memoizedSrc]);
 
   // 1. Implement SSR-safe dynamic loading for `@google/model-viewer` Web Component inside useEffect
   useEffect(() => {
     let isMounted = true;
 
     if (typeof window !== 'undefined') {
+      // Quiet Lit dev mode warning flags before custom element definitions load
+      window.litDisableDevMode = true;
+      if (typeof globalThis !== 'undefined') {
+        globalThis.litDisableDevMode = true;
+      }
+
       // Check native WebXR support
       if (navigator && 'xr' in navigator && navigator.xr && typeof navigator.xr.isSessionSupported === 'function') {
         navigator.xr.isSessionSupported('immersive-ar')
@@ -140,7 +285,6 @@ export function ArModelViewer({
         })
         .catch((err) => {
           console.warn('[ArModelViewer] Dynamic import fallback, trying script tag:', err);
-          // Fallback script injector if bundled import encounters browser module isolation
           const script = document.createElement('script');
           script.type = 'module';
           script.src = 'https://ajax.googleapis.com/ajax/libs/model-viewer/4.0.0/model-viewer.min.js';
@@ -155,14 +299,13 @@ export function ArModelViewer({
     };
   }, []);
 
-  // Reset errors when model changes
+  // Reset errors when model source changes
   useEffect(() => {
     setHasModelError(false);
-  }, [currentModelSrc]);
+  }, [memoizedSrc]);
 
   // Direct AR activation trigger
-  const handleTriggerAR = async () => {
-    // If not a mobile device, check if WebXR immersive-ar is truly supported before invoking activateAR
+  const handleTriggerAR = useCallback(async () => {
     const isMobile = typeof navigator !== 'undefined' && /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
     if (!isMobile) {
       if (typeof navigator !== 'undefined' && 'xr' in navigator && navigator.xr && typeof navigator.xr.isSessionSupported === 'function') {
@@ -187,29 +330,40 @@ export function ArModelViewer({
     } else {
       setShowQrModal(true);
     }
-  };
+  }, []);
 
-  const handleSelectCatalogModel = (model) => {
+  const handleSelectCatalogModel = useCallback((model) => {
     setIsCustomActive(false);
     setSelectedModel(model);
     if (onModelSelect) onModelSelect(model);
-  };
+  }, [onModelSelect]);
 
-  const handleApplyCustomUrl = (e) => {
+  const handleApplyCustomUrl = useCallback((e) => {
     e.preventDefault();
     if (customSrc.trim()) {
       setIsCustomActive(true);
     }
-  };
+  }, [customSrc]);
 
-  const getModelTitle = (m) => {
+  const handleResetToDefault = useCallback(() => {
+    setIsCustomActive(false);
+    setSelectedModel(DEFAULT_AR_MODELS[0]);
+    setHasModelError(false);
+  }, []);
+
+  const handleResetCamera = useCallback(() => {
+    if (modelViewerRef.current) {
+      modelViewerRef.current.cameraOrbit = STATIC_CONFIG.defaultCameraOrbit;
+    }
+  }, []);
+
+  const getModelTitle = useCallback((m) => {
     if (lang === 'si') return m.nameSi || m.name;
     if (lang === 'ta') return m.nameTa || m.name;
     return m.name;
-  };
+  }, [lang]);
 
   // Build clean mobile URL for QR Code projection
-  const currentOrigin = typeof window !== 'undefined' ? window.location.origin : '';
   const mobileArUrl = typeof window !== 'undefined' ? window.location.href : '';
 
   return (
@@ -344,58 +498,28 @@ export function ArModelViewer({
             </p>
             <button
               type="button"
-              onClick={() => {
-                setIsCustomActive(false);
-                setSelectedModel(DEFAULT_AR_MODELS[0]);
-                setHasModelError(false);
-              }}
+              onClick={handleResetToDefault}
               className="px-4 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-mono text-xs font-bold transition shadow-lg cursor-pointer"
             >
               Reset to Apollo Astronaut
             </button>
           </div>
         ) : (
-          /* 3. Core <model-viewer> with required attributes */
-          <model-viewer
-            ref={modelViewerRef}
-            src={currentModelSrc}
-            ios-src={currentIosSrc || undefined}
-            alt={currentAlt}
+          /* Memoized Stable <model-viewer> canvas */
+          <StableModelViewerCanvas
+            viewerRef={modelViewerRef}
+            src={memoizedSrc}
+            iosSrc={memoizedIosSrc}
+            poster={memoizedPoster}
+            alt={memoizedAlt}
             ar={ar}
-            ar-modes={arModes}
-            camera-controls={cameraControls}
-            auto-rotate={isRotating}
-            auto-rotate-delay="1000"
-            rotation-per-second="25deg"
-            shadow-intensity="1.2"
-            shadow-softness="0.8"
-            exposure={String(exposure)}
-            environment-image="neutral"
-            touch-action="pan-y"
-            onError={() => {
-              console.warn('[model-viewer] Failed to load GLB model:', currentModelSrc);
-              setHasModelError(true);
-            }}
-            style={{ width: '100%', height: '100%', outline: 'none' }}
-          >
-            {/* 4. Elevated AR launch button with slot="ar-button" */}
-            <button
-              slot="ar-button"
-              className="absolute bottom-5 right-5 z-20 px-4 py-2.5 rounded-2xl bg-gradient-to-r from-cyan-500 via-blue-600 to-indigo-600 hover:from-cyan-400 hover:to-indigo-500 text-white font-mono text-xs font-bold shadow-2xl shadow-cyan-500/40 border border-cyan-300/40 flex items-center gap-2 cursor-pointer transition transform hover:scale-105 active:scale-95 backdrop-blur-md"
-            >
-              <Camera className="w-4 h-4 text-cyan-200" />
-              <span>PROJECT IN REAL SPACE (AR)</span>
-            </button>
-
-            {/* AR Guidance Prompt Overlay with slot="ar-prompt" */}
-            <div
-              slot="ar-prompt"
-              className="absolute bottom-20 left-1/2 -translate-x-1/2 z-20 px-4 py-2 rounded-2xl bg-slate-950/90 border border-cyan-500/40 text-cyan-200 text-xs font-mono shadow-2xl pointer-events-none flex items-center gap-2 backdrop-blur-md whitespace-nowrap"
-            >
-              <Sparkles className="w-3.5 h-3.5 text-cyan-400 animate-spin" />
-              <span>Point camera at a flat ground surface and move device gently</span>
-            </div>
-          </model-viewer>
+            arModes={memoizedArModes}
+            cameraControls={cameraControls}
+            cameraOrbit={memoizedCameraOrbit}
+            autoRotate={isRotating}
+            exposure={memoizedExposure}
+            onError={handleModelError}
+          />
         )}
 
         {/* Viewport Floating Controls */}
@@ -428,11 +552,7 @@ export function ArModelViewer({
           {/* Reset Camera */}
           <button
             type="button"
-            onClick={() => {
-              if (modelViewerRef.current) {
-                modelViewerRef.current.cameraOrbit = '0deg 75deg 105%';
-              }
-            }}
+            onClick={handleResetCamera}
             className="p-1.5 rounded-lg bg-slate-900 border border-slate-800 text-slate-400 hover:text-white text-xs font-mono transition cursor-pointer"
             title="Reset Camera View"
           >
@@ -461,7 +581,7 @@ export function ArModelViewer({
             </span>
             <span className="text-slate-600">•</span>
             <span className="text-[10px] font-mono text-emerald-400">
-              {arModes}
+              {memoizedArModes}
             </span>
           </div>
 

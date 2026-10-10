@@ -23,7 +23,9 @@ import {
   BrainCircuit,
   Target,
   Globe,
-  Flame
+  Flame,
+  ChevronDown,
+  Check
 } from 'lucide-react';
 import { useFavorites } from '../utils/favorites';
 
@@ -186,6 +188,19 @@ export default function AnimatedNavbar({
   const { totalCount } = useFavorites();
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [langDropdownOpen, setLangDropdownOpen] = useState(false);
+  const langDropdownRef = React.useRef(null);
+
+  // Close language dropdown on outside click
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (langDropdownRef.current && !langDropdownRef.current.contains(event.target)) {
+        setLangDropdownOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   // Real-time telemetry sync status and periodic live pulse synced with live data stream
   const { isOnline, isSyncing } = useTelemetrySync();
@@ -212,6 +227,13 @@ export default function AnimatedNavbar({
 
   const handleLanguageChange = (code) => {
     i18n.changeLanguage(code);
+    if (typeof document !== 'undefined') {
+      document.documentElement.lang = code;
+    }
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem('i18nextLng', code);
+    }
+    setLangDropdownOpen(false);
     setMobileMenuOpen(false);
   };
 
@@ -384,8 +406,112 @@ export default function AnimatedNavbar({
             })}
           </nav>
 
-          {/* Right Action Tools: Mobile Toggle */}
+          {/* Right Action Tools: Language Selector Dropdown & Mobile Toggle */}
           <div className="flex items-center gap-2 sm:gap-3">
+            {/* Anchored Top Navbar Language Selector (Compact on Mobile, Full on Desktop) */}
+            <div ref={langDropdownRef} className="relative">
+              {(() => {
+                const currentLangObj = LANGUAGES.find((l) => l.code === currentLang) || LANGUAGES[0];
+                return (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => setLangDropdownOpen(!langDropdownOpen)}
+                      className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1.5 rounded-xl bg-slate-900/90 hover:bg-slate-800/90 border border-slate-800/90 hover:border-cyan-500/50 text-white transition-all shadow-sm active:scale-95 focus:outline-none focus:ring-2 focus:ring-cyan-500/40"
+                      aria-label="Select Language"
+                      aria-expanded={langDropdownOpen}
+                    >
+                      <span className="text-base sm:text-lg leading-none select-none">{currentLangObj.flag}</span>
+                      {/* Compact code on mobile, native name on tablet/desktop */}
+                      <span className="font-mono font-bold text-xs uppercase text-cyan-300 sm:hidden">
+                        {currentLangObj.code}
+                      </span>
+                      <span className="hidden sm:inline font-sans font-bold text-xs text-slate-100">
+                        {currentLangObj.nativeName}
+                      </span>
+                      <ChevronDown
+                        className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 ${
+                          langDropdownOpen ? 'rotate-180 text-cyan-400' : ''
+                        }`}
+                      />
+                    </button>
+
+                    {/* Glassmorphic Dropdown Menu */}
+                    <AnimatePresence>
+                      {langDropdownOpen && (
+                        <motion.div
+                          initial={{ opacity: 0, y: 8, scale: 0.95 }}
+                          animate={{ opacity: 1, y: 0, scale: 1 }}
+                          exit={{ opacity: 0, y: 6, scale: 0.96 }}
+                          transition={SPRING_TRANSITION}
+                          className="absolute right-0 mt-2 w-64 sm:w-72 rounded-2xl bg-slate-950/95 border border-cyan-500/30 backdrop-blur-2xl shadow-[0_20px_50px_rgba(0,0,0,0.85)] p-2.5 z-50 text-slate-200"
+                        >
+                          {/* Header Badge */}
+                          <div className="flex items-center justify-between px-2.5 py-1.5 mb-1.5 border-b border-slate-800/80">
+                            <div className="flex items-center gap-1.5 text-[11px] font-mono font-bold uppercase tracking-wider text-cyan-400">
+                              <Globe2 className="w-3.5 h-3.5 text-cyan-400" />
+                              <span>Trilingual i18n</span>
+                            </div>
+                            <span className="text-[10px] font-mono text-slate-400 font-medium">
+                              NASA & AI
+                            </span>
+                          </div>
+
+                          {/* Language Selection List */}
+                          <div className="space-y-1">
+                            {LANGUAGES.map((langItem) => {
+                              const isSelected = currentLang === langItem.code;
+                              return (
+                                <button
+                                  key={langItem.code}
+                                  type="button"
+                                  onClick={() => handleLanguageChange(langItem.code)}
+                                  className={`w-full flex items-center justify-between p-2 rounded-xl transition-all select-none text-left ${
+                                    isSelected
+                                      ? 'bg-gradient-to-r from-cyan-950/90 via-blue-950/80 to-slate-900 border border-cyan-400/50 shadow-md text-white'
+                                      : 'hover:bg-slate-900/80 border border-transparent text-slate-300 hover:text-white'
+                                  }`}
+                                >
+                                  <div className="flex items-center gap-2.5">
+                                    <span className="text-xl leading-none">{langItem.flag}</span>
+                                    <div>
+                                      <div className="flex items-center gap-1.5">
+                                        <span className={`font-sans font-bold text-xs sm:text-sm ${
+                                          isSelected ? 'text-cyan-200' : 'text-slate-200'
+                                        }`}>
+                                          {langItem.nativeName}
+                                        </span>
+                                        <span className="text-[10px] font-mono text-slate-400 uppercase">
+                                          ({langItem.code})
+                                        </span>
+                                      </div>
+                                      <span className="text-[10px] text-slate-400 font-mono block">
+                                        {langItem.label}
+                                      </span>
+                                    </div>
+                                  </div>
+
+                                  {isSelected && (
+                                    <div className="w-5 h-5 rounded-full bg-cyan-500/20 border border-cyan-400 flex items-center justify-center text-cyan-300">
+                                      <Check className="w-3 h-3" />
+                                    </div>
+                                  )}
+                                </button>
+                              );
+                            })}
+                          </div>
+
+                          <div className="mt-2 pt-1.5 border-t border-slate-800/80 px-2 text-[10px] font-mono text-slate-400 text-center">
+                            <span>Dynamic NASA translation on-the-fly</span>
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </>
+                );
+              })()}
+            </div>
+
             {/* Mobile Hamburger Menu Toggle */}
             <div className="lg:hidden">
               <button

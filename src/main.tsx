@@ -1,6 +1,12 @@
 // Ensure window.fetch has both getter and setter so third-party polyfills don't throw TypeError
 if (typeof window !== 'undefined') {
-  // Suppress harmless Vite WebSocket HMR and timeout AbortError in preview environment
+  // Quiet Lit dev mode warning in browsers
+  (window as any).litDisableDevMode = true;
+  if (typeof globalThis !== 'undefined') {
+    (globalThis as any).litDisableDevMode = true;
+  }
+
+  // Suppress harmless Vite WebSocket HMR, Lit dev mode, and timeout AbortError in preview environment
   try {
     const origErr = console.error;
     console.error = (...args: any[]) => {
@@ -11,7 +17,10 @@ if (typeof window !== 'undefined') {
         msg.includes('request timeout') ||
         msg.includes('aborted') ||
         msg.includes('three.clock') ||
-        msg.includes('multiple instances of three.js')
+        msg.includes('multiple instances of three.js') ||
+        msg.includes('lit is in dev mode') ||
+        msg.includes('scheduled an update while an update was already in progress') ||
+        msg.includes('msg/dev-mode')
       ) {
         return;
       }
@@ -26,7 +35,10 @@ if (typeof window !== 'undefined') {
         msg.includes('closed without opened') || 
         msg.includes('three.clock') ||
         msg.includes('three.timer') ||
-        msg.includes('multiple instances of three.js')
+        msg.includes('multiple instances of three.js') ||
+        msg.includes('lit is in dev mode') ||
+        msg.includes('scheduled an update while an update was already in progress') ||
+        msg.includes('msg/dev-mode')
       ) {
         return;
       }

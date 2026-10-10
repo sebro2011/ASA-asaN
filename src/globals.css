@@ -149,6 +149,17 @@
   background: rgba(34, 211, 238, 0.55);
 }
 
+/* Hide scrollbar for Chrome, Safari and Opera */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* Hide scrollbar for IE, Edge and Firefox */
+.no-scrollbar {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+
 /* =========================================================
    Mobile Viewport Performance Optimization (< 768px)
    Disables expensive composite backdrop-filter passes on mobile

@@ -7,8 +7,12 @@ export interface MissionStep {
   telemetry: string;
 }
 
+export type MissionCategory = 'All' | 'Robotic' | 'Human Spaceflight' | 'Lunar';
+
 export interface SpaceMission {
   id: string;
+  category: 'Robotic' | 'Human Spaceflight' | 'Lunar';
+  categories: ('Robotic' | 'Human Spaceflight' | 'Lunar')[];
   name: Record<SupportedLanguage, string>;
   subtitle: Record<SupportedLanguage, string>;
   year: string;
@@ -27,6 +31,8 @@ export interface SpaceMission {
 export const SPACE_MISSIONS: SpaceMission[] = [
   {
     id: 'apollo-11',
+    category: 'Human Spaceflight',
+    categories: ['Human Spaceflight', 'Lunar'],
     name: {
       en: 'Apollo 11',
       si: 'ඇපලෝ 11 (Apollo 11)',
@@ -122,6 +128,8 @@ export const SPACE_MISSIONS: SpaceMission[] = [
   },
   {
     id: 'artemis',
+    category: 'Human Spaceflight',
+    categories: ['Human Spaceflight', 'Lunar'],
     name: {
       en: 'Artemis Program',
       si: 'ආටෙමිස් වැඩසටහන (Artemis)',
@@ -203,6 +211,8 @@ export const SPACE_MISSIONS: SpaceMission[] = [
   },
   {
     id: 'jwst',
+    category: 'Robotic',
+    categories: ['Robotic'],
     name: {
       en: 'James Webb Space Telescope',
       si: 'ජේම්ස් වෙබ් අභ්‍යවකාශ දුරේක්ෂය',
@@ -284,6 +294,8 @@ export const SPACE_MISSIONS: SpaceMission[] = [
   },
   {
     id: 'perseverance',
+    category: 'Robotic',
+    categories: ['Robotic'],
     name: {
       en: 'Mars Perseverance & Ingenuity',
       si: 'අඟහරු පර්සෙවරන්ස් සහ ඉන්ජෙනුයිටි',

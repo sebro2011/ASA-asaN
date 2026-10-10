@@ -966,7 +966,7 @@ export function GeminiChatWidget({
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.8, y: 15 }}
             transition={{ duration: 0.25, ease: 'easeOut' }}
-            className="fixed bottom-24 sm:bottom-6 right-5 z-40"
+            className="fixed bottom-20 sm:bottom-6 right-4 sm:right-6 z-40"
           >
             <button
               type="button"
@@ -1028,7 +1028,7 @@ export function GeminiChatWidget({
             className={`fixed z-50 flex flex-col overflow-hidden bg-[#010409]/95 backdrop-blur-2xl border border-cyan-500/30 rounded-2xl shadow-[0_0_50px_rgba(6,182,212,0.22)] ${
               isMaximized
                 ? 'inset-3 sm:inset-6 max-w-5xl mx-auto'
-                : 'bottom-20 sm:bottom-6 right-3 sm:right-6 w-[calc(100vw-24px)] sm:w-[460px] md:w-[500px]'
+                : 'bottom-20 sm:bottom-6 right-4 sm:right-6 w-[calc(100vw-32px)] sm:w-[460px] md:w-[500px]'
             }`}
             style={{
               boxShadow: '0 20px 50px rgba(0, 0, 0, 0.8), 0 0 35px rgba(6, 182, 212, 0.22)'

@@ -63,7 +63,7 @@ export const FloatingLanguageSwitcher: React.FC<{ className?: string }> = ({ cla
   return (
     <div
       ref={dropdownRef}
-      className={`fixed top-20 sm:top-24 right-4 sm:right-6 z-40 pointer-events-auto ${className}`}
+      className={`hidden lg:block fixed top-24 right-6 z-40 pointer-events-auto ${className}`}
     >
       {/* Floating Pill Trigger */}
       <motion.button
