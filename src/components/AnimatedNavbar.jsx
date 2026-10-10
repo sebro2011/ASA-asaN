@@ -24,6 +24,7 @@ import {
   Target,
   Globe,
   Flame,
+  Leaf,
   ChevronDown,
   Check
 } from 'lucide-react';
@@ -69,6 +70,16 @@ export const NAV_ITEMS = [
       en: 'EPIC Earth',
       si: 'EPIC පෘථිවිය',
       ta: 'EPIC பூமி'
+    }
+  },
+  {
+    id: 'earth',
+    icon: Leaf,
+    badge: 'DATA',
+    labels: {
+      en: 'Earth Lab',
+      si: 'පෘථිවි පරීක්ෂණාගාරය',
+      ta: 'பூமி ஆய்வகம்'
     }
   },
   {

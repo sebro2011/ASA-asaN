@@ -11,6 +11,7 @@ import {
   Newspaper,
   BrainCircuit,
   Globe2,
+  Leaf,
   Bot,
   LucideIcon
 } from 'lucide-react';
@@ -26,7 +27,7 @@ export interface BottomBarTab {
 }
 
 /**
- * 8 Primary Navigation Tabs with Trilingual Labels
+ * 9 Primary Navigation Tabs with Trilingual Labels
  */
 export const TABS: BottomBarTab[] = [
   {
@@ -90,6 +91,15 @@ export const TABS: BottomBarTab[] = [
       en: 'ISS',
       si: 'ISS',
       ta: 'ISS'
+    }
+  },
+  {
+    id: 'earth',
+    icon: Leaf,
+    labels: {
+      en: 'Earth',
+      si: 'පෘථිවිය',
+      ta: 'பூமி'
     }
   },
   {

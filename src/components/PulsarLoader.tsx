@@ -4,7 +4,7 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import Logo from './Logo';
 import { SupportedLanguage } from '../i18n/translations';
-import { Sparkles, Radio, Orbit, Compass, Rocket, Newspaper, Bot, Bookmark, Flame } from 'lucide-react';
+import { Sparkles, Radio, Orbit, Compass, Rocket, Newspaper, Bot, Bookmark, Flame, Leaf } from 'lucide-react';
 
 interface PulsarLoaderProps {
   targetTab: string;
@@ -46,6 +46,11 @@ const TAB_STATUS_MESSAGES: Record<string, Record<SupportedLanguage, { title: str
     en: { title: 'Accessing Secure Celestial Mission Log', subtitle: 'Decrypting locally preserved cosmic artifacts & bookmarks', icon: Bookmark },
     si: { title: 'සුරැකි තාරකා වාර්තා පිරික්සමින්', subtitle: 'ඔබගේ ප්‍රියතම අභ්‍යවකාශ මතකයන් හා ඡායාරූප පූරණය කෙරේ', icon: Bookmark },
     ta: { title: 'சேமிக்கப்பட்ட விண்வெளிப் பதிவுகளைத் திறக்கிறது', subtitle: 'உள்ளூரில் சேமிக்கப்பட்ட தகவல்கள் பெறப்படுகின்றன', icon: Bookmark }
+  },
+  earth: {
+    en: { title: 'Linking NASA POWER Climate Archive', subtitle: 'Downloading monthly temperature & precipitation observations', icon: Leaf },
+    si: { title: 'NASA POWER දේශගුණ ගබඩාවට සම්බන්ධ වෙමින්', subtitle: 'මාසික උෂ්ණත්ව සහ වර්ෂාපතන නිරීක්ෂණ බාගනිමින්', icon: Leaf },
+    ta: { title: 'NASA POWER காலநிலை காப்பகத்துடன் இணைக்கிறது', subtitle: 'மாதாந்திர வெப்பநிலை & மழைப்பொழிவு கண்காணிப்புகள் பதிவிறக்கப்படுகின்றன', icon: Leaf }
   }
 };
 

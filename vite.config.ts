@@ -157,6 +157,8 @@ export default defineConfig(({ mode }) => {
     server: {
       hmr: false,
       watch: process.env.DISABLE_HMR === 'true' ? null : {},
+      // Allow proxied sandbox preview hosts (e.g. *.e2b.app) to reach the dev server
+      allowedHosts: true,
     },
   };
 });

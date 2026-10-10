@@ -32,6 +32,12 @@ const VOICE_COMMANDS = {
     type: 'navigate',
     label: 'EPIC Earth'
   },
+  nav_earthlab: {
+    patterns: ['earth lab', 'earth intelligence', 'climate', 'weather', 'rainfall', 'temperature', 'පෘථිවි පරීක්ෂණාගාරය', 'දේශගුණය', 'வானிலை', 'பூமி ஆய்வகம்'],
+    target: 'earthlab',
+    type: 'navigate',
+    label: 'Earth Intelligence Lab'
+  },
   nav_exoplanets: {
     patterns: ['exoplanet', 'exoplanets', 'alien planet', 'බාහිර ග්‍රහලෝක', 'පුදුම ග්‍රහලෝක', 'புறக்கோள்கள்'],
     target: 'exoplanets',
