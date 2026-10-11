@@ -9,7 +9,11 @@
     "start": "node server.ts",
     "preview": "vite preview",
     "clean": "rm -rf dist",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "test:earth": "node --import tsx --test scripts/test-earth-intelligence.mjs",
+    "verify:earth": "node --import tsx scripts/verify-earth-services.mjs",
+    "test:earth-server": "node --import tsx --test scripts/test-earth-server.mjs",
+    "test:earth-smoke": "node --import tsx scripts/smoke-render.mjs"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
@@ -34,6 +38,7 @@
     "react": "^19.0.1",
     "react-dom": "^19.0.1",
     "react-i18next": "^17.0.15",
+    "react-is": "^19.3.0",
     "recharts": "^3.10.1",
     "three": "^0.186.1",
     "tsx": "^4.21.0",
