@@ -39,6 +39,39 @@ export default defineConfig(({ mode }) => {
               }
             },
             {
+              // Earth Intelligence Lab: validated NASA proxies (domains, POWER,
+              // capability report). NetworkFirst keeps live values authoritative.
+              urlPattern: ({ url }) => url.pathname.startsWith('/api/earth/'),
+              handler: 'NetworkFirst',
+              options: {
+                cacheName: 'earth-intelligence-api',
+                networkTimeoutSeconds: 12,
+                expiration: {
+                  maxEntries: 60,
+                  maxAgeSeconds: 60 * 60 * 24 * 3 // 3 days
+                },
+                cacheableResponse: {
+                  statuses: [0, 200]
+                }
+              }
+            },
+            {
+              // NASA GIBS imagery tiles: CacheFirst so panning/zooming back over
+              // previously seen areas is instant and works offline.
+              urlPattern: ({ url }) => url.hostname.endsWith('gibs.earthdata.nasa.gov'),
+              handler: 'CacheFirst',
+              options: {
+                cacheName: 'gibs-imagery-tiles',
+                expiration: {
+                  maxEntries: 400,
+                  maxAgeSeconds: 60 * 60 * 24 * 21 // 21 days
+                },
+                cacheableResponse: {
+                  statuses: [0, 200]
+                }
+              }
+            },
+            {
               urlPattern: ({ url }) => 
                 url.pathname.startsWith('/api/iss') ||
                 url.pathname.startsWith('/api/epic') ||

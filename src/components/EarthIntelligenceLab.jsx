@@ -1,896 +1,1019 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+/**
+ * Earth Intelligence Lab — NASA Space Explorer (SYS.13)
+ *
+ * Upgraded in place: the previous NASA POWER monthly explorer is preserved as the
+ * "Trend Detective" workspace (same service, same datasets, richer controls), and
+ * three new workspaces are added:
+ *
+ *   1. Imagery Command  — NASA GIBS satellite imagery on a Leaflet map with a
+ *                         verified layer catalog, date controls, side-by-side and
+ *                         swipe comparison, 2D/3D views and availability reporting.
+ *   2. Trend Detective  — NASA POWER monthly archive time series with descriptive
+ *                         statistics and explicit limitations.
+ *   3. Sri Lanka Watch  — island-focused study areas and datasets.
+ *   4. AI Earth Analyst — grounded Q&A over the retrieved bundle, with a
+ *                         deterministic non-AI fallback.
+ *
+ * Scientific-integrity rules enforced throughout: every value carries provider,
+ * dataset, observation date and retrieval timestamp; dates outside a layer's
+ * reported observation domain are refused rather than silently substituted; no
+ * measurement is ever invented or interpolated.
+ *
+ * The heavy map and 3D globe modules are dynamically imported (React.lazy).
+ */
+
+import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
-  ResponsiveContainer,
-  ComposedChart,
-  Bar,
-  Area,
-  Line,
-  CartesianGrid,
-  XAxis,
-  YAxis,
-  Tooltip,
-  Legend,
-  Brush,
-  ReferenceLine
-} from 'recharts';
-import {
   Activity,
-  AlertTriangle,
-  CloudRain,
+  Calendar,
+  ChevronDown,
+  Globe2,
+  Layers,
   Leaf,
+  Loader2,
   MapPin,
-  RefreshCw,
-  Sun,
-  Thermometer
+  Radar,
+  Search,
+  Satellite,
+  Sparkles,
+  WifiOff
 } from 'lucide-react';
 
-// ====================================================
-// Earth Intelligence Lab — NASA POWER Monthly Climate
-// Historical monthly temperature (T2M) & precipitation
-// (PRECTOTCORR) explorer. Keyless public NASA API.
-// ====================================================
+import {
+  GIBS_LAYERS,
+  GIBS_ATTRIBUTION,
+  DEFAULT_LAYER_ID,
+  DEFAULT_VIEW,
+  getGibsLayer,
+  layersByCategory
+} from '../lib/earth/gibsCatalog';
+import { fetchLayerDomain, probeLayer } from '../lib/earth/gibsClient';
+import { checkAvailability, describeCoverage, latestReportedDate, toIsoDate, addDays } from '../lib/earth/domains';
+import { buildAnalystContext, buildMarkdownReport, powerSeriesCsv } from '../lib/earth/context';
+import { compareRenderedImagery } from '../lib/earth/imagediff';
+import { searchPlaces } from '../lib/earth/geocode';
+import { validateCoordinates } from '../lib/earth/geo';
+import { fetchCapabilities } from '../lib/earth/capabilities';
+import { useDevicePerformance } from '../hooks/useDevicePerformance';
+import { useOnlineStatus } from '../hooks/useOnlineStatus';
+import { daysInMonth, meanOf, parseParameter } from '../lib/earth/power';
 
-const POWER_MONTHLY_POINT_URL =
-  'https://power.larc.nasa.gov/api/temporal/monthly/point';
+import { InfoNote, LoadingBlock, Panel, Pill, SectionHeading, StatusBadge, formatDateTime } from './earth/EarthPanel';
+import TrendDetective from './earth/TrendDetective';
+import SriLankaWatch from './earth/SriLankaWatch';
+import AnalystPanel from './earth/AnalystPanel';
+import ProvenancePanel from './earth/ProvenancePanel';
 
-/** First year requested from the NASA POWER monthly archive */
-const START_YEAR = 2015;
+/* Heavy map + 3D modules: separate chunks, loaded on demand. */
+const ImageryMap = React.lazy(() => import('./earth/ImageryMap'));
+const Globe3D = React.lazy(() => import('./earth/Globe3D'));
 
-/** NASA POWER encodes missing grid values as -999 (or similarly large negatives) */
-const POWER_FILL_VALUE_THRESHOLD = -900;
-
-const PARAMS = {
-  temp: 'T2M',
-  rain: 'PRECTOTCORR'
-};
-
-/** Selectable observation locations (lat/lon of the metro area) */
-const LOCATIONS = [
-  {
-    key: 'sriLanka',
-    labelKey: 'earthLocationSriLanka',
-    lat: 6.9271,
-    lon: 79.8612
-  },
-  {
-    key: 'london',
-    labelKey: 'earthLocationLondon',
-    lat: 51.5072,
-    lon: -0.1276
-  },
-  {
-    key: 'newYork',
-    labelKey: 'earthLocationNewYork',
-    lat: 40.7128,
-    lon: -74.006
-  }
-];
-
-/** Time-range filters (applied locally over the fetched archive) */
-const RANGE_OPTIONS = [
-  { key: 'all', labelKey: 'earthRangeAll', years: null },
-  { key: '10y', labelKey: 'earthRange10', years: 10 },
-  { key: '5y', labelKey: 'earthRange5', years: 5 }
-];
-
-const LOCALES = {
-  en: 'en-US',
-  si: 'si-LK',
-  ta: 'ta-LK'
-};
-
-const getLocale = (lang) => LOCALES[lang] || 'en-US';
-
-/** Safe number formatter with fixed decimals */
-function formatNumber(value, digits = 1, lang = 'en') {
-  if (value === null || value === undefined || !Number.isFinite(value)) return '—';
-  try {
-    return new Intl.NumberFormat(getLocale(lang), {
-      minimumFractionDigits: digits,
-      maximumFractionDigits: digits
-    }).format(value);
-  } catch {
-    return value.toFixed(digits);
-  }
-}
-
-/** Localized short month + year label for a 'YYYY-MM' key */
-function formatMonthLabel(dateKey, lang = 'en') {
-  const [year, month] = String(dateKey).split('-').map(Number);
-  if (!year || !month) return dateKey;
-  try {
-    return new Intl.DateTimeFormat(getLocale(lang), {
-      month: 'short',
-      year: 'numeric'
-    }).format(new Date(year, month - 1, 1));
-  } catch {
-    return dateKey;
-  }
-}
-
-/** Days in a calendar month (for rainfall totals) */
-export function daysInMonth(year, month) {
-  return new Date(year, month, 0).getDate();
-}
-
-/** Build the NASA POWER monthly point request URL */
-function buildPowerUrl(lat, lon) {
-  const params = new URLSearchParams({
-    parameters: `${PARAMS.temp},${PARAMS.rain}`,
-    community: 'RE',
-    longitude: String(lon),
-    latitude: String(lat),
-    start: String(START_YEAR),
-    end: String(new Date().getFullYear()),
-    format: 'JSON'
-  });
-  return `${POWER_MONTHLY_POINT_URL}?${params.toString()}`;
-}
+/* ------------------------------------------------------------------ */
+/* Backwards-compatible pure exports (preserved from the previous Lab) */
+/* ------------------------------------------------------------------ */
+export { daysInMonth, parseParameter, meanOf };
 
 /**
- * Parse one NASA POWER monthly parameter object ({ 'YYYYMM': value, ... })
- * into a Map<year, Map<month, value>>. Month keys '01'-'12' only — the
- * NASA POWER monthly API reports month '13' as the annual aggregate.
- */
-export function parseParameter(raw) {
-  const byYear = new Map();
-  if (!raw || typeof raw !== 'object') return byYear;
-
-  for (const [key, value] of Object.entries(raw)) {
-    const match = /^(\d{4})(0[1-9]|1[0-2])$/.exec(key);
-    if (!match) continue;
-
-    const num = Number(value);
-    if (!Number.isFinite(num) || num <= POWER_FILL_VALUE_THRESHOLD) continue;
-
-    const year = Number(match[1]);
-    const month = Number(match[2]);
-
-    if (!byYear.has(year)) byYear.set(year, new Map());
-    byYear.get(year).set(month, num);
-  }
-  return byYear;
-}
-
-/**
- * Fetch + normalize the monthly archive for one location.
- * Returns rows: [{ date, year, month, temp, rain, yearTempMean, yearRainMean }]
- * Missing measurements are kept as null so charts can gap them out.
- */
-async function fetchPowerMonthly(lat, lon, signal) {
-  const response = await fetch(buildPowerUrl(lat, lon), { signal });
-
-  if (!response.ok) {
-    throw new Error(`NASA POWER request failed (${response.status})`);
-  }
-
-  let payload;
-  try {
-    payload = await response.json();
-  } catch {
-    throw new Error('NASA POWER returned an unreadable response');
-  }
-
-  const parameters = payload?.properties?.parameter;
-  const tempByYear = parseParameter(parameters?.[PARAMS.temp]);
-  const rainByYear = parseParameter(parameters?.[PARAMS.rain]);
-
-  if (!tempByYear.size && !rainByYear.size) {
-    throw new Error('No valid monthly observations in response');
-  }
-
-  const rows = [];
-  const years = new Set([...tempByYear.keys(), ...rainByYear.keys()]);
-
-  for (const year of [...years].sort((a, b) => a - b)) {
-    const tempMonths = tempByYear.get(year) || new Map();
-    const rainMonths = rainByYear.get(year) || new Map();
-
-    const monthSet = new Set([...tempMonths.keys(), ...rainMonths.keys()]);
-    const yearTemps = [...tempMonths.values()];
-    const yearRains = [...rainMonths.values()];
-
-    const yearTempMean = yearTemps.length
-      ? yearTemps.reduce((sum, v) => sum + v, 0) / yearTemps.length
-      : null;
-    const yearRainMean = yearRains.length
-      ? yearRains.reduce((sum, v) => sum + v, 0) / yearRains.length
-      : null;
-
-    for (const month of [...monthSet].sort((a, b) => a - b)) {
-      const temp = tempMonths.has(month) ? tempMonths.get(month) : null;
-      const rain = rainMonths.has(month) ? rainMonths.get(month) : null;
-      rows.push({
-        date: `${year}-${String(month).padStart(2, '0')}`,
-        year,
-        month,
-        temp: temp === null ? null : Number(temp.toFixed(2)),
-        rain: rain === null ? null : Number(rain.toFixed(2)),
-        yearTempMean: yearTempMean === null ? null : Number(yearTempMean.toFixed(2)),
-        yearRainMean: yearRainMean === null ? null : Number(yearRainMean.toFixed(2))
-      });
-    }
-  }
-
-  if (!rows.length) {
-    throw new Error('No valid monthly observations found');
-  }
-
-  return rows;
-}
-
-/** Mean of the finite values inside a list of {key: value} accessors */
-export function meanOf(values) {
-  const valid = values.filter((v) => v !== null && v !== undefined && Number.isFinite(v));
-  if (!valid.length) return null;
-  return valid.reduce((sum, v) => sum + v, 0) / valid.length;
-}
-
-/** Pick the record that maximises / minimises `accessor` (null-safe) */
-function extremeRow(rows, accessor, pickMax) {
-  let best = null;
-  let bestValue = null;
-  for (const row of rows) {
-    const value = accessor(row);
-    if (value === null || value === undefined || !Number.isFinite(value)) continue;
-    if (
-      bestValue === null ||
-      (pickMax ? value > bestValue : value < bestValue)
-    ) {
-      best = row;
-      bestValue = value;
-    }
-  }
-  return best;
-}
-
-/**
- * Aggregate the monthly rows into per-year statistics and
- * whole-period historical summary figures.
+ * Legacy adapter kept so any external importer of the old Lab keeps working.
+ * The Trend Detective uses `buildSeriesStats` from `lib/earth/power` directly.
  */
 export function buildSummaries(rows) {
   const byYear = new Map();
-
-  for (const row of rows) {
-    if (!byYear.has(row.year)) {
-      byYear.set(row.year, {
-        year: row.year,
-        months: 0,
-        tempMonths: 0,
-        rainMonths: 0,
-        temps: [],
-        rains: [],
-        totalRainMm: 0
-      });
-    }
+  for (const row of rows || []) {
+    if (!byYear.has(row.year)) byYear.set(row.year, { year: row.year, temps: [], rains: [] });
     const bucket = byYear.get(row.year);
-    bucket.months += 1;
-    if (row.temp !== null) {
-      bucket.tempMonths += 1;
-      bucket.temps.push(row.temp);
-    }
-    if (row.rain !== null) {
-      bucket.rainMonths += 1;
-      bucket.rains.push(row.rain);
-      // Convert the mm/day rate to a monthly total in mm
-      bucket.totalRainMm += row.rain * daysInMonth(row.year, row.month);
-    }
+    if (row.temp !== null && row.temp !== undefined) bucket.temps.push(row.temp);
+    if (row.rain !== null && row.rain !== undefined) bucket.rains.push(row.rain);
   }
-
   const yearly = [...byYear.values()]
     .sort((a, b) => a.year - b.year)
     .map((bucket) => ({
       year: bucket.year,
-      months: bucket.months,
-      tempMonths: bucket.tempMonths,
-      rainMonths: bucket.rainMonths,
       avgTemp: meanOf(bucket.temps),
       avgRain: meanOf(bucket.rains),
-      totalRainMm: bucket.rainMonths ? Number(bucket.totalRainMm.toFixed(1)) : null,
-      complete: bucket.tempMonths >= 12 && bucket.rainMonths >= 12
+      tempMonths: bucket.temps.length,
+      rainMonths: bucket.rains.length,
+      complete: bucket.temps.length >= 12 && bucket.rains.length >= 12
     }));
-
-  const tempRows = rows.filter((row) => row.temp !== null);
-  const rainRows = rows.filter((row) => row.rain !== null);
-
-  const warmestMonth = extremeRow(tempRows, (row) => row.temp, true);
-  const coolestMonth = extremeRow(tempRows, (row) => row.temp, false);
-  const wettestMonth = extremeRow(rainRows, (row) => row.rain, true);
-
-  const yearsWithTemp = yearly.filter((entry) => entry.avgTemp !== null);
-  const yearsWithRain = yearly.filter((entry) => entry.avgRain !== null);
-
-  const warmestYear = extremeRow(yearsWithTemp, (entry) => entry.avgTemp, true);
-  const coolestYear = extremeRow(yearsWithTemp, (entry) => entry.avgTemp, false);
-  const wettestYear = extremeRow(yearsWithRain, (entry) => entry.avgRain, true);
-  const driestYear = extremeRow(yearsWithRain, (entry) => entry.avgRain, false);
-
-  // Annual rainfall totals — only years with all 12 valid rain months,
-  // so partial years don't skew the mean low
-  const completeYears = yearly.filter(
-    (entry) => entry.rainMonths >= 12 && entry.totalRainMm !== null
-  );
-  const meanAnnualRainMm = meanOf(completeYears.map((entry) => entry.totalRainMm));
-
+  const allTemps = (rows || []).map((row) => row.temp).filter((value) => value !== null && value !== undefined);
+  const allRains = (rows || []).map((row) => row.rain).filter((value) => value !== null && value !== undefined);
   return {
     yearly,
-    avgTemp: meanOf(tempRows.map((row) => row.temp)),
-    avgRain: meanOf(rainRows.map((row) => row.rain)),
-    meanAnnualRainMm,
-    warmestMonth,
-    coolestMonth,
-    wettestMonth,
-    warmestYear,
-    coolestYear,
-    wettestYear,
-    driestYear,
-    tempCount: tempRows.length,
-    rainCount: rainRows.length
+    avgTemp: meanOf(allTemps),
+    avgRain: meanOf(allRains),
+    tempCount: allTemps.length,
+    rainCount: allRains.length
   };
 }
 
-/** Compact stat card used across the summary grid */
-function StatCard({ icon: Icon, accentClass, label, value, unit, note }) {
-  return (
-    <div
-      className={`rounded-xl border border-slate-800 bg-slate-950/80 p-4 flex flex-col gap-1.5 ${accentClass}`}
-    >
-      <div className="flex items-center gap-2">
-        <Icon className="h-4 w-4 shrink-0 opacity-90" />
-        <p className="text-xs text-slate-400 leading-tight">{label}</p>
-      </div>
-      <p className="text-xl sm:text-2xl font-bold text-white break-words">
-        {value}
-        {unit ? (
-          <span className="ml-1.5 text-xs sm:text-sm font-medium text-slate-400">
-            {unit}
-          </span>
-        ) : null}
-      </p>
-      {note ? <p className="text-[11px] text-slate-500 leading-snug">{note}</p> : null}
-    </div>
-  );
+/* ------------------------------------------------------------------ */
+/* Helpers                                                            */
+/* ------------------------------------------------------------------ */
+
+const MODES = [
+  { key: 'overview', labelKey: 'earthModeOverview', icon: Satellite },
+  { key: 'trends', labelKey: 'earthModeTrends', icon: Activity },
+  { key: 'srilanka', labelKey: 'earthModeSriLanka', icon: Leaf },
+  { key: 'analyst', labelKey: 'earthModeAnalyst', icon: Sparkles }
+];
+
+const CATEGORY_LABELS = {
+  all: 'earthCategoryAll',
+  'true-color': 'earthCategoryTrueColor',
+  vegetation: 'earthCategoryVegetation',
+  land: 'earthCategoryLand',
+  ocean: 'earthCategoryOcean',
+  atmosphere: 'earthCategoryAtmosphere',
+  fire: 'earthCategoryFire',
+  night: 'earthCategoryNight'
+};
+
+const AREA_PRESETS = [
+  { label: 'Sri Lanka (island-wide)', latitude: DEFAULT_VIEW.center[0], longitude: DEFAULT_VIEW.center[1], bounds: [5.9, 79.5, 9.9, 81.9] },
+  { label: 'Sri Lanka (Colombo)', latitude: 6.9271, longitude: 79.8612, bounds: [6.75, 79.75, 7.1, 80.05] },
+  { label: 'Amazon Basin', latitude: -3.119, longitude: -60.0217, bounds: [-5.5, -64.0, -1.0, -57.0] },
+  { label: 'Bay of Bengal', latitude: 15.0, longitude: 88.0, bounds: [5.0, 80.0, 22.0, 95.0] },
+  { label: 'California', latitude: 36.7783, longitude: -119.4179, bounds: [32.5, -124.5, 42.0, -114.0] }
+];
+
+function usePrefersReducedMotion() {
+  const [reduced, setReduced] = useState(false);
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) return undefined;
+    const query = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const onChange = () => setReduced(query.matches);
+    onChange();
+    query.addEventListener?.('change', onChange);
+    return () => query.removeEventListener?.('change', onChange);
+  }, []);
+  return reduced;
 }
+
+/* ------------------------------------------------------------------ */
+/* Workspace                                                          */
+/* ------------------------------------------------------------------ */
 
 export default function EarthIntelligenceLab({ lang = 'en' }) {
-  const { t, i18n } = useTranslation();
-  const activeLang = (lang || i18n.language || 'en').slice(0, 2);
+  const { t } = useTranslation();
+  const reducedMotion = usePrefersReducedMotion();
+  const isOnline = useOnlineStatus();
+  const { isOptimizedModeActive, reason: hardwareReason } = useDevicePerformance();
 
-  const [locationKey, setLocationKey] = useState('sriLanka');
-  const [rangeKey, setRangeKey] = useState('all');
-  const [rows, setRows] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [hiddenSeries, setHiddenSeries] = useState({});
+  const [mode, setMode] = useState('overview');
+  const [layerId, setLayerId] = useState(DEFAULT_LAYER_ID);
+  const [category, setCategory] = useState('all');
+  const [date, setDate] = useState(() => addDays(toIsoDate(new Date()), -1));
+  const [compareDate, setCompareDate] = useState(null);
+  const [viewMode, setViewMode] = useState('single');
+  const [opacity, setOpacity] = useState(1);
+  const [useGlobe, setUseGlobe] = useState(false);
+  const [area, setArea] = useState({
+    label: 'Sri Lanka (island-wide)',
+    latitude: DEFAULT_VIEW.center[0],
+    longitude: DEFAULT_VIEW.center[1],
+    bounds: [5.9, 79.5, 9.9, 81.9],
+    source: 'preset'
+  });
+  const [domainState, setDomainState] = useState({ layerId: null, domain: null, transport: null, error: null, loading: false });
+  const [probeState, setProbeState] = useState({ key: null, ok: null, service: null, format: null, error: null });
+  const [powerSourced, setPowerSourced] = useState(null);
+  const [capabilities, setCapabilities] = useState(null);
+  const [difference, setDifference] = useState(null);
+  const [differenceError, setDifferenceError] = useState(null);
+  const [differenceBusy, setDifferenceBusy] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [searchNotice, setSearchNotice] = useState(null);
+  const [searchBusy, setSearchBusy] = useState(false);
+  const [viewInfo, setViewInfo] = useState(null);
+  const [globeFallback, setGlobeFallback] = useState(null);
   const abortRef = useRef(null);
-  const tRef = useRef(t);
-  tRef.current = t;
 
-  const location = useMemo(
-    () => LOCATIONS.find((item) => item.key === locationKey) || LOCATIONS[0],
-    [locationKey]
+  const layer = useMemo(() => getGibsLayer(layerId) || getGibsLayer(DEFAULT_LAYER_ID), [layerId]);
+  const grouped = useMemo(() => layersByCategory(), []);
+  const visibleLayers = useMemo(() => (category === 'all' ? GIBS_LAYERS : grouped[category] || []), [category, grouped]);
+
+  /* ------------------------------ capabilities ---------------------------- */
+  useEffect(() => {
+    const controller = new AbortController();
+    fetchCapabilities(controller.signal)
+      .then((result) => setCapabilities(result))
+      .catch(() => setCapabilities(null));
+    return () => controller.abort();
+  }, []);
+
+  /* --------------------------- layer domain + probe ----------------------- */
+  const loadLayerState = useCallback(
+    async (targetLayer, { force = false } = {}) => {
+      abortRef.current?.abort();
+      const controller = new AbortController();
+      abortRef.current = controller;
+      setDomainState({ layerId: targetLayer.id, domain: null, transport: null, error: null, loading: true });
+
+      try {
+        const result = await fetchLayerDomain(targetLayer, { signal: controller.signal, force });
+        if (controller.signal.aborted) return;
+        setDomainState({
+          layerId: targetLayer.id,
+          domain: result.domain,
+          transport: result.transport,
+          error: result.error || null,
+          loading: false
+        });
+
+        const probeKey = `${targetLayer.id}:${date}`;
+        const probe = await probeLayer(targetLayer, date, { force });
+        if (controller.signal.aborted) return;
+        setProbeState({ key: probeKey, ok: probe.ok, service: probe.service, format: probe.format, error: probe.error || null });
+      } catch (error) {
+        if (error?.name === 'AbortError') return;
+        setDomainState({ layerId: targetLayer.id, domain: null, transport: 'error', error: error?.message || 'Layer metadata failed', loading: false });
+        setProbeState({ key: `${targetLayer.id}:${date}`, ok: null, service: null, format: null, error: error?.message || null });
+      }
+    },
+    [date]
   );
 
-  const loadData = useCallback(async () => {
-    abortRef.current?.abort();
-    const controller = new AbortController();
-    abortRef.current = controller;
+  useEffect(() => {
+    loadLayerState(layer);
+    return () => abortRef.current?.abort();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [layer.id]);
 
-    setLoading(true);
-    setError('');
+  /* ------------------------- move to latest available --------------------- */
+  const latestAvailable = useMemo(() => latestReportedDate(domainState.domain), [domainState.domain]);
+  const availability = useMemo(
+    () => (domainState.domain ? checkAvailability(domainState.domain, layer.id, date) : null),
+    [domainState.domain, layer.id, date]
+  );
+  const compareAvailability = useMemo(
+    () => (domainState.domain && compareDate ? checkAvailability(domainState.domain, layer.id, compareDate) : null),
+    [domainState.domain, layer.id, compareDate]
+  );
 
+  // First load (or a new layer): snap to the most recent reported day instead of "yesterday".
+  useEffect(() => {
+    if (!latestAvailable) return;
+    if (domainState.layerId !== layer.id) return;
+    setDate((current) => (current > latestAvailable ? latestAvailable : current));
+  }, [latestAvailable, domainState.layerId, layer.id]);
+
+  const blockedReason =
+    availability && availability.verdict === 'outside-domain'
+      ? availability.detail
+      : !isOnline
+        ? t('earthOffline')
+        : null;
+  const blocked = Boolean(blockedReason);
+
+  /* --------------------------- rendered comparison ------------------------ */
+  const computeDifference = useCallback(async () => {
+    if (!compareDate || !area.bounds) return;
+    setDifferenceBusy(true);
+    setDifferenceError(null);
     try {
-      const data = await fetchPowerMonthly(
-        location.lat,
-        location.lon,
-        controller.signal
-      );
-      setRows(data);
-    } catch (err) {
-      if (err?.name === 'AbortError') return;
-      setError(tRef.current('earthError'));
-      setRows([]);
-    } finally {
-      if (abortRef.current === controller) {
-        setLoading(false);
+      const outcome = await compareRenderedImagery(layer, date, compareDate, area.bounds, 256);
+      if (outcome.ok) setDifference(outcome.result);
+      else {
+        setDifference(null);
+        setDifferenceError(outcome.reason === 'cors' ? t('earthPixelCompareCors') : outcome.detail);
       }
+    } finally {
+      setDifferenceBusy(false);
     }
-  }, [location]);
+  }, [area.bounds, compareDate, date, layer, t]);
 
   useEffect(() => {
-    loadData();
-    return () => abortRef.current?.abort();
-  }, [loadData]);
+    setDifference(null);
+    setDifferenceError(null);
+  }, [layer.id, date, compareDate]);
 
-  /** Rows restricted to the selected time range */
-  const visibleRows = useMemo(() => {
-    const range = RANGE_OPTIONS.find((item) => item.key === rangeKey);
-    if (!range?.years) return rows;
-    const endYear = rows.length ? rows[rows.length - 1].year : new Date().getFullYear();
-    const minYear = endYear - range.years + 1;
-    return rows.filter((row) => row.year >= minYear);
-  }, [rows, rangeKey]);
+  /* -------------------------------- search -------------------------------- */
+  const runSearch = useCallback(
+    async (query) => {
+      const trimmed = (query || '').trim();
+      if (!trimmed) return;
+      setSearchBusy(true);
+      setSearchNotice(null);
+      try {
+        const outcome = await searchPlaces(trimmed);
+        setSearchResults(outcome.results);
+        setSearchNotice(outcome.notice || null);
+        if (!outcome.results.length) setSearchNotice(t('earthSearchNoResults'));
+      } catch (error) {
+        if (error?.name === 'AbortError') return;
+        setSearchNotice(t('earthSearchLocalOnly'));
+      } finally {
+        setSearchBusy(false);
+      }
+    },
+    [t]
+  );
 
-  const summary = useMemo(() => buildSummaries(visibleRows), [visibleRows]);
+  const applyPlace = useCallback((place) => {
+    setArea({
+      label: place.label,
+      latitude: place.latitude,
+      longitude: place.longitude,
+      bounds: place.bounds,
+      source: place.source
+    });
+    setSearchResults([]);
+    setSearchNotice(null);
+  }, []);
 
-  const unitTemp = '°C';
-  const unitRain = 'mm/day';
-  const unitRainTotal = 'mm';
+  /* --------------------------- analyst + report --------------------------- */
+  const context = useMemo(
+    () =>
+      buildAnalystContext({
+        area,
+        primaryDate: date,
+        compareDate,
+        layers: [{ layer, domain: domainState.domain, availability, probeOk: probeState.ok }],
+        power: powerSourced?.data || null,
+        powerProvenanceUrl: powerSourced?.provenance?.sourceUrl,
+        powerRetrievedAt: powerSourced?.provenance?.retrievedAt,
+        probeNotes: probeState.ok === false ? [`${layer.id} did not return a renderable image during the live probe.`] : [],
+        renderedDifference: difference
+          ? {
+              meanAbsoluteDifference: difference.meanAbsoluteDifference,
+              changedFraction: difference.changedFraction,
+              transparentFraction: difference.transparentFraction,
+              method: difference.method,
+              computedAt: difference.computedAt
+            }
+          : null
+      }),
+    [area, date, compareDate, layer, domainState.domain, availability, probeState.ok, powerSourced, difference]
+  );
 
-  const latest = visibleRows.length ? visibleRows[visibleRows.length - 1] : null;
-  const isEmpty = !loading && !error && (!visibleRows.length || (!summary.tempCount && !summary.rainCount));
+  const provenanceEntries = useMemo(() => {
+    const entries = [
+      {
+        key: `layer-${layer.id}`,
+        title: layer.title,
+        status: blocked ? 'unavailable' : domainState.transport === 'error' ? 'unavailable' : domainState.domain?.fromCache || domainState.transport === 'cache' ? 'cached' : 'live',
+        dataset: `${layer.id} (${layer.service.toUpperCase()}${layer.tileMatrixSet ? ` · ${layer.tileMatrixSet}` : ''})`,
+        provider: 'NASA EOSDIS Global Imagery Browse Services (GIBS)',
+        sourceUrl: domainState.domain?.sourceUrl || `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/1.0.0/${layer.id}/default/all/all.xml`,
+        observation: date,
+        retrievedAt: domainState.domain?.retrievedAt || new Date().toISOString(),
+        coverage: describeCoverage(domainState.domain) || 'not retrieved',
+        units: layer.unit,
+        resolution: layer.resolution,
+        transport: domainState.transport
+          ? t(
+              domainState.transport === 'server'
+                ? 'earthProvenanceTransportServer'
+                : domainState.transport === 'direct'
+                  ? 'earthProvenanceTransportDirect'
+                  : domainState.transport === 'cache'
+                    ? 'earthProvenanceTransportCache'
+                    : 'earthProvenanceTransportError'
+            )
+          : undefined,
+        note: blockedReason || probeState.error || undefined,
+        limitations: [layer.limitations, ...(availability ? [availability.detail] : [])]
+      }
+    ];
 
-  const periodLabel = visibleRows.length
-    ? t('earthSummaryPeriodValue', {
-        start: visibleRows[0].year,
-        end: visibleRows[visibleRows.length - 1].year,
-        months: visibleRows.length
-      })
-    : '—';
+    if (powerSourced?.data) {
+      const data = powerSourced.data;
+      entries.push({
+        key: 'power',
+        title: `${data.placeLabel} — NASA POWER monthly archive`,
+        status: powerSourced.status,
+        dataset: `POWER monthly: ${data.available.join(', ') || 'no parameters returned'}`,
+        provider: powerSourced.provenance.provider,
+        sourceUrl: powerSourced.provenance.sourceUrl,
+        observation: powerSourced.provenance.observationDate,
+        retrievedAt: powerSourced.provenance.retrievedAt,
+        coverage: `${data.startYear}–${data.endYear} · ${data.rows.length} monthly records`,
+        units: data.available.map((code) => `${code} (${data.stats[code]?.unit || '—'})`).join(', '),
+        resolution: powerSourced.provenance.resolution,
+        note: data.unavailable.length ? `${t('earthSeriesUnavailable')}: ${data.unavailable.join(', ')}` : undefined,
+        limitations: powerSourced.provenance.note ? [powerSourced.provenance.note] : undefined
+      });
+    }
 
-  const toggleSeries = (dataKey) => {
-    setHiddenSeries((prev) => ({ ...prev, [dataKey]: !prev[dataKey] }));
-  };
+    if (difference) {
+      entries.push({
+        key: 'difference',
+        title: t('earthPixelCompare'),
+        status: 'derived',
+        dataset: 'Rendered-pixel comparison (client-side, from GIBS WMS imagery)',
+        provider: 'Derived by NASA Space Explorer',
+        sourceUrl: difference.urlA,
+        observation: `${date} vs ${compareDate}`,
+        retrievedAt: difference.computedAt,
+        coverage: `${(difference.changedFraction * 100).toFixed(2)}% of rendered pixels changed by >12/255`,
+        resolution: '256 × 256 WMS rendering of the current bounding box',
+        limitations: [t('earthPixelCompareNote')]
+      });
+    }
 
-  const tooltipLabelFormatter = (label) => formatMonthLabel(label, activeLang);
+    return entries;
+  }, [layer, date, compareDate, domainState, blocked, blockedReason, probeState, availability, powerSourced, difference, t]);
 
-  const tempTooltipFormatter = (value, name) => {
-    if (value === null || value === undefined) return [t('earthNoDataShort'), name];
-    return [`${formatNumber(value, 1, activeLang)} ${unitTemp}`, name];
-  };
+  const report = useMemo(() => {
+    if (!provenanceEntries.length) return null;
+    const generatedAt = new Date().toISOString();
+    const markdown = buildMarkdownReport({
+      area,
+      primaryDate: date,
+      compareDate,
+      layers: [{ layer, domain: domainState.domain, availability, probeOk: probeState.ok }],
+      power: powerSourced?.data || null,
+      powerProvenanceUrl: powerSourced?.provenance?.sourceUrl,
+      powerRetrievedAt: powerSourced?.provenance?.retrievedAt,
+      renderedDifference: difference
+        ? {
+            meanAbsoluteDifference: difference.meanAbsoluteDifference,
+            changedFraction: difference.changedFraction,
+            transparentFraction: difference.transparentFraction,
+            method: difference.method,
+            computedAt: difference.computedAt
+          }
+        : null,
+      context,
+      generatedAt
+    });
+    const filenameBase = `earth-intelligence-${area.label.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}-${date}`;
+    return {
+      markdown,
+      json: JSON.stringify(
+        {
+          generatedAt,
+          area,
+          dates: [date, compareDate].filter(Boolean),
+          layer: {
+            id: layer.id,
+            title: layer.title,
+            service: layer.service,
+            tileMatrixSet: layer.tileMatrixSet || null,
+            units: layer.unit,
+            resolution: layer.resolution,
+            limitations: layer.limitations
+          },
+          availability,
+          domain: domainState.domain,
+          probe: probeState,
+          power: {
+            provenance: powerSourced?.provenance || null,
+            available: powerSourced?.data?.available || [],
+            unavailable: powerSourced?.data?.unavailable || [],
+            statistics: powerSourced?.data
+              ? powerSourced.data.available.map((code) => ({ code, ...powerSourced.data.stats[code] }))
+              : []
+          },
+          renderedDifference: difference,
+          dataGaps: context.dataGaps
+        },
+        null,
+        2
+      ),
+      csv: powerSourced?.data ? powerSeriesCsv(powerSourced.data) : null,
+      filenameBase
+    };
+  }, [provenanceEntries.length, area, date, compareDate, layer, domainState.domain, availability, probeState, powerSourced, difference, context]);
 
-  const rainTooltipFormatter = (value, name) => {
-    if (value === null || value === undefined) return [t('earthNoDataShort'), name];
-    return [`${formatNumber(value, 1, activeLang)} ${unitRain}`, name];
-  };
+  /* -------------------------- derived status lines ------------------------ */
+  const probeLabel = useMemo(() => {
+    if (probeState.ok === true) return t('earthLayerProbeOk');
+    if (probeState.ok === false) return t('earthLayerProbeFailed');
+    return t('earthVerifyingLayer');
+  }, [probeState.ok, t]);
+
+  const coordinatesValid = validateCoordinates(area.latitude, area.longitude);
 
   return (
-    <section className="space-y-4 sm:space-y-6 text-slate-100" aria-busy={loading}>
-      {/* ===== Intro / source briefing card ===== */}
-      <div className="rounded-2xl border border-lime-500/30 bg-gradient-to-br from-lime-950/50 via-slate-950 to-emerald-950/30 p-5 sm:p-6">
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="rounded-xl border border-lime-400/30 bg-lime-400/10 p-3">
-            <Leaf className="h-6 w-6 text-lime-300" />
+    <div className="space-y-4 text-slate-100 sm:space-y-5">
+      {/* ================= Intro / provenance briefing ================= */}
+      <Panel className="space-y-3 border-cyan-500/25 bg-gradient-to-br from-cyan-950/40 via-slate-950 to-emerald-950/25">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="flex items-start gap-3">
+            <div className="rounded-xl border border-cyan-400/30 bg-cyan-400/10 p-2.5">
+              <Globe2 className="h-5 w-5 text-cyan-300" />
+            </div>
+            <div className="min-w-0">
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-cyan-500/30 bg-cyan-500/10 px-2.5 py-0.5 font-mono text-[10px] font-semibold tracking-wide text-cyan-200">
+                <Radar className="h-3 w-3" />
+                {t('earthLabBadge')}
+              </span>
+              <p className="mt-2 max-w-3xl text-xs leading-relaxed text-slate-300 sm:text-sm">{t('earthLabIntro')}</p>
+            </div>
           </div>
-          <div className="min-w-0">
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-lime-500/30 bg-lime-500/10 px-2.5 py-1 font-mono text-[10px] font-semibold tracking-wide text-lime-300">
-              <Activity className="h-3 w-3" />
-              {t('earthSourceBadge')}
-            </span>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-300">
-              {t('earthIntro')}
-            </p>
+          <div className="flex flex-wrap items-center gap-2">
+            {capabilities ? (
+              <Pill tone={capabilities.serverReachable ? 'emerald' : 'slate'}>
+                {capabilities.serverReachable ? 'validated server proxy' : 'static mode · direct NASA services'}
+              </Pill>
+            ) : null}
+            {capabilities?.aiAnalyst ? <Pill tone="violet">AI analyst online</Pill> : null}
+            {capabilities && !capabilities.firmsHotspots ? <Pill tone="slate">FIRMS: no MAP_KEY</Pill> : null}
+            {!isOnline ? (
+              <Pill tone="amber">
+                <WifiOff className="h-3 w-3" /> offline
+              </Pill>
+            ) : null}
           </div>
         </div>
+
+        {isOptimizedModeActive && useGlobe ? (
+          <InfoNote tone="amber">{t('earthGlobeFallback')} ({hardwareReason})</InfoNote>
+        ) : null}
+      </Panel>
+
+      {/* ============================ Mode tabs ============================ */}
+      <div role="tablist" aria-label={t('earthModesLabel')} className="flex flex-wrap gap-2">
+        {MODES.map((item) => {
+          const Icon = item.icon;
+          const active = mode === item.key;
+          return (
+            <button
+              key={item.key}
+              role="tab"
+              aria-selected={active}
+              type="button"
+              onClick={() => setMode(item.key)}
+              className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-400 sm:text-sm ${
+                active
+                  ? 'border-cyan-400/70 bg-cyan-500/15 text-cyan-100 shadow-[0_0_18px_rgba(34,211,238,0.18)]'
+                  : 'border-slate-800 bg-slate-950/70 text-slate-300 hover:border-cyan-500/50 hover:text-white'
+              }`}
+            >
+              <Icon className="h-4 w-4" />
+              {t(item.labelKey)}
+            </button>
+          );
+        })}
       </div>
 
-      {/* ===== Location + range selectors ===== */}
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div className="rounded-xl border border-slate-800 bg-slate-950/80 p-4">
-          <span className="mb-2.5 flex items-center gap-2 text-sm text-slate-300">
-            <MapPin className="h-4 w-4 text-cyan-400" />
-            {t('earthLocationLabel')}
-          </span>
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3" role="group" aria-label={t('earthLocationLabel')}>
-            {LOCATIONS.map((item) => {
-              const isActive = item.key === locationKey;
-              return (
+      {/* ============================ Search bar ============================ */}
+      <Panel className="space-y-3">
+        <SectionHeading icon={Search} title={t('earthSearchLabel')} subtitle={t('earthSearchPlaceholder')} />
+        <form
+          className="flex flex-wrap items-center gap-2"
+          onSubmit={(event) => {
+            event.preventDefault();
+            runSearch(searchQuery);
+          }}
+        >
+          <label htmlFor="earth-place-search" className="sr-only">
+            {t('earthSearchLabel')}
+          </label>
+          <input
+            id="earth-place-search"
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            placeholder={t('earthSearchPlaceholder')}
+            className="min-w-[180px] flex-1 rounded-lg border border-slate-700 bg-slate-900/80 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-400"
+          />
+          <button
+            type="submit"
+            disabled={searchBusy}
+            className="flex items-center gap-2 rounded-lg border border-cyan-500/40 bg-cyan-500/10 px-3 py-2 text-sm text-cyan-100 transition hover:bg-cyan-500/20 disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-400"
+          >
+            {searchBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+            {searchBusy ? t('earthSearching') : t('earthSearchAction')}
+          </button>
+        </form>
+
+        <div className="flex flex-wrap gap-1.5">
+          {AREA_PRESETS.map((preset) => (
+            <button
+              key={preset.label}
+              type="button"
+              onClick={() => setArea({ ...preset, source: 'preset' })}
+              className="rounded-full border border-slate-700 bg-slate-900/70 px-2.5 py-1 text-[11px] text-slate-300 transition hover:border-cyan-500/50 hover:text-white"
+            >
+              {preset.label}
+            </button>
+          ))}
+        </div>
+
+        {searchNotice ? <InfoNote tone="amber">{searchNotice}</InfoNote> : null}
+
+        {searchResults.length ? (
+          <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            {searchResults.map((place) => (
+              <li key={`${place.label}-${place.latitude}-${place.longitude}`}>
                 <button
-                  key={item.key}
                   type="button"
-                  onClick={() => setLocationKey(item.key)}
-                  aria-pressed={isActive}
-                  className={`rounded-lg border px-3 py-2.5 text-sm font-medium transition-all cursor-pointer active:scale-[0.98] ${
-                    isActive
-                      ? 'border-lime-400/80 bg-lime-500/15 text-lime-200 shadow-[0_0_15px_rgba(132,204,22,0.2)]'
-                      : 'border-slate-700 bg-slate-900 text-slate-300 hover:border-cyan-500/50 hover:text-white'
+                  onClick={() => applyPlace(place)}
+                  className="w-full rounded-xl border border-slate-800 bg-slate-950/70 p-3 text-left transition hover:border-cyan-500/50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-400"
+                >
+                  <p className="text-sm text-white">{place.label}</p>
+                  <p className="mt-0.5 font-mono text-[10px] text-slate-500">
+                    {place.latitude.toFixed(3)}°, {place.longitude.toFixed(3)}°
+                  </p>
+                  <p className="mt-1 text-[10px] text-slate-500">{place.attribution}</p>
+                </button>
+              </li>
+            ))}
+          </ul>
+        ) : null}
+      </Panel>
+
+      {/* ============================ Overview mode ============================ */}
+      {mode === 'overview' ? (
+        <div className="space-y-4">
+          <Panel className="space-y-4">
+            <SectionHeading
+              icon={Layers}
+              title={t('earthLayerLabel')}
+              subtitle={`${visibleLayers.length} validated datasets · ${GIBS_ATTRIBUTION}`}
+              badge={
+                <div className="flex flex-wrap items-center gap-2">
+                  <StatusBadge status={domainState.loading ? 'cached' : blocked ? 'unavailable' : probeState.ok === false ? 'unavailable' : 'live'} />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const next = !useGlobe;
+                      if (next && isOptimizedModeActive) {
+                        setGlobeFallback('low-end');
+                        return;
+                      }
+                      setUseGlobe(next);
+                      setGlobeFallback(null);
+                    }}
+                    className="flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-900/70 px-2.5 py-1.5 text-[11px] text-slate-200 transition hover:border-cyan-500/50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-400"
+                    aria-pressed={useGlobe}
+                  >
+                    <Globe2 className="h-3.5 w-3.5" />
+                    {useGlobe ? t('earthMapToggle') : t('earthGlobeToggle')}
+                  </button>
+                </div>
+              }
+            />
+
+            <div className="flex flex-wrap gap-1.5">
+              {Object.entries(CATEGORY_LABELS).map(([key, labelKey]) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setCategory(key)}
+                  aria-pressed={category === key}
+                  className={`rounded-lg border px-2.5 py-1 text-[11px] transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-400 ${
+                    category === key
+                      ? 'border-lime-400/70 bg-lime-500/15 text-lime-100'
+                      : 'border-slate-700 bg-slate-900/70 text-slate-300 hover:border-lime-500/50 hover:text-white'
                   }`}
                 >
-                  {t(item.labelKey)}
-                  <span className="mt-0.5 block text-[10px] font-mono text-slate-500">
-                    {formatNumber(item.lat, 2, activeLang)}°, {formatNumber(item.lon, 2, activeLang)}°
-                  </span>
+                  {t(labelKey)}
                 </button>
-              );
-            })}
-          </div>
-        </div>
+              ))}
+            </div>
 
-        <div className="rounded-xl border border-slate-800 bg-slate-950/80 p-4">
-          <span className="mb-2.5 flex items-center gap-2 text-sm text-slate-300">
-            <Activity className="h-4 w-4 text-emerald-400" />
-            {t('earthTimeRange')}
-          </span>
-          <div className="flex flex-wrap items-center gap-2" role="group" aria-label={t('earthTimeRange')}>
-            {RANGE_OPTIONS.map((item) => {
-              const isActive = item.key === rangeKey;
-              return (
-                <button
-                  key={item.key}
-                  type="button"
-                  onClick={() => setRangeKey(item.key)}
-                  aria-pressed={isActive}
-                  className={`rounded-lg border px-3 py-2 text-sm transition-all cursor-pointer active:scale-[0.98] ${
-                    isActive
-                      ? 'border-cyan-400/80 bg-cyan-500/15 text-cyan-200'
-                      : 'border-slate-700 bg-slate-900 text-slate-300 hover:border-cyan-500/50 hover:text-white'
-                  }`}
+            <label className="block">
+              <span className="sr-only">{t('earthLayerLabel')}</span>
+              <div className="relative">
+                <select
+                  value={layerId}
+                  onChange={(event) => setLayerId(event.target.value)}
+                  className="w-full appearance-none rounded-lg border border-slate-700 bg-slate-900/80 px-3 py-2 pr-9 text-sm text-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-400"
                 >
-                  {t(item.labelKey)}
-                </button>
-              );
-            })}
-            <button
-              type="button"
-              onClick={loadData}
-              disabled={loading}
-              className="ml-auto flex items-center gap-2 rounded-lg border border-cyan-500/30 px-3 py-2 text-sm text-cyan-300 hover:bg-cyan-950/50 disabled:opacity-50 transition-all cursor-pointer active:scale-[0.98]"
-            >
-              <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-              {t('earthRefresh')}
-            </button>
-          </div>
-          <p className="mt-3 text-[11px] font-mono text-slate-500">
-            {t('earthCoordinates')}:{' '}
-            {formatNumber(location.lat, 4, activeLang)}°,{' '}
-            {formatNumber(location.lon, 4, activeLang)}°
-          </p>
-        </div>
-      </div>
-
-      {/* ===== Loading state ===== */}
-      {loading && (
-        <div
-          className="rounded-2xl border border-slate-800 bg-slate-950/80 p-10"
-          role="status"
-          aria-live="polite"
-        >
-          <div className="flex flex-col items-center gap-4">
-            <div className="relative h-12 w-12">
-              <div className="absolute inset-0 rounded-full border-2 border-cyan-500/20 border-t-cyan-400 animate-spin" />
-              <Leaf className="absolute inset-0 m-auto h-5 w-5 text-lime-300" />
-            </div>
-            <p className="text-sm text-slate-300">{t('earthLoading')}</p>
-            <p className="font-mono text-[10px] text-slate-600">
-              POWER / MONTHLY / {PARAMS.temp} + {PARAMS.rain}
-            </p>
-          </div>
-        </div>
-      )}
-
-      {/* ===== Error state ===== */}
-      {!loading && error && (
-        <div
-          className="rounded-2xl border border-amber-500/40 bg-amber-950/30 p-6"
-          role="alert"
-        >
-          <div className="flex flex-col items-center gap-3 text-center">
-            <AlertTriangle className="h-8 w-8 text-amber-300" />
-            <p className="text-sm text-amber-200">{error}</p>
-            <button
-              type="button"
-              onClick={loadData}
-              className="flex items-center gap-2 rounded-lg border border-amber-400/50 bg-amber-500/10 px-4 py-2 text-sm text-amber-200 hover:bg-amber-500/20 transition-all cursor-pointer active:scale-[0.98]"
-            >
-              <RefreshCw className="h-4 w-4" />
-              {t('earthRetry')}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* ===== Empty state ===== */}
-      {isEmpty && (
-        <div
-          className="rounded-2xl border border-slate-800 bg-slate-950/80 p-10 text-center"
-          role="status"
-        >
-          <CloudRain className="mx-auto h-8 w-8 text-slate-600" />
-          <p className="mt-3 text-sm text-slate-400">{t('earthNoData')}</p>
-        </div>
-      )}
-
-      {/* ===== Historical summary cards ===== */}
-      {!loading && !error && !isEmpty && (
-        <>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <StatCard
-              icon={Activity}
-              accentClass="border-cyan-500/20"
-              label={t('earthSummaryPeriod')}
-              value={periodLabel}
-              note={
-                latest
-                  ? `${t('earthSummaryLatest')}: ${formatMonthLabel(latest.date, activeLang)}`
-                  : null
-              }
-            />
-            <StatCard
-              icon={Thermometer}
-              accentClass="border-rose-500/20"
-              label={t('earthSummaryAvgTemp')}
-              value={formatNumber(summary.avgTemp, 1, activeLang)}
-              unit={unitTemp}
-              note={
-                summary.warmestMonth
-                  ? `${t('earthSummaryMaxTemp')}: ${formatNumber(summary.warmestMonth.temp, 1, activeLang)} ${unitTemp} (${formatMonthLabel(summary.warmestMonth.date, activeLang)})`
-                  : null
-              }
-            />
-            <StatCard
-              icon={CloudRain}
-              accentClass="border-sky-500/20"
-              label={t('earthSummaryAvgRain')}
-              value={formatNumber(summary.avgRain, 1, activeLang)}
-              unit={unitRain}
-              note={
-                summary.wettestMonth
-                  ? `${t('earthSummaryMaxRain')}: ${formatNumber(summary.wettestMonth.rain, 1, activeLang)} ${unitRain} (${formatMonthLabel(summary.wettestMonth.date, activeLang)})`
-                  : null
-              }
-            />
-            <StatCard
-              icon={Sun}
-              accentClass="border-amber-500/20"
-              label={t('earthSummaryTotalRain')}
-              value={formatNumber(summary.meanAnnualRainMm, 0, activeLang)}
-              unit={unitRainTotal}
-              note={
-                summary.warmestYear
-                  ? `${t('earthWarmestYear')}: ${summary.warmestYear.year} · ${t('earthWettestYear')}: ${summary.wettestYear ? summary.wettestYear.year : '—'}`
-                  : null
-              }
-            />
-          </div>
-
-          {/* ===== Interactive temperature chart ===== */}
-          <div className="rounded-2xl border border-slate-800 bg-slate-950/80 p-4 sm:p-6">
-            <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <h3 className="flex items-center gap-2 font-semibold text-white">
-                  <Thermometer className="h-4 w-4 text-rose-400" />
-                  {t('earthTemperatureChart')}
-                  <span className="rounded-full border border-rose-500/30 bg-rose-500/10 px-2 py-0.5 font-mono text-[10px] text-rose-300">
-                    {unitTemp}
-                  </span>
-                </h3>
-                <p className="mt-1 text-xs text-slate-500">
-                  {t('earthTemperatureChartSub')}
-                </p>
-              </div>
-            </div>
-
-            <div className="h-64 w-full sm:h-80" data-no-swipe>
-              <ResponsiveContainer width="100%" height="100%">
-                <ComposedChart data={visibleRows} margin={{ top: 8, right: 8, left: -10, bottom: 0 }}>
-                  <CartesianGrid stroke="#1e293b" strokeDasharray="3 3" />
-                  <XAxis
-                    dataKey="date"
-                    stroke="#64748b"
-                    tick={{ fontSize: 10 }}
-                    tickFormatter={(value) => formatMonthLabel(value, activeLang)}
-                    minTickGap={28}
-                  />
-                  <YAxis
-                    stroke="#64748b"
-                    tick={{ fontSize: 11 }}
-                    width={52}
-                    unit=""
-                  />
-                  <Tooltip
-                    contentStyle={{
-                      background: '#020817',
-                      border: '1px solid #334155',
-                      borderRadius: 12
-                    }}
-                    labelStyle={{ color: '#67e8f9' }}
-                    labelFormatter={tooltipLabelFormatter}
-                    formatter={tempTooltipFormatter}
-                  />
-                  <Legend
-                    wrapperStyle={{ fontSize: 11 }}
-                    onClick={(payload) => {
-                      if (payload?.dataKey) toggleSeries(payload.dataKey);
-                    }}
-                  />
-                  <ReferenceLine
-                    y={summary.avgTemp ?? undefined}
-                    stroke="#f43f5e"
-                    strokeDasharray="6 4"
-                    label={{
-                      value: t('earthAnnualMean'),
-                      fill: '#fda4af',
-                      fontSize: 10,
-                      position: 'insideTopRight'
-                    }}
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="temp"
-                    name={t('earthMonthlySeries')}
-                    stroke="#22d3ee"
-                    strokeWidth={2}
-                    fill="url(#tempGradient)"
-                    connectNulls={false}
-                    dot={false}
-                    activeDot={{ r: 4 }}
-                    hide={!!hiddenSeries.temp}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="yearTempMean"
-                    name={t('earthAnnualMean')}
-                    stroke="#f59e0b"
-                    strokeWidth={1.5}
-                    strokeDasharray="5 4"
-                    dot={false}
-                    connectNulls={false}
-                    hide={!!hiddenSeries.yearTempMean}
-                  />
-                  <Brush
-                    dataKey="date"
-                    height={22}
-                    stroke="#22d3ee"
-                    fill="#0f172a"
-                    travellerWidth={8}
-                    tickFormatter={(value) => formatMonthLabel(value, activeLang)}
-                  />
-                  <defs>
-                    <linearGradient id="tempGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#22d3ee" stopOpacity={0.35} />
-                      <stop offset="95%" stopColor="#22d3ee" stopOpacity={0.02} />
-                    </linearGradient>
-                  </defs>
-                </ComposedChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-
-          {/* ===== Interactive rainfall chart ===== */}
-          <div className="rounded-2xl border border-slate-800 bg-slate-950/80 p-4 sm:p-6">
-            <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <h3 className="flex items-center gap-2 font-semibold text-white">
-                  <CloudRain className="h-4 w-4 text-sky-400" />
-                  {t('earthRainfallChart')}
-                  <span className="rounded-full border border-sky-500/30 bg-sky-500/10 px-2 py-0.5 font-mono text-[10px] text-sky-300">
-                    {unitRain}
-                  </span>
-                </h3>
-                <p className="mt-1 text-xs text-slate-500">
-                  {t('earthRainfallChartSub')}
-                </p>
-              </div>
-            </div>
-
-            <div className="h-64 w-full sm:h-80" data-no-swipe>
-              <ResponsiveContainer width="100%" height="100%">
-                <ComposedChart data={visibleRows} margin={{ top: 8, right: 8, left: -10, bottom: 0 }}>
-                  <CartesianGrid stroke="#1e293b" strokeDasharray="3 3" />
-                  <XAxis
-                    dataKey="date"
-                    stroke="#64748b"
-                    tick={{ fontSize: 10 }}
-                    tickFormatter={(value) => formatMonthLabel(value, activeLang)}
-                    minTickGap={28}
-                  />
-                  <YAxis
-                    stroke="#64748b"
-                    tick={{ fontSize: 11 }}
-                    width={52}
-                  />
-                  <Tooltip
-                    contentStyle={{
-                      background: '#020817',
-                      border: '1px solid #334155',
-                      borderRadius: 12
-                    }}
-                    labelStyle={{ color: '#7dd3fc' }}
-                    labelFormatter={tooltipLabelFormatter}
-                    formatter={rainTooltipFormatter}
-                  />
-                  <Legend
-                    wrapperStyle={{ fontSize: 11 }}
-                    onClick={(payload) => {
-                      if (payload?.dataKey) toggleSeries(payload.dataKey);
-                    }}
-                  />
-                  <ReferenceLine
-                    y={summary.avgRain ?? undefined}
-                    stroke="#38bdf8"
-                    strokeDasharray="6 4"
-                    label={{
-                      value: t('earthAnnualMean'),
-                      fill: '#7dd3fc',
-                      fontSize: 10,
-                      position: 'insideTopRight'
-                    }}
-                  />
-                  <Bar
-                    dataKey="rain"
-                    name={t('earthMonthlySeries')}
-                    fill="#0ea5e9"
-                    radius={[3, 3, 0, 0]}
-                    maxBarSize={14}
-                    hide={!!hiddenSeries.rain}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="yearRainMean"
-                    name={t('earthAnnualMean')}
-                    stroke="#f59e0b"
-                    strokeWidth={1.5}
-                    strokeDasharray="5 4"
-                    dot={false}
-                    connectNulls={false}
-                    hide={!!hiddenSeries.yearRainMean}
-                  />
-                  <Brush
-                    dataKey="date"
-                    height={22}
-                    stroke="#0ea5e9"
-                    fill="#0f172a"
-                    travellerWidth={8}
-                    tickFormatter={(value) => formatMonthLabel(value, activeLang)}
-                  />
-                </ComposedChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-
-          {/* ===== Yearly averages table ===== */}
-          <div className="rounded-2xl border border-slate-800 bg-slate-950/80 p-4 sm:p-6">
-            <h3 className="flex items-center gap-2 font-semibold text-white">
-              <Activity className="h-4 w-4 text-emerald-400" />
-              {t('earthYearlyTableHeading')}
-            </h3>
-            <div className="mt-4 overflow-x-auto">
-              <table className="w-full min-w-[520px] text-left text-sm">
-                <thead>
-                  <tr className="border-b border-slate-800 text-xs text-slate-400">
-                    <th className="px-3 py-2 font-medium">{t('earthTableYear')}</th>
-                    <th className="px-3 py-2 font-medium">{t('earthTableAvgTemp')}</th>
-                    <th className="px-3 py-2 font-medium">{t('earthTableAvgRain')}</th>
-                    <th className="px-3 py-2 font-medium">{t('earthTableTotalRain')}</th>
-                    <th className="px-3 py-2 font-medium">{t('earthTableMonths')}</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-800/70">
-                  {summary.yearly.map((entry) => (
-                    <tr key={entry.year} className="text-slate-300">
-                      <td className="px-3 py-2 font-mono text-xs text-cyan-300">
-                        {entry.year}
-                      </td>
-                      <td className="px-3 py-2">
-                        {formatNumber(entry.avgTemp, 1, activeLang)} {unitTemp}
-                      </td>
-                      <td className="px-3 py-2">
-                        {formatNumber(entry.avgRain, 1, activeLang)} {unitRain}
-                      </td>
-                      <td className="px-3 py-2">
-                        {formatNumber(entry.totalRainMm, 0, activeLang)} {unitRainTotal}
-                      </td>
-                      <td className="px-3 py-2 text-xs text-slate-500">
-                        {entry.months}
-                        {!entry.complete ? ' *' : ''}
-                      </td>
-                    </tr>
+                  {visibleLayers.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.title} — {item.id}
+                    </option>
                   ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
+                </select>
+                <ChevronDown className="pointer-events-none absolute top-1/2 right-3 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              </div>
+            </label>
 
-          {/* ===== Units & source disclaimer ===== */}
-          <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4 sm:p-5 space-y-2">
-            <p className="text-xs leading-5 text-slate-400">
-              <span className="font-semibold text-slate-300">{t('earthUnitsNote')}</span>
-            </p>
-            <p className="text-xs leading-5 text-slate-500">{t('earthDisclaimer')}</p>
-          </div>
-        </>
-      )}
-    </section>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <label className="flex flex-col gap-1 text-[11px] text-slate-400">
+                <span className="flex items-center gap-1.5">
+                  <Calendar className="h-3.5 w-3.5 text-cyan-400" />
+                  {t('earthObservationDate')}
+                </span>
+                <input
+                  type="date"
+                  value={date}
+                  max={toIsoDate(new Date())}
+                  onChange={(event) => setDate(event.target.value)}
+                  className="rounded-lg border border-slate-700 bg-slate-900/80 px-2.5 py-2 text-sm text-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-400"
+                />
+              </label>
+              <label className="flex flex-col gap-1 text-[11px] text-slate-400">
+                <span>{t('earthComparisonDate')}</span>
+                <input
+                  type="date"
+                  value={compareDate || ''}
+                  max={toIsoDate(new Date())}
+                  onChange={(event) => {
+                    const next = event.target.value || null;
+                    setCompareDate(next);
+                    if (next && viewMode === 'single') setViewMode('side');
+                  }}
+                  className="rounded-lg border border-slate-700 bg-slate-900/80 px-2.5 py-2 text-sm text-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-400"
+                />
+              </label>
+              <div className="flex flex-col gap-1 text-[11px] text-slate-400">
+                <span>{t('earthViewMode')}</span>
+                <div className="flex gap-1">
+                  {[
+                    { key: 'single', label: t('earthViewSingle') },
+                    { key: 'side', label: t('earthViewSideBySide') },
+                    { key: 'swipe', label: t('earthSwipeHint') && t('earthViewSwipe') }
+                  ].map((option) => (
+                    <button
+                      key={option.key}
+                      type="button"
+                      onClick={() => setViewMode(option.key)}
+                      aria-pressed={viewMode === option.key}
+                      disabled={option.key !== 'single' && !compareDate}
+                      className={`flex-1 rounded-lg border px-2 py-2 text-[11px] transition disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-400 ${
+                        viewMode === option.key
+                          ? 'border-cyan-400/70 bg-cyan-500/15 text-cyan-100'
+                          : 'border-slate-700 bg-slate-900/70 text-slate-300 hover:border-cyan-500/50'
+                      }`}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <label className="flex flex-col gap-1 text-[11px] text-slate-400">
+                <span>
+                  {t('earthLayerOpacity')} · {Math.round(opacity * 100)}%
+                </span>
+                <input
+                  type="range"
+                  min={0.2}
+                  max={1}
+                  step={0.05}
+                  value={opacity}
+                  onChange={(event) => setOpacity(Number(event.target.value))}
+                  className="mt-2 accent-cyan-400"
+                />
+              </label>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
+              <Pill tone="cyan">
+                <MapPin className="h-3 w-3" /> {area.label}
+              </Pill>
+              <span className="font-mono">
+                {coordinatesValid ? `${area.latitude.toFixed(4)}°, ${area.longitude.toFixed(4)}°` : 'invalid coordinates'}
+              </span>
+              {latestAvailable ? (
+                <button
+                  type="button"
+                  onClick={() => setDate(latestAvailable)}
+                  className="rounded-full border border-slate-700 bg-slate-900/70 px-2.5 py-1 text-[11px] text-slate-300 transition hover:border-cyan-500/50 hover:text-white"
+                >
+                  {t('earthLatestAvailable')}: {latestAvailable}
+                </button>
+              ) : null}
+              <span className={`rounded-full border px-2.5 py-1 ${probeState.ok === false ? 'border-amber-500/40 text-amber-200' : 'border-slate-700 text-slate-300'}`}>
+                {probeLabel}
+              </span>
+            </div>
+
+            {availability ? (
+              <InfoNote tone={availability.verdict === 'available' ? 'cyan' : 'amber'}>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span>{availability.detail}</span>
+                  {availability.verdict === 'outside-domain' && availability.nearestDate ? (
+                    <button
+                      type="button"
+                      onClick={() => setDate(availability.nearestDate)}
+                      className="rounded-full border border-amber-400/50 bg-amber-500/10 px-2.5 py-0.5 text-[11px] text-amber-100 transition hover:bg-amber-500/20"
+                    >
+                      {t('earthJumpToNearest', { date: availability.nearestDate })}
+                    </button>
+                  ) : null}
+                </div>
+              </InfoNote>
+            ) : domainState.loading ? (
+              <InfoNote>{t('earthVerifyingLayer')}</InfoNote>
+            ) : (
+              <InfoNote tone="amber">{t('earthDateUnverified')}</InfoNote>
+            )}
+          </Panel>
+
+          <Panel className="space-y-3">
+            <Suspense fallback={<LoadingBlock label={t('earthVerifyingLayer')} detail="leaflet · GIBS WMTS" />}>
+              {useGlobe ? (
+                <Globe3D
+                  layer={layer}
+                  date={date}
+                  reducedMotion={reducedMotion}
+                  center={{ latitude: area.latitude, longitude: area.longitude }}
+                  quality={isOptimizedModeActive ? 'low' : 'high'}
+                  onFallback={(reason) => {
+                    setGlobeFallback(reason);
+                    setUseGlobe(false);
+                  }}
+                />
+              ) : (
+                <ImageryMap
+                  area={area}
+                  layer={layer}
+                  date={blocked ? null : date}
+                  compareDate={compareDate}
+                  mode={viewMode}
+                  opacity={opacity}
+                  reducedMotion={reducedMotion}
+                  verifiedService={probeState.ok ? probeState.service : null}
+                  verifiedFormat={probeState.ok ? probeState.format : null}
+                  blocked={blocked ? { reason: blockedReason } : null}
+                  onViewChange={setViewInfo}
+                  labels={{
+                    zoomIn: 'Zoom in',
+                    zoomOut: 'Zoom out',
+                    reset: t('earthResetView'),
+                    swipeHint: t('earthSwipeHint'),
+                    primary: t('earthObservationDate'),
+                    comparison: t('earthComparisonDate'),
+                    attribution: t('earthImageryAttribution')
+                  }}
+                />
+              )}
+            </Suspense>
+
+            {globeFallback === 'texture' ? <InfoNote tone="amber">{t('earthGlobeFallback')}</InfoNote> : null}
+
+            <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
+              <span className="font-mono text-cyan-300/80">{layer.id}</span>
+              <span>
+                {t('earthProvenanceCoverage')}: {describeCoverage(domainState.domain) || '—'}
+              </span>
+              {viewInfo ? (
+                <span className="font-mono">
+                  z{viewInfo.zoom} · {viewInfo.center[0].toFixed(2)}°, {viewInfo.center[1].toFixed(2)}°
+                </span>
+              ) : null}
+            </div>
+            <p className="text-[11px] text-slate-500">{GIBS_ATTRIBUTION}</p>
+            <p className="text-[11px] text-slate-500">{t('earthMapKeyboardHint')}</p>
+          </Panel>
+
+          {compareDate && area.bounds ? (
+            <Panel className="space-y-3">
+              <SectionHeading
+                icon={Activity}
+                title={t('earthPixelCompare')}
+                subtitle={t('earthPixelCompareNote')}
+                badge={difference ? <StatusBadge status="derived" /> : undefined}
+              />
+              <button
+                type="button"
+                onClick={computeDifference}
+                disabled={differenceBusy}
+                className="flex items-center gap-2 rounded-lg border border-violet-500/40 bg-violet-500/10 px-3 py-2 text-xs text-violet-100 transition hover:bg-violet-500/20 disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet-300"
+              >
+                {differenceBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Activity className="h-3.5 w-3.5" />}
+                {t('earthPixelCompare')} · {date} ↔ {compareDate}
+              </button>
+              {difference ? (
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <div className="rounded-xl border border-violet-500/30 bg-violet-950/10 p-3">
+                    <p className="text-[11px] text-slate-400">{t('earthPixelCompareMean')}</p>
+                    <p className="text-lg font-bold text-white">{difference.meanAbsoluteDifference}</p>
+                  </div>
+                  <div className="rounded-xl border border-violet-500/30 bg-violet-950/10 p-3">
+                    <p className="text-[11px] text-slate-400">{t('earthPixelCompareChanged')}</p>
+                    <p className="text-lg font-bold text-white">{(difference.changedFraction * 100).toFixed(2)}%</p>
+                  </div>
+                  <div className="rounded-xl border border-violet-500/30 bg-violet-950/10 p-3">
+                    <p className="text-[11px] text-slate-400">{t('earthPixelCompareTransparent')}</p>
+                    <p className="text-lg font-bold text-white">{(difference.transparentFraction * 100).toFixed(2)}%</p>
+                  </div>
+                </div>
+              ) : null}
+              {differenceError ? (
+                <InfoNote tone="amber">{t('earthPixelCompareUnavailable', { reason: differenceError })}</InfoNote>
+              ) : null}
+              {compareAvailability && compareAvailability.verdict !== 'available' ? (
+                <InfoNote tone="amber">
+                  {compareAvailability.detail}
+                  {compareAvailability.nearestDate ? (
+                    <button
+                      type="button"
+                      onClick={() => setCompareDate(compareAvailability.nearestDate)}
+                      className="ml-2 rounded-full border border-amber-400/50 bg-amber-500/10 px-2.5 py-0.5 text-[11px] text-amber-100"
+                    >
+                      {t('earthJumpToNearest', { date: compareAvailability.nearestDate })}
+                    </button>
+                  ) : null}
+                </InfoNote>
+              ) : null}
+            </Panel>
+          ) : null}
+
+          <Panel>
+            <SectionHeading icon={Layers} title={t('earthDatasetDescription')} subtitle={layer.summary} />
+            <div className="mt-3 grid gap-3 lg:grid-cols-2">
+              <div className="space-y-1.5 text-xs text-slate-300">
+                <p>
+                  <span className="text-slate-500">{t('earthPlatformLabel')}: </span>
+                  {layer.platform} · {layer.instrument}
+                </p>
+                <p>
+                  <span className="text-slate-500">{t('earthParameterLabel')}: </span>
+                  {layer.parameter}
+                </p>
+                <p>
+                  <span className="text-slate-500">{t('earthProvenanceUnits')}: </span>
+                  {layer.unit}
+                </p>
+                <p>
+                  <span className="text-slate-500">{t('earthResolutionLabel')}: </span>
+                  {layer.resolution}
+                </p>
+                <p>
+                  <span className="text-slate-500">{t('earthPeriodLabel')}: </span>
+                  {layer.period}
+                </p>
+                <p>
+                  <span className="text-slate-500">{t('earthVerificationLabel')}: </span>
+                  {layer.verification === 'describe-domains' ? t('earthVerificationDescribeDomains') : t('earthVerificationCatalog')} ·{' '}
+                  {t('earthVerifiedOn', { date: layer.verifiedOn })}
+                </p>
+              </div>
+              <div className="space-y-3">
+                <div>
+                  <p className="text-[11px] uppercase tracking-wide text-slate-500">{t('earthDatasetAppropriateFor')}</p>
+                  <ul className="mt-1 space-y-1 text-xs text-slate-300">
+                    {layer.appropriateFor.map((item) => (
+                      <li key={item} className="flex gap-2">
+                        <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-emerald-400" />
+                        <span>{item}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+                <div className="rounded-xl border border-amber-500/25 bg-amber-950/10 p-3">
+                  <p className="text-[11px] uppercase tracking-wide text-amber-300/80">{t('earthDatasetLimitations')}</p>
+                  <p className="mt-1 text-xs leading-relaxed text-amber-100">{layer.limitations}</p>
+                </div>
+              </div>
+            </div>
+          </Panel>
+        </div>
+      ) : null}
+
+      {/* ============================ Trend Detective ============================ */}
+      {mode === 'trends' ? (
+        <TrendDetective
+          area={{ ...area, source: area.source === 'preset' ? 'preset' : 'gazetteer' }}
+          onAreaChange={(next) => setArea({ ...next, source: 'custom' })}
+          onPowerResolved={(sourced) => setPowerSourced(sourced)}
+          reducedMotion={reducedMotion}
+        />
+      ) : null}
+
+      {/* ============================ Sri Lanka Watch ============================ */}
+      {mode === 'srilanka' ? (
+        <div className="space-y-4">
+          <SriLankaWatch
+            area={area}
+            layer={layer}
+            date={date}
+            compareDate={compareDate}
+            onSelectArea={(next) => {
+              setArea(next);
+              setMode('overview');
+            }}
+            onSelectLayer={(id) => {
+              setLayerId(id);
+              setMode('overview');
+            }}
+            onSetDate={(next, which) => {
+              if (which === 'compare') {
+                setCompareDate(next);
+                setViewMode('side');
+              } else setDate(next);
+            }}
+          />
+          <Panel>
+            <SectionHeading icon={Satellite} title={t('earthStatisticalSummary')} subtitle={t('earthTrendCaveat')} />
+            <div className="mt-3">
+              <button
+                type="button"
+                onClick={() => setMode('trends')}
+                className="rounded-lg border border-cyan-500/40 bg-cyan-500/10 px-3 py-2 text-xs text-cyan-100 transition hover:bg-cyan-500/20"
+              >
+                {t('earthModeTrends')} →
+              </button>
+            </div>
+          </Panel>
+        </div>
+      ) : null}
+
+      {/* ============================ AI Analyst ============================ */}
+      {mode === 'analyst' ? <AnalystPanel context={context} lang={lang} aiCapable={Boolean(capabilities?.aiAnalyst)} /> : null}
+
+      {/* ============================ Provenance ============================ */}
+      <ProvenancePanel entries={provenanceEntries} report={report} />
+
+      {!isOnline ? <InfoNote tone="amber">{t('earthOffline')}</InfoNote> : null}
+      {reducedMotion ? <p className="text-[11px] text-slate-500">{t('earthReducedMotion')}</p> : null}
+    </div>
   );
 }

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, lazy, Suspense } from 'react';
 import { useTranslation } from 'react-i18next';
 import { motion, AnimatePresence } from 'framer-motion';
 import { SupportedLanguage } from './i18n/translations';
@@ -20,7 +20,9 @@ import IssTracker2D from './components/IssTracker2D.jsx';
 import AsteroidRadar from './components/AsteroidRadar.jsx';
 import EPICViewer from './components/EPICViewer.jsx';
 import ExoplanetLab from './components/ExoplanetLab.jsx';
-import EarthIntelligenceLab from './components/EarthIntelligenceLab.jsx';
+// Earth Intelligence Lab pulls in Leaflet, three.js (globe) and recharts — load it
+// lazily so the rest of the site is unaffected while it is off-screen.
+const EarthIntelligenceLab = lazy(() => import('./components/EarthIntelligenceLab.jsx'));
 import FloatingVoiceControl from './components/FloatingVoiceControl.jsx';
 import SolarWeather from './components/SolarWeather.jsx';
 import SpaceQuizModule from './components/SpaceQuizModule.jsx';
@@ -1045,7 +1047,16 @@ export default function App() {
                     </p>
                   </div>
 
-                  <EarthIntelligenceLab lang={lang} />
+                  <Suspense
+                    fallback={
+                      <div className="rounded-2xl border border-slate-800 bg-slate-950/80 p-10 text-center" role="status" aria-live="polite">
+                        <p className="text-sm text-slate-300">{t('earthLoadingSeries')}</p>
+                        <p className="mt-2 font-mono text-[10px] text-slate-600">GIBS · POWER · Leaflet (lazy chunk)</p>
+                      </div>
+                    }
+                  >
+                    <EarthIntelligenceLab lang={lang} />
+                  </Suspense>
                 </section>
               </AtmosphericEntryTransition>
             )}

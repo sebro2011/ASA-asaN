@@ -1,5 +1,6 @@
 import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
+import { earthIntelligenceTranslations } from './i18n/earthIntelligence';
 
 export const resources = {
   en: {
@@ -405,6 +406,18 @@ export const resources = {
     },
   },
 };
+
+// ---------------------------------------------------------------------------
+// Earth Intelligence Lab keys (src/i18n/earthIntelligence.ts) are merged into
+// the existing trilingual resources so the Lab stays translatable without
+// touching the rest of the site's dictionaries.
+// ---------------------------------------------------------------------------
+(['en', 'si', 'ta'] as const).forEach((lang) => {
+  const bucket = (resources as any)?.[lang]?.translation;
+  if (bucket) {
+    Object.assign(bucket, earthIntelligenceTranslations[lang]);
+  }
+});
 
 // Initialize i18next
 i18n
