@@ -181,3 +181,43 @@ failing → 2D map with the reason shown.
   that returns the plain-text MapServer error, versus an image for a valid layer).
 * **Not verifiable from the agent sandbox:** the rendered WebGL pixels — the
   visual result has to be judged in a browser (the dev preview is the check).
+
+
+---
+
+## Addendum B — Live validation and hosting behaviour (2026-10-11)
+
+The PR deploy preview (`deploy-preview-2--nasaspacexplorer.netlify.app`) passed its
+build check, which also provided a public path to the real services, because the
+build sandbox has no egress to NASA hosts.
+
+**NASA POWER — end-to-end against live data.** A real 2023–2024 monthly request for
+Colombo (6.9271, 79.8612) was parsed with the branch's own
+`parsePowerResponse` / `buildSeriesStats`:
+
+| Check | Result |
+| --- | --- |
+| Monthly rows | 24 (month 13, POWER's annual aggregate, correctly excluded) |
+| Availability | `T2M`, `PRECTOTCORR` returned; `WS2M` requested but not returned → reported unavailable |
+| Elevation | `geometry.coordinates[2]` = 123.66 m |
+| Units | from the provider payload — `C`, `mm/day` |
+| 2023 annual T2M | recomputed 26.63 °C vs POWER `202313` 26.63 ✓ |
+| 2023 annual PRECTOTCORR | recomputed 8.11 mm/day vs POWER `202313` 8.11 ✓ |
+
+The annual cross-check matters: it validates the month-13 handling and the mean
+logic against the provider's own aggregate rather than against our own arithmetic.
+
+**GIBS.** The 4096 × 2048 `GetMap` is accepted (invalid-LAYER control returns the
+plain-text MapServer error; a valid layer returns an image). All 17 catalog layer
+identifiers and their observation-date coverage were read from `DescribeDomains`.
+
+**Hosting behaviour.** `/api/earth/health` returns 404 on the Netlify deploy
+preview: Netlify serves the static build only and `server.ts` does not run there.
+This is a supported configuration — the client fallback chain (direct GIBS, direct
+POWER, deterministic local analyst) handles it, and FIRMS counts remain
+"unavailable" because no key reaches the client. Running the server-side features
+in production needs either a Node host or a thin Netlify Functions adapter over the
+existing router.
+
+**Still not verified by an automated agent:** the rendered imagery and globe
+pixels (needs a browser), and FIRMS counts (needs `FIRMS_MAP_KEY`).
