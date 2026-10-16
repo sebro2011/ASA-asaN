@@ -7,6 +7,7 @@ import WebSocket, { WebSocketServer } from 'ws';
 import { GoogleGenAI, Type } from '@google/genai';
 import { generateLocalSpaceResponse } from './src/utils/spaceLocalAiEngine.js';
 import { earthRouter } from './server/earthIntelligence.js';
+import { handleNovaChatRequest } from './server/novaChat.js';
 
 dotenv.config();
 
@@ -1959,6 +1960,26 @@ const handleNasaAiEndpoint = async (req: express.Request, res: express.Response)
     suggestions: localResult.suggestions
   });
 };
+
+// Additive local/Express adapter for the same isolated Vercel Nova chat handler.
+app.post('/api/nova/chat', async (req, res) => {
+  try {
+    const response = await handleNovaChatRequest({
+      body: req.body,
+      ip: req.ip || req.socket.remoteAddress || 'unknown',
+      contentLength: req.headers['content-length'],
+    });
+    for (const [name, value] of Object.entries(response.headers)) {
+      res.setHeader(name, value);
+    }
+    return res.status(response.status).json(response.body);
+  } catch {
+    return res.status(500).json({
+      error: 'NOVA could not process this request. Please retry.',
+      code: 'INTERNAL_ERROR',
+    });
+  }
+});
 
 app.post('/api/nasa-ai', handleNasaAiEndpoint);
 app.post('/api/openrouter/chat', handleNasaAiEndpoint);

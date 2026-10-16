@@ -41,7 +41,7 @@ import {
   ExternalLink,
   CornerDownLeft
 } from 'lucide-react';
-import { askNasaAi } from '@/lib/nasaApi';
+import { askNovaAi } from '@/lib/nasaApi';
 import GeminiLiveVoice from './GeminiLiveVoice.jsx';
 
 const STORAGE_KEY = 'nasa_ai_chat_thread_v3';
@@ -388,16 +388,77 @@ function resolveLocalFallbackQuery(query, lang = 'en') {
     if (lang === 'ta') {
       return '🛰️ ISS தகவல்: சர்வதேச விண்வெளி நிலையம் மணிக்கு 27,580 கி.மீ வேகத்தில் பூமியில் இருந்து சுமார் 420 கி.மீ உயரத்தில் சுற்றிவருகிறது. ஒவ்வொரு 92.7 நிமிடங்களுக்கும் ஒருமுறை பூமியை வலம் வருகிறது.';
     }
-    return '🛰️ ISS Telemetry: The International Space Station orbits at ~27,580 km/h (17,137 mph) at ~420 km altitude, completing an entire Earth orbit every 92.68 minutes.';
+    return '🛰️ ISS orbital facts: The International Space Station orbits at ~27,580 km/h (17,137 mph) at ~420 km altitude, completing an entire Earth orbit every 92.68 minutes.';
   }
 
   if (lang === 'si') {
-    return `🛰️ නාසා තාරකා භෞතික විද්‍යා දත්ත පද්ධතිය ("${query}"): නාසා දත්ත පද්ධතිය මඟින් සනාථ කරන්නේ සෞරග්‍රහ මණ්ඩල ගවේෂණ, ආටෙමිස් චන්ද්‍ර මෙහෙයුම් සහ ගැඹුරු විශ්වයේ තාරකා භෞතික විද්‍යා පරීක්ෂණ සාර්ථකව ක්‍රියාත්මක වන බවයි.`;
+    return `🛰️ නොබැඳි සටහන (“${query}”): අන්තර්ජාලය නොමැති විට OpenRouter හෝ සජීවී NASA දත්ත වෙත පිවිසිය නොහැක. මෙම දේශීය ආදර්ශ ප්‍රතිචාරය නවතම ටෙලිමෙට්‍රි වාර්තාවක් නොවේ; නැවත සම්බන්ධ වී Retry කරන්න.`;
   }
   if (lang === 'ta') {
-    return `🛰️ நாசா நுண்ணறிவு தகவல் ("${query}"): நாசாவின் அதிகாரப்பூர்வ தரவுகளின்படி ஆர்ட்டெமிஸ் நிலவுத் திட்டம், செவ்வாய் ஆய்வு மற்றும் விண்மீன் ஆய்வுகள் வெற்றிகரமாக நடைபெற்று வருகின்றன.`;
+    return `🛰️ இணையமில்லா குறிப்பு (“${query}”): இணைய இணைப்பு இல்லாதபோது OpenRouter அல்லது நேரடி NASA தரவை அணுக முடியாது. இந்த உள்ளூர் மாதிரி பதில் தற்போதைய தொலைநிலை அளவீட்டு அறிக்கை அல்ல; மீண்டும் இணைந்து Retry செய்யவும்.`;
   }
-  return `🛰️ NASA Astrophysics Intelligence for "${query}": Telemetry confirms operational readiness across LEO (ISS), Cislunar space (Artemis), Mars astrobiology (Perseverance), and deep-space cosmology (JWST).`;
+  return `🛰️ Offline note for "${query}": OpenRouter and live NASA data are unavailable without an internet connection. This saved local demo response is not a current telemetry report; reconnect and retry for an AI answer.`;
+}
+
+function getNovaErrorMessage(error, lang = 'en') {
+  const language = typeof lang === 'string' ? lang.split(/[-_]/)[0].toLowerCase() : 'en';
+  const code = typeof error?.code === 'string' ? error.code : '';
+  const messages = {
+    en: {
+      AI_NOT_CONFIGURED: 'NOVA AI is not configured on this deployment. Please contact the site administrator.',
+      RATE_LIMITED: 'Too many NOVA requests were sent. Please wait a moment and retry.',
+      UPSTREAM_RATE_LIMITED: 'OpenRouter free models are busy or rate-limited. Please wait a moment and retry.',
+      FREE_MODEL_UNAVAILABLE: 'No free model is available for this request right now. Please retry shortly.',
+      AI_TIMEOUT: 'NOVA took too long to respond. Please retry.',
+      NETWORK_ERROR: 'Could not reach NOVA. Check your connection and retry.',
+      UPSTREAM_NETWORK_ERROR: 'Could not reach the AI provider. Check your connection and retry.',
+      PROVIDER_UNAVAILABLE: 'The AI provider is temporarily unavailable. Please retry shortly.',
+      PROVIDER_AUTH_ERROR: 'The AI provider could not process this request. Please try again later.',
+      INVALID_REQUEST: 'That message could not be sent. Please check it and try again.',
+      REQUEST_TOO_LARGE: 'That request is too long. Shorten it and try again.',
+      MESSAGE_TOO_LARGE: 'That message is too long. Shorten it and try again.',
+      HISTORY_TOO_LARGE: 'The conversation is too long to send. Start a new chat or shorten your message.',
+      HISTORY_TOO_LONG: 'The conversation history is too long. Start a new chat and try again.',
+    },
+    si: {
+      AI_NOT_CONFIGURED: 'මෙම යෙදවුමේ NOVA AI සකසා නැත. කරුණාකර අඩවි පරිපාලක අමතන්න.',
+      RATE_LIMITED: 'NOVA ඉල්ලීම් වැඩි ප්‍රමාණයක් යවා ඇත. මොහොතක් රැඳී නැවත උත්සාහ කරන්න.',
+      UPSTREAM_RATE_LIMITED: 'OpenRouter නොමිලේ මාදිලි මේ මොහොතේ කාර්යබහුලයි. මොහොතක් රැඳී නැවත උත්සාහ කරන්න.',
+      FREE_MODEL_UNAVAILABLE: 'දැනට මෙම ඉල්ලීමට නොමිලේ මාදිලියක් ලබාගත නොහැක. මඳ වේලාවකින් නැවත උත්සාහ කරන්න.',
+      AI_TIMEOUT: 'NOVA පිළිතුරු දීමට වැඩි වේලාවක් ගත විය. නැවත උත්සාහ කරන්න.',
+      NETWORK_ERROR: 'NOVA වෙත සම්බන්ධ විය නොහැක. ඔබගේ සම්බන්ධතාව පරීක්ෂා කර නැවත උත්සාහ කරන්න.',
+      UPSTREAM_NETWORK_ERROR: 'AI සේවාව වෙත සම්බන්ධ විය නොහැක. සම්බන්ධතාව පරීක්ෂා කර නැවත උත්සාහ කරන්න.',
+      PROVIDER_UNAVAILABLE: 'AI සේවාව තාවකාලිකව ලබාගත නොහැක. මඳ වේලාවකින් නැවත උත්සාහ කරන්න.',
+      PROVIDER_AUTH_ERROR: 'AI සේවාවට මෙම ඉල්ලීම සකස් කළ නොහැකි විය. පසුව නැවත උත්සාහ කරන්න.',
+      INVALID_REQUEST: 'එම පණිවිඩය යැවිය නොහැක. එය පරීක්ෂා කර නැවත උත්සාහ කරන්න.',
+      REQUEST_TOO_LARGE: 'එම ඉල්ලීම දිග වැඩිය. කෙටි කර නැවත උත්සාහ කරන්න.',
+      MESSAGE_TOO_LARGE: 'එම පණිවිඩය දිග වැඩිය. කෙටි කර නැවත උත්සාහ කරන්න.',
+      HISTORY_TOO_LARGE: 'සංවාදය යැවීමට දිග වැඩිය. නව සංවාදයක් ආරම්භ කරන්න හෝ පණිවිඩය කෙටි කරන්න.',
+      HISTORY_TOO_LONG: 'සංවාද ඉතිහාසය දිග වැඩිය. නව සංවාදයක් ආරම්භ කර නැවත උත්සාහ කරන්න.',
+    },
+    ta: {
+      AI_NOT_CONFIGURED: 'இந்த வெளியீட்டில் NOVA AI அமைக்கப்படவில்லை. தள நிர்வாகியைத் தொடர்புகொள்ளவும்.',
+      RATE_LIMITED: 'NOVA கோரிக்கைகள் அதிகமாக அனுப்பப்பட்டுள்ளன. சிறிது நேரம் காத்திருந்து மீண்டும் முயற்சிக்கவும்.',
+      UPSTREAM_RATE_LIMITED: 'OpenRouter இலவச மாதிரிகள் தற்போது அதிக பயன்பாட்டில் உள்ளன அல்லது வரம்பை எட்டியுள்ளன. சிறிது நேரம் காத்திருந்து மீண்டும் முயற்சிக்கவும்.',
+      FREE_MODEL_UNAVAILABLE: 'இந்தக் கோரிக்கைக்கு இப்போது இலவச மாதிரி கிடைக்கவில்லை. சிறிது நேரம் கழித்து மீண்டும் முயற்சிக்கவும்.',
+      AI_TIMEOUT: 'NOVA பதிலளிக்க அதிக நேரம் எடுத்தது. மீண்டும் முயற்சிக்கவும்.',
+      NETWORK_ERROR: 'NOVA-வை அணுக முடியவில்லை. உங்கள் இணைப்பைச் சரிபார்த்து மீண்டும் முயற்சிக்கவும்.',
+      UPSTREAM_NETWORK_ERROR: 'AI சேவையை அணுக முடியவில்லை. இணைப்பைச் சரிபார்த்து மீண்டும் முயற்சிக்கவும்.',
+      PROVIDER_UNAVAILABLE: 'AI சேவை தற்காலிகமாக கிடைக்கவில்லை. சிறிது நேரம் கழித்து மீண்டும் முயற்சிக்கவும்.',
+      PROVIDER_AUTH_ERROR: 'AI சேவையால் இந்தக் கோரிக்கையைச் செயல்படுத்த முடியவில்லை. பின்னர் மீண்டும் முயற்சிக்கவும்.',
+      INVALID_REQUEST: 'இந்தச் செய்தியை அனுப்ப முடியவில்லை. சரிபார்த்து மீண்டும் முயற்சிக்கவும்.',
+      REQUEST_TOO_LARGE: 'இந்தக் கோரிக்கை மிக நீளமாக உள்ளது. சுருக்கி மீண்டும் முயற்சிக்கவும்.',
+      MESSAGE_TOO_LARGE: 'இந்தச் செய்தி மிக நீளமாக உள்ளது. சுருக்கி மீண்டும் முயற்சிக்கவும்.',
+      HISTORY_TOO_LARGE: 'உரையாடல் மிக நீளமாக உள்ளது. புதிய உரையாடலைத் தொடங்கவும் அல்லது செய்தியைச் சுருக்கவும்.',
+      HISTORY_TOO_LONG: 'உரையாடல் வரலாறு மிக நீளமாக உள்ளது. புதிய உரையாடலைத் தொடங்கி மீண்டும் முயற்சிக்கவும்.',
+    },
+  };
+
+  const languageMessages = messages[language] || messages.en;
+  if (languageMessages[code]) return languageMessages[code];
+  if (code.includes('TOO_LARGE') || code === 'HISTORY_TOO_LONG') return languageMessages.REQUEST_TOO_LARGE;
+  if (code.startsWith('INVALID_') || code === 'LATEST_MESSAGE_MUST_BE_USER') return languageMessages.INVALID_REQUEST;
+  return languageMessages.PROVIDER_UNAVAILABLE;
 }
 
 /**
@@ -626,13 +687,14 @@ export function NasaAi({ className = '', lang: propLang }) {
 
   // Conversation Thread
   const [messages, setMessages] = useState([]);
-  const [activeModel, setActiveModel] = useState('gemini-3.8-flash');
-  const [connectionState, setConnectionState] = useState('online'); // 'online' | 'connecting' | 'offline'
+  const [activeModel, setActiveModel] = useState('openrouter/free');
+  const [connectionState, setConnectionState] = useState('ready'); // 'ready' | 'online' | 'connecting' | 'offline' | 'error'
 
   const chatScrollRef = useRef(null);
   const textareaRef = useRef(null);
   const recognitionRef = useRef(null);
   const streamTimerRef = useRef(null);
+  const requestAbortControllerRef = useRef(null);
 
   const getSpeechLocale = useCallback((code) => {
     switch (code) {
@@ -647,7 +709,7 @@ export function NasaAi({ className = '', lang: propLang }) {
   useEffect(() => {
     const handleOnline = () => {
       setIsOnline(true);
-      setConnectionState('online');
+      setConnectionState('ready');
     };
     const handleOffline = () => {
       setIsOnline(false);
@@ -763,6 +825,10 @@ export function NasaAi({ className = '', lang: propLang }) {
 
   // Stop Generation / Streaming helper
   const handleStopGeneration = useCallback(() => {
+    if (requestAbortControllerRef.current) {
+      requestAbortControllerRef.current.abort();
+      requestAbortControllerRef.current = null;
+    }
     if (streamTimerRef.current) {
       clearInterval(streamTimerRef.current);
       streamTimerRef.current = null;
@@ -770,9 +836,16 @@ export function NasaAi({ className = '', lang: propLang }) {
     setStreamingMessageId(null);
     setStreamingText('');
     setLoading(false);
-    setConnectionState('online');
+    setConnectionState(typeof navigator !== 'undefined' && navigator.onLine === false ? 'offline' : 'ready');
+    if (streamingMessageId) {
+      setMessages(prev => {
+        const updated = prev.filter(message => message.id !== streamingMessageId || message.text);
+        persistMessages(updated);
+        return updated;
+      });
+    }
     stopSpeech();
-  }, [stopSpeech]);
+  }, [persistMessages, stopSpeech, streamingMessageId]);
 
   // Clear chat / New Chat
   const handleStartNewChat = () => {
@@ -793,7 +866,7 @@ export function NasaAi({ className = '', lang: propLang }) {
   };
 
   // Streaming animation helper
-  const streamAssistantResponse = useCallback((assistantMsg, fullText) => {
+  const streamAssistantResponse = useCallback((assistantMsg, fullText, finalConnectionState = 'online') => {
     if (streamTimerRef.current) {
       clearInterval(streamTimerRef.current);
     }
@@ -812,7 +885,7 @@ export function NasaAi({ className = '', lang: propLang }) {
         streamTimerRef.current = null;
         setStreamingMessageId(null);
         setStreamingText('');
-        setConnectionState('online');
+        setConnectionState(finalConnectionState);
         // Update assistant message with completed text
         setMessages(prev => {
           const updated = prev.map(m => m.id === assistantMsg.id ? { ...m, text: fullText } : m);
@@ -864,69 +937,119 @@ export function NasaAi({ className = '', lang: propLang }) {
       role: 'assistant',
       text: '',
       timestamp: Date.now() + 1,
+      queryText: text,
       suggestions: [],
-      model: 'gemini-3.8-flash',
-      provider: 'Google Gemini 3.8 Flash'
+      model: 'openrouter/free',
+      provider: 'OpenRouter'
     };
 
     const updatedWithUser = [...messages, userMessage, initialAssistantMsg];
     setMessages(updatedWithUser);
+    const requestController = new AbortController();
+    requestAbortControllerRef.current = requestController;
 
     try {
-      // Pass previous turns for multi-turn conversation memory
-      const historyContext = messages.slice(-6).map(m => ({
-        role: m.role,
-        text: m.text
-      }));
+      // Keep a bounded, validated conversation context; error messages are not sent back as AI history.
+      const historyContext = messages
+        .filter((m) =>
+          (m.role === 'user' || m.role === 'assistant') &&
+          typeof m.text === 'string' &&
+          m.text.trim() &&
+          !m.isError
+        )
+        .slice(-6)
+        .map((m) => ({
+          role: m.role,
+          text: m.isFallback ? `[Local offline fallback; may be incomplete] ${m.text}` : m.text
+        }));
 
-      // Active Real-Time NASA Telemetry Payload
-      const telemetryPayload = {
-        apodTitle: 'The Pillars of Creation in Deep Infrared',
-        asteroidCount: 8,
-        issPosition: { lat: 21.48, lon: 81.39 },
-        issAltitude: 418.6,
-        issVelocity: 27584
-      };
-
-      const apiResult = await askNasaAi(text, activeLang, historyContext, telemetryPayload);
-      let answerText = '';
-      let suggestions = [];
-      let modelName = 'gemini-3.8-flash';
-      let providerName = 'Google Gemini 3.8 Flash';
-
-      if (typeof apiResult === 'object' && apiResult !== null) {
-        answerText = apiResult.text || '';
-        suggestions = apiResult.suggestions || [];
-        modelName = apiResult.model || 'gemini-3.8-flash';
-        providerName = apiResult.provider || 'Google Gemini 3.8 Flash';
-      } else if (typeof apiResult === 'string') {
-        answerText = apiResult;
-      }
-
-      if (!answerText) {
-        answerText = resolveLocalFallbackQuery(text, activeLang);
-      }
+      const apiResult = await askNovaAi(text, activeLang, historyContext, { signal: requestController.signal });
+      const answerText = apiResult.text;
+      const suggestions = apiResult.suggestions || [];
+      const modelName = apiResult.model || 'openrouter/free';
+      const providerName = apiResult.provider || 'OpenRouter';
 
       setActiveModel(modelName);
 
-      // Attach suggestions to assistant message
+      // Attach OpenRouter's selected model/provider and follow-up prompts to the response.
       setMessages(prev => prev.map(m => m.id === assistantMsgId ? {
         ...m,
         suggestions,
         model: modelName,
-        provider: providerName
+        provider: providerName,
+        isFallback: apiResult.fallback === true
       } : m));
 
       setLoading(false);
       streamAssistantResponse(initialAssistantMsg, answerText);
-    } catch {
-      const fallbackText = resolveLocalFallbackQuery(text, activeLang);
+    } catch (error) {
+      if (requestController.signal.aborted) {
+        setLoading(false);
+        setConnectionState(typeof navigator !== 'undefined' && navigator.onLine === false ? 'offline' : 'ready');
+        setMessages(prev => {
+          const updated = prev.filter(m => m.id !== assistantMsgId);
+          persistMessages(updated);
+          return updated;
+        });
+        return;
+      }
+
+      const isOffline = typeof navigator !== 'undefined' && navigator.onLine === false;
+      if (isOffline) {
+        const fallbackLang = typeof activeLang === 'string' ? activeLang.split(/[-_]/)[0] : 'en';
+        const fallbackText = resolveLocalFallbackQuery(text, fallbackLang);
+        const localProvider = fallbackLang === 'si'
+          ? 'දේශීය නොබැඳි පිළිතුර'
+          : fallbackLang === 'ta'
+          ? 'உள்ளூர் ஆஃப்லைன் பதில்'
+          : 'Local offline response';
+
+        setLoading(false);
+        setActiveModel('Local offline knowledge base');
+        setMessages(prev => {
+          const updated = prev.map(m => m.id === assistantMsgId ? {
+            ...m,
+            model: 'Local fallback',
+            provider: localProvider,
+            suggestions: [],
+            isFallback: true
+          } : m);
+          persistMessages(updated);
+          return updated;
+        });
+        streamAssistantResponse(initialAssistantMsg, fallbackText, 'offline');
+        return;
+      }
+
+      const errorText = getNovaErrorMessage(error, activeLang);
+      const fallbackLang = typeof activeLang === 'string' ? activeLang.split(/[-_]/)[0] : 'en';
+      const unavailableLabel = fallbackLang === 'si'
+        ? 'තාවකාලිකව ලබාගත නොහැක'
+        : fallbackLang === 'ta'
+        ? 'தற்காலிகமாக கிடைக்கவில்லை'
+        : 'Temporarily unavailable';
+
       setLoading(false);
-      setActiveModel('nasa-local-engine');
-      setConnectionState('offline');
-      streamAssistantResponse(initialAssistantMsg, fallbackText);
+      setConnectionState('error');
+      setActiveModel('OpenRouter free models');
+      setMessages(prev => {
+        const updated = prev.map(m => m.id === assistantMsgId ? {
+          ...m,
+          text: errorText,
+          suggestions: [],
+          model: unavailableLabel,
+          provider: 'OpenRouter',
+          isError: true
+        } : m);
+        persistMessages(updated);
+        return updated;
+      });
+    } finally {
+      if (requestAbortControllerRef.current === requestController) {
+        requestAbortControllerRef.current = null;
+      }
     }
-  }, [activeLang, inputQuery, loading, messages, soundEffectsEnabled, stopSpeech, streamAssistantResponse]);
+  }, [activeLang, inputQuery, loading, messages, soundEffectsEnabled, stopSpeech, streamAssistantResponse, persistMessages]);
 
   // Voice Microphone Input
   const toggleVoiceInput = useCallback(() => {
@@ -998,8 +1121,8 @@ export function NasaAi({ className = '', lang: propLang }) {
         : '🎯 Today’s APOD Quiz (Pillars of Creation) generated! Test your astrophysics knowledge on the 3 questions below:',
       timestamp: Date.now(),
       suggestions: [],
-      model: 'gemini-3.8-flash',
-      provider: 'Google Gemini 3.8 Flash'
+      model: 'APOD quiz bank',
+      provider: 'NASA APOD Quiz Module'
     };
 
     setMessages(prev => {
@@ -1081,14 +1204,18 @@ export function NasaAi({ className = '', lang: propLang }) {
               className={`absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full border-2 border-slate-950 ${
                 connectionState === 'connecting'
                   ? 'bg-amber-400 animate-ping'
-                  : connectionState === 'offline' || !isOnline
+                  : connectionState === 'offline' || !isOnline || connectionState === 'error'
                   ? 'bg-rose-500 ring-1 ring-rose-400'
+                  : connectionState === 'ready'
+                  ? 'bg-slate-400'
                   : 'bg-emerald-400 animate-pulse ring-1 ring-emerald-300/50'
               }`}
               title={
                 connectionState === 'connecting' ? 'Transmitting Query' :
                 connectionState === 'offline' || !isOnline ? 'Offline Guard Engine' :
-                'Gemini Telemetry Online'
+                connectionState === 'error' ? 'OpenRouter request failed' :
+                connectionState === 'ready' ? 'Ready to connect' :
+                'OpenRouter AI Online'
               }
             />
           </div>
@@ -1102,20 +1229,23 @@ export function NasaAi({ className = '', lang: propLang }) {
               {/* AI Engine Badge */}
               <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-cyan-500/15 border border-cyan-500/30 text-cyan-300 flex items-center gap-1.5 shadow-sm">
                 <Sparkles className="w-3 h-3 text-cyan-400" />
-                Gemini 3.8 Flash
+                OpenRouter • Free Models
               </span>
 
               {/* Verified Online/Connecting State Badge */}
               <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono flex items-center gap-1.5 ${
                 connectionState === 'connecting'
                   ? 'bg-amber-500/15 text-amber-300 border border-amber-500/30'
-                  : connectionState === 'offline' || !isOnline
+                  : connectionState === 'offline' || !isOnline || connectionState === 'error'
                   ? 'bg-rose-500/15 text-rose-300 border border-rose-500/30'
+                  : connectionState === 'ready'
+                  ? 'bg-slate-500/15 text-slate-300 border border-slate-500/30'
                   : 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
               }`}>
                 <span className={`w-1.5 h-1.5 rounded-full ${
                   connectionState === 'connecting' ? 'bg-amber-400 animate-spin' :
-                  connectionState === 'offline' || !isOnline ? 'bg-rose-400' :
+                  connectionState === 'offline' || !isOnline || connectionState === 'error' ? 'bg-rose-400' :
+                  connectionState === 'ready' ? 'bg-slate-400' :
                   'bg-emerald-400'
                 }`} />
                 <span>
@@ -1123,7 +1253,11 @@ export function NasaAi({ className = '', lang: propLang }) {
                     ? (activeLang === 'si' ? 'සම්ප්‍රේෂණය වෙමින්...' : activeLang === 'ta' ? 'இணைக்கிறது...' : 'Connecting...') 
                     : connectionState === 'offline' || !isOnline
                     ? (activeLang === 'si' ? 'Offline Guard' : activeLang === 'ta' ? 'ஆஃப்லைன் பயன்முறை' : 'Offline Guard')
-                    : (activeLang === 'si' ? 'සජීවී ටෙලිමෙට්‍රි' : activeLang === 'ta' ? 'நேரலை' : 'Online Telemetry')}
+                    : connectionState === 'error'
+                    ? (activeLang === 'si' ? 'AI සේවාව තාවකාලිකව අසාර්ථකයි' : activeLang === 'ta' ? 'AI சேவை தற்காலிகமாகக் கிடைக்கவில்லை' : 'AI temporarily unavailable')
+                    : connectionState === 'ready'
+                    ? (activeLang === 'si' ? 'සම්බන්ධ වීමට සූදානම්' : activeLang === 'ta' ? 'இணைக்கத் தயார்' : 'Ready to connect')
+                    : (activeLang === 'si' ? 'OpenRouter නොමිලේ මාදිලි' : activeLang === 'ta' ? 'OpenRouter இலவச மாதிரிகள்' : 'OpenRouter Free Models')}
                 </span>
               </span>
 
@@ -1134,9 +1268,9 @@ export function NasaAi({ className = '', lang: propLang }) {
             </div>
 
             <p className="text-[11px] text-slate-400 mt-0.5 hidden sm:block">
-              {activeLang === 'si' ? 'ගැඹුරු අභ්‍යවකාශ සහායක • නාසා ටෙලිමෙට්‍රි සහ බහු-වාර මතකය' :
-               activeLang === 'ta' ? 'நாசா விண்வெளி உதவியாளர் • பல திருப்ப உரையாடல் நினைவகம்' :
-               'Astrophysics Mission Assistant • Multi-Turn Memory & Real-Time Telemetry'}
+              {activeLang === 'si' ? 'අභ්‍යවකාශ සහායක • OpenRouter AI සහ සංවාද මතකය' :
+               activeLang === 'ta' ? 'விண்வெளி உதவியாளர் • OpenRouter AI உரையாடல் நினைவகம்' :
+               'Space Assistant • OpenRouter Free AI & Multi-Turn Memory'}
             </p>
           </div>
         </div>
@@ -1353,6 +1487,8 @@ export function NasaAi({ className = '', lang: propLang }) {
                   className={`max-w-[92%] sm:max-w-[82%] rounded-2xl p-4 sm:p-5 shadow-2xl transition-all ${
                     isUser
                       ? 'bg-gradient-to-r from-blue-950/70 via-indigo-950/70 to-slate-950/90 border border-blue-500/40 text-blue-50 rounded-tr-none'
+                      : msg.isError
+                      ? 'bg-rose-950/35 border border-rose-500/40 text-rose-100 rounded-tl-none'
                       : 'bg-slate-950/90 border border-slate-800/90 text-slate-100 rounded-tl-none hover:border-cyan-500/40'
                   }`}
                 >
@@ -1360,7 +1496,7 @@ export function NasaAi({ className = '', lang: propLang }) {
                   <div className="flex items-center justify-between gap-2 mb-2 text-[10px] font-mono text-slate-400 border-b border-slate-800/60 pb-1.5">
                     <span className="font-semibold text-slate-300 flex items-center gap-1.5">
                       <span className={`w-1.5 h-1.5 rounded-full ${isUser ? 'bg-blue-400' : 'bg-cyan-400'}`} />
-                      {isUser ? (activeLang === 'si' ? 'ගවේෂකයා (ඔබ)' : activeLang === 'ta' ? 'ஆய்வாளர் (நீங்கள்)' : 'Space Explorer') : (msg.provider || 'NASA AI Assistant')}
+                      {isUser ? (activeLang === 'si' ? 'ගවේෂකයා (ඔබ)' : activeLang === 'ta' ? 'ஆய்வாளர் (நீங்கள்)' : 'Space Explorer') : (msg.provider || 'NOVA AI Assistant')}
                     </span>
                     
                     {!isUser && msg.model && (
@@ -1369,6 +1505,21 @@ export function NasaAi({ className = '', lang: propLang }) {
                       </span>
                     )}
                   </div>
+
+                  {!isUser && (msg.isError || msg.isFallback) && (
+                    <div className={`mb-2 flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-[10px] font-mono ${
+                      msg.isError
+                        ? 'bg-rose-500/10 text-rose-200 border border-rose-500/20'
+                        : 'bg-amber-500/10 text-amber-200 border border-amber-500/20'
+                    }`}>
+                      <AlertCircle className="w-3 h-3 shrink-0" />
+                      <span>
+                        {msg.isError
+                          ? (activeLang === 'si' ? 'OpenRouter පිළිතුර ලබාගත නොහැකි විය. පහත Retry භාවිත කරන්න.' : activeLang === 'ta' ? 'OpenRouter பதில் கிடைக்கவில்லை. கீழே உள்ள Retry-ஐப் பயன்படுத்தவும்.' : 'OpenRouter did not respond. Use Retry below.')
+                          : (activeLang === 'si' ? 'මෙය දේශීය නොබැඳි පිළිතුරකි; OpenRouter මඟින් ජනනය කර නැත.' : activeLang === 'ta' ? 'இது உள்ளூர் ஆஃப்லைன் பதில்; OpenRouter உருவாக்கியது அல்ல.' : 'Local offline fallback — not generated by OpenRouter.')}
+                      </span>
+                    </div>
+                  )}
 
                   {/* Message Formatted Text Content */}
                   <div className="text-xs sm:text-sm font-sans select-text">
@@ -1424,7 +1575,7 @@ export function NasaAi({ className = '', lang: propLang }) {
                         {lastSubmittedQuery && (
                           <button
                             type="button"
-                            onClick={() => executeUserQuery(lastSubmittedQuery)}
+                            onClick={() => executeUserQuery(msg.queryText || lastSubmittedQuery)}
                             disabled={loading}
                             className="px-2.5 py-1 rounded-xl bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-400 hover:text-white text-[11px] font-mono transition cursor-pointer flex items-center gap-1.5 shadow-sm active:scale-95"
                             title="Regenerate / Retry response"
@@ -1487,9 +1638,9 @@ export function NasaAi({ className = '', lang: propLang }) {
                   <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse delay-150" />
                 </div>
                 <span>
-                  {activeLang === 'si' ? 'නාසා දත්ත සම්ප්‍රේෂණය වෙමින් පවතී...' :
-                   activeLang === 'ta' ? 'நாசா தரவு மீட்டெடுக்கப்படுகிறது...' :
-                   'Transmitting from Gemini 3.8 Flash...'}
+                  {activeLang === 'si' ? 'OpenRouter නොමිලේ AI පිළිතුර සකස් කරමින්...' :
+                   activeLang === 'ta' ? 'OpenRouter இலவச AI பதிலை உருவாக்குகிறது...' :
+                   'Waiting for an OpenRouter free-model response...'}
                 </span>
               </div>
               <button
@@ -1704,7 +1855,7 @@ export function NasaAi({ className = '', lang: propLang }) {
             <span className="text-slate-600">•</span>
             <span className="text-emerald-400 flex items-center gap-1">
               <ShieldCheck className="w-3 h-3" />
-              Verified Telemetry
+              OpenRouter • Free Models
             </span>
           </span>
           <span className="text-slate-500">

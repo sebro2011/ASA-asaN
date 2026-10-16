@@ -10,6 +10,7 @@
     "preview": "vite preview",
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit",
+    "test:nova-chat": "node --test scripts/test-nova-chat.mjs",
     "test:earth": "node --import tsx --test scripts/test-earth-intelligence.mjs",
     "verify:earth": "node --import tsx scripts/verify-earth-services.mjs",
     "test:earth-server": "node --import tsx --test scripts/test-earth-server.mjs",
