@@ -7,7 +7,7 @@ import WebSocket, { WebSocketServer } from 'ws';
 import { GoogleGenAI, Type } from '@google/genai';
 import { generateLocalSpaceResponse } from './src/utils/spaceLocalAiEngine.js';
 import { earthRouter } from './server/earthIntelligence.js';
-import { handleNovaChatRequest } from './server/novaChat.js';
+import { getNovaPublicConfig, handleNovaChatRequest } from './server/novaChat.js';
 
 dotenv.config();
 
@@ -1961,6 +1961,13 @@ const handleNasaAiEndpoint = async (req: express.Request, res: express.Response)
   });
 };
 
+// Provider status is intentionally limited to configured/not-configured flags; never return secrets.
+app.get('/api/nova/config', (_req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  return res.json(getNovaPublicConfig());
+});
+
 // Additive local/Express adapter for the same isolated Vercel Nova chat handler.
 app.post('/api/nova/chat', async (req, res) => {
   try {
@@ -1970,7 +1977,7 @@ app.post('/api/nova/chat', async (req, res) => {
       contentLength: req.headers['content-length'],
     });
     for (const [name, value] of Object.entries(response.headers)) {
-      res.setHeader(name, value);
+      res.setHeader(name, String(value));
     }
     return res.status(response.status).json(response.body);
   } catch {

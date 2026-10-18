@@ -1,6 +1,9 @@
+import { generateLocalSpaceResponse } from '../src/utils/spaceLocalAiEngine.js';
+
 const OPENROUTER_CHAT_COMPLETIONS_URL = 'https://openrouter.ai/api/v1/chat/completions';
-// OpenRouter's documented zero-cost router chooses an available free model per request.
+const GEMINI_GENERATE_CONTENT_URL = 'https://generativelanguage.googleapis.com/v1beta/models';
 export const OPENROUTER_FREE_MODEL = 'openrouter/free';
+export const DEFAULT_GEMINI_MODEL = 'gemini-2.5-flash';
 
 const MAX_REQUEST_BYTES = 24 * 1024;
 const MAX_TOTAL_MESSAGE_BYTES = 20 * 1024;
@@ -10,6 +13,12 @@ const UPSTREAM_TIMEOUT_MS = 8_000;
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const RATE_LIMIT_REQUESTS = 8;
 const SUPPORTED_LANGUAGES = new Set(['en', 'si', 'ta']);
+const SUPPORTED_PROVIDERS = new Set(['auto', 'local', 'gemini', 'openrouter']);
+const PROVIDER_NAMES = {
+  local: 'NOVA Local Space Engine',
+  gemini: 'Google Gemini',
+  openrouter: 'OpenRouter',
+};
 
 const FALLBACK_SUGGESTIONS = {
   en: ['What is the Artemis mission?', 'What has JWST discovered?', 'How do Mars rovers explore?'],
@@ -39,8 +48,8 @@ function result(status, body, headers = {}) {
   };
 }
 
-function errorResult(status, code, error, headers = {}) {
-  return result(status, { error, code }, headers);
+function errorResult(status, code, error, headers = {}, details = {}) {
+  return result(status, { error, code, ...details }, headers);
 }
 
 function parseRequestBody(body, contentLength) {
@@ -132,7 +141,15 @@ function validateChatRequest(body) {
     }
   }
 
-  return { messages, language };
+  let provider = 'auto';
+  if (body.provider !== undefined) {
+    if (typeof body.provider !== 'string' || !SUPPORTED_PROVIDERS.has(body.provider.trim().toLowerCase())) {
+      return { error: errorResult(400, 'INVALID_PROVIDER', 'Provider must be auto, local, gemini, or openrouter.') };
+    }
+    provider = body.provider.trim().toLowerCase();
+  }
+
+  return { messages, language, provider };
 }
 
 export function createNovaRateLimiter({ limit = RATE_LIMIT_REQUESTS, windowMs = RATE_LIMIT_WINDOW_MS, now = Date.now } = {}) {
@@ -208,45 +225,258 @@ function extractSuggestions(text, language) {
   };
 }
 
-function providerError(status) {
-  if (status === 429) {
-    return errorResult(
-      429,
-      'UPSTREAM_RATE_LIMITED',
-      'Free models are busy or rate-limited right now. Please wait a moment and retry.',
-      { 'Retry-After': '30' },
-    );
-  }
-  if (status === 404 || status === 422) {
-    return errorResult(503, 'FREE_MODEL_UNAVAILABLE', 'No free model is available for this request right now. Please retry shortly.');
-  }
-  if (status === 401 || status === 403) {
-    return errorResult(503, 'PROVIDER_AUTH_ERROR', 'The AI provider could not process this request. Please try again later.');
-  }
-  if (status === 408 || status === 504) {
-    return errorResult(504, 'AI_TIMEOUT', 'The AI response took too long. Please retry.');
-  }
-  if (status >= 500) {
-    return errorResult(503, 'PROVIDER_UNAVAILABLE', 'The AI provider is temporarily unavailable. Please retry shortly.');
-  }
-  return errorResult(502, 'PROVIDER_ERROR', 'The AI provider could not complete this request. Please retry.');
+function cleanModelName(value, fallback) {
+  return typeof value === 'string' && value.trim() && value.trim().length <= 160
+    ? value.trim()
+    : fallback;
+}
+
+function getProcessEnv() {
+  return typeof process !== 'undefined' && process.env ? process.env : {};
 }
 
 function getReferer() {
-  const configuredUrl = typeof process !== 'undefined' ? process.env.APP_URL : '';
+  const env = getProcessEnv();
+  const configuredUrl = env.APP_URL;
   if (configuredUrl && /^https?:\/\//i.test(configuredUrl)) return configuredUrl;
 
-  const vercelUrl = typeof process !== 'undefined' ? process.env.VERCEL_URL : '';
+  const vercelUrl = env.VERCEL_URL;
   if (vercelUrl && /^[a-z0-9.-]+(?::\d+)?$/i.test(vercelUrl)) return `https://${vercelUrl}`;
   return '';
 }
 
+function providerError(status, provider, model) {
+  let response;
+  if (status === 429) {
+    response = errorResult(
+      429,
+      'UPSTREAM_RATE_LIMITED',
+      'The selected AI provider is busy or rate-limited right now. Please wait a moment and retry.',
+      { 'Retry-After': '30' },
+    );
+  } else if (status === 404 || status === 422) {
+    const isOpenRouterFreeModel = provider === 'openrouter' && model === OPENROUTER_FREE_MODEL;
+    response = errorResult(
+      503,
+      isOpenRouterFreeModel ? 'FREE_MODEL_UNAVAILABLE' : 'MODEL_UNAVAILABLE',
+      'The selected AI model is unavailable right now. Please retry shortly.',
+    );
+  } else if (status === 401 || status === 403) {
+    response = errorResult(503, 'PROVIDER_AUTH_ERROR', 'The AI provider could not process this request. Check its server-side API key.');
+  } else if (status === 408 || status === 504) {
+    response = errorResult(504, 'AI_TIMEOUT', 'The AI response took too long. Please retry.');
+  } else if (status >= 500) {
+    response = errorResult(503, 'PROVIDER_UNAVAILABLE', 'The AI provider is temporarily unavailable. Please retry shortly.');
+  } else {
+    response = errorResult(502, 'PROVIDER_ERROR', 'The AI provider could not complete this request. Please retry.');
+  }
+  return withProvider(response, provider);
+}
+
+function withProvider(response, provider) {
+  return {
+    ...response,
+    body: {
+      ...response.body,
+      provider: PROVIDER_NAMES[provider] || provider,
+    },
+  };
+}
+
+function getLocalResponse(query, language, { fallback = false } = {}) {
+  const local = generateLocalSpaceResponse(query, language);
+  return result(200, {
+    text: local.text,
+    suggestions: Array.isArray(local.suggestions) ? local.suggestions : FALLBACK_SUGGESTIONS[language],
+    model: 'nasa-local-engine',
+    provider: PROVIDER_NAMES.local,
+    lang: language,
+    fallback,
+    intent: local.intent,
+  });
+}
+
+async function fetchProviderJson({ fetchImpl, url, init, timeoutMs, provider, model }) {
+  const controller = new AbortController();
+  let timeoutExpired = false;
+  const timeout = setTimeout(() => {
+    timeoutExpired = true;
+    controller.abort();
+  }, timeoutMs);
+
+  try {
+    const upstream = await fetchImpl(url, { ...init, signal: controller.signal });
+    if (!upstream || !upstream.ok) {
+      return { error: providerError(Number(upstream?.status) || 502, provider, model) };
+    }
+
+    let data;
+    try {
+      data = await upstream.json();
+    } catch {
+      return {
+        error: withProvider(
+          errorResult(502, 'INVALID_PROVIDER_RESPONSE', 'The AI provider returned an unreadable response. Please retry.'),
+          provider,
+        ),
+      };
+    }
+    return { data };
+  } catch (error) {
+    if (timeoutExpired || error?.name === 'AbortError') {
+      return {
+        error: withProvider(
+          errorResult(504, 'AI_TIMEOUT', 'The AI response took too long. Please retry.'),
+          provider,
+        ),
+      };
+    }
+    return {
+      error: withProvider(
+        errorResult(503, 'UPSTREAM_NETWORK_ERROR', 'Could not reach the AI provider. Check your connection and retry.'),
+        provider,
+      ),
+    };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function callOpenRouter({ fetchImpl, apiKey, model, messages, language, timeoutMs }) {
+  const headers = {
+    Authorization: `Bearer ${apiKey}`,
+    'Content-Type': 'application/json',
+    'X-Title': 'NOVA AI',
+  };
+  const referer = getReferer();
+  if (referer) headers['HTTP-Referer'] = referer;
+
+  const upstreamResult = await fetchProviderJson({
+    fetchImpl,
+    url: OPENROUTER_CHAT_COMPLETIONS_URL,
+    init: {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        model,
+        messages: [
+          { role: 'system', content: makeSystemPrompt(language) },
+          ...messages,
+        ],
+        temperature: 0.7,
+        max_tokens: 1_200,
+      }),
+    },
+    timeoutMs,
+    provider: 'openrouter',
+    model,
+  });
+  if (upstreamResult.error) return upstreamResult.error;
+
+  const rawText = extractText(upstreamResult.data?.choices?.[0]?.message?.content);
+  if (!rawText) {
+    return withProvider(
+      errorResult(502, 'EMPTY_PROVIDER_RESPONSE', 'The AI provider returned an empty response. Please retry.'),
+      'openrouter',
+    );
+  }
+
+  const parsed = extractSuggestions(rawText, language);
+  return result(200, {
+    text: parsed.text || rawText,
+    suggestions: parsed.suggestions,
+    model: typeof upstreamResult.data?.model === 'string' && upstreamResult.data.model.length <= 160
+      ? upstreamResult.data.model
+      : model,
+    provider: PROVIDER_NAMES.openrouter,
+    lang: language,
+    fallback: false,
+  });
+}
+
+async function callGemini({ fetchImpl, apiKey, model, messages, language, timeoutMs }) {
+  const url = `${GEMINI_GENERATE_CONTENT_URL}/${encodeURIComponent(model)}:generateContent`;
+  const contents = messages.map((message) => ({
+    role: message.role === 'assistant' ? 'model' : 'user',
+    parts: [{ text: message.content }],
+  }));
+  const upstreamResult = await fetchProviderJson({
+    fetchImpl,
+    url,
+    init: {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-goog-api-key': apiKey,
+      },
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text: makeSystemPrompt(language) }] },
+        contents,
+        generationConfig: {
+          temperature: 0.7,
+          maxOutputTokens: 1_200,
+        },
+      }),
+    },
+    timeoutMs,
+    provider: 'gemini',
+    model,
+  });
+  if (upstreamResult.error) return upstreamResult.error;
+
+  const rawText = extractText(upstreamResult.data?.candidates?.[0]?.content?.parts);
+  if (!rawText) {
+    return withProvider(
+      errorResult(502, 'EMPTY_PROVIDER_RESPONSE', 'The AI provider returned an empty response. Please retry.'),
+      'gemini',
+    );
+  }
+
+  const parsed = extractSuggestions(rawText, language);
+  return result(200, {
+    text: parsed.text || rawText,
+    suggestions: parsed.suggestions,
+    model,
+    provider: PROVIDER_NAMES.gemini,
+    lang: language,
+    fallback: false,
+  });
+}
+
+function readKey(getter) {
+  try {
+    const value = getter();
+    return typeof value === 'string' ? value.trim() : '';
+  } catch {
+    return '';
+  }
+}
+
+/** Return only safe provider availability information. Never return API key values. */
+export function getNovaPublicConfig({ env = getProcessEnv() } = {}) {
+  return {
+    providers: {
+      auto: true,
+      local: true,
+      gemini: typeof env.GEMINI_API_KEY === 'string' && Boolean(env.GEMINI_API_KEY.trim()),
+      openrouter: typeof env.OPENROUTER_API_KEY === 'string' && Boolean(env.OPENROUTER_API_KEY.trim()),
+    },
+  };
+}
+
 export function createNovaChatHandler({
   fetchImpl = (...args) => globalThis.fetch(...args),
-  getApiKey = () => (typeof process !== 'undefined' ? process.env.OPENROUTER_API_KEY : ''),
+  getOpenRouterApiKey,
+  getGeminiApiKey = () => getProcessEnv().GEMINI_API_KEY,
+  // Backwards-compatible alias for callers/tests written for the original OpenRouter-only handler.
+  getApiKey,
+  getOpenRouterModel = () => getProcessEnv().NOVA_OPENROUTER_MODEL,
+  getGeminiModel = () => getProcessEnv().NOVA_GEMINI_MODEL,
   rateLimiter = createNovaRateLimiter(),
   timeoutMs = UPSTREAM_TIMEOUT_MS,
 } = {}) {
+  const readOpenRouterKey = getOpenRouterApiKey || getApiKey || (() => getProcessEnv().OPENROUTER_API_KEY);
+
   /** @param {{ body?: unknown, ip?: string, contentLength?: string | number }} [request] */
   return async function handleNovaChatRequest({ body, ip = 'unknown', contentLength } = {}) {
     const parsed = parseRequestBody(body, contentLength);
@@ -254,11 +484,6 @@ export function createNovaChatHandler({
 
     const validated = validateChatRequest(parsed.body);
     if (validated.error) return validated.error;
-
-    const apiKey = getApiKey();
-    if (typeof apiKey !== 'string' || !apiKey.trim()) {
-      return errorResult(503, 'AI_NOT_CONFIGURED', 'NOVA AI is not configured on this deployment. Please contact the site administrator.');
-    }
 
     const limit = rateLimiter(ip);
     if (!limit.allowed) {
@@ -270,70 +495,72 @@ export function createNovaChatHandler({
       );
     }
 
-    const messages = [
-      { role: 'system', content: makeSystemPrompt(validated.language) },
-      ...validated.messages,
-    ];
-    const headers = {
-      Authorization: `Bearer ${apiKey.trim()}`,
-      'Content-Type': 'application/json',
-      'X-Title': 'NOVA AI',
-    };
-    const referer = getReferer();
-    if (referer) headers['HTTP-Referer'] = referer;
-
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), timeoutMs);
-
-    try {
-      const upstream = await fetchImpl(OPENROUTER_CHAT_COMPLETIONS_URL, {
-        method: 'POST',
-        headers,
-        signal: controller.signal,
-        body: JSON.stringify({
-          model: OPENROUTER_FREE_MODEL,
-          messages,
-          temperature: 0.7,
-          max_tokens: 1_200,
-        }),
-      });
-
-      if (!upstream || !upstream.ok) {
-        return providerError(Number(upstream?.status) || 502);
-      }
-
-      let data;
-      try {
-        data = await upstream.json();
-      } catch {
-        return errorResult(502, 'INVALID_PROVIDER_RESPONSE', 'The AI provider returned an unreadable response. Please retry.');
-      }
-
-      const rawText = extractText(data?.choices?.[0]?.message?.content);
-      if (!rawText) {
-        return errorResult(502, 'EMPTY_PROVIDER_RESPONSE', 'The AI provider returned an empty response. Please retry.');
-      }
-
-      const parsedResponse = extractSuggestions(rawText, validated.language);
-      return result(200, {
-        text: parsedResponse.text || rawText,
-        suggestions: parsedResponse.suggestions,
-        model: typeof data?.model === 'string' && data.model.length <= 160 ? data.model : OPENROUTER_FREE_MODEL,
-        provider: 'OpenRouter',
-        lang: validated.language,
-        fallback: false,
-      });
-    } catch (error) {
-      if (controller.signal.aborted || error?.name === 'AbortError') {
-        return errorResult(504, 'AI_TIMEOUT', 'The AI response took too long. Please retry.');
-      }
-      return errorResult(503, 'UPSTREAM_NETWORK_ERROR', 'Could not reach the AI provider. Check your connection and retry.');
-    } finally {
-      clearTimeout(timeout);
+    if (validated.provider === 'local') {
+      return getLocalResponse(validated.messages.at(-1).content, validated.language);
     }
+
+    const keys = {
+      openrouter: readKey(readOpenRouterKey),
+      gemini: readKey(getGeminiApiKey),
+    };
+    const models = {
+      openrouter: cleanModelName(readKey(getOpenRouterModel), OPENROUTER_FREE_MODEL),
+      gemini: cleanModelName(readKey(getGeminiModel), DEFAULT_GEMINI_MODEL),
+    };
+
+    const providerOrder = validated.provider === 'auto'
+      ? ['openrouter', 'gemini'].filter((provider) => Boolean(keys[provider]))
+      : [validated.provider];
+
+    if (validated.provider !== 'auto' && !keys[validated.provider]) {
+      return errorResult(
+        503,
+        'PROVIDER_NOT_CONFIGURED',
+        `The ${PROVIDER_NAMES[validated.provider]} API key is not configured on this deployment.`,
+        {},
+        { provider: PROVIDER_NAMES[validated.provider] },
+      );
+    }
+
+    if (providerOrder.length === 0) {
+      return getLocalResponse(validated.messages.at(-1).content, validated.language, { fallback: true });
+    }
+
+    let lastError = null;
+    for (const provider of providerOrder) {
+      const response = provider === 'openrouter'
+        ? await callOpenRouter({
+          fetchImpl,
+          apiKey: keys.openrouter,
+          model: models.openrouter,
+          messages: validated.messages,
+          language: validated.language,
+          timeoutMs,
+        })
+        : await callGemini({
+          fetchImpl,
+          apiKey: keys.gemini,
+          model: models.gemini,
+          messages: validated.messages,
+          language: validated.language,
+          timeoutMs,
+        });
+
+      if (response.status === 200) return response;
+      lastError = response;
+      if (validated.provider !== 'auto') return response;
+    }
+
+    // Automatic routing is resilient: if configured online providers are unavailable,
+    // answer from the bundled local knowledge engine and identify that provider honestly.
+    if (validated.provider === 'auto') {
+      return getLocalResponse(validated.messages.at(-1).content, validated.language, { fallback: true });
+    }
+
+    return lastError || errorResult(503, 'PROVIDER_UNAVAILABLE', 'NOVA could not complete this request. Please retry.');
   };
 }
 
-// Vercel and Express adapters share this function. Its limiter is per warm process;
-// use Vercel edge rate limiting for a distributed production-wide quota if needed.
+// Vercel and Express adapters share this handler. Its limiter is per warm process;
+// use a distributed rate limiter if a deployment-wide quota is needed.
 export const handleNovaChatRequest = createNovaChatHandler();

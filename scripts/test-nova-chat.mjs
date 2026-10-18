@@ -3,9 +3,12 @@ import assert from 'node:assert/strict';
 import {
   createNovaChatHandler,
   createNovaRateLimiter,
+  DEFAULT_GEMINI_MODEL,
+  getNovaPublicConfig,
   OPENROUTER_FREE_MODEL,
 } from '../server/novaChat.js';
 import vercelNovaChatHandler from '../api/nova/chat.js';
+import vercelNovaConfigHandler from '../api/nova/config.js';
 import { askNovaAi } from '../lib/nasaApi.js';
 
 const TEST_API_KEY = 'sk-or-test-only-never-a-real-key';
@@ -35,6 +38,7 @@ function successFetch(responseData = {
 function createTestHandler(options = {}) {
   return createNovaChatHandler({
     getApiKey: () => TEST_API_KEY,
+    getGeminiApiKey: () => '',
     fetchImpl: successFetch(),
     ...options,
   });
@@ -113,19 +117,39 @@ test('passes Sinhala and Tamil language guidance while keeping the latest messag
   }
 });
 
-test('returns a safe configuration error when the server key is missing', async () => {
+test('Auto uses the bundled local engine when no server-side provider keys are configured', async () => {
   let calledProvider = false;
   const handler = createNovaChatHandler({
     getApiKey: () => '',
+    getGeminiApiKey: () => '',
     fetchImpl: async () => { calledProvider = true; },
   });
 
   const response = await handler({ body: sampleBody, ip: '198.51.100.11' });
 
-  assert.equal(response.status, 503);
-  assert.equal(response.body.code, 'AI_NOT_CONFIGURED');
+  assert.equal(response.status, 200);
+  assert.equal(response.body.model, 'nasa-local-engine');
+  assert.equal(response.body.provider, 'NOVA Local Space Engine');
+  assert.equal(response.body.fallback, true);
   assert.equal(calledProvider, false);
   assert.equal(JSON.stringify(response).includes('sk-or-'), false);
+});
+
+test('explicit Gemini selection returns a safe error when its server-side key is missing', async () => {
+  const handler = createNovaChatHandler({
+    getApiKey: () => TEST_API_KEY,
+    getGeminiApiKey: () => '',
+    fetchImpl: async () => { throw new Error('should not call upstream'); },
+  });
+  const response = await handler({
+    body: { ...sampleBody, provider: 'gemini' },
+    ip: '198.51.100.27',
+  });
+
+  assert.equal(response.status, 503);
+  assert.equal(response.body.code, 'PROVIDER_NOT_CONFIGURED');
+  assert.equal(response.body.provider, 'Google Gemini');
+  assert.equal(JSON.stringify(response).includes(TEST_API_KEY), false);
 });
 
 test('rejects malformed JSON, unsupported roles, and a non-user final message', async () => {
@@ -207,9 +231,10 @@ test('maps provider rate limits and outages to safe retryable errors', async () 
     fetchImpl: async () => ({ ok: false, status: 404, json: async () => ({ error: TEST_API_KEY }) }),
   });
 
-  const rateLimited = await upstream429({ body: sampleBody, ip: '198.51.100.19' });
-  const unavailable = await upstream500({ body: sampleBody, ip: '198.51.100.20' });
-  const noFreeModel = await unavailableFreeModel({ body: sampleBody, ip: '198.51.100.21' });
+  const selectedOpenRouter = { ...sampleBody, provider: 'openrouter' };
+  const rateLimited = await upstream429({ body: selectedOpenRouter, ip: '198.51.100.19' });
+  const unavailable = await upstream500({ body: selectedOpenRouter, ip: '198.51.100.20' });
+  const noFreeModel = await unavailableFreeModel({ body: selectedOpenRouter, ip: '198.51.100.21' });
 
   assert.equal(rateLimited.status, 429);
   assert.equal(rateLimited.body.code, 'UPSTREAM_RATE_LIMITED');
@@ -246,12 +271,13 @@ test('browser helper posts only bounded history to the same-origin endpoint', as
       role: index % 2 ? 'assistant' : 'user',
       text: `Turn ${index}: ${'அ'.repeat(3_500)}`,
     }));
-    const result = await askNovaAi('ஜேம்ஸ் வெப் பற்றி விளக்குங்கள்.', 'ta-LK', history);
+    const result = await askNovaAi('ஜேம்ஸ் வெப் பற்றி விளக்குங்கள்.', 'ta-LK', history, { provider: 'gemini' });
 
     assert.equal(capturedRequest.url, '/api/nova/chat');
     assert.equal(capturedRequest.options.method, 'POST');
     assert.equal(capturedRequest.options.headers.Authorization, undefined);
     assert.equal(capturedRequest.payload.lang, 'ta');
+    assert.equal(capturedRequest.payload.provider, 'gemini');
     assert.ok(capturedRequest.payload.messages.length <= 12);
     assert.equal(capturedRequest.payload.messages.at(-1).role, 'user');
     assert.ok(capturedRequest.payload.messages.every((message) => message.content.length <= 4_000));
@@ -266,7 +292,9 @@ test('browser helper posts only bounded history to the same-origin endpoint', as
 
 test('Vercel function adapter enforces POST and handles fake-key requests without leaking the key', async () => {
   const previousKey = process.env.OPENROUTER_API_KEY;
+  const previousGeminiKey = process.env.GEMINI_API_KEY;
   process.env.OPENROUTER_API_KEY = '';
+  process.env.GEMINI_API_KEY = '';
 
   function mockResponse() {
     return {
@@ -293,8 +321,9 @@ test('Vercel function adapter enforces POST and handles fake-key requests withou
       socket: { remoteAddress: '127.0.0.1' },
     }, missingKeyResponse);
 
-    assert.equal(missingKeyResponse.statusCode, 503);
-    assert.equal(missingKeyResponse.body.code, 'AI_NOT_CONFIGURED');
+    assert.equal(missingKeyResponse.statusCode, 200);
+    assert.equal(missingKeyResponse.body.model, 'nasa-local-engine');
+    assert.equal(missingKeyResponse.body.fallback, true);
     assert.equal(missingKeyResponse.headers['Cache-Control'], 'no-store');
     assert.equal(JSON.stringify(missingKeyResponse.body).includes('OPENROUTER_API_KEY'), false);
 
@@ -333,7 +362,175 @@ test('Vercel function adapter enforces POST and handles fake-key requests withou
   } finally {
     if (previousKey === undefined) delete process.env.OPENROUTER_API_KEY;
     else process.env.OPENROUTER_API_KEY = previousKey;
+    if (previousGeminiKey === undefined) delete process.env.GEMINI_API_KEY;
+    else process.env.GEMINI_API_KEY = previousGeminiKey;
   }
+});
+
+test('the local provider runs the built-in trilingual knowledge engine without an upstream request', async () => {
+  let calledProvider = false;
+  const handler = createNovaChatHandler({
+    getApiKey: () => TEST_API_KEY,
+    getGeminiApiKey: () => 'another-server-key',
+    fetchImpl: async () => { calledProvider = true; throw new Error('local mode must not call a provider'); },
+  });
+  const response = await handler({
+    body: { lang: 'en', provider: 'local', messages: [{ role: 'user', content: 'What does the James Webb telescope do?' }] },
+    ip: '198.51.100.28',
+  });
+
+  assert.equal(response.status, 200);
+  assert.equal(response.body.provider, 'NOVA Local Space Engine');
+  assert.equal(response.body.model, 'nasa-local-engine');
+  assert.equal(response.body.intent, 'jwst');
+  assert.equal(response.body.fallback, false);
+  assert.equal(calledProvider, false);
+});
+
+test('Gemini uses the server-only key header and translates conversation roles to Gemini format', async () => {
+  let capturedRequest;
+  const handler = createNovaChatHandler({
+    getApiKey: () => '',
+    getGeminiApiKey: () => TEST_API_KEY,
+    fetchImpl: async (url, options) => {
+      capturedRequest = { url, options, payload: JSON.parse(options.body) };
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          candidates: [{
+            content: {
+              role: 'model',
+              parts: [{ text: 'JWST studies infrared light.\nSUGGESTIONS: [What is infrared?] | [What did it find?]' }],
+            },
+          }],
+        }),
+      };
+    },
+  });
+  const response = await handler({
+    body: {
+      lang: 'en',
+      provider: 'gemini',
+      messages: [
+        { role: 'user', content: 'What is infrared?' },
+        { role: 'assistant', content: 'It is electromagnetic radiation.' },
+        { role: 'user', content: 'What does JWST study?' },
+      ],
+    },
+    ip: '198.51.100.29',
+  });
+
+  assert.equal(response.status, 200);
+  assert.equal(capturedRequest.url, `https://generativelanguage.googleapis.com/v1beta/models/${DEFAULT_GEMINI_MODEL}:generateContent`);
+  assert.equal(capturedRequest.options.headers['x-goog-api-key'], TEST_API_KEY);
+  assert.equal(capturedRequest.url.includes(TEST_API_KEY), false);
+  assert.equal(capturedRequest.payload.contents[1].role, 'model');
+  assert.equal(capturedRequest.payload.contents[2].role, 'user');
+  assert.match(capturedRequest.payload.systemInstruction.parts[0].text, /latest user message/i);
+  assert.equal(response.body.text, 'JWST studies infrared light.');
+  assert.deepEqual(response.body.suggestions, ['What is infrared?', 'What did it find?']);
+  assert.equal(response.body.provider, 'Google Gemini');
+  assert.equal(response.body.model, DEFAULT_GEMINI_MODEL);
+  assert.equal(JSON.stringify(response).includes(TEST_API_KEY), false);
+});
+
+test('Auto falls through from a rate-limited OpenRouter request to Gemini', async () => {
+  const attemptedProviders = [];
+  const handler = createNovaChatHandler({
+    getApiKey: () => TEST_API_KEY,
+    getGeminiApiKey: () => 'gemini-test-key',
+    fetchImpl: async (url) => {
+      attemptedProviders.push(url.includes('openrouter.ai') ? 'openrouter' : 'gemini');
+      if (url.includes('openrouter.ai')) return { ok: false, status: 429 };
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ candidates: [{ content: { parts: [{ text: 'Gemini fallback succeeded.' }] } }] }),
+      };
+    },
+  });
+  const response = await handler({ body: sampleBody, ip: '198.51.100.30' });
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(attemptedProviders, ['openrouter', 'gemini']);
+  assert.equal(response.body.provider, 'Google Gemini');
+  assert.equal(response.body.fallback, false);
+  assert.equal(JSON.stringify(response).includes(TEST_API_KEY), false);
+  assert.equal(JSON.stringify(response).includes('gemini-test-key'), false);
+});
+
+test('Auto falls back to the local engine when every configured online provider fails', async () => {
+  const attemptedProviders = [];
+  const handler = createNovaChatHandler({
+    getApiKey: () => TEST_API_KEY,
+    getGeminiApiKey: () => 'gemini-test-key',
+    fetchImpl: async (url) => {
+      attemptedProviders.push(url.includes('openrouter.ai') ? 'openrouter' : 'gemini');
+      return { ok: false, status: 503 };
+    },
+  });
+  const response = await handler({ body: sampleBody, ip: '198.51.100.32' });
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(attemptedProviders, ['openrouter', 'gemini']);
+  assert.equal(response.body.provider, 'NOVA Local Space Engine');
+  assert.equal(response.body.model, 'nasa-local-engine');
+  assert.equal(response.body.fallback, true);
+});
+
+test('public provider config reports availability without exposing API keys', () => {
+  const config = getNovaPublicConfig({
+    env: {
+      GEMINI_API_KEY: 'private-gemini-key',
+      OPENROUTER_API_KEY: 'private-openrouter-key',
+    },
+  });
+
+  assert.deepEqual(config.providers, { auto: true, local: true, gemini: true, openrouter: true });
+  assert.equal(JSON.stringify(config).includes('private-gemini-key'), false);
+  assert.equal(JSON.stringify(config).includes('private-openrouter-key'), false);
+});
+
+test('Vercel provider-config endpoint only supports GET and returns safe availability flags', async () => {
+  const previousGeminiKey = process.env.GEMINI_API_KEY;
+  const previousOpenRouterKey = process.env.OPENROUTER_API_KEY;
+  process.env.GEMINI_API_KEY = 'private-gemini-key';
+  process.env.OPENROUTER_API_KEY = '';
+  const makeResponse = () => ({
+    headers: {}, statusCode: 200, body: null,
+    setHeader(name, value) { this.headers[name] = value; },
+    status(code) { this.statusCode = code; return this; },
+    json(body) { this.body = body; return this; },
+  });
+
+  try {
+    const methodResponse = makeResponse();
+    vercelNovaConfigHandler({ method: 'POST' }, methodResponse);
+    assert.equal(methodResponse.statusCode, 405);
+    assert.equal(methodResponse.headers.Allow, 'GET');
+
+    const getResponse = makeResponse();
+    vercelNovaConfigHandler({ method: 'GET' }, getResponse);
+    assert.equal(getResponse.statusCode, 200);
+    assert.deepEqual(getResponse.body.providers, { auto: true, local: true, gemini: true, openrouter: false });
+    assert.equal(JSON.stringify(getResponse.body).includes('private-gemini-key'), false);
+    assert.equal(getResponse.headers['Cache-Control'], 'no-store');
+  } finally {
+    if (previousGeminiKey === undefined) delete process.env.GEMINI_API_KEY;
+    else process.env.GEMINI_API_KEY = previousGeminiKey;
+    if (previousOpenRouterKey === undefined) delete process.env.OPENROUTER_API_KEY;
+    else process.env.OPENROUTER_API_KEY = previousOpenRouterKey;
+  }
+});
+
+test('rejects unknown provider selection', async () => {
+  const response = await createTestHandler()({
+    body: { ...sampleBody, provider: 'unknown-provider' },
+    ip: '198.51.100.31',
+  });
+  assert.equal(response.status, 400);
+  assert.equal(response.body.code, 'INVALID_PROVIDER');
 });
 
 test('aborts a provider request after the configured timeout', async () => {
@@ -354,7 +551,7 @@ test('aborts a provider request after the configured timeout', async () => {
     }),
   });
 
-  const response = await handler({ body: sampleBody, ip: '198.51.100.22' });
+  const response = await handler({ body: { ...sampleBody, provider: 'openrouter' }, ip: '198.51.100.22' });
   assert.equal(response.status, 504);
   assert.equal(response.body.code, 'AI_TIMEOUT');
   assert.equal(JSON.stringify(response).includes(TEST_API_KEY), false);
