@@ -1,30 +1,42 @@
-# NOVA AI — OpenRouter deployment notes
+# NOVA AI — Local, Gemini, and OpenRouter setup
 
-NOVA sends same-origin `POST` requests to `/api/nova/chat`. On Vercel, that URL is provided by the Node function in `api/nova/chat.js`; the Vite frontend remains a static build. The local Express server exposes the same handler at the same path for development.
+NOVA uses a single same-origin chat API: `POST /api/nova/chat`. Vercel serves it through `api/nova/chat.js`; the local Express server exposes the same handler during `npm run dev`. The bundled local space engine is always available, including when no API keys are configured.
 
-## Provider and model
+## Provider modes
 
-The server calls OpenRouter's Chat Completions endpoint and selects `openrouter/free`, OpenRouter's free-model router. It chooses from currently available free models; the actual model used is returned in the response and displayed in the chat. Free-model availability, speed, language quality, and rate limits can vary.
+The NOVA chat provider selector offers:
 
-## Configure the secret
+- **Auto** — tries configured online providers in this order: OpenRouter, then Gemini. If neither is configured or both fail, NOVA answers with the bundled local space-knowledge engine.
+- **Local** — runs the bundled `src/utils/spaceLocalAiEngine.js` in the browser. No server request, external key, or internet connection is needed after the app has loaded.
+- **Gemini** — sends chat requests to Google Gemini using `GEMINI_API_KEY`.
+- **OpenRouter** — sends chat requests to OpenRouter using `OPENROUTER_API_KEY` and the selected model.
 
-In **Vercel → Project → Settings → Environment Variables**, add a variable named exactly:
+The UI receives only provider availability flags from `GET /api/nova/config`; it never receives API key values. NOVA does not log conversation prompts or key values. When Auto falls back to the local engine, the response is labeled **NOVA Local Space Engine** rather than presented as a Gemini/OpenRouter answer. The built-in engine is a deterministic, trilingual NASA/space knowledge and intent engine—not a downloaded local LLM.
 
-```text
-OPENROUTER_API_KEY
+## Configure keys
+
+### Local development
+
+Copy `.env.example` to an ignored `.env` file and add one or both server-only keys:
+
+```dotenv
+GEMINI_API_KEY="your-gemini-key"
+OPENROUTER_API_KEY="your-openrouter-key"
 ```
 
-Add it to both **Production** and **Preview** (and **Development** only if using Vercel's local tooling). Keep the value server-side: do not prefix it with `VITE_` or `NEXT_PUBLIC_`, put it in frontend code, or commit it. A preview deployment can use a separate, restricted OpenRouter key if desired.
+Do not add a `VITE_` or `NEXT_PUBLIC_` prefix. Restart `npm run dev` after changing the environment. Without either key, NOVA still works in Local and Auto modes using its bundled engine.
 
-For local `npm run dev`, set `OPENROUTER_API_KEY` in an ignored `.env` file or in the server process environment. `.env*` files are ignored by Git; commit only the empty placeholder in `.env.example`.
+### Vercel
 
-## Redeploy after environment changes
+In **Vercel → Project → Settings → Environment Variables**, add `GEMINI_API_KEY`, `OPENROUTER_API_KEY`, or both to the Production and Preview environments as needed. Keep both values server-side; never put them in client-side code, browser storage, or frontend-prefixed variables. After changing environment variables, redeploy so the new function runtime receives them.
 
-Vercel environment variables are applied to deployments, not retroactively to an already-built deployment. After adding or changing the key, create a new deployment or redeploy the existing commit in the matching environment. Test Preview first, then deploy/redeploy Production after Preview succeeds. No `vercel.json` override is required for the repository's Vite build plus root-level `api/` function.
+## Models and routing
 
-## Operational notes
+Defaults are `gemini-2.5-flash` and OpenRouter's `openrouter/free` router. Set `NOVA_GEMINI_MODEL` or `NOVA_OPENROUTER_MODEL` server-side to override either model. The OpenRouter key can be used with any model available to that key; free-model availability and rate limits can vary.
 
-- The function rejects requests over 24 KiB, more than 12 messages, messages over 4,000 characters, and conversation content over 20 KiB.
-- It applies an in-memory limit of 8 requests per IP per minute per warm function process. Serverless instances do not share this memory; use Vercel edge rate limiting for a deployment-wide quota on a public production app.
-- A free-model outage or rate limit returns a retryable error; the client uses a clearly labelled local response only when the browser is offline.
-- Chat text is sent to OpenRouter for generation. This handler does not log prompts or credentials; hosting-platform request logs and OpenRouter's data-handling policies are governed by those providers. Avoid sending sensitive personal information.
+## Limits and privacy
+
+- Requests are limited to 24 KiB, 12 messages, 4,000 characters per message, and 20 KiB total message content.
+- The in-memory limiter allows 8 NOVA requests per IP per minute per warm server process. For a public deployment-wide quota, configure a distributed rate limiter at the hosting layer.
+- Chat content is sent only to the selected online provider. Local mode does not make a provider request. Avoid sending sensitive personal information; provider and hosting data-handling policies still apply.
+- Provider keys are read from the server environment and are not returned by `/api/nova/config` or `/api/nova/chat`.

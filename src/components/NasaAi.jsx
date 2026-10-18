@@ -42,9 +42,22 @@ import {
   CornerDownLeft
 } from 'lucide-react';
 import { askNovaAi } from '@/lib/nasaApi';
+import { generateLocalSpaceResponse } from '../utils/spaceLocalAiEngine.js';
 import GeminiLiveVoice from './GeminiLiveVoice.jsx';
 
 const STORAGE_KEY = 'nasa_ai_chat_thread_v3';
+const NOVA_PROVIDER_STORAGE_KEY = 'nova_ai_provider_v1';
+const NOVA_PROVIDER_VALUES = new Set(['auto', 'local', 'gemini', 'openrouter']);
+
+function getSavedNovaProvider() {
+  if (typeof window === 'undefined' || !window.localStorage) return 'auto';
+  try {
+    const savedProvider = localStorage.getItem(NOVA_PROVIDER_STORAGE_KEY)?.trim().toLowerCase();
+    return NOVA_PROVIDER_VALUES.has(savedProvider) ? savedProvider : 'auto';
+  } catch {
+    return 'auto';
+  }
+}
 
 /**
  * Web Audio API synthesizer for sci-fi UI feedback
@@ -126,32 +139,6 @@ class SpaceAudioSynthesizer {
 }
 
 const spaceAudio = new SpaceAudioSynthesizer();
-
-/**
- * Trilingual Astrobiology and Deep Space Intelligence Knowledge Bank (Offline Guard)
- */
-const SPACE_INTELLIGENCE_BASE = {
-  apod: {
-    en: '🌌 NASA APOD Feature: "The Pillars of Creation in Deep Infrared" reveals monumental spires of dense interstellar hydrogen gas and dust in the Eagle Nebula (M16), spanning 4–5 light-years. Intense ultraviolet stellar winds from newborn massive stars sculpt these cosmic towers where new protostellar systems are born.',
-    si: '🌌 නාසා APOD විශේෂාංගය: "ගැඹුරු අධෝරක්ත කිරණින් මැවුම්කාර කුළුණු" (Pillars of Creation) මඟින් ඊගල් නිහාරිකාව (M16) තුළ ආලෝක වර්ෂ 4-5ක් පුරා විහිදෙන කොස්මික් දූවිලි හා හයිඩ්‍රජන් වායු කුළුණු අනාවරණය කරයි. නවක තාරකාවල ප්‍රබල පාරජම්බුල විකිරණ මඟින් මෙම තාරකා තවාන් අලංකාර ලෙස හැඩගස්වා ඇත.',
-    ta: '🌌 நாசா APOD சிறப்பம்சம்: "ஆழ அகச்சிவப்புக் கதிர்களில் படைப்பின் தூண்கள்" (Pillars of Creation) என்பது கழுகு நெபுலாவில் (M16) 4–5 ஒளியாண்டுகள் பரவியுள்ள அடர்ந்த காஸ்மிக் வாயு மற்றும் தூசு தூண்களைக் காட்டுகிறது. புதிய விண்மீன்களின் தீவிர புற ஊதா கதிர்வீச்சு இந்த விண்மீன் நாற்றங்கால்களை வடிவமைக்கிறது.'
-  },
-  jwst: {
-    en: '🚀 JWST Discoveries: Operating 1.5 million km away at Sun-Earth L2, the James Webb Space Telescope’s 6.5m gold-beryllium mirror penetrates cosmic dust to observe the earliest galaxies formed over 13.5 billion years ago (SMACS 0723, GLASS-z12) and spectroscopically confirms atmospheric methane and water vapor on habitable-zone exoplanets.',
-    si: '🚀 JWST සොයාගැනීම්: පෘථිවියේ සිට කි.මී. මිලියන 1.5ක් ඈතින් L2 ලක්ෂ්‍යයේ කක්ෂගතව ඇති ජේම්ස් වෙබ් දුරේක්ෂයේ මීටර් 6.5ක රන් ආලේපිත දර්පණ මඟින් වසර බිලියන 13.5කට පෙර බිහිවූ මුල්ම මන්දාකිණිවල ආලෝකය සහ බාහිර ග්‍රහලෝකවල වායුගෝලීය ජල වාෂ්ප සාන්ද්‍රණයන් විමර්ශනය කරයි.',
-    ta: '🚀 JWST கண்டுபிடிப்புகள்: பூமியிலிருந்து 1.5 மில்லியன் கி.மீ தொலைவில் உள்ள L2 புள்ளியில் இயங்கும் ஜேம்ஸ் வெப் தொலைநோக்கியின் 6.5 மீ தங்க முலாம் பூசப்பட்ட கண்ணாடிகள், 13.5 பில்லியன் ஆண்டுகளுக்கு முந்தைய ஆரம்பகால விண்மீன் திரள்களையும் வாழக்கூடிய புறக்கோள்களின் வளிமண்டல நீராவியையும் கண்டறிந்துள்ளன.'
-  },
-  mars: {
-    en: '🔴 Mars Surface Weather: In Jezero Crater, the Perseverance MEDA weather station records a current diurnal atmospheric surface pressure of 748 Pascals (~7.5 mbar) with ambient air temperatures fluctuating between a midday high of -18°C (0°F) to an overnight low of -82°C (-115°F) under clear, dusty skies.',
-    si: '🔴 අඟහරු කාලගුණය: ජෙසීරෝ ආවාටයේ Perseverance රෝවරයේ MEDA කාලගුණ මධ්‍යස්ථානයට අනුව මතුපිට වායුගෝලීය පීඩනය පැස්කල් 748ක් වන අතර දිවා කාලයේ උපරිම උෂ්ණත්වය -18°C දක්වා සහ රාත්‍රී කාලයේ අවම උෂ්ණත්වය -82°C දක්වා වෙනස් වන පැහැදිලි දූවිලි සහිත අහසක් පවතී.',
-    ta: '🔴 செவ்வாய் வானிலை: ஜெசிரோ பள்ளத்தில் உள்ள பெர்சிவரன்ஸ் ரோவரின் MEDA வானிலை மையம், வளிமண்டல அழுத்தத்தை 748 பாஸ்கல் எனவும், வெப்பநிலை பகலில் அதிகபட்சமாக -18°C முதல் இரவில் குறைந்தபட்சமாக -82°C வரை பதிவாகியுள்ளதாகவும் தெரிவிக்கிறது.'
-  },
-  artemis: {
-    en: '🌕 NASA Artemis Program: Humanity’s next monumental step to land the first woman and first person of color on the Moon. Artemis II will launch a crew of 4 astronauts on a lunar flyby aboard the Space Launch System (SLS) and Orion capsule, paving the path for the Artemis III South Pole surface landing.',
-    si: '🌕 නාසා ආටෙමිස් වැඩසටහන: සඳ මතට ප්‍රථම කාන්තාව සහ ප්‍රථම කළු ජාතිකයා ගොඩබැස්වීමේ ඓතිහාසික මෙහෙයුමයි. SLS රොකට්ටුව සහ ඔරායන් කැප්සියුලය මඟින් ගගනගාමීන් 4 දෙනෙකු සඳ වටා පියාසර කරවීමෙන් පසුව ආටෙමිස් III මඟින් සඳෙහි දක්ෂිණ ධ්‍රැවයට ගොඩබසිනු ඇත.',
-    ta: '🌕 ஆர்ட்டெமிஸ் நிலவுத் திட்டம்: நிலவில் முதல் பெண்ணையும் முதல் நிறமுடைய மனிதரையும் தரையிறக்கும் நாசாவின் வரலாற்றுச் சிறப்புமிக்க திட்டம். ஆர்ட்டெமிஸ் II நிலவைச் சுற்றி 4 விண்வெளி வீரர்களைக் கொண்டு செல்லும், ஆர்ட்டெமிஸ் III நிலவின் தென் துருவத்தில் தரையிறங்கும்.'
-  }
-};
 
 /**
  * Trilingual Interactive Quiz Generator for APOD
@@ -366,49 +353,17 @@ const WELCOME_SUGGESTION_CARDS = [
   }
 ];
 
-function resolveLocalFallbackQuery(query, lang = 'en') {
-  const q = (query || '').toLowerCase().trim();
-
-  if (q.includes('apod') || q.includes('today') || q.includes('picture') || q.includes('අද') || q.includes('இன்றைய')) {
-    return SPACE_INTELLIGENCE_BASE.apod[lang] || SPACE_INTELLIGENCE_BASE.apod.en;
-  }
-  if (q.includes('artemis') || q.includes('moon') || q.includes('සඳ') || q.includes('நிலவு')) {
-    return SPACE_INTELLIGENCE_BASE.artemis[lang] || SPACE_INTELLIGENCE_BASE.artemis.en;
-  }
-  if (q.includes('jwst') || q.includes('webb') || q.includes('discover') || q.includes('වෙබ්') || q.includes('கண்டுபிடிப்பு')) {
-    return SPACE_INTELLIGENCE_BASE.jwst[lang] || SPACE_INTELLIGENCE_BASE.jwst.en;
-  }
-  if (q.includes('mars') || q.includes('weather') || q.includes('perseverance') || q.includes('අඟහරු') || q.includes('செவ்வாய்')) {
-    return SPACE_INTELLIGENCE_BASE.mars[lang] || SPACE_INTELLIGENCE_BASE.mars.en;
-  }
-  if (q.includes('iss') || q.includes('orbit') || q.includes('කක්ෂ') || q.includes('சுற்றுப்பாதை')) {
-    if (lang === 'si') {
-      return '🛰️ ISS තොරතුරු: ජාත්‍යන්තර අභ්‍යවකාශ නැවතුම පෘථිවිය වටා පැයට කි.මී. 27,580 ක වේගයෙන් සහ කි.මී. 420 ක උන්නතාංශයක කක්ෂගතව පවතී. සෑම මිනිත්තු 92.7 කට වරක් පෘථිවිය වටා එක් වටයක් සම්පූර්ණ කරයි.';
-    }
-    if (lang === 'ta') {
-      return '🛰️ ISS தகவல்: சர்வதேச விண்வெளி நிலையம் மணிக்கு 27,580 கி.மீ வேகத்தில் பூமியில் இருந்து சுமார் 420 கி.மீ உயரத்தில் சுற்றிவருகிறது. ஒவ்வொரு 92.7 நிமிடங்களுக்கும் ஒருமுறை பூமியை வலம் வருகிறது.';
-    }
-    return '🛰️ ISS orbital facts: The International Space Station orbits at ~27,580 km/h (17,137 mph) at ~420 km altitude, completing an entire Earth orbit every 92.68 minutes.';
-  }
-
-  if (lang === 'si') {
-    return `🛰️ නොබැඳි සටහන (“${query}”): අන්තර්ජාලය නොමැති විට OpenRouter හෝ සජීවී NASA දත්ත වෙත පිවිසිය නොහැක. මෙම දේශීය ආදර්ශ ප්‍රතිචාරය නවතම ටෙලිමෙට්‍රි වාර්තාවක් නොවේ; නැවත සම්බන්ධ වී Retry කරන්න.`;
-  }
-  if (lang === 'ta') {
-    return `🛰️ இணையமில்லா குறிப்பு (“${query}”): இணைய இணைப்பு இல்லாதபோது OpenRouter அல்லது நேரடி NASA தரவை அணுக முடியாது. இந்த உள்ளூர் மாதிரி பதில் தற்போதைய தொலைநிலை அளவீட்டு அறிக்கை அல்ல; மீண்டும் இணைந்து Retry செய்யவும்.`;
-  }
-  return `🛰️ Offline note for "${query}": OpenRouter and live NASA data are unavailable without an internet connection. This saved local demo response is not a current telemetry report; reconnect and retry for an AI answer.`;
-}
-
 function getNovaErrorMessage(error, lang = 'en') {
   const language = typeof lang === 'string' ? lang.split(/[-_]/)[0].toLowerCase() : 'en';
   const code = typeof error?.code === 'string' ? error.code : '';
   const messages = {
     en: {
       AI_NOT_CONFIGURED: 'NOVA AI is not configured on this deployment. Please contact the site administrator.',
+      PROVIDER_NOT_CONFIGURED: 'That provider is not configured on the server. Choose Auto or Local, or ask the administrator to add its server-side API key.',
       RATE_LIMITED: 'Too many NOVA requests were sent. Please wait a moment and retry.',
-      UPSTREAM_RATE_LIMITED: 'OpenRouter free models are busy or rate-limited. Please wait a moment and retry.',
-      FREE_MODEL_UNAVAILABLE: 'No free model is available for this request right now. Please retry shortly.',
+      UPSTREAM_RATE_LIMITED: 'The selected AI provider is busy or rate-limited. Please wait a moment and retry.',
+      FREE_MODEL_UNAVAILABLE: 'No free OpenRouter model is available for this request right now. Please retry shortly.',
+      MODEL_UNAVAILABLE: 'The selected model is unavailable right now. Please retry shortly.',
       AI_TIMEOUT: 'NOVA took too long to respond. Please retry.',
       NETWORK_ERROR: 'Could not reach NOVA. Check your connection and retry.',
       UPSTREAM_NETWORK_ERROR: 'Could not reach the AI provider. Check your connection and retry.',
@@ -422,9 +377,11 @@ function getNovaErrorMessage(error, lang = 'en') {
     },
     si: {
       AI_NOT_CONFIGURED: 'මෙම යෙදවුමේ NOVA AI සකසා නැත. කරුණාකර අඩවි පරිපාලක අමතන්න.',
+      PROVIDER_NOT_CONFIGURED: 'තෝරාගත් AI සේවාව සේවාදායකයේ සකසා නැත. Auto හෝ Local තෝරන්න, නැතහොත් සේවාදායකයේ API යතුර එක් කරන ලෙස පරිපාලකගෙන් ඉල්ලන්න.',
       RATE_LIMITED: 'NOVA ඉල්ලීම් වැඩි ප්‍රමාණයක් යවා ඇත. මොහොතක් රැඳී නැවත උත්සාහ කරන්න.',
-      UPSTREAM_RATE_LIMITED: 'OpenRouter නොමිලේ මාදිලි මේ මොහොතේ කාර්යබහුලයි. මොහොතක් රැඳී නැවත උත්සාහ කරන්න.',
-      FREE_MODEL_UNAVAILABLE: 'දැනට මෙම ඉල්ලීමට නොමිලේ මාදිලියක් ලබාගත නොහැක. මඳ වේලාවකින් නැවත උත්සාහ කරන්න.',
+      UPSTREAM_RATE_LIMITED: 'තෝරාගත් AI සේවාව මේ මොහොතේ කාර්යබහුලයි. මොහොතක් රැඳී නැවත උත්සාහ කරන්න.',
+      FREE_MODEL_UNAVAILABLE: 'දැනට OpenRouter නොමිලේ මාදිලියක් ලබාගත නොහැක. මඳ වේලාවකින් නැවත උත්සාහ කරන්න.',
+      MODEL_UNAVAILABLE: 'තෝරාගත් AI මාදිලිය දැනට ලබාගත නොහැක. මඳ වේලාවකින් නැවත උත්සාහ කරන්න.',
       AI_TIMEOUT: 'NOVA පිළිතුරු දීමට වැඩි වේලාවක් ගත විය. නැවත උත්සාහ කරන්න.',
       NETWORK_ERROR: 'NOVA වෙත සම්බන්ධ විය නොහැක. ඔබගේ සම්බන්ධතාව පරීක්ෂා කර නැවත උත්සාහ කරන්න.',
       UPSTREAM_NETWORK_ERROR: 'AI සේවාව වෙත සම්බන්ධ විය නොහැක. සම්බන්ධතාව පරීක්ෂා කර නැවත උත්සාහ කරන්න.',
@@ -438,9 +395,11 @@ function getNovaErrorMessage(error, lang = 'en') {
     },
     ta: {
       AI_NOT_CONFIGURED: 'இந்த வெளியீட்டில் NOVA AI அமைக்கப்படவில்லை. தள நிர்வாகியைத் தொடர்புகொள்ளவும்.',
+      PROVIDER_NOT_CONFIGURED: 'தேர்ந்தெடுத்த AI சேவை சேவையகத்தில் அமைக்கப்படவில்லை. Auto அல்லது Local-ஐத் தேர்ந்தெடுக்கவும் அல்லது சேவையக API சாவியைச் சேர்க்க நிர்வாகியிடம் கேட்கவும்.',
       RATE_LIMITED: 'NOVA கோரிக்கைகள் அதிகமாக அனுப்பப்பட்டுள்ளன. சிறிது நேரம் காத்திருந்து மீண்டும் முயற்சிக்கவும்.',
-      UPSTREAM_RATE_LIMITED: 'OpenRouter இலவச மாதிரிகள் தற்போது அதிக பயன்பாட்டில் உள்ளன அல்லது வரம்பை எட்டியுள்ளன. சிறிது நேரம் காத்திருந்து மீண்டும் முயற்சிக்கவும்.',
-      FREE_MODEL_UNAVAILABLE: 'இந்தக் கோரிக்கைக்கு இப்போது இலவச மாதிரி கிடைக்கவில்லை. சிறிது நேரம் கழித்து மீண்டும் முயற்சிக்கவும்.',
+      UPSTREAM_RATE_LIMITED: 'தேர்ந்தெடுத்த AI சேவை தற்போது அதிக பயன்பாட்டில் உள்ளது. சிறிது நேரம் காத்திருந்து மீண்டும் முயற்சிக்கவும்.',
+      FREE_MODEL_UNAVAILABLE: 'இந்தக் கோரிக்கைக்கு இப்போது OpenRouter இலவச மாதிரி கிடைக்கவில்லை. சிறிது நேரம் கழித்து மீண்டும் முயற்சிக்கவும்.',
+      MODEL_UNAVAILABLE: 'தேர்ந்தெடுத்த AI மாதிரி தற்போது கிடைக்கவில்லை. சிறிது நேரம் கழித்து மீண்டும் முயற்சிக்கவும்.',
       AI_TIMEOUT: 'NOVA பதிலளிக்க அதிக நேரம் எடுத்தது. மீண்டும் முயற்சிக்கவும்.',
       NETWORK_ERROR: 'NOVA-வை அணுக முடியவில்லை. உங்கள் இணைப்பைச் சரிபார்த்து மீண்டும் முயற்சிக்கவும்.',
       UPSTREAM_NETWORK_ERROR: 'AI சேவையை அணுக முடியவில்லை. இணைப்பைச் சரிபார்த்து மீண்டும் முயற்சிக்கவும்.',
@@ -687,7 +646,9 @@ export function NasaAi({ className = '', lang: propLang }) {
 
   // Conversation Thread
   const [messages, setMessages] = useState([]);
-  const [activeModel, setActiveModel] = useState('openrouter/free');
+  const [selectedProvider, setSelectedProvider] = useState(getSavedNovaProvider);
+  const [providerAvailability, setProviderAvailability] = useState({ local: true, gemini: null, openrouter: null });
+  const [activeModel, setActiveModel] = useState('Auto routing');
   const [connectionState, setConnectionState] = useState('ready'); // 'ready' | 'online' | 'connecting' | 'offline' | 'error'
 
   const chatScrollRef = useRef(null);
@@ -724,6 +685,30 @@ export function NasaAi({ className = '', lang: propLang }) {
       window.removeEventListener('offline', handleOffline);
     };
   }, []);
+
+  // Read only public key-availability flags; the API never sends provider secrets to the browser.
+  useEffect(() => {
+    let mounted = true;
+    fetch('/api/nova/config', { headers: { Accept: 'application/json' }, cache: 'no-store' })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((config) => {
+        if (!mounted || !config?.providers) return;
+        setProviderAvailability({
+          local: true,
+          gemini: config.providers.gemini === true,
+          openrouter: config.providers.openrouter === true,
+        });
+      })
+      .catch(() => {});
+    return () => { mounted = false; };
+  }, []);
+
+  useEffect(() => {
+    if ((selectedProvider === 'gemini' || selectedProvider === 'openrouter') && providerAvailability[selectedProvider] === false) {
+      setSelectedProvider('auto');
+      try { localStorage.setItem(NOVA_PROVIDER_STORAGE_KEY, 'auto'); } catch {}
+    }
+  }, [providerAvailability, selectedProvider]);
 
   // Auto-resize textarea
   const adjustTextareaHeight = useCallback(() => {
@@ -939,8 +924,8 @@ export function NasaAi({ className = '', lang: propLang }) {
       timestamp: Date.now() + 1,
       queryText: text,
       suggestions: [],
-      model: 'openrouter/free',
-      provider: 'OpenRouter'
+      model: 'nasa-local-engine',
+      provider: 'NOVA AI'
     };
 
     const updatedWithUser = [...messages, userMessage, initialAssistantMsg];
@@ -963,15 +948,32 @@ export function NasaAi({ className = '', lang: propLang }) {
           text: m.isFallback ? `[Local offline fallback; may be incomplete] ${m.text}` : m.text
         }));
 
-      const apiResult = await askNovaAi(text, activeLang, historyContext, { signal: requestController.signal });
+      const localLanguage = typeof activeLang === 'string' ? activeLang.split(/[-_]/)[0] : 'en';
+      const apiResult = selectedProvider === 'local'
+        ? (() => {
+          const local = generateLocalSpaceResponse(text, localLanguage);
+          return {
+            text: local.text,
+            suggestions: local.suggestions || [],
+            model: 'nasa-local-engine',
+            provider: 'NOVA Local Space Engine',
+            lang: local.lang || localLanguage,
+            fallback: false,
+            intent: local.intent,
+          };
+        })()
+        : await askNovaAi(text, activeLang, historyContext, {
+          signal: requestController.signal,
+          provider: selectedProvider,
+        });
       const answerText = apiResult.text;
       const suggestions = apiResult.suggestions || [];
-      const modelName = apiResult.model || 'openrouter/free';
-      const providerName = apiResult.provider || 'OpenRouter';
+      const modelName = apiResult.model || 'nasa-local-engine';
+      const providerName = apiResult.provider || 'NOVA Local Space Engine';
 
       setActiveModel(modelName);
 
-      // Attach OpenRouter's selected model/provider and follow-up prompts to the response.
+      // Show the provider/model actually used (including a labeled local fallback).
       setMessages(prev => prev.map(m => m.id === assistantMsgId ? {
         ...m,
         suggestions,
@@ -997,21 +999,18 @@ export function NasaAi({ className = '', lang: propLang }) {
       const isOffline = typeof navigator !== 'undefined' && navigator.onLine === false;
       if (isOffline) {
         const fallbackLang = typeof activeLang === 'string' ? activeLang.split(/[-_]/)[0] : 'en';
-        const fallbackText = resolveLocalFallbackQuery(text, fallbackLang);
-        const localProvider = fallbackLang === 'si'
-          ? 'දේශීය නොබැඳි පිළිතුර'
-          : fallbackLang === 'ta'
-          ? 'உள்ளூர் ஆஃப்லைன் பதில்'
-          : 'Local offline response';
+        const localResult = generateLocalSpaceResponse(text, fallbackLang);
+        const fallbackText = localResult.text;
+        const localProvider = 'NOVA Local Space Engine';
 
         setLoading(false);
-        setActiveModel('Local offline knowledge base');
+        setActiveModel('nasa-local-engine');
         setMessages(prev => {
           const updated = prev.map(m => m.id === assistantMsgId ? {
             ...m,
-            model: 'Local fallback',
+            model: 'nasa-local-engine',
             provider: localProvider,
-            suggestions: [],
+            suggestions: localResult.suggestions || [],
             isFallback: true
           } : m);
           persistMessages(updated);
@@ -1031,14 +1030,14 @@ export function NasaAi({ className = '', lang: propLang }) {
 
       setLoading(false);
       setConnectionState('error');
-      setActiveModel('OpenRouter free models');
+      setActiveModel(unavailableLabel);
       setMessages(prev => {
         const updated = prev.map(m => m.id === assistantMsgId ? {
           ...m,
           text: errorText,
           suggestions: [],
           model: unavailableLabel,
-          provider: 'OpenRouter',
+          provider: error?.provider || 'NOVA AI',
           isError: true
         } : m);
         persistMessages(updated);
@@ -1049,7 +1048,7 @@ export function NasaAi({ className = '', lang: propLang }) {
         requestAbortControllerRef.current = null;
       }
     }
-  }, [activeLang, inputQuery, loading, messages, soundEffectsEnabled, stopSpeech, streamAssistantResponse, persistMessages]);
+  }, [activeLang, inputQuery, loading, messages, selectedProvider, soundEffectsEnabled, stopSpeech, streamAssistantResponse, persistMessages]);
 
   // Voice Microphone Input
   const toggleVoiceInput = useCallback(() => {
@@ -1213,9 +1212,9 @@ export function NasaAi({ className = '', lang: propLang }) {
               title={
                 connectionState === 'connecting' ? 'Transmitting Query' :
                 connectionState === 'offline' || !isOnline ? 'Offline Guard Engine' :
-                connectionState === 'error' ? 'OpenRouter request failed' :
+                connectionState === 'error' ? 'NOVA provider request failed' :
                 connectionState === 'ready' ? 'Ready to connect' :
-                'OpenRouter AI Online'
+                'NOVA AI Online'
               }
             />
           </div>
@@ -1229,7 +1228,7 @@ export function NasaAi({ className = '', lang: propLang }) {
               {/* AI Engine Badge */}
               <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-cyan-500/15 border border-cyan-500/30 text-cyan-300 flex items-center gap-1.5 shadow-sm">
                 <Sparkles className="w-3 h-3 text-cyan-400" />
-                OpenRouter • Free Models
+                {activeLang === 'si' ? 'දේශීය • Gemini • OpenRouter' : activeLang === 'ta' ? 'உள்ளூர் • Gemini • OpenRouter' : 'Local • Gemini • OpenRouter'}
               </span>
 
               {/* Verified Online/Connecting State Badge */}
@@ -1257,7 +1256,7 @@ export function NasaAi({ className = '', lang: propLang }) {
                     ? (activeLang === 'si' ? 'AI සේවාව තාවකාලිකව අසාර්ථකයි' : activeLang === 'ta' ? 'AI சேவை தற்காலிகமாகக் கிடைக்கவில்லை' : 'AI temporarily unavailable')
                     : connectionState === 'ready'
                     ? (activeLang === 'si' ? 'සම්බන්ධ වීමට සූදානම්' : activeLang === 'ta' ? 'இணைக்கத் தயார்' : 'Ready to connect')
-                    : (activeLang === 'si' ? 'OpenRouter නොමිලේ මාදිලි' : activeLang === 'ta' ? 'OpenRouter இலவச மாதிரிகள்' : 'OpenRouter Free Models')}
+                    : (activeLang === 'si' ? 'දේශීය • Gemini • OpenRouter' : activeLang === 'ta' ? 'உள்ளூர் • Gemini • OpenRouter' : 'Local • Gemini • OpenRouter')}
                 </span>
               </span>
 
@@ -1268,16 +1267,52 @@ export function NasaAi({ className = '', lang: propLang }) {
             </div>
 
             <p className="text-[11px] text-slate-400 mt-0.5 hidden sm:block">
-              {activeLang === 'si' ? 'අභ්‍යවකාශ සහායක • OpenRouter AI සහ සංවාද මතකය' :
-               activeLang === 'ta' ? 'விண்வெளி உதவியாளர் • OpenRouter AI உரையாடல் நினைவகம்' :
-               'Space Assistant • OpenRouter Free AI & Multi-Turn Memory'}
+              {activeLang === 'si' ? 'අභ්‍යවකාශ සහායක • දේශීය එන්ජිම, Gemini සහ OpenRouter' :
+               activeLang === 'ta' ? 'விண்வெளி உதவியாளர் • உள்ளூர் இயந்திரம், Gemini மற்றும் OpenRouter' :
+               'Space Assistant • Local Engine, Gemini & OpenRouter'}
             </p>
           </div>
         </div>
 
         {/* Header Action Controls */}
-        <div className="flex items-center gap-1.5 text-xs font-mono">
-          
+        <div className="flex items-center gap-1.5 text-xs font-mono flex-wrap">
+
+          {/* Engine selector; keys are configured server-side and never entered in the browser. */}
+          <label
+            className="flex items-center gap-1.5 rounded-xl border border-slate-700 bg-slate-900/80 px-2 py-1.5 text-slate-300"
+            title={activeLang === 'si'
+              ? 'Gemini සහ OpenRouter API යතුරු සේවාදායකයේ ආරක්ෂිතව සකසන්න.'
+              : activeLang === 'ta'
+              ? 'Gemini மற்றும் OpenRouter API சாவிகளை சேவையகத்தில் பாதுகாப்பாக அமைக்கவும்.'
+              : 'Provider API keys are configured securely on the server.'}
+          >
+            <Layers className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+            <select
+              aria-label={activeLang === 'si' ? 'NOVA AI එන්ජිම තෝරන්න' : activeLang === 'ta' ? 'NOVA AI இயந்திரத்தைத் தேர்ந்தெடுக்கவும்' : 'Choose NOVA AI engine'}
+              value={selectedProvider}
+              disabled={loading || Boolean(streamingMessageId)}
+              onChange={(event) => {
+                const nextProvider = event.target.value;
+                setSelectedProvider(nextProvider);
+                try { localStorage.setItem(NOVA_PROVIDER_STORAGE_KEY, nextProvider); } catch {}
+              }}
+              className="max-w-[170px] bg-transparent text-[11px] font-semibold text-cyan-100 outline-none cursor-pointer disabled:cursor-not-allowed"
+            >
+              <option value="auto">{activeLang === 'si' ? 'ස්වයංක්‍රීය' : activeLang === 'ta' ? 'தானியங்கி' : 'Auto (OpenRouter → Gemini → Local)'}</option>
+              <option value="local">{activeLang === 'si' ? 'දේශීය අභ්‍යවකාශ එන්ජිම' : activeLang === 'ta' ? 'உள்ளூர் விண்வெளி இயந்திரம்' : 'Local Space Engine'}</option>
+              <option value="gemini" disabled={providerAvailability.gemini === false}>
+                Gemini{providerAvailability.gemini === false
+                  ? (activeLang === 'si' ? ' · යතුර සකසා නැත' : activeLang === 'ta' ? ' · சாவி அமைக்கப்படவில்லை' : ' · key not configured')
+                  : ' API'}
+              </option>
+              <option value="openrouter" disabled={providerAvailability.openrouter === false}>
+                OpenRouter{providerAvailability.openrouter === false
+                  ? (activeLang === 'si' ? ' · යතුර සකසා නැත' : activeLang === 'ta' ? ' · சாவி அமைக்கப்படவில்லை' : ' · key not configured')
+                  : ' API'}
+              </option>
+            </select>
+          </label>
+
           {/* New Chat Button */}
           <button
             type="button"
@@ -1515,8 +1550,8 @@ export function NasaAi({ className = '', lang: propLang }) {
                       <AlertCircle className="w-3 h-3 shrink-0" />
                       <span>
                         {msg.isError
-                          ? (activeLang === 'si' ? 'OpenRouter පිළිතුර ලබාගත නොහැකි විය. පහත Retry භාවිත කරන්න.' : activeLang === 'ta' ? 'OpenRouter பதில் கிடைக்கவில்லை. கீழே உள்ள Retry-ஐப் பயன்படுத்தவும்.' : 'OpenRouter did not respond. Use Retry below.')
-                          : (activeLang === 'si' ? 'මෙය දේශීය නොබැඳි පිළිතුරකි; OpenRouter මඟින් ජනනය කර නැත.' : activeLang === 'ta' ? 'இது உள்ளூர் ஆஃப்லைன் பதில்; OpenRouter உருவாக்கியது அல்ல.' : 'Local offline fallback — not generated by OpenRouter.')}
+                          ? (activeLang === 'si' ? 'NOVA AI පිළිතුර ලබාගත නොහැකි විය. පහත Retry භාවිත කරන්න.' : activeLang === 'ta' ? 'NOVA AI பதில் கிடைக்கவில்லை. கீழே உள்ள Retry-ஐப் பயன்படுத்தவும்.' : 'NOVA could not get a provider response. Use Retry below.')
+                          : (activeLang === 'si' ? 'මෙම පිළිතුර NOVA හි දේශීය අභ්‍යවකාශ දැනුම් එන්ජිමෙන් ලබාගත්තකි.' : activeLang === 'ta' ? 'இந்தப் பதில் NOVA-வின் உள்ளூர் விண்வெளி அறிவு இயந்திரத்திலிருந்து வழங்கப்பட்டது.' : 'Answered by NOVA’s built-in local space-knowledge engine.')}
                       </span>
                     </div>
                   )}
@@ -1638,9 +1673,9 @@ export function NasaAi({ className = '', lang: propLang }) {
                   <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse delay-150" />
                 </div>
                 <span>
-                  {activeLang === 'si' ? 'OpenRouter නොමිලේ AI පිළිතුර සකස් කරමින්...' :
-                   activeLang === 'ta' ? 'OpenRouter இலவச AI பதிலை உருவாக்குகிறது...' :
-                   'Waiting for an OpenRouter free-model response...'}
+                  {activeLang === 'si' ? 'NOVA AI පිළිතුර සකස් කරමින්...' :
+                   activeLang === 'ta' ? 'NOVA AI பதிலை உருவாக்குகிறது...' :
+                   selectedProvider === 'local' ? 'Searching the local space-knowledge engine...' : 'NOVA is preparing a response with your selected provider...'}
                 </span>
               </div>
               <button
@@ -1855,7 +1890,7 @@ export function NasaAi({ className = '', lang: propLang }) {
             <span className="text-slate-600">•</span>
             <span className="text-emerald-400 flex items-center gap-1">
               <ShieldCheck className="w-3 h-3" />
-              OpenRouter • Free Models
+              {activeLang === 'si' ? 'දේශීය • Gemini • OpenRouter' : activeLang === 'ta' ? 'உள்ளூர் • Gemini • OpenRouter' : 'Local • Gemini • OpenRouter'}
             </span>
           </span>
           <span className="text-slate-500">

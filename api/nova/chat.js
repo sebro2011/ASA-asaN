@@ -1,5 +1,8 @@
 import { handleNovaChatRequest } from '../../server/novaChat.js';
 
+// Allow Auto mode to try both configured providers before falling back locally.
+export const config = { maxDuration: 30 };
+
 function getClientIp(req) {
   const forwarded = req.headers?.['x-forwarded-for'];
   const firstForwardedIp = Array.isArray(forwarded)
