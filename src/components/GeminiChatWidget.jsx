@@ -327,7 +327,7 @@ function MarkdownTextRenderer({ text }) {
   const codeBlockParts = text.split(/(```[\s\S]*?```)/g);
 
   return (
-    <div className="space-y-2 leading-relaxed text-slate-200 break-words text-xs sm:text-sm">
+    <div className="space-y-2 leading-relaxed text-ink-2 break-words text-xs sm:text-sm">
       {codeBlockParts.map((block, blockIdx) => {
         if (block.startsWith('```') && block.endsWith('```')) {
           const rawContent = block.slice(3, -3);
@@ -362,7 +362,7 @@ function MarkdownTextRenderer({ text }) {
 
               if (trimmed.startsWith('### ')) {
                 return (
-                  <h4 key={idx} className="text-sm font-bold text-cyan-300 font-['Orbitron'] mt-3 mb-1 flex items-center gap-1.5">
+                  <h4 key={idx} className="text-sm font-bold text-cyan-300 font-display mt-3 mb-1 flex items-center gap-1.5">
                     <Sparkles className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
                     <span>{trimmed.replace(/^###\s+/, '')}</span>
                   </h4>
@@ -371,8 +371,8 @@ function MarkdownTextRenderer({ text }) {
 
               if (trimmed.startsWith('## ')) {
                 return (
-                  <h3 key={idx} className="text-base font-bold text-white font-['Orbitron'] mt-3.5 mb-1.5 text-purple-300 flex items-center gap-1.5">
-                    <Atom className="w-4 h-4 text-purple-400 shrink-0" />
+                  <h3 key={idx} className="text-base font-bold text-white font-display mt-3.5 mb-1.5 text-derived flex items-center gap-1.5">
+                    <Atom className="w-4 h-4 text-derived shrink-0" />
                     <span>{trimmed.replace(/^##\s+/, '')}</span>
                   </h3>
                 );
@@ -380,7 +380,7 @@ function MarkdownTextRenderer({ text }) {
 
               if (trimmed.startsWith('# ')) {
                 return (
-                  <h2 key={idx} className="text-lg font-bold text-white font-['Orbitron'] mt-4 mb-2 text-cyan-200">
+                  <h2 key={idx} className="text-lg font-bold text-white font-display mt-4 mb-2 text-cyan-200">
                     {trimmed.replace(/^#\s+/, '')}
                   </h2>
                 );
@@ -443,8 +443,8 @@ function CodeBlockView({ language, code }) {
   };
 
   return (
-    <div className="my-2.5 rounded-xl bg-[#030712] border border-cyan-950/80 overflow-hidden font-mono text-xs shadow-xl">
-      <div className="flex items-center justify-between px-3 py-1.5 bg-slate-950 border-b border-cyan-950/60 text-[11px] text-slate-400">
+    <div className="my-2.5 rounded-[10px] bg-[#030712] border border-cyan-950/80 overflow-hidden font-mono text-xs shadow-xl">
+      <div className="flex items-center justify-between px-3 py-1.5 bg-abyss border-b border-cyan-950/60 text-[11px] text-ink-3">
         <div className="flex items-center gap-1.5">
           <Terminal className="w-3.5 h-3.5 text-cyan-400" />
           <span className="uppercase text-cyan-300 font-bold">{language}</span>
@@ -452,13 +452,13 @@ function CodeBlockView({ language, code }) {
         <button
           type="button"
           onClick={handleCopy}
-          className="flex items-center gap-1 px-2 py-0.5 rounded hover:bg-slate-900 text-slate-300 hover:text-white transition cursor-pointer"
+          className="flex items-center gap-1 px-2 py-0.5 rounded hover:bg-surface/60 text-ink-2 hover:text-ink transition cursor-pointer"
         >
-          {copied ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+          {copied ? <Check className="w-3 h-3 text-signal" /> : <Copy className="w-3 h-3" />}
           <span>{copied ? 'Copied' : 'Copy'}</span>
         </button>
       </div>
-      <pre className="p-3 overflow-x-auto text-slate-200 leading-relaxed scrollbar-thin">
+      <pre className="p-3 overflow-x-auto text-ink-2 leading-relaxed scrollbar-thin">
         <code>{code}</code>
       </pre>
     </div>
@@ -971,7 +971,7 @@ export function GeminiChatWidget({
             <button
               type="button"
               onClick={() => setIsOpen(true)}
-              className="group relative flex items-center gap-2.5 px-4 py-2.5 rounded-full bg-[#010409]/95 border border-cyan-500/40 text-cyan-200 shadow-[0_0_24px_rgba(6,182,212,0.25)] hover:border-cyan-400 hover:shadow-[0_0_35px_rgba(6,182,212,0.4)] backdrop-blur-xl transition-all cursor-pointer select-none"
+              className="group relative flex items-center gap-2.5 px-4 py-2.5 rounded-full bg-void border border-cyan-500/40 text-cyan-200 shadow-[0_0_24px_rgba(6,182,212,0.25)] hover:border-cyan-400 hover:shadow-[0_0_35px_rgba(6,182,212,0.4)] backdrop-blur-xl transition-all cursor-pointer select-none"
               title="Open NOVA NASA AI Assistant"
             >
               {/* Radial glow background */}
@@ -990,7 +990,7 @@ export function GeminiChatWidget({
 
               {/* Text label */}
               <div className="flex flex-col text-left">
-                <span className="text-xs font-bold font-['Orbitron'] tracking-wider text-white flex items-center gap-1.5">
+                <span className="text-xs font-bold font-display tracking-wider text-white flex items-center gap-1.5">
                   NOVA
                   <span className="text-[10px] font-mono font-normal text-cyan-400/90 px-1 py-0.2 rounded bg-cyan-950/60 border border-cyan-500/30">
                     AI
@@ -1025,7 +1025,7 @@ export function GeminiChatWidget({
               opacity: { duration: 0.25, ease: MISSION_CONTROL_EASE_OUT },
               y: { duration: 0.32, ease: MISSION_CONTROL_EASE_OUT }
             }}
-            className={`fixed z-50 flex flex-col overflow-hidden bg-[#010409]/95 backdrop-blur-2xl border border-cyan-500/30 rounded-2xl shadow-[0_0_50px_rgba(6,182,212,0.22)] ${
+            className={`fixed z-50 flex flex-col overflow-hidden bg-void backdrop-blur-2xl border border-cyan-500/30 rounded-[14px] shadow-[0_0_50px_rgba(6,182,212,0.22)] ${
               isMaximized
                 ? 'inset-3 sm:inset-6 max-w-5xl mx-auto'
                 : 'bottom-20 sm:bottom-6 right-4 sm:right-6 w-[calc(100vw-32px)] sm:w-[460px] md:w-[500px]'
@@ -1042,13 +1042,13 @@ export function GeminiChatWidget({
               onClick={() => {
                 if (isCollapsed) setIsCollapsed(false);
               }}
-              className={`px-4 py-3 bg-[#010409]/90 border-b border-cyan-500/20 flex items-center justify-between gap-3 shrink-0 select-none ${
-                isCollapsed ? 'cursor-pointer hover:bg-slate-950/95 transition' : ''
+              className={`px-4 py-3 bg-void border-b border-cyan-500/20 flex items-center justify-between gap-3 shrink-0 select-none ${
+                isCollapsed ? 'cursor-pointer hover:bg-abyss/95 transition' : ''
               }`}
             >
               <div className="flex items-center gap-2.5 min-w-0">
                 {/* Assistant avatar badge */}
-                <div className="relative w-8 h-8 rounded-xl bg-cyan-950/80 border border-cyan-500/40 flex items-center justify-center shrink-0 text-cyan-300 shadow-inner">
+                <div className="relative w-8 h-8 rounded-[10px] bg-cyan-950/80 border border-cyan-500/40 flex items-center justify-center shrink-0 text-cyan-300 shadow-inner">
                   <Bot className="w-4 h-4" />
                   <span className={`absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full ${
                     connectionState === 'connecting'
@@ -1061,7 +1061,7 @@ export function GeminiChatWidget({
 
                 <div className="min-w-0 flex flex-col">
                   <div className="flex items-center gap-2">
-                    <h3 className="text-xs sm:text-sm font-bold text-white font-['Orbitron'] tracking-wide truncate">
+                    <h3 className="text-xs sm:text-sm font-bold text-white font-display tracking-wide truncate">
                       {ui.title}
                     </h3>
                   </div>
@@ -1089,14 +1089,14 @@ export function GeminiChatWidget({
               {/* Header Actions */}
               <div className="flex items-center gap-1.5 shrink-0">
                 {/* Trilingual Language Selector */}
-                <div className="flex items-center p-0.5 rounded-lg bg-slate-900/80 border border-cyan-950">
+                <div className="flex items-center p-0.5 rounded-[8px] bg-surface/60 border border-cyan-950">
                   <button
                     type="button"
                     onClick={() => handleLanguageChange('en')}
                     className={`px-1.5 py-0.5 rounded text-[10px] font-mono transition ${
                       activeLang === 'en' 
                         ? 'bg-cyan-500/20 text-cyan-300 font-bold border border-cyan-500/40' 
-                        : 'text-slate-400 hover:text-white'
+                        : 'text-ink-3 hover:text-ink'
                     }`}
                     title="English"
                   >
@@ -1108,7 +1108,7 @@ export function GeminiChatWidget({
                     className={`px-1.5 py-0.5 rounded text-[10px] font-mono transition ${
                       activeLang === 'si' 
                         ? 'bg-cyan-500/20 text-cyan-300 font-bold border border-cyan-500/40' 
-                        : 'text-slate-400 hover:text-white'
+                        : 'text-ink-3 hover:text-ink'
                     }`}
                     title="සිංහල"
                   >
@@ -1120,7 +1120,7 @@ export function GeminiChatWidget({
                     className={`px-1.5 py-0.5 rounded text-[10px] font-mono transition ${
                       activeLang === 'ta' 
                         ? 'bg-cyan-500/20 text-cyan-300 font-bold border border-cyan-500/40' 
-                        : 'text-slate-400 hover:text-white'
+                        : 'text-ink-3 hover:text-ink'
                     }`}
                     title="தமிழ்"
                   >
@@ -1132,10 +1132,10 @@ export function GeminiChatWidget({
                 <button
                   type="button"
                   onClick={() => setSoundEffectsEnabled(!soundEffectsEnabled)}
-                  className={`p-1.5 rounded-lg border transition ${
+                  className={`p-1.5 rounded-[8px] border transition ${
                     soundEffectsEnabled
                       ? 'border-cyan-500/40 text-cyan-300 bg-cyan-950/40'
-                      : 'border-slate-800 text-slate-500 hover:text-slate-300'
+                      : 'border-line text-ink-4 hover:text-ink-2'
                   }`}
                   title={soundEffectsEnabled ? 'Mute sound effects' : 'Enable sound effects'}
                 >
@@ -1146,7 +1146,7 @@ export function GeminiChatWidget({
                 <button
                   type="button"
                   onClick={() => setIsLiveVoiceOpen(true)}
-                  className="px-2 py-1.5 rounded-lg border border-cyan-500/40 hover:border-cyan-400 bg-gradient-to-r from-cyan-950/90 to-blue-950/90 hover:from-cyan-900 hover:to-blue-900 text-cyan-300 flex items-center gap-1.5 shadow-[0_0_12px_rgba(6,182,212,0.3)] transition hover:scale-105 active:scale-95 cursor-pointer"
+                  className="px-2 py-1.5 rounded-[8px] border border-cyan-500/40 hover:border-cyan-400 bg-gradient-to-r from-cyan-950/90 to-blue-950/90 hover:from-cyan-900 hover:to-blue-900 text-cyan-300 flex items-center gap-1.5 shadow-[0_0_12px_rgba(6,182,212,0.3)] transition hover:scale-105 active:scale-95 cursor-pointer"
                   title={ui.liveVoiceTooltip}
                   aria-label={ui.liveVoiceTooltip}
                 >
@@ -1161,10 +1161,10 @@ export function GeminiChatWidget({
                   type="button"
                   onClick={handleClearConversation}
                   disabled={messages.length === 0}
-                  className={`px-2.5 py-1.5 rounded-lg border transition-all duration-200 flex items-center gap-1.5 cursor-pointer ${
+                  className={`px-2.5 py-1.5 rounded-[8px] border transition-all duration-200 flex items-center gap-1.5 cursor-pointer ${
                     messages.length > 0
-                      ? 'border-cyan-500/30 hover:border-rose-500/60 text-slate-300 hover:text-rose-300 bg-slate-900/80 hover:bg-rose-950/30 active:scale-95 shadow-sm hover:shadow-[0_0_12px_rgba(244,63,94,0.2)]'
-                      : 'border-slate-900/60 text-slate-600 bg-slate-950/40 cursor-not-allowed opacity-40'
+                      ? 'border-cyan-500/30 hover:border-rose-500/60 text-ink-2 hover:text-critical bg-surface/60 hover:bg-rose-950/30 active:scale-95 shadow-sm hover:shadow-[0_0_12px_rgba(244,63,94,0.2)]'
+                      : 'border-slate-900/60 text-ink-4 bg-abyss/40 cursor-not-allowed opacity-40'
                   }`}
                   title={ui.clearConversation}
                   aria-label={ui.clearConversation}
@@ -1182,7 +1182,7 @@ export function GeminiChatWidget({
                     e.stopPropagation();
                     setIsCollapsed(!isCollapsed);
                   }}
-                  className="p-1.5 rounded-lg border border-slate-800/80 hover:border-cyan-500/40 text-slate-400 hover:text-white bg-slate-900/60 transition cursor-pointer"
+                  className="p-1.5 rounded-[8px] border border-line hover:border-cyan-500/40 text-ink-3 hover:text-ink bg-surface/50 transition cursor-pointer"
                   title={isCollapsed ? 'Expand terminal' : 'Collapse terminal'}
                   aria-label={isCollapsed ? 'Expand terminal' : 'Collapse terminal'}
                 >
@@ -1197,7 +1197,7 @@ export function GeminiChatWidget({
                     if (isCollapsed) setIsCollapsed(false);
                     setIsMaximized(!isMaximized);
                   }}
-                  className="p-1.5 rounded-lg border border-slate-800/80 hover:border-cyan-500/40 text-slate-400 hover:text-white bg-slate-900/60 transition hidden sm:inline-flex cursor-pointer"
+                  className="p-1.5 rounded-[8px] border border-line hover:border-cyan-500/40 text-ink-3 hover:text-ink bg-surface/50 transition hidden sm:inline-flex cursor-pointer"
                   title={isMaximized ? 'Restore size' : 'Maximize terminal'}
                 >
                   {isMaximized ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
@@ -1210,7 +1210,7 @@ export function GeminiChatWidget({
                     e.stopPropagation();
                     setIsOpen(false);
                   }}
-                  className="p-1.5 rounded-lg border border-slate-800/80 hover:border-rose-500/40 text-slate-400 hover:text-rose-400 bg-slate-900/60 transition cursor-pointer"
+                  className="p-1.5 rounded-[8px] border border-line hover:border-rose-500/40 text-ink-3 hover:text-critical bg-surface/50 transition cursor-pointer"
                   title="Close terminal"
                 >
                   <X className="w-3.5 h-3.5" />
@@ -1233,19 +1233,19 @@ export function GeminiChatWidget({
                   className="flex-1 flex flex-col min-h-0 overflow-hidden"
                 >
                   {/* Active Telemetry Mini Status Strip */}
-                  <div className="px-3 py-1 bg-slate-950/80 border-b border-cyan-950/60 flex items-center justify-between text-[10px] font-mono text-slate-400 overflow-x-auto scrollbar-none gap-3 select-none">
+                  <div className="px-3 py-1 bg-abyss/70 border-b border-cyan-950/60 flex items-center justify-between text-[10px] font-mono text-ink-3 overflow-x-auto scrollbar-none gap-3 select-none">
                     <div className="flex items-center gap-2 shrink-0">
                       <span className="text-cyan-400 font-bold flex items-center gap-1">
                         <Radio className="w-3 h-3 text-cyan-400 animate-pulse" />
                         DSN TELEMETRY:
                       </span>
-                      <span className="text-slate-300">
+                      <span className="text-ink-2">
                         ISS ({telemetry.issPosition.lat.toFixed(1)}°, {telemetry.issPosition.lon.toFixed(1)}°) • {Math.round(telemetry.issAltitude)} km
                       </span>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
-                      <span className="text-slate-500">|</span>
-                      <span className="text-slate-300">
+                      <span className="text-ink-4">|</span>
+                      <span className="text-ink-2">
                         NEO: {telemetry.asteroidCount} objects
                       </span>
                     </div>
@@ -1259,15 +1259,15 @@ export function GeminiChatWidget({
                     {/* Welcome Screen when conversation is empty */}
                     {messages.length === 0 && (
                       <div className="py-4 space-y-5">
-                        <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-b from-cyan-950/30 via-slate-950/60 to-transparent border border-cyan-500/20 relative overflow-hidden">
+                        <div className="p-4 sm:p-5 rounded-[14px] bg-gradient-to-b from-cyan-950/30 via-slate-950/60 to-transparent border border-cyan-500/20 relative overflow-hidden">
                           <div className="relative z-10 flex flex-col items-center text-center">
-                            <div className="w-12 h-12 rounded-2xl bg-cyan-950/80 border border-cyan-500/40 flex items-center justify-center text-cyan-300 shadow-[0_0_20px_rgba(6,182,212,0.3)] mb-3">
+                            <div className="w-12 h-12 rounded-[14px] bg-cyan-950/80 border border-cyan-500/40 flex items-center justify-center text-cyan-300 shadow-[0_0_20px_rgba(6,182,212,0.3)] mb-3">
                               <Bot className="w-6 h-6 animate-pulse" />
                             </div>
-                            <h4 className="text-base sm:text-lg font-bold text-white font-['Orbitron']">
+                            <h4 className="text-base sm:text-lg font-bold text-white font-display">
                               {ui.welcomeTitle}
                             </h4>
-                            <p className="text-xs text-slate-300 mt-1 max-w-md leading-relaxed">
+                            <p className="text-xs text-ink-2 mt-1 max-w-md leading-relaxed">
                               {ui.welcomeSub}
                             </p>
                           </div>
@@ -1291,12 +1291,12 @@ export function GeminiChatWidget({
                                   key={card.id}
                                   type="button"
                                   onClick={() => executeUserQuery(promptText)}
-                                  className="group p-2.5 sm:p-3 rounded-xl bg-slate-950/70 border border-slate-800/80 hover:border-cyan-500/40 text-left transition-all hover:bg-cyan-950/20 flex items-start gap-2.5 cursor-pointer shadow-sm"
+                                  className="group p-2.5 sm:p-3 rounded-[10px] bg-abyss/70 border border-line hover:border-cyan-500/40 text-left transition-all hover:bg-cyan-950/20 flex items-start gap-2.5 cursor-pointer shadow-sm"
                                 >
-                                  <div className="w-7 h-7 rounded-lg bg-cyan-950/60 border border-cyan-800/40 flex items-center justify-center text-cyan-400 shrink-0 group-hover:scale-105 transition">
+                                  <div className="w-7 h-7 rounded-[8px] bg-cyan-950/60 border border-cyan-800/40 flex items-center justify-center text-cyan-400 shrink-0 group-hover:scale-105 transition">
                                     <IconComponent className="w-3.5 h-3.5" />
                                   </div>
-                                  <span className="text-xs text-slate-300 group-hover:text-white leading-snug line-clamp-2">
+                                  <span className="text-xs text-ink-2 group-hover:text-ink leading-snug line-clamp-2">
                                     {labelText}
                                   </span>
                                 </button>
@@ -1323,7 +1323,7 @@ export function GeminiChatWidget({
                           className={`flex gap-2.5 ${isUser ? 'justify-end' : 'justify-start'}`}
                         >
                           {!isUser && (
-                            <div className="w-7 h-7 rounded-xl bg-cyan-950/80 border border-cyan-500/40 flex items-center justify-center text-cyan-300 shrink-0 mt-0.5">
+                            <div className="w-7 h-7 rounded-[10px] bg-cyan-950/80 border border-cyan-500/40 flex items-center justify-center text-cyan-300 shrink-0 mt-0.5">
                               <Bot className="w-3.5 h-3.5" />
                             </div>
                           )}
@@ -1331,17 +1331,17 @@ export function GeminiChatWidget({
                           <div className={`max-w-[85%] sm:max-w-[80%] flex flex-col ${isUser ? 'items-end' : 'items-start'}`}>
                             {/* Message Bubble with subtle border gradient effect on hover & refined padding for long-form AI explanations */}
                             <div
-                              className={`group/bubble relative rounded-2xl transition-all duration-300 ${
+                              className={`group/bubble relative rounded-[14px] transition-all duration-300 ${
                                 isUser
                                   ? 'rounded-tr-none p-[1px] bg-gradient-to-r from-cyan-500/35 via-blue-500/40 to-indigo-500/30 hover:from-cyan-400 hover:via-sky-400 hover:to-blue-400 shadow-md hover:shadow-[0_4px_20px_rgba(6,182,212,0.25)]'
                                   : 'rounded-tl-none p-[1px] bg-gradient-to-br from-cyan-500/25 via-slate-800/40 to-blue-500/20 hover:from-cyan-400/80 hover:via-cyan-300/50 hover:to-blue-400/70 shadow-[0_4px_24px_rgba(0,0,0,0.55)] hover:shadow-[0_4px_30px_rgba(6,182,212,0.22)]'
                               }`}
                             >
                               <div
-                                className={`rounded-2xl transition-all duration-300 ${
+                                className={`rounded-[14px] transition-all duration-300 ${
                                   isUser
                                     ? 'rounded-tr-none bg-gradient-to-br from-cyan-600/95 via-blue-600/95 to-indigo-700/90 group-hover/bubble:from-cyan-500/95 group-hover/bubble:via-blue-500/95 px-4 py-3 sm:px-4.5 sm:py-3.5 text-white shadow-inner'
-                                    : 'rounded-tl-none bg-[#030712]/95 group-hover/bubble:bg-[#04081c]/95 px-4.5 py-4 sm:px-5 sm:py-4.5 text-slate-100 backdrop-blur-xl'
+                                    : 'rounded-tl-none bg-[#030712]/95 group-hover/bubble:bg-[#04081c]/95 px-4.5 py-4 sm:px-5 sm:py-4.5 text-ink backdrop-blur-xl'
                                 }`}
                               >
                                 {isUser ? (
@@ -1349,7 +1349,7 @@ export function GeminiChatWidget({
                                     {displayText}
                                   </p>
                                 ) : (
-                                  <div className="space-y-2.5 text-xs sm:text-sm leading-relaxed text-slate-100">
+                                  <div className="space-y-2.5 text-xs sm:text-sm leading-relaxed text-ink">
                                     <MarkdownTextRenderer text={displayText} />
 
                                     {/* Typewriter Cursor during streaming */}
@@ -1363,12 +1363,12 @@ export function GeminiChatWidget({
 
                             {/* Footer Actions for Assistant Messages */}
                             {!isUser && displayText && (
-                              <div className="flex items-center gap-2 mt-1.5 px-1 text-[10px] font-mono text-slate-400">
+                              <div className="flex items-center gap-2 mt-1.5 px-1 text-[10px] font-mono text-ink-3">
                                 <span className="text-cyan-400/80">
                                   {msg.model || 'Google Gemini 3.8 Flash'}
                                 </span>
 
-                                <span className="text-slate-600">•</span>
+                                <span className="text-ink-4">•</span>
 
                                 <button
                                   type="button"
@@ -1376,11 +1376,11 @@ export function GeminiChatWidget({
                                   className="hover:text-cyan-300 flex items-center gap-1 transition cursor-pointer"
                                   title="Copy response"
                                 >
-                                  {copiedId === msg.id ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                                  {copiedId === msg.id ? <Check className="w-3 h-3 text-signal" /> : <Copy className="w-3 h-3" />}
                                   <span>{copiedId === msg.id ? ui.copied : ui.copy}</span>
                                 </button>
 
-                                <span className="text-slate-600">•</span>
+                                <span className="text-ink-4">•</span>
 
                                 <button
                                   type="button"
@@ -1415,7 +1415,7 @@ export function GeminiChatWidget({
                           </div>
 
                           {isUser && (
-                            <div className="w-7 h-7 rounded-xl bg-blue-900/60 border border-blue-400/40 flex items-center justify-center text-blue-200 shrink-0 mt-0.5">
+                            <div className="w-7 h-7 rounded-[10px] bg-blue-900/60 border border-blue-400/40 flex items-center justify-center text-blue-200 shrink-0 mt-0.5">
                               <User className="w-3.5 h-3.5" />
                             </div>
                           )}
@@ -1430,10 +1430,10 @@ export function GeminiChatWidget({
                         animate={{ opacity: 1, y: 0 }}
                         className="flex items-center gap-2.5"
                       >
-                        <div className="w-7 h-7 rounded-xl bg-cyan-950/80 border border-cyan-500/40 flex items-center justify-center text-cyan-300 shrink-0">
+                        <div className="w-7 h-7 rounded-[10px] bg-cyan-950/80 border border-cyan-500/40 flex items-center justify-center text-cyan-300 shrink-0">
                           <Bot className="w-3.5 h-3.5" />
                         </div>
-                        <div className="p-3.5 rounded-2xl rounded-tl-none bg-[#030712]/90 border border-cyan-500/25 flex items-center gap-2 text-cyan-400 text-xs font-mono shadow-md">
+                        <div className="p-3.5 rounded-[14px] rounded-tl-none bg-[#030712]/90 border border-cyan-500/25 flex items-center gap-2 text-cyan-400 text-xs font-mono shadow-md">
                           <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-ping" />
                           <span>Processing live astrophysics telemetry...</span>
                         </div>
@@ -1443,29 +1443,29 @@ export function GeminiChatWidget({
 
                   {/* Speech error indicator toast */}
                   {speechError && (
-                    <div className="px-4 py-1.5 bg-rose-950/90 border-t border-rose-800 text-rose-300 text-xs font-mono flex items-center gap-1.5">
+                    <div className="px-4 py-1.5 bg-rose-950/90 border-t border-rose-800 text-critical text-xs font-mono flex items-center gap-1.5">
                       <AlertCircle className="w-3.5 h-3.5 shrink-0" />
                       <span>{speechError}</span>
                     </div>
                   )}
 
                   {/* Composer Box */}
-                  <footer className="p-3 bg-[#010409]/95 border-t border-cyan-500/20 shrink-0">
+                  <footer className="p-3 bg-void border-t border-cyan-500/20 shrink-0">
                     <form
                       onSubmit={(e) => {
                         e.preventDefault();
                         executeUserQuery();
                       }}
-                      className="relative flex items-end gap-2 bg-slate-950/90 border border-cyan-500/30 focus-within:border-cyan-400 focus-within:shadow-[0_0_20px_rgba(6,182,212,0.25)] rounded-2xl p-1.5 transition-all"
+                      className="relative flex items-end gap-2 bg-abyss/85 border border-cyan-500/30 focus-within:border-cyan-400 focus-within:shadow-[0_0_20px_rgba(6,182,212,0.25)] rounded-[14px] p-1.5 transition-all"
                     >
                       {/* Voice Input Microphone Button */}
                       <button
                         type="button"
                         onClick={toggleVoiceInput}
-                        className={`p-2 rounded-xl transition cursor-pointer shrink-0 ${
+                        className={`p-2 rounded-[10px] transition cursor-pointer shrink-0 ${
                           isListening
                             ? 'bg-rose-500 text-white shadow-lg shadow-rose-500/40 animate-pulse'
-                            : 'text-slate-400 hover:text-cyan-300 hover:bg-cyan-950/40'
+                            : 'text-ink-3 hover:text-cyan-300 hover:bg-cyan-950/40'
                         }`}
                         title={isListening ? 'Stop listening' : 'Start voice transmission'}
                       >
@@ -1476,7 +1476,7 @@ export function GeminiChatWidget({
                       <button
                         type="button"
                         onClick={() => setIsLiveVoiceOpen(true)}
-                        className="p-2 rounded-xl border border-cyan-500/30 hover:border-cyan-400 bg-cyan-950/40 hover:bg-cyan-900/60 text-cyan-400 hover:text-cyan-200 transition cursor-pointer shrink-0 shadow-sm flex items-center justify-center group"
+                        className="p-2 rounded-[10px] border border-cyan-500/30 hover:border-cyan-400 bg-cyan-950/40 hover:bg-cyan-900/60 text-cyan-400 hover:text-cyan-200 transition cursor-pointer shrink-0 shadow-sm flex items-center justify-center group"
                         title={ui.liveVoiceTooltip}
                       >
                         <Radio className="w-4 h-4 animate-pulse group-hover:scale-110 transition" />
@@ -1491,7 +1491,7 @@ export function GeminiChatWidget({
                         placeholder={ui.placeholder}
                         rows={1}
                         disabled={loading && !streamingMessageId}
-                        className="flex-1 bg-transparent border-0 text-xs sm:text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-0 resize-none py-2 px-1 max-h-[140px] leading-relaxed"
+                        className="flex-1 bg-transparent border-0 text-xs sm:text-sm text-ink placeholder-slate-500 focus:outline-none focus:ring-0 resize-none py-2 px-1 max-h-[140px] leading-relaxed"
                       />
 
                       {/* Send / Stop Generation Button */}
@@ -1499,7 +1499,7 @@ export function GeminiChatWidget({
                         <button
                           type="button"
                           onClick={handleStopGeneration}
-                          className="p-2 rounded-xl bg-amber-600/80 hover:bg-amber-500 text-white transition cursor-pointer shrink-0"
+                          className="p-2 rounded-[10px] bg-amber-600/80 hover:bg-amber-500 text-white transition cursor-pointer shrink-0"
                           title={ui.stop}
                         >
                           <Square className="w-4 h-4" />
@@ -1508,10 +1508,10 @@ export function GeminiChatWidget({
                         <button
                           type="submit"
                           disabled={!inputQuery.trim()}
-                          className={`p-2 rounded-xl transition cursor-pointer shrink-0 ${
+                          className={`p-2 rounded-[10px] transition cursor-pointer shrink-0 ${
                             inputQuery.trim()
                               ? 'bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold shadow-[0_0_15px_rgba(6,182,212,0.4)]'
-                              : 'bg-slate-900 text-slate-600 cursor-not-allowed'
+                              : 'bg-surface/60 text-ink-4 cursor-not-allowed'
                           }`}
                           title={ui.send}
                         >
@@ -1521,7 +1521,7 @@ export function GeminiChatWidget({
                     </form>
 
                     {/* Sub-bar hint: Enter to send, Shift+Enter for new line */}
-                    <div className="flex items-center justify-between text-[10px] font-mono text-slate-500 px-1.5 mt-1.5">
+                    <div className="flex items-center justify-between text-[10px] font-mono text-ink-4 px-1.5 mt-1.5">
                       <span className="hidden sm:inline">Enter ↵ to send • Shift+Enter for new line</span>
                       <span className="truncate text-cyan-500/70">{ui.modelTag}</span>
                     </div>

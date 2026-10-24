@@ -221,7 +221,7 @@ function NASABottomBar({
     <div
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
-      className={`fixed bottom-4 left-1/2 -translate-x-1/2 z-50 bg-[#010409]/85 backdrop-blur-2xl border border-white/10 rounded-full px-2.5 sm:px-3 py-1.5 sm:py-2 shadow-2xl lg:hidden pointer-events-auto max-w-[calc(100vw-1.25rem)] sm:max-w-xl w-auto ${className}`}
+      className={`fixed bottom-4 left-1/2 -translate-x-1/2 z-50 bg-void backdrop-blur-2xl border border-white/10 rounded-full px-2.5 sm:px-3 py-1.5 sm:py-2 shadow-2xl lg:hidden pointer-events-auto max-w-[calc(100vw-1.25rem)] sm:max-w-xl w-auto ${className}`}
       role="navigation"
       aria-label="NASA Navigation Bar"
       style={{
@@ -282,7 +282,7 @@ function NASABottomBar({
                     className={`w-4 h-4 sm:w-4.5 sm:h-4.5 transition-colors duration-200 ${
                       isActive
                         ? 'text-cyan-300 drop-shadow-[0_0_10px_rgba(34,211,238,0.9)]'
-                        : 'text-slate-400 group-hover:text-slate-200'
+                        : 'text-ink-3 group-hover:text-ink-2'
                     }`}
                   />
                 </motion.div>
@@ -298,7 +298,7 @@ function NASABottomBar({
                 className={`text-[9px] sm:text-[10px] tracking-tight mt-0.5 transition-colors duration-200 font-sans truncate max-w-[46px] sm:max-w-[54px] text-center leading-none ${
                   isActive
                     ? 'text-cyan-200 font-bold drop-shadow-[0_0_6px_rgba(34,211,238,0.5)]'
-                    : 'text-slate-400 group-hover:text-slate-300 font-medium'
+                    : 'text-ink-3 group-hover:text-ink-2 font-medium'
                 }`}
               >
                 {label}

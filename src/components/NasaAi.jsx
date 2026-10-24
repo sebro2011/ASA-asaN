@@ -430,7 +430,7 @@ function FormattedMessageText({ text }) {
   const codeBlockParts = text.split(/(```[\s\S]*?```)/g);
 
   return (
-    <div className="space-y-2 leading-relaxed text-slate-200">
+    <div className="space-y-2 leading-relaxed text-ink-2">
       {codeBlockParts.map((block, blockIdx) => {
         // If code block
         if (block.startsWith('```') && block.endsWith('```')) {
@@ -468,7 +468,7 @@ function FormattedMessageText({ text }) {
               // Header ###
               if (trimmed.startsWith('### ')) {
                 return (
-                  <h4 key={idx} className="text-sm font-bold text-cyan-300 font-['Orbitron'] mt-3 mb-1 flex items-center gap-1.5">
+                  <h4 key={idx} className="text-sm font-bold text-cyan-300 font-display mt-3 mb-1 flex items-center gap-1.5">
                     <Sparkles className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
                     <span>{trimmed.replace(/^###\s+/, '')}</span>
                   </h4>
@@ -478,8 +478,8 @@ function FormattedMessageText({ text }) {
               // Header ##
               if (trimmed.startsWith('## ')) {
                 return (
-                  <h3 key={idx} className="text-base font-bold text-white font-['Orbitron'] mt-3.5 mb-1.5 text-purple-300 flex items-center gap-1.5">
-                    <Atom className="w-4 h-4 text-purple-400 shrink-0" />
+                  <h3 key={idx} className="text-base font-bold text-white font-display mt-3.5 mb-1.5 text-derived flex items-center gap-1.5">
+                    <Atom className="w-4 h-4 text-derived shrink-0" />
                     <span>{trimmed.replace(/^##\s+/, '')}</span>
                   </h3>
                 );
@@ -488,7 +488,7 @@ function FormattedMessageText({ text }) {
               // Header #
               if (trimmed.startsWith('# ')) {
                 return (
-                  <h2 key={idx} className="text-lg font-bold text-white font-['Orbitron'] mt-4 mb-2 text-cyan-200">
+                  <h2 key={idx} className="text-lg font-bold text-white font-display mt-4 mb-2 text-cyan-200">
                     {trimmed.replace(/^#\s+/, '')}
                   </h2>
                 );
@@ -521,7 +521,7 @@ function FormattedMessageText({ text }) {
               if (numMatch) {
                 return (
                   <div key={idx} className="flex items-start gap-2 pl-1 text-xs sm:text-sm">
-                    <span className="text-purple-400 font-mono text-xs font-semibold shrink-0">{numMatch[1]}.</span>
+                    <span className="text-derived font-mono text-xs font-semibold shrink-0">{numMatch[1]}.</span>
                     <span className="flex-1">
                       <BoldParser content={numMatch[2]} />
                     </span>
@@ -557,8 +557,8 @@ function CodeBlockRenderer({ language, code }) {
   };
 
   return (
-    <div className="my-3 rounded-xl bg-slate-950/95 border border-slate-800 overflow-hidden font-mono text-xs shadow-xl">
-      <div className="flex items-center justify-between px-3 py-1.5 bg-slate-900/90 border-b border-slate-800 text-[11px] text-slate-400">
+    <div className="my-3 rounded-[10px] bg-abyss/95 border border-line overflow-hidden font-mono text-xs shadow-xl">
+      <div className="flex items-center justify-between px-3 py-1.5 bg-surface/65 border-b border-line text-[11px] text-ink-3">
         <div className="flex items-center gap-1.5">
           <Terminal className="w-3.5 h-3.5 text-cyan-400" />
           <span className="uppercase text-cyan-300 font-bold">{language}</span>
@@ -566,14 +566,14 @@ function CodeBlockRenderer({ language, code }) {
         <button
           type="button"
           onClick={handleCopy}
-          className="flex items-center gap-1 px-2 py-0.5 rounded hover:bg-slate-800 text-slate-300 hover:text-white transition cursor-pointer"
+          className="flex items-center gap-1 px-2 py-0.5 rounded hover:bg-surface-2 text-ink-2 hover:text-ink transition cursor-pointer"
           title="Copy code"
         >
-          {copied ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+          {copied ? <Check className="w-3 h-3 text-signal" /> : <Copy className="w-3 h-3" />}
           <span>{copied ? 'Copied' : 'Copy'}</span>
         </button>
       </div>
-      <pre className="p-3.5 overflow-x-auto text-slate-200 leading-relaxed scrollbar-thin">
+      <pre className="p-3.5 overflow-x-auto text-ink-2 leading-relaxed scrollbar-thin">
         <code>{code}</code>
       </pre>
     </div>
@@ -1182,32 +1182,27 @@ export function NasaAi({ className = '', lang: propLang }) {
 
   return (
     <div 
-      className={`w-full min-h-[640px] lg:min-h-[720px] bg-[#010409]/95 border border-cyan-500/30 rounded-2xl p-4 sm:p-6 shadow-[0_0_35px_rgba(6,182,212,0.18)] flex flex-col justify-between font-sans text-slate-100 backdrop-blur-2xl relative overflow-hidden hover:border-cyan-400/50 hover:shadow-[0_0_45px_rgba(6,182,212,0.28)] transition-all duration-300 ${className}`}
+      className={`relative flex min-h-[640px] w-full flex-col justify-between overflow-hidden rounded-[14px] border border-line bg-surface/35 p-4 font-sans text-ink sm:p-6 lg:min-h-[720px] ${className}`}
     >
-      {/* Deep Space Background Ambient Glow Radiance */}
-      <div className="absolute -top-36 -right-36 w-96 h-96 bg-cyan-600/10 rounded-full blur-3xl pointer-events-none" />
-      <div className="absolute -bottom-36 -left-36 w-96 h-96 bg-purple-600/10 rounded-full blur-3xl pointer-events-none" />
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-blue-600/5 rounded-full blur-[140px] pointer-events-none" />
+      <div className="pointer-events-none absolute inset-0 grid-field opacity-[0.35]" aria-hidden="true" />
 
       {/* TOP COMPACT HEADER BAR */}
       <div className="relative z-10 flex items-center justify-between gap-3 flex-wrap pb-3.5 border-b border-cyan-500/20">
         
         {/* Assistant Identity & Real-Time Connection Indicator */}
         <div className="flex items-center gap-3">
-          <div className="relative w-11 h-11 rounded-2xl bg-gradient-to-tr from-cyan-500 via-blue-600 to-indigo-600 p-[1.5px] flex items-center justify-center shadow-lg shadow-cyan-950/50 shrink-0">
-            <div className="w-full h-full bg-[#010409] rounded-[14px] flex items-center justify-center">
-              <Bot className="w-5 h-5 text-cyan-400" />
-            </div>
+          <div className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-[10px] border border-atmo/30 bg-atmo/10">
+            <Bot className="h-5 w-5 text-atmo" strokeWidth={1.7} />
             {/* Live Connection Status Dot */}
             <span 
               className={`absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full border-2 border-slate-950 ${
                 connectionState === 'connecting'
-                  ? 'bg-amber-400 animate-ping'
+                  ? 'bg-caution'
                   : connectionState === 'offline' || !isOnline || connectionState === 'error'
                   ? 'bg-rose-500 ring-1 ring-rose-400'
                   : connectionState === 'ready'
                   ? 'bg-slate-400'
-                  : 'bg-emerald-400 animate-pulse ring-1 ring-emerald-300/50'
+                  : 'bg-signal ring-1 ring-signal/40'
               }`}
               title={
                 connectionState === 'connecting' ? 'Transmitting Query' :
@@ -1221,8 +1216,8 @@ export function NasaAi({ className = '', lang: propLang }) {
 
           <div>
             <div className="flex items-center gap-2 flex-wrap">
-              <h3 className="font-['Orbitron'] font-bold text-base sm:text-lg text-white tracking-wide">
-                NOVA - NASA Mission Control AI
+              <h3 className="font-display font-bold text-base sm:text-lg text-white tracking-wide">
+                NOVA — grounded space assistant
               </h3>
               
               {/* AI Engine Badge */}
@@ -1236,10 +1231,10 @@ export function NasaAi({ className = '', lang: propLang }) {
                 connectionState === 'connecting'
                   ? 'bg-amber-500/15 text-amber-300 border border-amber-500/30'
                   : connectionState === 'offline' || !isOnline || connectionState === 'error'
-                  ? 'bg-rose-500/15 text-rose-300 border border-rose-500/30'
+                  ? 'bg-rose-500/15 text-critical border border-rose-500/30'
                   : connectionState === 'ready'
-                  ? 'bg-slate-500/15 text-slate-300 border border-slate-500/30'
-                  : 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
+                  ? 'bg-slate-500/15 text-ink-2 border border-slate-500/30'
+                  : 'bg-emerald-500/15 text-signal border border-emerald-500/30'
               }`}>
                 <span className={`w-1.5 h-1.5 rounded-full ${
                   connectionState === 'connecting' ? 'bg-amber-400 animate-spin' :
@@ -1261,12 +1256,12 @@ export function NasaAi({ className = '', lang: propLang }) {
               </span>
 
               {/* Language Pill */}
-              <span className="hidden md:inline-flex px-2 py-0.5 rounded-full text-[10px] font-mono bg-purple-500/15 border border-purple-500/30 text-purple-300 uppercase">
+              <span className="hidden md:inline-flex px-2 py-0.5 rounded-full text-[10px] font-mono bg-purple-500/15 border border-purple-500/30 text-derived uppercase">
                 {activeLang === 'si' ? '🇱🇰 සිංහල' : activeLang === 'ta' ? '🇮🇳 தமிழ்' : '🇬🇧 EN'}
               </span>
             </div>
 
-            <p className="text-[11px] text-slate-400 mt-0.5 hidden sm:block">
+            <p className="text-[11px] text-ink-3 mt-0.5 hidden sm:block">
               {activeLang === 'si' ? 'අභ්‍යවකාශ සහායක • දේශීය එන්ජිම, Gemini සහ OpenRouter' :
                activeLang === 'ta' ? 'விண்வெளி உதவியாளர் • உள்ளூர் இயந்திரம், Gemini மற்றும் OpenRouter' :
                'Space Assistant • Local Engine, Gemini & OpenRouter'}
@@ -1279,7 +1274,7 @@ export function NasaAi({ className = '', lang: propLang }) {
 
           {/* Engine selector; keys are configured server-side and never entered in the browser. */}
           <label
-            className="flex items-center gap-1.5 rounded-xl border border-slate-700 bg-slate-900/80 px-2 py-1.5 text-slate-300"
+            className="flex items-center gap-1.5 rounded-[10px] border border-line bg-surface/60 px-2 py-1.5 text-ink-2"
             title={activeLang === 'si'
               ? 'Gemini සහ OpenRouter API යතුරු සේවාදායකයේ ආරක්ෂිතව සකසන්න.'
               : activeLang === 'ta'
@@ -1317,7 +1312,7 @@ export function NasaAi({ className = '', lang: propLang }) {
           <button
             type="button"
             onClick={handleStartNewChat}
-            className="px-3 py-1.5 rounded-xl bg-slate-900/80 hover:bg-slate-800 border border-slate-700 hover:border-cyan-500/50 text-slate-300 hover:text-white transition cursor-pointer flex items-center gap-1.5 shadow-sm active:scale-95"
+            className="px-3 py-1.5 rounded-[10px] bg-surface/60 hover:bg-surface-2 border border-line hover:border-cyan-500/50 text-ink-2 hover:text-ink transition cursor-pointer flex items-center gap-1.5 shadow-sm active:scale-95"
             title="Start a fresh conversation thread"
           >
             <Plus className="w-3.5 h-3.5 text-cyan-400" />
@@ -1330,10 +1325,10 @@ export function NasaAi({ className = '', lang: propLang }) {
           <button
             type="button"
             onClick={handleLaunchApodQuiz}
-            className="px-2.5 py-1.5 rounded-xl bg-gradient-to-r from-purple-600/25 to-pink-600/25 border border-purple-500/40 hover:border-purple-400 text-purple-200 text-xs flex items-center gap-1.5 transition cursor-pointer shadow-sm hover:scale-[1.02] active:scale-95"
+            className="px-2.5 py-1.5 rounded-[10px] bg-gradient-to-r from-purple-600/25 to-pink-600/25 border border-purple-500/40 hover:border-purple-400 text-purple-200 text-xs flex items-center gap-1.5 transition cursor-pointer shadow-sm hover:scale-[1.02] active:scale-95"
             title="Generate a 3-question quiz from today's APOD telemetry"
           >
-            <HelpCircle className="w-3.5 h-3.5 text-purple-400" />
+            <HelpCircle className="w-3.5 h-3.5 text-derived" />
             <span className="text-[11px] font-medium hidden sm:inline">APOD Quiz</span>
           </button>
 
@@ -1341,7 +1336,7 @@ export function NasaAi({ className = '', lang: propLang }) {
           <button
             type="button"
             onClick={() => setIsLiveVoiceOpen(true)}
-            className="px-2.5 py-1.5 rounded-xl bg-gradient-to-r from-cyan-600/30 to-blue-600/30 border border-cyan-500/50 hover:border-cyan-400 text-cyan-200 text-xs flex items-center gap-1.5 transition cursor-pointer shadow-[0_0_15px_rgba(6,182,212,0.25)] hover:scale-[1.02] active:scale-95"
+            className="px-2.5 py-1.5 rounded-[10px] bg-gradient-to-r from-cyan-600/30 to-blue-600/30 border border-cyan-500/50 hover:border-cyan-400 text-cyan-200 text-xs flex items-center gap-1.5 transition cursor-pointer shadow-[0_0_15px_rgba(6,182,212,0.25)] hover:scale-[1.02] active:scale-95"
             title="Connect to Gemini Live Bidi-Streaming Voice Channel (16kHz In / 24kHz Out)"
           >
             <Radio className="w-3.5 h-3.5 text-cyan-400 animate-pulse" />
@@ -1354,10 +1349,10 @@ export function NasaAi({ className = '', lang: propLang }) {
           <button
             type="button"
             onClick={() => setSoundEffectsEnabled(prev => !prev)}
-            className={`p-2 rounded-xl border transition cursor-pointer flex items-center gap-1.5 ${
+            className={`p-2 rounded-[10px] border transition cursor-pointer flex items-center gap-1.5 ${
               soundEffectsEnabled
                 ? 'bg-cyan-500/10 border-cyan-500/30 text-cyan-300 hover:bg-cyan-500/20'
-                : 'bg-slate-800/80 border-slate-700 text-slate-500 hover:text-slate-300'
+                : 'bg-surface-2/70 border-line text-ink-4 hover:text-ink-2'
             }`}
             title={soundEffectsEnabled ? 'Sound Effects Enabled' : 'Sound Effects Muted'}
           >
@@ -1369,7 +1364,7 @@ export function NasaAi({ className = '', lang: propLang }) {
             <button
               type="button"
               onClick={handleStartNewChat}
-              className="p-2 rounded-xl bg-slate-900/80 border border-slate-700 hover:border-rose-500/50 text-slate-400 hover:text-rose-400 transition cursor-pointer"
+              className="p-2 rounded-[10px] bg-surface/60 border border-line hover:border-rose-500/50 text-ink-3 hover:text-critical transition cursor-pointer"
               title="Clear current conversation"
             >
               <Trash2 className="w-4 h-4" />
@@ -1380,8 +1375,8 @@ export function NasaAi({ className = '', lang: propLang }) {
 
       {/* QUICK TOPIC STRIP */}
       {hasConversation && (
-        <div className="relative z-10 py-2.5 flex items-center gap-2 overflow-x-auto select-none scrollbar-none border-b border-slate-800/50">
-          <span className="text-[10px] font-mono text-slate-400 uppercase tracking-wider shrink-0 flex items-center gap-1 pl-1">
+        <div className="relative z-10 py-2.5 flex items-center gap-2 overflow-x-auto select-none scrollbar-none border-b border-line/70">
+          <span className="text-[10px] font-mono text-ink-3 uppercase tracking-wider shrink-0 flex items-center gap-1 pl-1">
             <Compass className="w-3 h-3 text-cyan-400" />
             {activeLang === 'si' ? 'මාතෘකා:' : activeLang === 'ta' ? 'தலைப்புகள்:' : 'Topics:'}
           </span>
@@ -1393,7 +1388,7 @@ export function NasaAi({ className = '', lang: propLang }) {
                 key={card.id}
                 type="button"
                 onClick={() => executeUserQuery(card.prompt)}
-                className="px-3 py-1 rounded-xl bg-slate-900/70 border border-slate-800 hover:border-cyan-400/60 hover:bg-slate-800 text-[11px] font-mono text-slate-300 hover:text-cyan-200 whitespace-nowrap transition cursor-pointer active:scale-95 flex items-center gap-1.5 shadow-sm shrink-0"
+                className="px-3 py-1 rounded-[10px] bg-surface/60 border border-line hover:border-cyan-400/60 hover:bg-surface-2 text-[11px] font-mono text-ink-2 hover:text-cyan-200 whitespace-nowrap transition cursor-pointer active:scale-95 flex items-center gap-1.5 shadow-sm shrink-0"
               >
                 <card.icon className="w-3 h-3 text-cyan-400" />
                 <span>{label}</span>
@@ -1419,7 +1414,7 @@ export function NasaAi({ className = '', lang: propLang }) {
                 <span>NASA MISSION INTELLIGENCE CORE</span>
               </div>
 
-              <h2 className="text-2xl sm:text-3xl md:text-4xl font-serif tracking-tight text-white font-['Orbitron']">
+              <h2 className="text-2xl sm:text-3xl md:text-4xl font-serif tracking-tight text-white font-display">
                 {activeLang === 'si' 
                   ? 'සාදරයෙන් පිළිගනිමු, අභ්‍යවකාශ ගවේෂකයාණනි' 
                   : activeLang === 'ta' 
@@ -1427,7 +1422,7 @@ export function NasaAi({ className = '', lang: propLang }) {
                   : 'Welcome, Space Explorer'}
               </h2>
 
-              <p className="text-xs sm:text-sm md:text-base text-slate-300 max-w-2xl mx-auto leading-relaxed font-sans">
+              <p className="text-xs sm:text-sm md:text-base text-ink-2 max-w-2xl mx-auto leading-relaxed font-sans">
                 {activeLang === 'si'
                   ? 'විශ්වය, නාසා මෙහෙයුම්, ග්‍රහලෝක, තාරකා, කළු කුහර සහ අභ්‍යවකාශ විද්‍යාව පිළිබඳ ඕනෑම පැනයක් විමසන්න.'
                   : activeLang === 'ta'
@@ -1445,22 +1440,22 @@ export function NasaAi({ className = '', lang: propLang }) {
                     key={card.id}
                     type="button"
                     onClick={() => executeUserQuery(card.prompt)}
-                    className="group p-4 rounded-2xl bg-slate-950/70 border border-slate-800/80 hover:border-cyan-500/60 hover:shadow-[0_0_25px_rgba(34,211,238,0.18)] transition-all duration-300 text-left flex flex-col justify-between space-y-2 cursor-pointer active:scale-98"
+                    className="group p-4 rounded-[14px] bg-abyss/70 border border-line hover:border-cyan-500/60 hover:shadow-[0_0_25px_rgba(34,211,238,0.18)] transition-all duration-300 text-left flex flex-col justify-between space-y-2 cursor-pointer active:scale-98"
                   >
                     <div className="flex items-center justify-between w-full">
-                      <div className="w-9 h-9 rounded-xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-300 group-hover:scale-110 group-hover:bg-cyan-500/20 transition-all">
+                      <div className="w-9 h-9 rounded-[10px] bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-300 group-hover:scale-110 group-hover:bg-cyan-500/20 transition-all">
                         <IconComponent className="w-4 h-4 text-cyan-400" />
                       </div>
-                      <span className="text-[9px] font-mono px-2 py-0.5 rounded-full bg-slate-900 border border-slate-800 text-slate-400 group-hover:text-cyan-300 group-hover:border-cyan-500/30 transition">
+                      <span className="text-[9px] font-mono px-2 py-0.5 rounded-full bg-surface/60 border border-line text-ink-3 group-hover:text-cyan-300 group-hover:border-cyan-500/30 transition">
                         {card.badge}
                       </span>
                     </div>
 
                     <div>
-                      <h4 className="text-xs sm:text-sm font-bold text-white group-hover:text-cyan-200 transition font-['Orbitron']">
+                      <h4 className="text-xs sm:text-sm font-bold text-white group-hover:text-cyan-200 transition font-display">
                         {card.title[activeLang] || card.title.en}
                       </h4>
-                      <p className="text-[11px] text-slate-400 mt-1 leading-snug line-clamp-2">
+                      <p className="text-[11px] text-ink-3 mt-1 leading-snug line-clamp-2">
                         {card.desc[activeLang] || card.desc.en}
                       </p>
                     </div>
@@ -1475,8 +1470,8 @@ export function NasaAi({ className = '', lang: propLang }) {
             </div>
 
             {/* Quick Helper Tip */}
-            <div className="flex items-center justify-center gap-2 text-xs font-mono text-slate-400 text-center">
-              <Zap className="w-3.5 h-3.5 text-amber-400" />
+            <div className="flex items-center justify-center gap-2 text-xs font-mono text-ink-3 text-center">
+              <Zap className="w-3.5 h-3.5 text-caution" />
               <span>
                 {activeLang === 'si' 
                   ? 'ඉඟිය: හඬින් විමසීමට මයික්‍රෆෝනය ඔබන්න හෝ පහතින් ඔබේ පැනය ලියා යවන්න.' 
@@ -1508,10 +1503,10 @@ export function NasaAi({ className = '', lang: propLang }) {
               >
                 {/* Avatar Badge */}
                 <div 
-                  className={`w-9 h-9 rounded-2xl flex items-center justify-center shrink-0 shadow-lg ${
+                  className={`w-9 h-9 rounded-[14px] flex items-center justify-center shrink-0 shadow-lg ${
                     isUser 
                       ? 'bg-gradient-to-tr from-blue-600 via-indigo-600 to-purple-600 border border-blue-400/50 text-white shadow-blue-950/50' 
-                      : 'bg-slate-950 border border-cyan-500/40 text-cyan-400 shadow-cyan-950/50'
+                      : 'bg-abyss border border-cyan-500/40 text-cyan-400 shadow-cyan-950/50'
                   }`}
                 >
                   {isUser ? <User className="w-4 h-4" /> : <Bot className="w-4 h-4" />}
@@ -1519,17 +1514,17 @@ export function NasaAi({ className = '', lang: propLang }) {
 
                 {/* Message Bubble Body */}
                 <div 
-                  className={`max-w-[92%] sm:max-w-[82%] rounded-2xl p-4 sm:p-5 shadow-2xl transition-all ${
+                  className={`max-w-[92%] sm:max-w-[82%] rounded-[14px] p-4 sm:p-5 shadow-2xl transition-all ${
                     isUser
                       ? 'bg-gradient-to-r from-blue-950/70 via-indigo-950/70 to-slate-950/90 border border-blue-500/40 text-blue-50 rounded-tr-none'
                       : msg.isError
                       ? 'bg-rose-950/35 border border-rose-500/40 text-rose-100 rounded-tl-none'
-                      : 'bg-slate-950/90 border border-slate-800/90 text-slate-100 rounded-tl-none hover:border-cyan-500/40'
+                      : 'bg-abyss/85 border border-line/90 text-ink rounded-tl-none hover:border-cyan-500/40'
                   }`}
                 >
                   {/* Bubble Meta Header */}
-                  <div className="flex items-center justify-between gap-2 mb-2 text-[10px] font-mono text-slate-400 border-b border-slate-800/60 pb-1.5">
-                    <span className="font-semibold text-slate-300 flex items-center gap-1.5">
+                  <div className="flex items-center justify-between gap-2 mb-2 text-[10px] font-mono text-ink-3 border-b border-line pb-1.5">
+                    <span className="font-semibold text-ink-2 flex items-center gap-1.5">
                       <span className={`w-1.5 h-1.5 rounded-full ${isUser ? 'bg-blue-400' : 'bg-cyan-400'}`} />
                       {isUser ? (activeLang === 'si' ? 'ගවේෂකයා (ඔබ)' : activeLang === 'ta' ? 'ஆய்வாளர் (நீங்கள்)' : 'Space Explorer') : (msg.provider || 'NOVA AI Assistant')}
                     </span>
@@ -1542,9 +1537,9 @@ export function NasaAi({ className = '', lang: propLang }) {
                   </div>
 
                   {!isUser && (msg.isError || msg.isFallback) && (
-                    <div className={`mb-2 flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-[10px] font-mono ${
+                    <div className={`mb-2 flex items-center gap-1.5 rounded-[8px] px-2 py-1.5 text-[10px] font-mono ${
                       msg.isError
-                        ? 'bg-rose-500/10 text-rose-200 border border-rose-500/20'
+                        ? 'bg-rose-500/10 text-critical border border-rose-500/20'
                         : 'bg-amber-500/10 text-amber-200 border border-amber-500/20'
                     }`}>
                       <AlertCircle className="w-3 h-3 shrink-0" />
@@ -1566,20 +1561,20 @@ export function NasaAi({ className = '', lang: propLang }) {
 
                   {/* Assistant Footer Action Bar (Copy, TTS, Timestamp) */}
                   {!isUser && !isStreaming && msg.text && (
-                    <div className="mt-3.5 pt-2.5 border-t border-slate-800/80 flex items-center justify-between gap-2 flex-wrap">
+                    <div className="mt-3.5 pt-2.5 border-t border-line flex items-center justify-between gap-2 flex-wrap">
                       <div className="flex items-center gap-2">
                         
                         {/* Copy Message Button */}
                         <button
                           type="button"
                           onClick={() => handleCopyMessage(msg.id, msg.text)}
-                          className="px-2.5 py-1 rounded-xl bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-400 hover:text-white text-[11px] font-mono transition cursor-pointer flex items-center gap-1.5 shadow-sm active:scale-95"
+                          className="px-2.5 py-1 rounded-[10px] bg-surface/60 border border-line hover:border-line text-ink-3 hover:text-ink text-[11px] font-mono transition cursor-pointer flex items-center gap-1.5 shadow-sm active:scale-95"
                           title="Copy message text"
                         >
                           {copiedId === msg.id ? (
                             <>
-                              <Check className="w-3 h-3 text-emerald-400" />
-                              <span className="text-emerald-400">Copied</span>
+                              <Check className="w-3 h-3 text-signal" />
+                              <span className="text-signal">Copied</span>
                             </>
                           ) : (
                             <>
@@ -1594,10 +1589,10 @@ export function NasaAi({ className = '', lang: propLang }) {
                           <button
                             type="button"
                             onClick={() => toggleSpeakMessage(msg.id, msg.text)}
-                            className={`px-2.5 py-1 rounded-xl text-[11px] font-mono border transition cursor-pointer flex items-center gap-1.5 shadow-sm active:scale-95 ${
+                            className={`px-2.5 py-1 rounded-[10px] text-[11px] font-mono border transition cursor-pointer flex items-center gap-1.5 shadow-sm active:scale-95 ${
                               isPlayingSpeech
                                 ? 'bg-cyan-500/20 border-cyan-400 text-cyan-300 animate-pulse'
-                                : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white hover:border-slate-700'
+                                : 'bg-surface/60 border-line text-ink-3 hover:text-ink hover:border-line'
                             }`}
                             title={isPlayingSpeech ? 'Stop Voice Synthesis' : 'Listen with Speech Synthesis Voice'}
                           >
@@ -1612,17 +1607,17 @@ export function NasaAi({ className = '', lang: propLang }) {
                             type="button"
                             onClick={() => executeUserQuery(msg.queryText || lastSubmittedQuery)}
                             disabled={loading}
-                            className="px-2.5 py-1 rounded-xl bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-400 hover:text-white text-[11px] font-mono transition cursor-pointer flex items-center gap-1.5 shadow-sm active:scale-95"
+                            className="px-2.5 py-1 rounded-[10px] bg-surface/60 border border-line hover:border-line text-ink-3 hover:text-ink text-[11px] font-mono transition cursor-pointer flex items-center gap-1.5 shadow-sm active:scale-95"
                             title="Regenerate / Retry response"
                           >
-                            <RotateCcw className="w-3 h-3 text-amber-400" />
+                            <RotateCcw className="w-3 h-3 text-caution" />
                             <span>Retry</span>
                           </button>
                         )}
                       </div>
 
                       {/* Message Timestamp */}
-                      <span className="text-[10px] font-mono text-slate-500 flex items-center gap-1">
+                      <span className="text-[10px] font-mono text-ink-4 flex items-center gap-1">
                         <Clock className="w-2.5 h-2.5" />
                         {new Date(msg.timestamp || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                       </span>
@@ -1631,7 +1626,7 @@ export function NasaAi({ className = '', lang: propLang }) {
 
                   {/* Follow-Up Suggestions Chips */}
                   {!isUser && !isStreaming && Array.isArray(msg.suggestions) && msg.suggestions.length > 0 && (
-                    <div className="mt-3.5 pt-2.5 border-t border-slate-800/60 space-y-1.5">
+                    <div className="mt-3.5 pt-2.5 border-t border-line space-y-1.5">
                       <span className="text-[10px] font-mono text-cyan-400/90 flex items-center gap-1.5 font-semibold">
                         <Sparkles className="w-3 h-3 text-cyan-400" />
                         {activeLang === 'si' ? 'යෝජිත පසු විපරම් ප්‍රශ්න:' :
@@ -1644,7 +1639,7 @@ export function NasaAi({ className = '', lang: propLang }) {
                             key={sIdx}
                             type="button"
                             onClick={() => executeUserQuery(sug)}
-                            className="px-3 py-1 rounded-xl bg-cyan-950/40 border border-cyan-800/50 hover:border-cyan-400 hover:bg-cyan-900/40 text-cyan-300 text-[11px] font-mono transition cursor-pointer text-left active:scale-95 shadow-sm flex items-center gap-1.5"
+                            className="px-3 py-1 rounded-[10px] bg-cyan-950/40 border border-cyan-800/50 hover:border-cyan-400 hover:bg-cyan-900/40 text-cyan-300 text-[11px] font-mono transition cursor-pointer text-left active:scale-95 shadow-sm flex items-center gap-1.5"
                           >
                             <ChevronRight className="w-3 h-3 text-cyan-400" />
                             <span>{sug}</span>
@@ -1662,10 +1657,10 @@ export function NasaAi({ className = '', lang: propLang }) {
         {/* LOADING & TYPING GENERATION INDICATOR */}
         {loading && (
           <div className="flex items-start gap-3 animate-fadeIn">
-            <div className="w-9 h-9 rounded-2xl bg-slate-950 border border-cyan-500/40 text-cyan-400 flex items-center justify-center shrink-0 shadow-lg shadow-cyan-950/50">
+            <div className="w-9 h-9 rounded-[14px] bg-abyss border border-cyan-500/40 text-cyan-400 flex items-center justify-center shrink-0 shadow-lg shadow-cyan-950/50">
               <Bot className="w-4 h-4 animate-bounce text-cyan-400" />
             </div>
-            <div className="rounded-2xl p-4 bg-slate-950/90 border border-cyan-500/30 text-cyan-300 flex items-center justify-between gap-4 text-xs font-mono shadow-2xl max-w-md">
+            <div className="rounded-[14px] p-4 bg-abyss/85 border border-cyan-500/30 text-cyan-300 flex items-center justify-between gap-4 text-xs font-mono shadow-2xl max-w-md">
               <div className="flex items-center gap-3">
                 <div className="flex items-center gap-1">
                   <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping" />
@@ -1681,7 +1676,7 @@ export function NasaAi({ className = '', lang: propLang }) {
               <button
                 type="button"
                 onClick={handleStopGeneration}
-                className="px-2 py-1 rounded-lg bg-slate-900 border border-slate-700 hover:border-rose-500 text-rose-400 hover:text-white text-[10px] transition cursor-pointer flex items-center gap-1"
+                className="px-2 py-1 rounded-[8px] bg-surface/60 border border-line hover:border-rose-500 text-critical hover:text-ink text-[10px] transition cursor-pointer flex items-center gap-1"
                 title="Cancel generation"
               >
                 <Square className="w-2.5 h-2.5 fill-current" />
@@ -1693,11 +1688,11 @@ export function NasaAi({ className = '', lang: propLang }) {
 
         {/* Dynamic Quiz Card in Chat Stream */}
         {activeQuiz && (
-          <div className="rounded-2xl p-4 sm:p-5 bg-gradient-to-b from-purple-950/40 via-slate-950/80 to-slate-950/90 border border-purple-500/40 shadow-2xl space-y-4 my-2">
+          <div className="rounded-[14px] p-4 sm:p-5 bg-gradient-to-b from-purple-950/40 via-slate-950/80 to-slate-950/90 border border-purple-500/40 shadow-2xl space-y-4 my-2">
             <div className="flex items-center justify-between gap-2 border-b border-purple-500/20 pb-2">
               <div className="flex items-center gap-2">
-                <HelpCircle className="w-5 h-5 text-purple-400" />
-                <h4 className="font-['Orbitron'] font-bold text-sm text-purple-200">
+                <HelpCircle className="w-5 h-5 text-derived" />
+                <h4 className="font-display font-bold text-sm text-purple-200">
                   {activeLang === 'si' ? 'අද දවසේ APOD අභ්‍යවකාශ ප්‍රශ්නාවලිය' :
                    activeLang === 'ta' ? 'இன்றைய APOD விண்வெளி வினாடி வினா' :
                    'Today’s APOD Telemetry Quiz'}
@@ -1706,7 +1701,7 @@ export function NasaAi({ className = '', lang: propLang }) {
               <button
                 type="button"
                 onClick={() => setActiveQuiz(null)}
-                className="text-xs text-slate-400 hover:text-white font-mono cursor-pointer"
+                className="text-xs text-ink-3 hover:text-ink font-mono cursor-pointer"
               >
                 ✕ Close
               </button>
@@ -1720,13 +1715,13 @@ export function NasaAi({ className = '', lang: propLang }) {
                     {q.options.map((opt, optIdx) => {
                       const isSelected = selectedAnswers[qIdx] === optIdx;
                       const isCorrect = q.correctIndex === optIdx;
-                      let btnStyle = 'bg-slate-900 border-slate-800 text-slate-300 hover:border-slate-700';
+                      let btnStyle = 'bg-surface/60 border-line text-ink-2 hover:border-line';
 
                       if (quizScore !== null) {
                         if (isCorrect) {
                           btnStyle = 'bg-emerald-500/20 border-emerald-500 text-emerald-200 font-bold';
                         } else if (isSelected && !isCorrect) {
-                          btnStyle = 'bg-rose-500/20 border-rose-500 text-rose-300';
+                          btnStyle = 'bg-rose-500/20 border-rose-500 text-critical';
                         }
                       } else if (isSelected) {
                         btnStyle = 'bg-cyan-500/20 border-cyan-400 text-cyan-200 font-bold';
@@ -1737,18 +1732,18 @@ export function NasaAi({ className = '', lang: propLang }) {
                           key={optIdx}
                           type="button"
                           onClick={() => handleSelectQuizOption(qIdx, optIdx)}
-                          className={`p-2.5 rounded-xl border text-left transition cursor-pointer text-[11px] leading-snug flex items-center justify-between ${btnStyle}`}
+                          className={`p-2.5 rounded-[10px] border text-left transition cursor-pointer text-[11px] leading-snug flex items-center justify-between ${btnStyle}`}
                         >
                           <span>{opt}</span>
                           {quizScore !== null && isCorrect && (
-                            <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0 ml-1.5" />
+                            <Check className="w-3.5 h-3.5 text-signal shrink-0 ml-1.5" />
                           )}
                         </button>
                       );
                     })}
                   </div>
                   {quizScore !== null && (
-                    <p className="text-[10px] text-slate-400 italic pt-0.5">
+                    <p className="text-[10px] text-ink-3 italic pt-0.5">
                       💡 {q.explanation}
                     </p>
                   )}
@@ -1763,7 +1758,7 @@ export function NasaAi({ className = '', lang: propLang }) {
                   type="button"
                   onClick={handleSubmitQuiz}
                   disabled={Object.keys(selectedAnswers).length < activeQuiz.length}
-                  className="px-4 py-2 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold disabled:opacity-40 transition cursor-pointer disabled:cursor-not-allowed shadow-md"
+                  className="px-4 py-2 rounded-[10px] bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold disabled:opacity-40 transition cursor-pointer disabled:cursor-not-allowed shadow-md"
                 >
                   {activeLang === 'si' ? 'පිළිතුරු තහවුරු කරන්න' :
                    activeLang === 'ta' ? 'விடைகளைச் சமர்ப்பிக்கவும்' :
@@ -1771,8 +1766,8 @@ export function NasaAi({ className = '', lang: propLang }) {
                 </button>
               ) : (
                 <div className="flex items-center gap-3">
-                  <span className="px-3 py-1.5 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 font-bold flex items-center gap-2">
-                    <Award className="w-4 h-4 text-emerald-400" />
+                  <span className="px-3 py-1.5 rounded-[10px] bg-emerald-500/20 border border-emerald-500/40 text-signal font-bold flex items-center gap-2">
+                    <Award className="w-4 h-4 text-signal" />
                     Score: {quizScore} / {activeQuiz.length}
                   </span>
                   <button
@@ -1781,7 +1776,7 @@ export function NasaAi({ className = '', lang: propLang }) {
                       setSelectedAnswers({});
                       setQuizScore(null);
                     }}
-                    className="px-3 py-1.5 rounded-xl bg-slate-800 text-slate-300 hover:text-white border border-slate-700 transition cursor-pointer flex items-center gap-1.5"
+                    className="px-3 py-1.5 rounded-[10px] bg-surface-2 text-ink-2 hover:text-ink border border-line transition cursor-pointer flex items-center gap-1.5"
                   >
                     <RotateCcw className="w-3 h-3" />
                     <span>Retry</span>
@@ -1794,12 +1789,12 @@ export function NasaAi({ className = '', lang: propLang }) {
       </div>
 
       {/* BOTTOM UPGRADED SMART CHAT COMPOSER */}
-      <div className="relative z-10 pt-3 space-y-2 border-t border-slate-800/80">
+      <div className="relative z-10 pt-3 space-y-2 border-t border-line">
         
         {/* Speech Error Notice */}
         {speechError && (
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-rose-950/60 border border-rose-500/40 text-rose-300 text-xs font-mono animate-fadeIn">
-            <AlertCircle className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-[10px] bg-rose-950/60 border border-rose-500/40 text-critical text-xs font-mono animate-fadeIn">
+            <AlertCircle className="w-3.5 h-3.5 text-critical shrink-0" />
             <span>Voice error: {speechError}. Please check microphone permissions.</span>
           </div>
         )}
@@ -1812,7 +1807,7 @@ export function NasaAi({ className = '', lang: propLang }) {
           className="relative flex items-end gap-2 w-full"
         >
           {/* Natural Multiline Expanding Input */}
-          <div className="relative flex-1 rounded-2xl bg-slate-950/90 border border-slate-800 focus-within:border-cyan-400/80 focus-within:ring-1 focus-within:ring-cyan-400/50 shadow-inner transition-all flex items-center">
+          <div className="relative flex-1 rounded-[14px] bg-abyss/85 border border-line focus-within:border-cyan-400/80 focus-within:ring-1 focus-within:ring-cyan-400/50 shadow-inner transition-all flex items-center">
             <textarea
               ref={textareaRef}
               rows={1}
@@ -1837,7 +1832,7 @@ export function NasaAi({ className = '', lang: propLang }) {
 
             {/* Input Enter Icon Indicator */}
             {inputQuery.trim() && !loading && (
-              <span className="absolute right-3 bottom-3 text-slate-500 pointer-events-none hidden sm:inline" title="Press Enter to send">
+              <span className="absolute right-3 bottom-3 text-ink-4 pointer-events-none hidden sm:inline" title="Press Enter to send">
                 <CornerDownLeft className="w-3.5 h-3.5" />
               </span>
             )}
@@ -1849,14 +1844,14 @@ export function NasaAi({ className = '', lang: propLang }) {
               type="button"
               onClick={toggleVoiceInput}
               disabled={loading}
-              className={`p-3 rounded-2xl border transition cursor-pointer shrink-0 shadow-lg ${
+              className={`p-3 rounded-[14px] border transition cursor-pointer shrink-0 shadow-lg ${
                 isListening
-                  ? 'bg-rose-500/20 border-rose-500 text-rose-400 shadow-rose-950/50 ring-2 ring-rose-400 animate-pulse'
-                  : 'bg-slate-900 border-slate-700 text-slate-300 hover:text-cyan-300 hover:border-cyan-500/50'
+                  ? 'bg-rose-500/20 border-rose-500 text-critical shadow-rose-950/50 ring-2 ring-rose-400 animate-pulse'
+                  : 'bg-surface/60 border-line text-ink-2 hover:text-cyan-300 hover:border-cyan-500/50'
               }`}
               title={isListening ? 'Stop Voice Recording' : `Speak in ${getSpeechLocale(activeLang)}`}
             >
-              {isListening ? <MicOff className="w-4 h-4 text-rose-400" /> : <Mic className="w-4 h-4 text-cyan-400" />}
+              {isListening ? <MicOff className="w-4 h-4 text-critical" /> : <Mic className="w-4 h-4 text-cyan-400" />}
             </button>
           )}
 
@@ -1882,18 +1877,18 @@ export function NasaAi({ className = '', lang: propLang }) {
           )}
         </form>
 
-        {/* Footer Real-Time Telemetry Bar */}
-        <div className="flex items-center justify-between text-[10px] font-mono text-slate-400 px-1 flex-wrap gap-2">
+        {/* Connection + model footer */}
+        <div className="flex items-center justify-between text-[10px] font-mono text-ink-3 px-1 flex-wrap gap-2">
           <span className="flex items-center gap-1.5 text-cyan-300">
             <Zap className="w-3 h-3 text-cyan-400" />
             <span>AI Engine: {activeModel}</span>
-            <span className="text-slate-600">•</span>
-            <span className="text-emerald-400 flex items-center gap-1">
+            <span className="text-ink-4">•</span>
+            <span className="text-signal flex items-center gap-1">
               <ShieldCheck className="w-3 h-3" />
               {activeLang === 'si' ? 'දේශීය • Gemini • OpenRouter' : activeLang === 'ta' ? 'உள்ளூர் • Gemini • OpenRouter' : 'Local • Gemini • OpenRouter'}
             </span>
           </span>
-          <span className="text-slate-500">
+          <span className="text-ink-4">
             {isSpeechSupported 
               ? `Mic: ${getSpeechLocale(activeLang)} • Enter to transmit • Shift+Enter new line` 
               : 'Enter to transmit • Shift+Enter new line'}

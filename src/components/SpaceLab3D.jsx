@@ -558,7 +558,7 @@ function SpaceLab3D({ lang = 'en' }) {
   }, [currentTarget]);
 
   return (
-    <div ref={containerRef} className="relative w-full h-[720px] sm:h-[800px] rounded-3xl overflow-hidden border border-cyan-500/30 bg-slate-950 shadow-2xl flex flex-col justify-between selection:bg-cyan-500/30">
+    <div ref={containerRef} className="relative w-full h-[720px] sm:h-[800px] rounded-3xl overflow-hidden border border-cyan-500/30 bg-abyss shadow-2xl flex flex-col justify-between selection:bg-cyan-500/30">
       {/* 3D WebGL Canvas */}
       <div className="absolute inset-0 z-0">
         <Canvas
@@ -656,9 +656,9 @@ function SpaceLab3D({ lang = 'en' }) {
 
       {/* Top Header & Target Switcher */}
       <div className="relative z-10 p-4 sm:p-6 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 pointer-events-none">
-        <div className="pointer-events-auto apple-liquid-glass rounded-2xl p-3 shadow-xl flex items-center gap-3">
+        <div className="pointer-events-auto apple-liquid-glass rounded-[14px] p-3 shadow-xl flex items-center gap-3">
           <div 
-            className="w-10 h-10 rounded-xl flex items-center justify-center shadow-lg transition-colors"
+            className="w-10 h-10 rounded-[10px] flex items-center justify-center shadow-lg transition-colors"
             style={{ 
               backgroundColor: `${currentTarget.glowColor}25`,
               borderColor: `${currentTarget.glowColor}50` 
@@ -668,36 +668,36 @@ function SpaceLab3D({ lang = 'en' }) {
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <span className="font-['Orbitron'] text-xs sm:text-sm font-bold text-white tracking-wider">
+              <span className="font-display text-xs sm:text-sm font-bold text-white tracking-wider">
                 {currentTarget.name[lang] || currentTarget.name.en}
               </span>
-              <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center gap-1">
-                <Activity className="w-3 h-3 text-emerald-400" />
+              <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-emerald-500/20 text-signal border border-emerald-500/40 flex items-center gap-1">
+                <Activity className="w-3 h-3 text-signal" />
                 {fpsStatus}
               </span>
             </div>
-            <p className="text-[11px] text-slate-400 font-mono">
+            <p className="text-[11px] text-ink-3 font-mono">
               {currentTarget.subtitle[lang] || currentTarget.subtitle.en}
             </p>
           </div>
         </div>
 
         {/* Mars, Moon, JWST Selector Pill */}
-        <div className="pointer-events-auto flex items-center gap-1.5 p-1.5 rounded-2xl apple-liquid-glass shadow-2xl overflow-x-auto">
+        <div className="pointer-events-auto flex items-center gap-1.5 p-1.5 rounded-[14px] apple-liquid-glass shadow-2xl overflow-x-auto">
           {SPACE_TARGETS.map((target) => {
             const isSelected = selectedTargetId === target.id;
             return (
               <button
                 key={target.id}
                 onClick={() => setSelectedTargetId(target.id)}
-                className={`relative px-4 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-colors select-none z-10 ${
-                  isSelected ? 'text-cyan-200 font-bold' : 'text-slate-400 hover:text-white'
+                className={`relative px-4 py-2 rounded-[10px] text-xs font-semibold whitespace-nowrap transition-colors select-none z-10 ${
+                  isSelected ? 'text-cyan-200 font-bold' : 'text-ink-3 hover:text-ink'
                 }`}
               >
                 {isSelected && (
                   <motion.div
                     layoutId="spacelab-opt-pill"
-                    className="absolute inset-0 rounded-xl bg-gradient-to-r from-cyan-600 via-sky-600 to-blue-600 shadow-md shadow-cyan-500/40 border border-cyan-400/50 -z-10"
+                    className="absolute inset-0 rounded-[10px] bg-gradient-to-r from-cyan-600 via-sky-600 to-blue-600 shadow-md shadow-cyan-500/40 border border-cyan-400/50 -z-10"
                     transition={{ type: 'spring', stiffness: 420, damping: 30 }}
                   />
                 )}
@@ -710,7 +710,7 @@ function SpaceLab3D({ lang = 'en' }) {
 
       {/* Bottom Floating Area: Telemetry HUD & Controls */}
       <div className="relative z-10 p-4 sm:p-6 flex flex-col lg:flex-row items-end justify-between gap-4 pointer-events-none">
-        <div className="pointer-events-auto w-full lg:max-w-md apple-liquid-glass rounded-2xl p-4 shadow-2xl space-y-3">
+        <div className="pointer-events-auto w-full lg:max-w-md apple-liquid-glass rounded-[14px] p-4 shadow-2xl space-y-3">
           <div className="flex items-center justify-between border-b border-white/10 pb-2">
             <div className="flex items-center gap-2">
               <Gauge className="w-4 h-4 text-cyan-400" />
@@ -728,36 +728,36 @@ function SpaceLab3D({ lang = 'en' }) {
 
           {hudExpanded && (
             <div className="grid grid-cols-2 gap-2.5 text-xs font-mono">
-              <div className="p-2.5 rounded-xl apple-liquid-glass">
-                <span className="text-[10px] text-slate-400 block mb-0.5">
+              <div className="p-2.5 rounded-[10px] apple-liquid-glass">
+                <span className="text-[10px] text-ink-3 block mb-0.5">
                   {lang === 'si' ? 'කක්ෂීය ප්‍රවේගය' : lang === 'ta' ? 'சுற்றுப்பாதை வேகம்' : 'Orbital Velocity'}
                 </span>
                 <span className="text-cyan-300 font-bold">{currentTarget.telemetry.velocity}</span>
               </div>
 
-              <div className="p-2.5 rounded-xl apple-liquid-glass">
-                <span className="text-[10px] text-slate-400 block mb-0.5">
+              <div className="p-2.5 rounded-[10px] apple-liquid-glass">
+                <span className="text-[10px] text-ink-3 block mb-0.5">
                   {lang === 'si' ? 'දුරස්ථභාවය' : lang === 'ta' ? 'தொலைவு' : 'Distance'}
                 </span>
                 <span className="text-cyan-300 font-bold">{currentTarget.telemetry.distance}</span>
               </div>
 
-              <div className="p-2.5 rounded-xl apple-liquid-glass">
-                <span className="text-[10px] text-slate-400 block mb-0.5">
+              <div className="p-2.5 rounded-[10px] apple-liquid-glass">
+                <span className="text-[10px] text-ink-3 block mb-0.5">
                   {lang === 'si' ? 'පෘෂ්ඨීය පීඩනය' : lang === 'ta' ? 'மேற்பரப்பு அழுத்தம்' : 'Pressure / Vacuum'}
                 </span>
-                <span className="text-emerald-300 font-bold">{currentTarget.telemetry.surfacePressure}</span>
+                <span className="text-signal font-bold">{currentTarget.telemetry.surfacePressure}</span>
               </div>
 
-              <div className="p-2.5 rounded-xl apple-liquid-glass">
-                <span className="text-[10px] text-slate-400 block mb-0.5">
+              <div className="p-2.5 rounded-[10px] apple-liquid-glass">
+                <span className="text-[10px] text-ink-3 block mb-0.5">
                   {lang === 'si' ? 'තාප තත්ත්වය' : lang === 'ta' ? 'வெப்பநிலை' : 'Thermal Profile'}
                 </span>
                 <span className="text-amber-300 font-bold">{currentTarget.telemetry.temperature}</span>
               </div>
 
-              <div className="col-span-2 p-2.5 rounded-xl apple-liquid-glass">
-                <span className="text-[10px] text-slate-400 block mb-0.5">
+              <div className="col-span-2 p-2.5 rounded-[10px] apple-liquid-glass">
+                <span className="text-[10px] text-ink-3 block mb-0.5">
                   {lang === 'si' ? 'වායුගෝලය / පරිසරය' : lang === 'ta' ? 'வளிமண்டலம்' : 'Environment & Medium'}
                 </span>
                 <span className="text-sky-300 font-medium">{currentTarget.telemetry.atmosphere}</span>
@@ -765,20 +765,20 @@ function SpaceLab3D({ lang = 'en' }) {
             </div>
           )}
 
-          <div className="text-[11px] font-mono text-slate-400 flex items-center justify-between pt-1">
+          <div className="text-[11px] font-mono text-ink-3 flex items-center justify-between pt-1">
             <span>Status: <strong className="text-cyan-400">{currentTarget.telemetry.status}</strong></span>
-            <span className="text-emerald-400 flex items-center gap-1">
+            <span className="text-signal flex items-center gap-1">
               <ShieldCheck className="w-3.5 h-3.5" /> DSN Link Active
             </span>
           </div>
         </div>
 
         {/* Controls Bar */}
-        <div className="pointer-events-auto flex flex-wrap items-center gap-2 p-2 rounded-2xl apple-liquid-glass shadow-2xl">
+        <div className="pointer-events-auto flex flex-wrap items-center gap-2 p-2 rounded-[14px] apple-liquid-glass shadow-2xl">
           <button
             onClick={() => setAutoRotate(!autoRotate)}
-            className={`p-2.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition ${
-              autoRotate ? 'bg-cyan-600 text-white shadow-md shadow-cyan-600/30' : 'bg-slate-800/80 text-slate-300 hover:text-white'
+            className={`p-2.5 rounded-[10px] text-xs font-semibold flex items-center gap-1.5 transition ${
+              autoRotate ? 'bg-cyan-600 text-white shadow-md shadow-cyan-600/30' : 'bg-surface-2/70 text-ink-2 hover:text-ink'
             }`}
             title="Toggle Auto Rotation"
           >
@@ -790,7 +790,7 @@ function SpaceLab3D({ lang = 'en' }) {
 
           <button
             onClick={handleResetCamera}
-            className="p-2.5 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 text-slate-300 hover:text-white text-xs font-semibold flex items-center gap-1.5 transition"
+            className="p-2.5 rounded-[10px] bg-surface-2/70 hover:bg-slate-700/80 text-ink-2 hover:text-ink text-xs font-semibold flex items-center gap-1.5 transition"
             title="Reset Camera View"
           >
             <RotateCcw className="w-4 h-4 text-cyan-400" />
@@ -799,8 +799,8 @@ function SpaceLab3D({ lang = 'en' }) {
 
           <button
             onClick={() => setWireframe(!wireframe)}
-            className={`p-2.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition ${
-              wireframe ? 'bg-indigo-600 text-white' : 'bg-slate-800/80 text-slate-300 hover:text-white'
+            className={`p-2.5 rounded-[10px] text-xs font-semibold flex items-center gap-1.5 transition ${
+              wireframe ? 'bg-indigo-600 text-white' : 'bg-surface-2/70 text-ink-2 hover:text-ink'
             }`}
             title="Toggle Wireframe Mesh"
           >
@@ -811,8 +811,8 @@ function SpaceLab3D({ lang = 'en' }) {
           {selectedTargetId === 'mars' && (
             <button
               onClick={() => setAtmosphereHaze(!atmosphereHaze)}
-              className={`p-2.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition ${
-                atmosphereHaze ? 'bg-orange-600 text-white' : 'bg-slate-800/80 text-slate-300'
+              className={`p-2.5 rounded-[10px] text-xs font-semibold flex items-center gap-1.5 transition ${
+                atmosphereHaze ? 'bg-orange-600 text-white' : 'bg-surface-2/70 text-ink-2'
               }`}
               title="Toggle Mars Dust Haze"
             >
@@ -823,8 +823,8 @@ function SpaceLab3D({ lang = 'en' }) {
 
           <button
             onClick={() => setBloomEnabled(!bloomEnabled)}
-            className={`p-2.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition ${
-              bloomEnabled ? 'bg-amber-600 text-white' : 'bg-slate-800/80 text-slate-300'
+            className={`p-2.5 rounded-[10px] text-xs font-semibold flex items-center gap-1.5 transition ${
+              bloomEnabled ? 'bg-amber-600 text-white' : 'bg-surface-2/70 text-ink-2'
             }`}
             title="Toggle Mirror Specular Bloom"
           >
@@ -832,8 +832,8 @@ function SpaceLab3D({ lang = 'en' }) {
             <span className="hidden sm:inline">Bloom</span>
           </button>
 
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-950/80 border border-slate-800">
-            <Sun className="w-3.5 h-3.5 text-amber-400" />
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-[10px] bg-abyss/70 border border-line">
+            <Sun className="w-3.5 h-3.5 text-caution" />
             <input
               type="range"
               min="0.5"

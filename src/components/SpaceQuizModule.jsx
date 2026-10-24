@@ -216,14 +216,14 @@ function SpaceQuizModule({ lang = 'en', className = '' }) {
       {/* Header Bar */}
       <div className="flex items-center justify-between gap-3 border-b border-white/10 pb-4 flex-wrap">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-cyan-600 to-indigo-600 flex items-center justify-center shadow-lg shadow-cyan-950/40">
+          <div className="w-10 h-10 rounded-[14px] bg-gradient-to-tr from-cyan-600 to-indigo-600 flex items-center justify-center shadow-lg shadow-cyan-950/40">
             <Trophy className="w-5 h-5 text-white" />
           </div>
           <div>
-            <h3 className="font-['Orbitron'] font-bold text-base sm:text-lg text-white">
+            <h3 className="font-display font-bold text-base sm:text-lg text-white">
               Interactive Space Quiz Module
             </h3>
-            <p className="text-xs text-slate-400 font-mono">
+            <p className="text-xs text-ink-3 font-mono">
               Telemetry & Astrophysics Knowledge Challenge
             </p>
           </div>
@@ -231,12 +231,12 @@ function SpaceQuizModule({ lang = 'en', className = '' }) {
 
         {/* Stats Pill Strip */}
         <div className="flex items-center gap-2 font-mono text-xs">
-          <div className="px-3.5 py-1.5 rounded-xl liquid-glass text-amber-300 flex items-center gap-1.5 shadow-sm">
-            <Flame className="w-3.5 h-3.5 text-amber-400" />
+          <div className="px-3.5 py-1.5 rounded-[10px] liquid-glass text-amber-300 flex items-center gap-1.5 shadow-sm">
+            <Flame className="w-3.5 h-3.5 text-caution" />
             <span>Streak: <b>{streak}x</b></span>
           </div>
 
-          <div className="px-3.5 py-1.5 rounded-xl liquid-glass text-cyan-300 flex items-center gap-1.5 shadow-sm">
+          <div className="px-3.5 py-1.5 rounded-[10px] liquid-glass text-cyan-300 flex items-center gap-1.5 shadow-sm">
             <Award className="w-3.5 h-3.5 text-cyan-400" />
             <span>Score: <b>{score}</b></span>
           </div>
@@ -254,8 +254,8 @@ function SpaceQuizModule({ lang = 'en', className = '' }) {
             </span>
 
             {/* Countdown Badge */}
-            <div className={`px-3 py-1 rounded-xl border flex items-center gap-1.5 font-bold ${
-              timeLeft <= 5 ? 'bg-rose-500/20 border-rose-500 text-rose-300 animate-pulse' : 'liquid-glass text-slate-300'
+            <div className={`px-3 py-1 rounded-[10px] border flex items-center gap-1.5 font-bold ${
+              timeLeft <= 5 ? 'bg-rose-500/20 border-rose-500 text-critical animate-pulse' : 'liquid-glass text-ink-2'
             }`}>
               <Clock className="w-3.5 h-3.5" />
               <span>{timeLeft}s</span>
@@ -263,7 +263,7 @@ function SpaceQuizModule({ lang = 'en', className = '' }) {
           </div>
 
           {/* Question Box */}
-          <div className="p-5 rounded-2xl liquid-glass border border-white/10 shadow-inner">
+          <div className="p-5 rounded-[14px] liquid-glass border border-white/10 shadow-inner">
             <h4 className="text-base sm:text-lg font-bold text-white leading-snug">
               {currentQ.question[currentLang] || currentQ.question.en}
             </h4>
@@ -275,14 +275,14 @@ function SpaceQuizModule({ lang = 'en', className = '' }) {
               const optText = opt.text[currentLang] || opt.text.en;
               const isSelected = selectedOption === opt;
 
-              let btnStyle = 'liquid-glass liquid-glass-edge liquid-glass-hover text-slate-200';
+              let btnStyle = 'liquid-glass liquid-glass-edge liquid-glass-hover text-ink-2';
               if (isAnswered) {
                 if (opt.correct) {
                   btnStyle = 'bg-emerald-950/80 border-emerald-500 text-emerald-200 shadow-md shadow-emerald-950/50';
                 } else if (isSelected && !opt.correct) {
-                  btnStyle = 'bg-rose-950/80 border-rose-500 text-rose-200';
+                  btnStyle = 'bg-rose-950/80 border-rose-500 text-critical';
                 } else {
-                  btnStyle = 'liquid-glass text-slate-500 opacity-50';
+                  btnStyle = 'liquid-glass text-ink-4 opacity-50';
                 }
               }
 
@@ -292,14 +292,14 @@ function SpaceQuizModule({ lang = 'en', className = '' }) {
                   type="button"
                   onClick={() => handleSelectOption(opt)}
                   disabled={isAnswered}
-                  className={`p-4 rounded-2xl border text-left text-xs sm:text-sm font-medium transition cursor-pointer flex items-center justify-between gap-3 ${btnStyle}`}
+                  className={`p-4 rounded-[14px] border text-left text-xs sm:text-sm font-medium transition cursor-pointer flex items-center justify-between gap-3 ${btnStyle}`}
                 >
                   <span>{optText}</span>
                   {isAnswered && opt.correct && (
-                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                    <CheckCircle2 className="w-4 h-4 text-signal shrink-0" />
                   )}
                   {isAnswered && isSelected && !opt.correct && (
-                    <XCircle className="w-4 h-4 text-rose-400 shrink-0" />
+                    <XCircle className="w-4 h-4 text-critical shrink-0" />
                   )}
                 </button>
               );
@@ -312,7 +312,7 @@ function SpaceQuizModule({ lang = 'en', className = '' }) {
               <motion.div
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="p-4 rounded-2xl liquid-glass border border-cyan-500/30 text-xs text-slate-300 space-y-2"
+                className="p-4 rounded-[14px] liquid-glass border border-cyan-500/30 text-xs text-ink-2 space-y-2"
               >
                 <div className="flex items-center justify-between">
                   <span className="font-mono font-bold text-cyan-300 flex items-center gap-1.5">
@@ -322,7 +322,7 @@ function SpaceQuizModule({ lang = 'en', className = '' }) {
                   <button
                     type="button"
                     onClick={handleNextQuestion}
-                    className="px-4 py-1.5 rounded-xl bg-gradient-to-r from-cyan-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 text-white font-mono font-bold flex items-center gap-1.5 transition shadow-md shadow-cyan-950/50 cursor-pointer"
+                    className="px-4 py-1.5 rounded-[10px] bg-gradient-to-r from-cyan-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 text-white font-mono font-bold flex items-center gap-1.5 transition shadow-md shadow-cyan-950/50 cursor-pointer"
                   >
                     <span>{currentIndex + 1 < SPACE_QUESTIONS.length ? 'Next Question' : 'View Results'}</span>
                     <ChevronRight className="w-4 h-4" />
@@ -343,28 +343,28 @@ function SpaceQuizModule({ lang = 'en', className = '' }) {
           className="text-center py-8 space-y-6"
         >
           <div className="inline-flex p-4 rounded-3xl bg-cyan-500/20 border border-cyan-500/40 shadow-2xl">
-            <Trophy className="w-16 h-16 text-amber-400 animate-bounce" />
+            <Trophy className="w-16 h-16 text-caution animate-bounce" />
           </div>
 
           <div className="space-y-1">
             <span className="text-xs font-mono uppercase tracking-widest text-cyan-400 font-bold block">
               Mission Debrief Complete
             </span>
-            <h4 className="text-3xl font-black font-['Orbitron'] text-white">
+            <h4 className="text-3xl font-black font-display text-white">
               Score: {score} Points
             </h4>
-            <p className="text-sm font-mono text-slate-400">
+            <p className="text-sm font-mono text-ink-3">
               Personal Best: {highScore} Points
             </p>
           </div>
 
           {/* Rank Badge Card */}
-          <div className="max-w-xs mx-auto p-4 rounded-2xl liquid-glass space-y-1">
-            <span className="text-[10px] font-mono text-slate-400 uppercase">Awarded Commission:</span>
-            <h5 className={`text-lg font-bold font-['Orbitron'] bg-gradient-to-r ${rank.color} bg-clip-text text-transparent`}>
+          <div className="max-w-xs mx-auto p-4 rounded-[14px] liquid-glass space-y-1">
+            <span className="text-[10px] font-mono text-ink-3 uppercase">Awarded Commission:</span>
+            <h5 className={`text-lg font-bold font-display bg-gradient-to-r ${rank.color} bg-clip-text text-transparent`}>
               {rank.title}
             </h5>
-            <span className="inline-block px-2.5 py-0.5 rounded-full bg-slate-800/80 text-[10px] font-mono text-cyan-300">
+            <span className="inline-block px-2.5 py-0.5 rounded-full bg-surface-2/70 text-[10px] font-mono text-cyan-300">
               {rank.tag} RANK
             </span>
           </div>
@@ -372,7 +372,7 @@ function SpaceQuizModule({ lang = 'en', className = '' }) {
           <button
             type="button"
             onClick={handleRestart}
-            className="px-6 py-2.5 rounded-2xl bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-mono font-bold text-sm shadow-xl shadow-cyan-950/60 inline-flex items-center gap-2 cursor-pointer transition"
+            className="px-6 py-2.5 rounded-[14px] bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-mono font-bold text-sm shadow-xl shadow-cyan-950/60 inline-flex items-center gap-2 cursor-pointer transition"
           >
             <RotateCcw className="w-4 h-4" />
             <span>Launch Another Simulation</span>

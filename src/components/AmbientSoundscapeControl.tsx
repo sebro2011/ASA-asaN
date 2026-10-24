@@ -103,10 +103,10 @@ export const AmbientSoundscapeControl: React.FC<AmbientSoundscapeControlProps> =
   const knobY = 26 + radius * Math.sin(knobAngle);
 
   return (
-    <div className={`relative flex items-center gap-3 px-3.5 py-2 rounded-2xl transition-all duration-300 border select-none ${
+    <div className={`relative flex items-center gap-3 px-3.5 py-2 rounded-[14px] transition-all duration-300 border select-none ${
       isPlaying
         ? 'bg-gradient-to-r from-cyan-950/80 via-blue-950/80 to-purple-950/80 border-cyan-400/60 shadow-[0_0_20px_rgba(6,182,212,0.3)] text-cyan-200'
-        : 'bg-slate-950/80 hover:bg-slate-900/90 border-slate-800 hover:border-slate-700 text-slate-300 hover:text-white'
+        : 'bg-abyss/70 hover:bg-surface/65 border-line hover:border-line text-ink-2 hover:text-ink'
     } ${className}`}>
       
       {/* Circular Volume Slider Container */}
@@ -174,7 +174,7 @@ export const AmbientSoundscapeControl: React.FC<AmbientSoundscapeControlProps> =
           className={`absolute inset-2 rounded-full flex items-center justify-center transition-all ${
             isPlaying
               ? 'bg-cyan-500/20 text-cyan-300 shadow-inner hover:scale-105'
-              : 'bg-slate-900 text-slate-400 hover:text-cyan-300 hover:bg-slate-800'
+              : 'bg-surface/60 text-ink-3 hover:text-cyan-300 hover:bg-surface-2'
           }`}
           title={isPlaying ? 'Pause Soundscape' : 'Play Deep Space Soundscape'}
         >
@@ -204,13 +204,13 @@ export const AmbientSoundscapeControl: React.FC<AmbientSoundscapeControlProps> =
 
       {/* Text Info & Controls */}
       <div className="text-left cursor-pointer" onClick={handleTogglePlay}>
-        <div className="flex items-center gap-1.5 text-xs font-bold font-['Orbitron'] tracking-wide">
+        <div className="flex items-center gap-1.5 text-xs font-bold font-display tracking-wide">
           <span>{text.title}</span>
           {isPlaying && (
             <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-ping" />
           )}
         </div>
-        <div className="text-[10px] font-mono text-slate-400 flex items-center gap-1 mt-0.5">
+        <div className="text-[10px] font-mono text-ink-3 flex items-center gap-1 mt-0.5">
           <span>{isPlaying ? `${text.active} • ${Math.round(volume * 100)}%` : text.inactive}</span>
         </div>
       </div>

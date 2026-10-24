@@ -257,7 +257,7 @@ export default function AnimatedNavbar({
   };
 
   return (
-    <header className={`sticky top-0 z-50 w-full bg-[#030718]/92 backdrop-blur-2xl border-b border-cyan-500/20 shadow-[0_12px_32px_rgba(0,0,0,0.7)] transition-all ${className}`}>
+    <header className={`sticky top-0 z-50 w-full bg-abyss backdrop-blur-2xl border-b border-cyan-500/20 shadow-[0_12px_32px_rgba(0,0,0,0.7)] transition-all ${className}`}>
       {/* Subtle top neon ambient bar */}
       <div className="h-[2px] w-full bg-gradient-to-r from-transparent via-cyan-400 to-transparent opacity-85" />
 
@@ -274,7 +274,7 @@ export default function AnimatedNavbar({
 
               <div>
                 <div className="flex items-center gap-1.5">
-                  <span className="font-['Orbitron'] font-black text-base md:text-lg tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-white via-slate-100 to-cyan-300">
+                  <span className="font-display font-black text-base md:text-lg tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-white via-slate-100 to-cyan-300">
                     NASA
                   </span>
                   <span className="text-[10px] font-mono px-1.5 py-0.2 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
@@ -288,8 +288,8 @@ export default function AnimatedNavbar({
                       : isSyncing
                         ? 'bg-cyan-500/15 border-cyan-500/40 text-cyan-200 shadow-[0_0_10px_rgba(6,182,212,0.3)]'
                         : isTelemetryPulse
-                          ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300 shadow-[0_0_12px_rgba(16,185,129,0.3)] ring-1 ring-emerald-400/30'
-                          : 'bg-slate-900/60 border-slate-800/80 text-slate-400'
+                          ? 'bg-emerald-500/15 border-emerald-500/40 text-signal shadow-[0_0_12px_rgba(16,185,129,0.3)] ring-1 ring-emerald-400/30'
+                          : 'bg-surface/50 border-line text-ink-3'
                   }`}
                   title={
                     !isOnline 
@@ -329,12 +329,12 @@ export default function AnimatedNavbar({
                   <span 
                     className={`hidden sm:inline font-semibold tracking-wider transition-all duration-700 ${
                       !isOnline
-                        ? 'text-amber-400 drop-shadow-[0_0_6px_rgba(245,158,11,0.5)]'
+                        ? 'text-caution drop-shadow-[0_0_6px_rgba(245,158,11,0.5)]'
                         : isSyncing
                           ? 'text-cyan-300 drop-shadow-[0_0_8px_rgba(34,211,238,0.7)] animate-pulse'
                           : isTelemetryPulse
-                            ? 'text-emerald-300 drop-shadow-[0_0_8px_rgba(52,211,153,0.8)] scale-[1.02]'
-                            : 'text-slate-400 group-hover:text-slate-300'
+                            ? 'text-signal drop-shadow-[0_0_8px_rgba(52,211,153,0.8)] scale-[1.02]'
+                            : 'text-ink-3 group-hover:text-ink-2'
                     }`}
                   >
                     {isSyncing ? 'SYNCING TELEMETRY' : isOnline ? 'LIVE TELEMETRY' : 'OFFLINE CACHED'}
@@ -343,12 +343,12 @@ export default function AnimatedNavbar({
                   <span 
                     className={`sm:hidden font-semibold tracking-wider transition-all duration-700 ${
                       !isOnline
-                        ? 'text-amber-400'
+                        ? 'text-caution'
                         : isSyncing
                           ? 'text-cyan-300'
                           : isTelemetryPulse
-                            ? 'text-emerald-300 drop-shadow-[0_0_8px_rgba(52,211,153,0.8)]'
-                            : 'text-slate-400'
+                            ? 'text-signal drop-shadow-[0_0_8px_rgba(52,211,153,0.8)]'
+                            : 'text-ink-3'
                     }`}
                   >
                     {isSyncing ? 'SYNC' : isOnline ? 'LIVE' : 'OFFLINE'}
@@ -359,7 +359,7 @@ export default function AnimatedNavbar({
           </div>
 
           {/* Desktop Navigation with Framer Motion Active Indicator layoutId */}
-          <nav className="hidden lg:flex items-center p-1.5 bg-slate-900/70 border border-slate-800/80 rounded-2xl backdrop-blur-md relative shadow-inner">
+          <nav className="hidden lg:flex items-center p-1.5 bg-surface/60 border border-line rounded-[14px] backdrop-blur-md relative shadow-inner">
             {NAV_ITEMS.map((item) => {
               const Icon = item.icon;
               const isActive = activeTab === item.id;
@@ -369,17 +369,17 @@ export default function AnimatedNavbar({
                 <button
                   key={item.id}
                   onClick={() => handleTabClick(item.id)}
-                  className={`relative flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold font-['Orbitron'] tracking-wide transition-colors duration-200 z-10 ${
+                  className={`relative flex items-center gap-2 px-3.5 py-2 rounded-[10px] text-xs font-semibold font-display tracking-wide transition-colors duration-200 z-10 ${
                     isActive
                       ? 'text-white font-bold'
-                      : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/30'
+                      : 'text-ink-3 hover:text-ink-2 hover:bg-surface-2/30'
                   }`}
                 >
                   {/* Framer Motion Active Gliding Pill with Spring Physics */}
                   {isActive && (
                     <motion.div
                       layoutId="active-nav-pill"
-                      className="absolute inset-0 bg-gradient-to-r from-cyan-600 via-blue-600 to-cyan-500 rounded-xl shadow-lg shadow-cyan-500/30 border border-cyan-400/40"
+                      className="absolute inset-0 bg-gradient-to-r from-cyan-600 via-blue-600 to-cyan-500 rounded-[10px] shadow-lg shadow-cyan-500/30 border border-cyan-400/40"
                       transition={SPRING_TRANSITION}
                       style={{ zIndex: -1 }}
                     />
@@ -428,7 +428,7 @@ export default function AnimatedNavbar({
                     <button
                       type="button"
                       onClick={() => setLangDropdownOpen(!langDropdownOpen)}
-                      className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1.5 rounded-xl bg-slate-900/90 hover:bg-slate-800/90 border border-slate-800/90 hover:border-cyan-500/50 text-white transition-all shadow-sm active:scale-95 focus:outline-none focus:ring-2 focus:ring-cyan-500/40"
+                      className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1.5 rounded-[10px] bg-surface/65 hover:bg-surface-2/90 border border-line/90 hover:border-cyan-500/50 text-white transition-all shadow-sm active:scale-95 focus:outline-none focus:ring-2 focus:ring-cyan-500/40"
                       aria-label="Select Language"
                       aria-expanded={langDropdownOpen}
                     >
@@ -437,11 +437,11 @@ export default function AnimatedNavbar({
                       <span className="font-mono font-bold text-xs uppercase text-cyan-300 sm:hidden">
                         {currentLangObj.code}
                       </span>
-                      <span className="hidden sm:inline font-sans font-bold text-xs text-slate-100">
+                      <span className="hidden sm:inline font-sans font-bold text-xs text-ink">
                         {currentLangObj.nativeName}
                       </span>
                       <ChevronDown
-                        className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 ${
+                        className={`w-3.5 h-3.5 text-ink-3 transition-transform duration-200 ${
                           langDropdownOpen ? 'rotate-180 text-cyan-400' : ''
                         }`}
                       />
@@ -455,15 +455,15 @@ export default function AnimatedNavbar({
                           animate={{ opacity: 1, y: 0, scale: 1 }}
                           exit={{ opacity: 0, y: 6, scale: 0.96 }}
                           transition={SPRING_TRANSITION}
-                          className="absolute right-0 mt-2 w-64 sm:w-72 rounded-2xl bg-slate-950/95 border border-cyan-500/30 backdrop-blur-2xl shadow-[0_20px_50px_rgba(0,0,0,0.85)] p-2.5 z-50 text-slate-200"
+                          className="absolute right-0 mt-2 w-64 sm:w-72 rounded-[14px] bg-abyss/95 border border-cyan-500/30 backdrop-blur-2xl shadow-[0_20px_50px_rgba(0,0,0,0.85)] p-2.5 z-50 text-ink-2"
                         >
                           {/* Header Badge */}
-                          <div className="flex items-center justify-between px-2.5 py-1.5 mb-1.5 border-b border-slate-800/80">
+                          <div className="flex items-center justify-between px-2.5 py-1.5 mb-1.5 border-b border-line">
                             <div className="flex items-center gap-1.5 text-[11px] font-mono font-bold uppercase tracking-wider text-cyan-400">
                               <Globe2 className="w-3.5 h-3.5 text-cyan-400" />
                               <span>Trilingual i18n</span>
                             </div>
-                            <span className="text-[10px] font-mono text-slate-400 font-medium">
+                            <span className="text-[10px] font-mono text-ink-3 font-medium">
                               NASA & AI
                             </span>
                           </div>
@@ -477,10 +477,10 @@ export default function AnimatedNavbar({
                                   key={langItem.code}
                                   type="button"
                                   onClick={() => handleLanguageChange(langItem.code)}
-                                  className={`w-full flex items-center justify-between p-2 rounded-xl transition-all select-none text-left ${
+                                  className={`w-full flex items-center justify-between p-2 rounded-[10px] transition-all select-none text-left ${
                                     isSelected
                                       ? 'bg-gradient-to-r from-cyan-950/90 via-blue-950/80 to-slate-900 border border-cyan-400/50 shadow-md text-white'
-                                      : 'hover:bg-slate-900/80 border border-transparent text-slate-300 hover:text-white'
+                                      : 'hover:bg-surface/60 border border-transparent text-ink-2 hover:text-ink'
                                   }`}
                                 >
                                   <div className="flex items-center gap-2.5">
@@ -488,15 +488,15 @@ export default function AnimatedNavbar({
                                     <div>
                                       <div className="flex items-center gap-1.5">
                                         <span className={`font-sans font-bold text-xs sm:text-sm ${
-                                          isSelected ? 'text-cyan-200' : 'text-slate-200'
+                                          isSelected ? 'text-cyan-200' : 'text-ink-2'
                                         }`}>
                                           {langItem.nativeName}
                                         </span>
-                                        <span className="text-[10px] font-mono text-slate-400 uppercase">
+                                        <span className="text-[10px] font-mono text-ink-3 uppercase">
                                           ({langItem.code})
                                         </span>
                                       </div>
-                                      <span className="text-[10px] text-slate-400 font-mono block">
+                                      <span className="text-[10px] text-ink-3 font-mono block">
                                         {langItem.label}
                                       </span>
                                     </div>
@@ -512,7 +512,7 @@ export default function AnimatedNavbar({
                             })}
                           </div>
 
-                          <div className="mt-2 pt-1.5 border-t border-slate-800/80 px-2 text-[10px] font-mono text-slate-400 text-center">
+                          <div className="mt-2 pt-1.5 border-t border-line px-2 text-[10px] font-mono text-ink-3 text-center">
                             <span>Dynamic NASA translation on-the-fly</span>
                           </div>
                         </motion.div>
@@ -527,7 +527,7 @@ export default function AnimatedNavbar({
             <div className="lg:hidden">
               <button
                 onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                className="p-2 rounded-xl bg-slate-900 border border-slate-800 text-slate-300 hover:text-white hover:border-cyan-500/50 transition"
+                className="p-2 rounded-[10px] bg-surface/60 border border-line text-ink-2 hover:text-ink hover:border-cyan-500/50 transition"
                 aria-label="Toggle Menu"
               >
                 {mobileMenuOpen ? <X className="w-5 h-5 text-cyan-400" /> : <Menu className="w-5 h-5" />}
@@ -546,7 +546,7 @@ export default function AnimatedNavbar({
             animate={{ opacity: 1, height: 'auto' }}
             exit={{ opacity: 0, height: 0 }}
             transition={SPRING_TRANSITION}
-            className="lg:hidden border-t border-slate-800 bg-slate-950/95 backdrop-blur-2xl px-4 py-4 space-y-3 overflow-hidden shadow-2xl"
+            className="lg:hidden border-t border-line bg-abyss/95 backdrop-blur-2xl px-4 py-4 space-y-3 overflow-hidden shadow-2xl"
           >
             {/* Navigation Tabs List */}
             <div className="grid grid-cols-1 gap-1.5">
@@ -559,15 +559,15 @@ export default function AnimatedNavbar({
                   <button
                     key={item.id}
                     onClick={() => handleTabClick(item.id)}
-                    className={`flex items-center justify-between px-4 py-3 rounded-xl text-xs font-semibold transition ${
+                    className={`flex items-center justify-between px-4 py-3 rounded-[10px] text-xs font-semibold transition ${
                       isActive
                         ? 'bg-gradient-to-r from-cyan-600 to-blue-600 text-white shadow-lg shadow-cyan-600/30 border border-cyan-400/50'
-                        : 'bg-slate-900/60 text-slate-300 hover:bg-slate-800 hover:text-white border border-slate-800'
+                        : 'bg-surface/50 text-ink-2 hover:bg-surface-2 hover:text-ink border border-line'
                     }`}
                   >
                     <div className="flex items-center gap-3">
                       <Icon className={`w-4 h-4 ${isActive ? 'text-white' : 'text-cyan-400'}`} />
-                      <span className="font-['Orbitron'] tracking-wide">{label}</span>
+                      <span className="font-display tracking-wide">{label}</span>
                     </div>
 
                     <div className="flex items-center gap-2">
@@ -588,29 +588,29 @@ export default function AnimatedNavbar({
             </div>
 
             {/* Mobile Export & Languages */}
-            <div className="pt-2 border-t border-slate-800 flex items-center justify-between gap-2">
+            <div className="pt-2 border-t border-line flex items-center justify-between gap-2">
               {onOpenExportModal && (
                 <button
                   onClick={() => {
                     onOpenExportModal();
                     setMobileMenuOpen(false);
                   }}
-                  className="flex-1 py-2.5 px-3 rounded-xl bg-cyan-600/20 border border-cyan-500/40 text-cyan-300 hover:bg-cyan-600/30 text-xs font-semibold flex items-center justify-center gap-2"
+                  className="flex-1 py-2.5 px-3 rounded-[10px] bg-cyan-600/20 border border-cyan-500/40 text-cyan-300 hover:bg-cyan-600/30 text-xs font-semibold flex items-center justify-center gap-2"
                 >
                   <FileCode className="w-3.5 h-3.5" />
                   <span>Export HTML Report</span>
                 </button>
               )}
 
-              <div className="flex items-center gap-1 bg-slate-900 p-1 rounded-xl border border-slate-800">
+              <div className="flex items-center gap-1 bg-surface/60 p-1 rounded-[10px] border border-line">
                 {LANGUAGES.map((l) => (
                   <button
                     key={l.code}
                     onClick={() => handleLanguageChange(l.code)}
-                    className={`px-2 py-1.5 rounded-lg text-xs font-mono transition ${
+                    className={`px-2 py-1.5 rounded-[8px] text-xs font-mono transition ${
                       l.code === currentLang
                         ? 'bg-cyan-600 text-white font-bold'
-                        : 'text-slate-400 hover:text-white'
+                        : 'text-ink-3 hover:text-ink'
                     }`}
                   >
                     {l.flag} {l.code.toUpperCase()}

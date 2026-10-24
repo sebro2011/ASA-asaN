@@ -737,7 +737,7 @@ export default function Globe3D({ layer, date, reducedMotion, onFallback, center
   });
 
   return (
-    <div className="relative overflow-hidden rounded-xl border border-slate-800 bg-[#03060d]">
+    <div className="relative overflow-hidden rounded-[10px] border border-line bg-[#03060d]">
       <div
         ref={mountRef}
         className="h-[340px] w-full sm:h-[460px]"
@@ -754,11 +754,11 @@ export default function Globe3D({ layer, date, reducedMotion, onFallback, center
       />
 
       <div className="pointer-events-none absolute top-2 left-2 flex flex-col gap-1">
-        <span className="rounded-full border border-cyan-500/40 bg-slate-950/80 px-2 py-0.5 font-mono text-[10px] text-cyan-200">
+        <span className="rounded-full border border-atmo/35 bg-abyss/70 px-2 py-0.5 font-mono text-[10px] text-atmo-soft">
           {layer.id} · {date}
         </span>
         {resolutionLabel ? (
-          <span className="rounded-full border border-slate-700/80 bg-slate-950/75 px-2 py-0.5 font-mono text-[10px] text-slate-300">
+          <span className="rounded-full border border-line bg-abyss/70/75 px-2 py-0.5 font-mono text-[10px] text-ink-2">
             {resolutionLabel}
           </span>
         ) : null}
@@ -773,7 +773,7 @@ export default function Globe3D({ layer, date, reducedMotion, onFallback, center
             title={t('earthGlobeGrid')}
             onClick={() => setShowGrid((value) => !value)}
             className={`flex items-center gap-1 rounded-md border px-2 py-1 text-[10px] transition ${
-              showGrid ? 'border-cyan-500/60 bg-cyan-500/15 text-cyan-100' : 'border-slate-700 bg-slate-950/85 text-slate-300 hover:border-slate-500'
+              showGrid ? 'border-cyan-500/60 bg-atmo/10 text-atmo-soft' : 'border-line bg-abyss/70/85 text-ink-2 hover:border-slate-500'
             }`}
           >
             <Grid3x3 className="h-3 w-3" />
@@ -786,7 +786,7 @@ export default function Globe3D({ layer, date, reducedMotion, onFallback, center
             title={spinEnabled ? t('earthGlobeSpinPause') : t('earthGlobeSpin')}
             onClick={() => setSpinEnabled((value) => !value)}
             className={`flex items-center gap-1 rounded-md border px-2 py-1 text-[10px] transition ${
-              spinEnabled ? 'border-cyan-500/60 bg-cyan-500/15 text-cyan-100' : 'border-slate-700 bg-slate-950/85 text-slate-300 hover:border-slate-500'
+              spinEnabled ? 'border-cyan-500/60 bg-atmo/10 text-atmo-soft' : 'border-line bg-abyss/70/85 text-ink-2 hover:border-slate-500'
             }`}
           >
             {spinEnabled ? <Pause className="h-3 w-3" /> : <Play className="h-3 w-3" />}
@@ -797,7 +797,7 @@ export default function Globe3D({ layer, date, reducedMotion, onFallback, center
             onClick={() => resetRef.current?.()}
             aria-label={t('earthResetView')}
             title={t('earthResetView')}
-            className="flex items-center gap-1 rounded-md border border-slate-700 bg-slate-950/85 px-2 py-1 text-[10px] text-slate-200 transition hover:border-cyan-500/60"
+            className="flex items-center gap-1 rounded-md border border-line bg-abyss/70/85 px-2 py-1 text-[10px] text-ink-2 transition hover:border-cyan-500/60"
           >
             <RotateCcw className="h-3 w-3" />
             <span className="hidden sm:inline">{t('earthResetView')}</span>
@@ -806,29 +806,29 @@ export default function Globe3D({ layer, date, reducedMotion, onFallback, center
       ) : null}
 
       {status === 'ready' ? (
-        <div className="pointer-events-none absolute right-2 bottom-2 flex items-center gap-1 rounded-full border border-amber-400/30 bg-slate-950/80 px-2 py-0.5 text-[10px] text-amber-100/90">
+        <div className="pointer-events-none absolute right-2 bottom-2 flex items-center gap-1 rounded-full border border-amber-400/30 bg-abyss/70 px-2 py-0.5 text-[10px] text-caution/90">
           <Sun className="h-3 w-3" />
           <span>{sunLabel}</span>
         </div>
       ) : null}
 
-      <div className="pointer-events-none absolute bottom-2 left-2 max-w-[80%] space-y-0.5 text-[10px] leading-relaxed text-slate-400">
+      <div className="pointer-events-none absolute bottom-2 left-2 max-w-[80%] space-y-0.5 text-[10px] leading-relaxed text-ink-3">
         <p>
           {t('earthGlobeHint')} · {t('earthGlobeKeyboardHint')}
         </p>
-        <p className="text-slate-500">{t('earthGlobeShadingNote')}</p>
-        <p className="text-slate-500">{t('earthImageryAttribution')}</p>
+        <p className="text-ink-4">{t('earthGlobeShadingNote')}</p>
+        <p className="text-ink-4">{t('earthImageryAttribution')}</p>
       </div>
 
       {status === 'loading' ? (
-        <div role="status" aria-live="polite" className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-slate-950/70">
-          <Loader2 className="h-5 w-5 animate-spin text-cyan-300" />
-          <p className="text-xs text-slate-300">{t('earthGlobeTexturePending')}</p>
+        <div role="status" aria-live="polite" className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-abyss/70">
+          <Loader2 className="h-5 w-5 animate-spin text-atmo" />
+          <p className="text-xs text-ink-2">{t('earthGlobeTexturePending')}</p>
         </div>
       ) : null}
       {status === 'error' ? (
-        <div role="status" className="absolute inset-0 flex items-center justify-center bg-slate-950/80 px-6 text-center">
-          <p className="text-xs text-amber-200">{t('earthGlobeFallback')}</p>
+        <div role="status" className="absolute inset-0 flex items-center justify-center bg-abyss/70 px-6 text-center">
+          <p className="text-xs text-caution">{t('earthGlobeFallback')}</p>
         </div>
       ) : null}
     </div>

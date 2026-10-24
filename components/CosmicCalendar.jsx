@@ -185,18 +185,18 @@ export function CosmicCalendar({ className = '', lang = 'en' }) {
   };
 
   return (
-    <div className={`bg-slate-900/90 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-4 font-sans text-slate-100 ${className}`}>
+    <div className={`bg-surface/65 border border-line rounded-[14px] p-5 shadow-xl space-y-4 font-sans text-ink ${className}`}>
       {/* Header Bar */}
-      <div className="flex items-center justify-between gap-3 flex-wrap border-b border-slate-800 pb-3">
+      <div className="flex items-center justify-between gap-3 flex-wrap border-b border-line pb-3">
         <div className="flex items-center gap-3">
-          <div className="relative w-10 h-10 rounded-xl bg-gradient-to-tr from-amber-500 via-orange-600 to-rose-600 p-0.5 flex items-center justify-center shadow-lg shadow-amber-950/40 shrink-0">
+          <div className="relative w-10 h-10 rounded-[10px] bg-gradient-to-tr from-amber-500 via-orange-600 to-rose-600 p-0.5 flex items-center justify-center shadow-lg shadow-amber-950/40 shrink-0">
             <CalendarIcon className="w-5 h-5 text-white" />
             <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-amber-400 rounded-full animate-ping" />
           </div>
 
           <div>
             <div className="flex items-center gap-2 flex-wrap">
-              <h3 className="font-['Orbitron'] font-bold text-sm sm:text-base text-white tracking-wide">
+              <h3 className="font-display font-bold text-sm sm:text-base text-white tracking-wide">
                 {lang === 'si' ? 'විශ්වීය දින දර්ශනය (2026/2027)' :
                  lang === 'ta' ? 'விண்வெளி நிகழ்வுகள் காலண்டர் (2026/2027)' :
                  'Astronomical Event Calendar (2026–2027)'}
@@ -205,23 +205,23 @@ export function CosmicCalendar({ className = '', lang = 'en' }) {
                 METEORS • ECLIPSES • MOONS
               </span>
             </div>
-            <p className="text-[11px] text-slate-400 font-mono mt-0.5">
+            <p className="text-[11px] text-ink-3 font-mono mt-0.5">
               Verified NASA/JPL Almanac: Solar & Lunar Eclipses, Meteor Showers, and Supermoons
             </p>
           </div>
         </div>
 
         {/* Year Filter Buttons */}
-        <div className="flex items-center gap-1 bg-slate-950/60 p-1 rounded-xl border border-slate-800 text-xs font-mono">
+        <div className="flex items-center gap-1 bg-abyss/60 p-1 rounded-[10px] border border-line text-xs font-mono">
           {['all', '2026', '2027'].map(yr => (
             <button
               key={yr}
               type="button"
               onClick={() => setSelectedYear(yr)}
-              className={`px-2.5 py-1 rounded-lg transition cursor-pointer font-bold ${
+              className={`px-2.5 py-1 rounded-[8px] transition cursor-pointer font-bold ${
                 selectedYear === yr
                   ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-sm'
-                  : 'text-slate-400 hover:text-white'
+                  : 'text-ink-3 hover:text-ink'
               }`}
             >
               {yr.toUpperCase()}
@@ -231,19 +231,19 @@ export function CosmicCalendar({ className = '', lang = 'en' }) {
       </div>
 
       {/* Featured Highlight Banner: Great 2026/2027 Eclipses */}
-      <div className="p-4 rounded-xl bg-gradient-to-r from-amber-950/30 via-slate-900 to-purple-950/30 border border-amber-500/30 flex items-center justify-between gap-4 flex-wrap shadow-inner">
+      <div className="p-4 rounded-[10px] bg-gradient-to-r from-amber-950/30 via-slate-900 to-purple-950/30 border border-amber-500/30 flex items-center justify-between gap-4 flex-wrap shadow-inner">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-300 shrink-0">
+          <div className="w-9 h-9 rounded-[10px] bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-300 shrink-0">
             <Sun className="w-5 h-5 animate-spin" style={{ animationDuration: '30s' }} />
           </div>
           <div>
-            <span className="text-[10px] font-mono text-amber-400 font-bold uppercase tracking-wider block">
+            <span className="text-[10px] font-mono text-caution font-bold uppercase tracking-wider block">
               PRIMARY CELESTIAL HIGHLIGHT
             </span>
-            <h4 className="text-sm font-bold text-white font-['Orbitron'] mt-0.5">
+            <h4 className="text-sm font-bold text-white font-display mt-0.5">
               Total Solar Eclipse • August 12, 2026
             </h4>
-            <p className="text-xs text-slate-300 font-sans mt-0.5">
+            <p className="text-xs text-ink-2 font-sans mt-0.5">
               Path of Totality sweeps across Greenland, Iceland, and Northern Spain.
             </p>
           </div>
@@ -253,9 +253,9 @@ export function CosmicCalendar({ className = '', lang = 'en' }) {
           href={createGoogleCalendarUrl(ASTRONOMICAL_EVENTS[1])}
           target="_blank"
           rel="noopener noreferrer"
-          className="px-3 py-1.5 rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-200 text-xs font-mono font-bold hover:bg-amber-500/30 transition flex items-center gap-1.5 shadow-sm"
+          className="px-3 py-1.5 rounded-[10px] bg-amber-500/20 border border-amber-500/40 text-amber-200 text-xs font-mono font-bold hover:bg-amber-500/30 transition flex items-center gap-1.5 shadow-sm"
         >
-          <ExternalLink className="w-3.5 h-3.5 text-amber-400" />
+          <ExternalLink className="w-3.5 h-3.5 text-caution" />
           <span>Add to Google Calendar</span>
         </a>
       </div>
@@ -273,10 +273,10 @@ export function CosmicCalendar({ className = '', lang = 'en' }) {
               key={c.id}
               type="button"
               onClick={() => setSelectedCategory(c.id)}
-              className={`px-3 py-1 rounded-xl text-xs font-mono transition whitespace-nowrap cursor-pointer border ${
+              className={`px-3 py-1 rounded-[10px] text-xs font-mono transition whitespace-nowrap cursor-pointer border ${
                 selectedCategory === c.id
                   ? 'bg-cyan-500/20 border-cyan-400 text-cyan-300 font-bold shadow-sm'
-                  : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:text-white'
+                  : 'bg-abyss/60 border-line text-ink-3 hover:text-ink'
               }`}
             >
               {c.label}
@@ -286,13 +286,13 @@ export function CosmicCalendar({ className = '', lang = 'en' }) {
 
         {/* Search input */}
         <div className="relative w-full sm:w-56">
-          <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+          <Search className="w-3.5 h-3.5 text-ink-3 absolute left-3 top-1/2 -translate-y-1/2" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search celestial events..."
-            className="w-full pl-8 pr-3 py-1.5 rounded-xl bg-slate-950/80 border border-slate-800 text-xs font-mono text-white placeholder-slate-500 focus:outline-none focus:border-cyan-400 transition"
+            className="w-full pl-8 pr-3 py-1.5 rounded-[10px] bg-abyss/70 border border-line text-xs font-mono text-white placeholder-slate-500 focus:outline-none focus:border-cyan-400 transition"
           />
         </div>
       </div>
@@ -304,30 +304,30 @@ export function CosmicCalendar({ className = '', lang = 'en' }) {
           return (
             <div
               key={ev.id}
-              className="p-4 rounded-xl bg-slate-950/60 border border-slate-800/80 hover:border-slate-700 transition flex flex-col justify-between space-y-3 shadow-md"
+              className="p-4 rounded-[10px] bg-abyss/60 border border-line hover:border-line transition flex flex-col justify-between space-y-3 shadow-md"
             >
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between gap-2">
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-slate-900 border border-slate-800 text-cyan-300">
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-surface/60 border border-line text-cyan-300">
                     {ev.date}
                   </span>
-                  <span className="text-[10px] font-mono text-amber-400 font-semibold">
+                  <span className="text-[10px] font-mono text-caution font-semibold">
                     {ev.peakRate}
                   </span>
                 </div>
 
-                <h4 className="font-bold text-sm text-white font-['Orbitron'] leading-snug">
+                <h4 className="font-bold text-sm text-white font-display leading-snug">
                   {getEventTitle(ev)}
                 </h4>
 
-                <p className="text-xs text-slate-300 leading-relaxed font-sans">
+                <p className="text-xs text-ink-2 leading-relaxed font-sans">
                   {getEventDesc(ev)}
                 </p>
               </div>
 
               {/* Event Card Footer */}
-              <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between text-[11px] font-mono text-slate-400">
-                <span className="flex items-center gap-1 text-slate-400 truncate max-w-[200px]" title={ev.visibility}>
+              <div className="pt-2 border-t border-line flex items-center justify-between text-[11px] font-mono text-ink-3">
+                <span className="flex items-center gap-1 text-ink-3 truncate max-w-[200px]" title={ev.visibility}>
                   <Globe2 className="w-3 h-3 text-cyan-400 shrink-0" />
                   <span className="truncate">{ev.visibility}</span>
                 </span>
@@ -337,7 +337,7 @@ export function CosmicCalendar({ className = '', lang = 'en' }) {
                     href={createGoogleCalendarUrl(ev)}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="p-1 rounded bg-slate-900 border border-slate-800 hover:border-cyan-400 text-cyan-300 transition"
+                    className="p-1 rounded bg-surface/60 border border-line hover:border-cyan-400 text-cyan-300 transition"
                     title="Add to Google Calendar"
                   >
                     <ExternalLink className="w-3.5 h-3.5" />
@@ -349,7 +349,7 @@ export function CosmicCalendar({ className = '', lang = 'en' }) {
                     className={`p-1 rounded border transition cursor-pointer ${
                       isSaved
                         ? 'bg-amber-500/20 border-amber-400 text-amber-300'
-                        : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white'
+                        : 'bg-surface/60 border-line text-ink-3 hover:text-ink'
                     }`}
                     title={isSaved ? 'Bookmarked' : 'Bookmark Event'}
                   >

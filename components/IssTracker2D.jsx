@@ -98,6 +98,8 @@ export function IssTracker2D({ className = '', lang = 'en' }) {
   });
 
   const [loading, setLoading] = useState(true);
+  // Distinguishes a real position fix from locally propagated motion.
+  const [trackSource, setTrackSource] = useState('propagated');
   const [lastUpdated, setLastUpdated] = useState(null);
   const [showOrbitTrack, setShowOrbitTrack] = useState(true);
   const [showGrid, setShowGrid] = useState(true);
@@ -132,6 +134,7 @@ export function IssTracker2D({ className = '', lang = 'en' }) {
           orbitTrailRef.current.shift();
         }
 
+        setTrackSource(data._isSample ? 'propagated' : 'live');
         setTelemetry({
           latitude: lat,
           longitude: lon,
@@ -553,19 +556,19 @@ export function IssTracker2D({ className = '', lang = 'en' }) {
   return (
     <div 
       ref={containerRef}
-      className={`bg-slate-950/80 backdrop-blur-xl border border-slate-800/80 rounded-2xl p-5 shadow-2xl space-y-4 font-sans text-slate-100 hover:border-cyan-500/50 hover:shadow-[0_0_25px_rgba(34,211,238,0.15)] transition-all duration-300 ${className}`}
+      className={`bg-abyss/70 backdrop-blur-xl border border-line rounded-[14px] p-5 shadow-2xl space-y-4 font-sans text-ink hover:border-cyan-500/50 hover:shadow-[0_0_25px_rgba(34,211,238,0.15)] transition-all duration-300 ${className}`}
     >
       {/* Header Bar */}
-      <div className="flex items-center justify-between gap-3 flex-wrap border-b border-slate-800 pb-3">
+      <div className="flex items-center justify-between gap-3 flex-wrap border-b border-line pb-3">
         <div className="flex items-center gap-3">
-          <div className="relative w-10 h-10 rounded-xl bg-gradient-to-tr from-cyan-600 via-blue-600 to-indigo-600 p-0.5 flex items-center justify-center shadow-lg shadow-cyan-950/40 shrink-0">
+          <div className="relative w-10 h-10 rounded-[10px] bg-gradient-to-tr from-cyan-600 via-blue-600 to-indigo-600 p-0.5 flex items-center justify-center shadow-lg shadow-cyan-950/40 shrink-0">
             <SatelliteIcon className="w-5 h-5 text-white" />
             <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-cyan-400 rounded-full animate-ping" />
           </div>
 
           <div>
             <div className="flex items-center gap-2 flex-wrap">
-              <h3 className="font-['Orbitron'] font-bold text-sm sm:text-base text-white tracking-wide">
+              <h3 className="font-display font-bold text-sm sm:text-base text-white tracking-wide">
                 {lang === 'si' ? 'අන්තර්ජාතික අභ්‍යවකාශ නැවතුම (ISS 2D Tracker)' :
                  lang === 'ta' ? 'சர்வதேச விண்வெளி நிலையம் (ISS 2D Tracker)' :
                  'ISS 2D Orbital Canvas Tracker'}
@@ -575,7 +578,7 @@ export function IssTracker2D({ className = '', lang = 'en' }) {
                 NORAD 25544 • 5s TELEMETRY
               </span>
             </div>
-            <p className="text-[11px] text-slate-400 font-mono mt-0.5">
+            <p className="text-[11px] text-ink-3 font-mono mt-0.5">
               Zero WebGL Overhead • 60 FPS HTML5 2D Canvas • Real-Time wheretheiss.at Feed
             </p>
           </div>
@@ -586,10 +589,10 @@ export function IssTracker2D({ className = '', lang = 'en' }) {
           <button
             type="button"
             onClick={() => setShowOrbitTrack(prev => !prev)}
-            className={`px-2.5 py-1.5 rounded-xl border text-xs font-mono transition flex items-center gap-1.5 cursor-pointer ${
+            className={`px-2.5 py-1.5 rounded-[10px] border text-xs font-mono transition flex items-center gap-1.5 cursor-pointer ${
               showOrbitTrack 
                 ? 'bg-cyan-500/20 border-cyan-400/50 text-cyan-300' 
-                : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-white'
+                : 'bg-surface-2 border-line text-ink-3 hover:text-ink'
             }`}
             title="Toggle Ground Track Trajectory"
           >
@@ -600,10 +603,10 @@ export function IssTracker2D({ className = '', lang = 'en' }) {
           <button
             type="button"
             onClick={() => setShowGrid(prev => !prev)}
-            className={`px-2.5 py-1.5 rounded-xl border text-xs font-mono transition flex items-center gap-1.5 cursor-pointer ${
+            className={`px-2.5 py-1.5 rounded-[10px] border text-xs font-mono transition flex items-center gap-1.5 cursor-pointer ${
               showGrid 
                 ? 'bg-cyan-500/20 border-cyan-400/50 text-cyan-300' 
-                : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-white'
+                : 'bg-surface-2 border-line text-ink-3 hover:text-ink'
             }`}
             title="Toggle Graticule Coordinate Grid"
           >
@@ -614,7 +617,7 @@ export function IssTracker2D({ className = '', lang = 'en' }) {
           <button
             type="button"
             onClick={fetchIssTelemetry}
-            className="p-2 rounded-xl bg-slate-800 border border-slate-700 text-slate-300 hover:text-white transition cursor-pointer"
+            className="p-2 rounded-[10px] bg-surface-2 border border-line text-ink-2 hover:text-ink transition cursor-pointer"
             title="Refresh Live Telemetry"
           >
             <RefreshCw className="w-3.5 h-3.5" />
@@ -623,14 +626,14 @@ export function IssTracker2D({ className = '', lang = 'en' }) {
       </div>
 
       {/* 2. Feature: ISS Sri Lanka Flyover Live Countdown Badge Banner */}
-      <div className="p-3.5 rounded-xl bg-gradient-to-r from-emerald-950/40 via-slate-900 to-cyan-950/40 border border-emerald-500/30 flex items-center justify-between gap-4 flex-wrap shadow-inner">
+      <div className="p-3.5 rounded-[10px] bg-gradient-to-r from-emerald-950/40 via-slate-900 to-cyan-950/40 border border-emerald-500/30 flex items-center justify-between gap-4 flex-wrap shadow-inner">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-lg shrink-0">
+          <div className="w-8 h-8 rounded-[8px] bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-lg shrink-0">
             🇱🇰
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <span className="text-xs font-bold text-emerald-300 font-['Orbitron']">
+              <span className="text-xs font-bold text-signal font-display">
                 {lang === 'si' ? 'ශ්‍රී ලංකාවට ඉහළින් ගමන් කිරීමේ ගණකය' :
                  lang === 'ta' ? 'இலங்கை நேரலை பறக்கும் கணிப்பான்' :
                  'Sri Lanka (Colombo) Flyover Calculator'}
@@ -639,25 +642,25 @@ export function IssTracker2D({ className = '', lang = 'en' }) {
                 6.9271° N, 79.8612° E
               </span>
             </div>
-            <p className="text-[11px] text-slate-300 font-mono mt-0.5">
+            <p className="text-[11px] text-ink-2 font-mono mt-0.5">
               Distance to Colombo: <strong className="text-cyan-300">{sriLankaDistance.toLocaleString()} km</strong>
               {sriLankaDistance < 1800 ? (
-                <span className="ml-2 text-emerald-400 font-bold">● VISIBLE HORIZON PASS</span>
+                <span className="ml-2 text-signal font-bold">● VISIBLE HORIZON PASS</span>
               ) : (
-                <span className="ml-2 text-slate-400">● Orbital Precession Phase</span>
+                <span className="ml-2 text-ink-3">● Orbital Precession Phase</span>
               )}
             </p>
           </div>
         </div>
 
         {/* Live Countdown Badge */}
-        <div className="flex items-center gap-2.5 bg-slate-950/80 px-3.5 py-2 rounded-xl border border-emerald-500/40 shadow-md">
-          <Clock className="w-4 h-4 text-emerald-400 animate-pulse" />
+        <div className="flex items-center gap-2.5 bg-abyss/70 px-3.5 py-2 rounded-[10px] border border-emerald-500/40 shadow-md">
+          <Clock className="w-4 h-4 text-signal animate-pulse" />
           <div>
-            <span className="text-[9px] font-mono text-slate-400 uppercase tracking-wider block">
+            <span className="text-[9px] font-mono text-ink-3 uppercase tracking-wider block">
               {lang === 'si' ? 'මීළඟ ගුවන් ගමනට ඉතිරි කාලය' : lang === 'ta' ? 'அடுத்த பறக்கும் நேரம்' : 'Next Pass Countdown'}
             </span>
-            <span className="text-sm font-bold font-mono text-emerald-300 tracking-wider">
+            <span className="text-sm font-bold font-mono text-signal tracking-wider">
               {countdownFormatted}
             </span>
           </div>
@@ -665,7 +668,7 @@ export function IssTracker2D({ className = '', lang = 'en' }) {
       </div>
 
       {/* Main 2D Canvas Map Viewport */}
-      <div className="relative w-full aspect-[2/1] min-h-[300px] sm:min-h-[400px] rounded-xl overflow-hidden border border-slate-800 bg-[#030712] shadow-inner select-none">
+      <div className="relative w-full aspect-[2/1] min-h-[300px] sm:min-h-[400px] rounded-[10px] overflow-hidden border border-line bg-[#030712] shadow-inner select-none">
         <canvas
           ref={canvasRef}
           className="w-full h-full block cursor-crosshair"
@@ -673,21 +676,25 @@ export function IssTracker2D({ className = '', lang = 'en' }) {
 
         {/* Corner HUD Badges */}
         <div className="absolute top-3 left-3 pointer-events-none flex items-center gap-2">
-          <span className="px-2.5 py-1 rounded-lg bg-slate-950/80 border border-slate-800 text-[10px] font-mono text-slate-300 backdrop-blur-md">
+          <span className="px-2.5 py-1 rounded-[8px] bg-abyss/70 border border-line text-[10px] font-mono text-ink-2 backdrop-blur-md">
             PROJECTION: EQUIRECTANGULAR 2D
           </span>
-          <span className="px-2.5 py-1 rounded-lg bg-slate-950/80 border border-slate-800 text-[10px] font-mono text-cyan-300 backdrop-blur-md flex items-center gap-1">
-            <Radio className="w-3 h-3 text-cyan-400 animate-pulse" />
-            60 FPS STREAM
+          <span
+            className={`flex items-center gap-1 rounded-[8px] border bg-abyss/70 px-2.5 py-1 font-mono text-[10px] backdrop-blur-md ${
+              trackSource === 'live' ? 'border-signal/40 text-signal' : 'border-caution/40 text-caution'
+            }`}
+          >
+            <Radio className="h-3 w-3" strokeWidth={1.8} />
+            {trackSource === 'live' ? 'POSITION FIX · WHERETHEISS.AT' : 'PROPAGATED · NO LIVE FIX'}
           </span>
         </div>
 
         {/* Solar Illumination Stamp */}
         <div className="absolute bottom-3 right-3 pointer-events-none">
-          <span className="px-2.5 py-1 rounded-lg bg-slate-950/80 border border-slate-800 text-[10px] font-mono text-amber-300 backdrop-blur-md flex items-center gap-1.5">
+          <span className="px-2.5 py-1 rounded-[8px] bg-abyss/70 border border-line text-[10px] font-mono text-amber-300 backdrop-blur-md flex items-center gap-1.5">
             {telemetry.visibility === 'daylight' ? (
               <>
-                <Sun className="w-3.5 h-3.5 text-amber-400" />
+                <Sun className="w-3.5 h-3.5 text-caution" />
                 SOLAR DAYLIGHT ORBIT
               </>
             ) : (
@@ -702,36 +709,36 @@ export function IssTracker2D({ className = '', lang = 'en' }) {
 
       {/* Real-Time Telemetry Stats Card Grid */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 font-mono text-xs">
-        <div className="p-3.5 rounded-xl bg-slate-950/60 border border-slate-800 space-y-1">
-          <span className="text-slate-400 block text-[10px] uppercase">Latitude</span>
-          <div className="text-base font-bold text-cyan-300 font-['Orbitron']">
+        <div className="p-3.5 rounded-[10px] bg-abyss/60 border border-line space-y-1">
+          <span className="text-ink-3 block text-[10px] uppercase">Latitude</span>
+          <div className="text-base font-bold text-cyan-300 font-display">
             {latStr}
           </div>
-          <span className="text-[10px] text-slate-500 block">Sub-satellite point</span>
+          <span className="text-[10px] text-ink-4 block">Sub-satellite point</span>
         </div>
 
-        <div className="p-3.5 rounded-xl bg-slate-950/60 border border-slate-800 space-y-1">
-          <span className="text-slate-400 block text-[10px] uppercase">Longitude</span>
-          <div className="text-base font-bold text-cyan-300 font-['Orbitron']">
+        <div className="p-3.5 rounded-[10px] bg-abyss/60 border border-line space-y-1">
+          <span className="text-ink-3 block text-[10px] uppercase">Longitude</span>
+          <div className="text-base font-bold text-cyan-300 font-display">
             {lonStr}
           </div>
-          <span className="text-[10px] text-slate-500 block">Prime meridian delta</span>
+          <span className="text-[10px] text-ink-4 block">Prime meridian delta</span>
         </div>
 
-        <div className="p-3.5 rounded-xl bg-slate-950/60 border border-slate-800 space-y-1">
-          <span className="text-slate-400 block text-[10px] uppercase">Orbital Velocity</span>
-          <div className="text-base font-bold text-amber-300 font-['Orbitron']">
-            {velKmh} <span className="text-xs font-normal text-slate-400">km/h</span>
+        <div className="p-3.5 rounded-[10px] bg-abyss/60 border border-line space-y-1">
+          <span className="text-ink-3 block text-[10px] uppercase">Orbital Velocity</span>
+          <div className="text-base font-bold text-amber-300 font-display">
+            {velKmh} <span className="text-xs font-normal text-ink-3">km/h</span>
           </div>
-          <span className="text-[10px] text-slate-500 block">Mach 22.5 • Earth orbit</span>
+          <span className="text-[10px] text-ink-4 block">Mach 22.5 • Earth orbit</span>
         </div>
 
-        <div className="p-3.5 rounded-xl bg-slate-950/60 border border-slate-800 space-y-1">
-          <span className="text-slate-400 block text-[10px] uppercase">Altitude</span>
-          <div className="text-base font-bold text-emerald-300 font-['Orbitron']">
-            {altKm} <span className="text-xs font-normal text-slate-400">km</span>
+        <div className="p-3.5 rounded-[10px] bg-abyss/60 border border-line space-y-1">
+          <span className="text-ink-3 block text-[10px] uppercase">Altitude</span>
+          <div className="text-base font-bold text-signal font-display">
+            {altKm} <span className="text-xs font-normal text-ink-3">km</span>
           </div>
-          <span className="text-[10px] text-slate-500 block">LEO orbital baseline</span>
+          <span className="text-[10px] text-ink-4 block">LEO orbital baseline</span>
         </div>
       </div>
     </div>

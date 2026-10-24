@@ -123,7 +123,7 @@ export const IssTelemetryIndicator: React.FC<IssTelemetryIndicatorProps> = React
 
       {showAlt && (
         <>
-          <span className="text-slate-500">·</span>
+          <span className="text-ink-4">·</span>
           <span>
             ALT: <span className="text-cyan-300 font-semibold">{altitude} KM</span>
           </span>
@@ -133,9 +133,9 @@ export const IssTelemetryIndicator: React.FC<IssTelemetryIndicatorProps> = React
       {/* Subtle Latency Readout Badge */}
       <span className={`text-[9px] px-1 py-0.2 rounded font-mono ml-0.5 ${
         status === 'green' 
-          ? 'bg-emerald-950/60 text-emerald-400 border border-emerald-800/40' 
+          ? 'bg-emerald-950/60 text-signal border border-emerald-800/40' 
           : status === 'yellow'
-          ? 'bg-amber-950/60 text-amber-400 border border-amber-800/40'
+          ? 'bg-amber-950/60 text-caution border border-amber-800/40'
           : 'bg-red-950/60 text-red-400 border border-red-800/50 animate-pulse'
       }`}>
         {latency.toFixed(1)}s

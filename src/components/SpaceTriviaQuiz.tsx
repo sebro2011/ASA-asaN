@@ -296,36 +296,36 @@ export const SpaceTriviaQuiz: React.FC<SpaceTriviaQuizProps> = ({
   };
 
   return (
-    <div className={`relative overflow-hidden rounded-3xl bg-gradient-to-b from-[#090D1A]/95 via-[#0D1326]/95 to-[#060812]/98 border border-slate-800/80 shadow-2xl p-6 sm:p-8 backdrop-blur-xl ${className}`}>
+    <div className={`relative overflow-hidden rounded-3xl bg-gradient-to-b from-[#090D1A]/95 via-[#0D1326]/95 to-[#060812]/98 border border-line shadow-2xl p-6 sm:p-8 backdrop-blur-xl ${className}`}>
       
       {/* Celebratory Confetti Burst Animation on Correct Answer */}
       <CosmicConfetti triggerKey={confettiKey} count={60} originX={0.5} originY={0.4} />
 
       {/* Header Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-slate-800/60">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-line">
         <div>
           <div className="flex items-center gap-2">
-            <div className="p-2 rounded-xl bg-cyan-500/10 border border-cyan-400/30 text-cyan-400">
+            <div className="p-2 rounded-[10px] bg-cyan-500/10 border border-cyan-400/30 text-cyan-400">
               <BrainCircuit className="w-5 h-5 animate-pulse" />
             </div>
-            <h2 className="text-xl sm:text-2xl font-bold font-['Orbitron'] text-white tracking-wide">
+            <h2 className="text-xl sm:text-2xl font-bold font-display text-white tracking-wide">
               {t.title}
             </h2>
             <span className="hidden sm:inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-indigo-950/60 border border-indigo-500/40 text-[10px] font-mono text-indigo-300">
-              <Sparkles className="w-3 h-3 text-amber-400" />
+              <Sparkles className="w-3 h-3 text-caution" />
               {t.aiPowered}
             </span>
           </div>
-          <p className="text-xs text-slate-400 mt-1 max-w-xl">
+          <p className="text-xs text-ink-3 mt-1 max-w-xl">
             {t.subtitle}
           </p>
         </div>
 
         {/* Stats Pills */}
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900/90 border border-slate-800 text-xs font-mono">
-            <Trophy className="w-4 h-4 text-amber-400" />
-            <span className="text-slate-400">{t.score}:</span>
+          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-[10px] bg-surface/65 border border-line text-xs font-mono">
+            <Trophy className="w-4 h-4 text-caution" />
+            <span className="text-ink-3">{t.score}:</span>
             <span className="text-amber-300 font-bold">{score}</span>
           </div>
 
@@ -333,9 +333,9 @@ export const SpaceTriviaQuiz: React.FC<SpaceTriviaQuizProps> = ({
             <motion.div
               initial={{ scale: 0.8, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-950/60 border border-rose-500/40 text-xs font-mono text-rose-300"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-[10px] bg-rose-950/60 border border-rose-500/40 text-xs font-mono text-critical"
             >
-              <Flame className="w-4 h-4 text-rose-400 animate-bounce" />
+              <Flame className="w-4 h-4 text-critical animate-bounce" />
               <span>{streak}x</span>
             </motion.div>
           )}
@@ -346,18 +346,18 @@ export const SpaceTriviaQuiz: React.FC<SpaceTriviaQuizProps> = ({
         <div className="mt-6">
           {/* Progress Bar & Question Counter */}
           <div className="space-y-2 mb-6">
-            <div className="flex items-center justify-between text-xs font-mono text-slate-400">
+            <div className="flex items-center justify-between text-xs font-mono text-ink-3">
               <span className="flex items-center gap-1.5 text-cyan-300 font-semibold">
                 <Rocket className="w-3.5 h-3.5" />
                 {t.question} {currentIndex + 1} {t.of} {questionPool.length}
               </span>
-              <span className="text-slate-500 font-medium">
+              <span className="text-ink-4 font-medium">
                 {currentQuestion.category} • <span className="capitalize text-indigo-300">{currentQuestion.difficulty}</span>
               </span>
             </div>
 
             {/* Glowing Space Progress Track */}
-            <div className="w-full h-2 rounded-full bg-slate-950 border border-slate-800/80 overflow-hidden relative">
+            <div className="w-full h-2 rounded-full bg-abyss border border-line overflow-hidden relative">
               <motion.div
                 className="h-full bg-gradient-to-r from-cyan-500 via-indigo-500 to-purple-500 rounded-full"
                 initial={{ width: 0 }}
@@ -378,8 +378,8 @@ export const SpaceTriviaQuiz: React.FC<SpaceTriviaQuizProps> = ({
               className="space-y-6"
             >
               {/* Question Text */}
-              <div className="p-5 sm:p-6 rounded-2xl bg-slate-900/60 border border-slate-800/90 shadow-inner">
-                <h3 className="text-base sm:text-lg font-semibold text-slate-100 leading-relaxed">
+              <div className="p-5 sm:p-6 rounded-[14px] bg-surface/50 border border-line/90 shadow-inner">
+                <h3 className="text-base sm:text-lg font-semibold text-ink leading-relaxed">
                   {currentQuestion.question}
                 </h3>
               </div>
@@ -391,15 +391,15 @@ export const SpaceTriviaQuiz: React.FC<SpaceTriviaQuizProps> = ({
                   const isCorrect = idx === currentQuestion.correctIndex;
                   const showResult = isAnswered;
 
-                  let btnStyle = "bg-slate-900/80 border-slate-800 hover:border-cyan-400/50 hover:bg-slate-800/90 text-slate-200";
+                  let btnStyle = "bg-surface/60 border-line hover:border-cyan-400/50 hover:bg-surface-2/90 text-ink-2";
 
                   if (showResult) {
                     if (isCorrect) {
                       btnStyle = "bg-emerald-950/80 border-emerald-400/80 text-emerald-200 shadow-[0_0_20px_rgba(52,211,153,0.3)]";
                     } else if (isSelected && !isCorrect) {
-                      btnStyle = "bg-rose-950/80 border-rose-500/80 text-rose-200 shadow-[0_0_20px_rgba(244,63,94,0.3)]";
+                      btnStyle = "bg-rose-950/80 border-rose-500/80 text-critical shadow-[0_0_20px_rgba(244,63,94,0.3)]";
                     } else {
-                      btnStyle = "bg-slate-950/50 border-slate-900 text-slate-500 opacity-60";
+                      btnStyle = "bg-abyss/50 border-slate-900 text-ink-4 opacity-60";
                     }
                   }
 
@@ -411,15 +411,15 @@ export const SpaceTriviaQuiz: React.FC<SpaceTriviaQuizProps> = ({
                       onClick={() => handleSelectOption(idx)}
                       whileHover={!isAnswered ? { scale: 1.015 } : {}}
                       whileTap={!isAnswered ? { scale: 0.98 } : {}}
-                      className={`relative flex items-center justify-between text-left p-4 rounded-2xl border transition-all duration-200 font-medium text-sm group ${btnStyle}`}
+                      className={`relative flex items-center justify-between text-left p-4 rounded-[14px] border transition-all duration-200 font-medium text-sm group ${btnStyle}`}
                     >
                       <div className="flex items-center gap-3">
-                        <span className={`w-7 h-7 rounded-xl flex items-center justify-center font-['Orbitron'] text-xs font-bold transition-colors ${
+                        <span className={`w-7 h-7 rounded-[10px] flex items-center justify-center font-display text-xs font-bold transition-colors ${
                           showResult && isCorrect
                             ? 'bg-emerald-500 text-slate-950'
                             : showResult && isSelected && !isCorrect
                             ? 'bg-rose-500 text-white'
-                            : 'bg-slate-800 text-slate-400 group-hover:text-cyan-300 group-hover:bg-slate-700'
+                            : 'bg-surface-2 text-ink-3 group-hover:text-cyan-300 group-hover:bg-slate-700'
                         }`}>
                           {String.fromCharCode(65 + idx)}
                         </span>
@@ -429,9 +429,9 @@ export const SpaceTriviaQuiz: React.FC<SpaceTriviaQuizProps> = ({
                       {showResult && (
                         <div>
                           {isCorrect ? (
-                            <CheckCircle2 className="w-5 h-5 text-emerald-400 animate-bounce" />
+                            <CheckCircle2 className="w-5 h-5 text-signal animate-bounce" />
                           ) : isSelected ? (
-                            <XCircle className="w-5 h-5 text-rose-400" />
+                            <XCircle className="w-5 h-5 text-critical" />
                           ) : null}
                         </div>
                       )}
@@ -445,26 +445,26 @@ export const SpaceTriviaQuiz: React.FC<SpaceTriviaQuizProps> = ({
                 <motion.div
                   initial={{ opacity: 0, y: 15 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className={`p-5 rounded-2xl border ${
+                  className={`p-5 rounded-[14px] border ${
                     selectedAnswer === currentQuestion.correctIndex
                       ? 'bg-emerald-950/30 border-emerald-500/40 text-emerald-100'
                       : 'bg-rose-950/30 border-rose-500/40 text-rose-100'
                   }`}
                 >
-                  <div className="flex items-center gap-2 mb-2 font-bold font-['Orbitron'] text-sm">
+                  <div className="flex items-center gap-2 mb-2 font-bold font-display text-sm">
                     {selectedAnswer === currentQuestion.correctIndex ? (
                       <>
-                        <Sparkles className="w-4 h-4 text-amber-400 animate-spin" />
-                        <span className="text-emerald-300">{t.correct}</span>
+                        <Sparkles className="w-4 h-4 text-caution animate-spin" />
+                        <span className="text-signal">{t.correct}</span>
                       </>
                     ) : (
                       <>
-                        <XCircle className="w-4 h-4 text-rose-400" />
-                        <span className="text-rose-300">{t.incorrect}</span>
+                        <XCircle className="w-4 h-4 text-critical" />
+                        <span className="text-critical">{t.incorrect}</span>
                       </>
                     )}
                   </div>
-                  <p className="text-xs sm:text-sm text-slate-300 leading-relaxed font-sans">
+                  <p className="text-xs sm:text-sm text-ink-2 leading-relaxed font-sans">
                     <span className="font-semibold text-white">{t.explanation}: </span>
                     {currentQuestion.explanation}
                   </p>
@@ -475,7 +475,7 @@ export const SpaceTriviaQuiz: React.FC<SpaceTriviaQuizProps> = ({
                       onClick={handleNext}
                       whileHover={{ scale: 1.03 }}
                       whileTap={{ scale: 0.97 }}
-                      className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 via-blue-600 to-indigo-600 text-white font-bold font-['Orbitron'] text-xs shadow-[0_0_20px_rgba(6,182,212,0.4)] hover:shadow-[0_0_25px_rgba(6,182,212,0.6)] transition-all cursor-pointer"
+                      className="flex items-center gap-2 px-5 py-2.5 rounded-[10px] bg-gradient-to-r from-cyan-500 via-blue-600 to-indigo-600 text-white font-bold font-display text-xs shadow-[0_0_20px_rgba(6,182,212,0.4)] hover:shadow-[0_0_25px_rgba(6,182,212,0.6)] transition-all cursor-pointer"
                     >
                       <span>
                         {currentIndex + 1 < questionPool.length ? t.nextBtn : t.finishBtn}
@@ -496,32 +496,32 @@ export const SpaceTriviaQuiz: React.FC<SpaceTriviaQuizProps> = ({
           className="mt-8 text-center py-8 space-y-6"
         >
           <div className="w-20 h-20 rounded-full bg-gradient-to-tr from-amber-500 to-yellow-300 p-0.5 mx-auto shadow-[0_0_30px_rgba(245,158,11,0.5)]">
-            <div className="w-full h-full rounded-full bg-slate-950 flex items-center justify-center">
-              <Award className="w-10 h-10 text-amber-400 animate-pulse" />
+            <div className="w-full h-full rounded-full bg-abyss flex items-center justify-center">
+              <Award className="w-10 h-10 text-caution animate-pulse" />
             </div>
           </div>
 
           <div>
-            <h3 className="text-2xl font-bold font-['Orbitron'] text-white">
+            <h3 className="text-2xl font-bold font-display text-white">
               {t.greatJob}
             </h3>
-            <p className="text-sm text-slate-400 mt-1">
+            <p className="text-sm text-ink-3 mt-1">
               {t.subtitle}
             </p>
           </div>
 
           <div className="grid grid-cols-3 gap-4 max-w-md mx-auto">
-            <div className="p-4 rounded-2xl bg-slate-900/80 border border-slate-800">
-              <div className="text-xs text-slate-400 font-mono">{t.score}</div>
-              <div className="text-xl font-bold text-amber-300 font-['Orbitron'] mt-1">{score}</div>
+            <div className="p-4 rounded-[14px] bg-surface/60 border border-line">
+              <div className="text-xs text-ink-3 font-mono">{t.score}</div>
+              <div className="text-xl font-bold text-amber-300 font-display mt-1">{score}</div>
             </div>
-            <div className="p-4 rounded-2xl bg-slate-900/80 border border-slate-800">
-              <div className="text-xs text-slate-400 font-mono">{t.streak}</div>
-              <div className="text-xl font-bold text-rose-300 font-['Orbitron'] mt-1">{maxStreak}x</div>
+            <div className="p-4 rounded-[14px] bg-surface/60 border border-line">
+              <div className="text-xs text-ink-3 font-mono">{t.streak}</div>
+              <div className="text-xl font-bold text-critical font-display mt-1">{maxStreak}x</div>
             </div>
-            <div className="p-4 rounded-2xl bg-slate-900/80 border border-slate-800">
-              <div className="text-xs text-slate-400 font-mono">{t.highScore}</div>
-              <div className="text-xl font-bold text-cyan-300 font-['Orbitron'] mt-1">{highScore}</div>
+            <div className="p-4 rounded-[14px] bg-surface/60 border border-line">
+              <div className="text-xs text-ink-3 font-mono">{t.highScore}</div>
+              <div className="text-xl font-bold text-cyan-300 font-display mt-1">{highScore}</div>
             </div>
           </div>
 
@@ -531,7 +531,7 @@ export const SpaceTriviaQuiz: React.FC<SpaceTriviaQuizProps> = ({
               onClick={handleRestart}
               whileHover={{ scale: 1.04 }}
               whileTap={{ scale: 0.96 }}
-              className="inline-flex items-center gap-2 px-6 py-3 rounded-2xl bg-gradient-to-r from-cyan-500 to-indigo-600 text-white font-bold font-['Orbitron'] text-sm shadow-[0_0_25px_rgba(6,182,212,0.4)] transition-all cursor-pointer"
+              className="inline-flex items-center gap-2 px-6 py-3 rounded-[14px] bg-gradient-to-r from-cyan-500 to-indigo-600 text-white font-bold font-display text-sm shadow-[0_0_25px_rgba(6,182,212,0.4)] transition-all cursor-pointer"
             >
               <RefreshCw className="w-4 h-4" />
               <span>{t.playAgain}</span>

@@ -1,2 +1,17 @@
+/* Self-hosted type: no CDN round-trip, works offline and in restricted networks. */
+@import "@fontsource-variable/inter/wght.css";
+@import "@fontsource/jetbrains-mono/400.css";
+@import "@fontsource/jetbrains-mono/500.css";
+@import "@fontsource/noto-sans-sinhala/sinhala-400.css";
+@import "@fontsource/noto-sans-sinhala/sinhala-500.css";
+@import "@fontsource/noto-sans-sinhala/sinhala-600.css";
+@import "@fontsource/noto-sans-sinhala/sinhala-700.css";
+@import "@fontsource/noto-sans-tamil/tamil-400.css";
+@import "@fontsource/noto-sans-tamil/tamil-500.css";
+@import "@fontsource/noto-sans-tamil/tamil-600.css";
+@import "@fontsource/noto-sans-tamil/tamil-700.css";
+
+@import "leaflet/dist/leaflet.css";
 @import "tailwindcss";
+@import "./styles/tokens.css";
 @import "./globals.css";

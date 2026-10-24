@@ -128,7 +128,7 @@ export default function Navbar({
   const activeLang = LANGUAGES.find(l => l.code === currentLang) || LANGUAGES[0];
 
   return (
-    <nav className={`sticky top-0 z-40 w-full bg-slate-950/95 backdrop-blur-md border-b border-slate-800 transition-colors ${className}`}>
+    <nav className={`sticky top-0 z-40 w-full bg-abyss/95 backdrop-blur-md border-b border-line transition-colors ${className}`}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16 sm:h-20 gap-4">
           
@@ -148,7 +148,7 @@ export default function Navbar({
                   NASA <span className="text-cyan-400">Space Explorer</span>
                 </span>
               </div>
-              <p className="text-[11px] text-slate-400 font-medium tracking-wide hidden sm:block">
+              <p className="text-[11px] text-ink-3 font-medium tracking-wide hidden sm:block">
                 {currentLang === 'si' ? 'තුන්භාෂා අභ්‍යවකාශ ද්වාරය' : currentLang === 'ta' ? 'முமொழி விண்வெளி தளம்' : 'Cosmic Exploration Portal'}
               </p>
             </div>
@@ -166,16 +166,16 @@ export default function Navbar({
                   key={item.id}
                   type="button"
                   onClick={() => handleNavClick(item.id)}
-                  className={`px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all duration-150 flex items-center gap-2 select-none ${
+                  className={`px-3.5 py-2 rounded-[10px] text-xs sm:text-sm font-semibold transition-all duration-150 flex items-center gap-2 select-none ${
                     isActive
                       ? 'bg-cyan-500/15 text-cyan-300 border border-cyan-500/30 shadow-sm'
-                      : 'text-slate-400 hover:text-white hover:bg-slate-900/80 border border-transparent'
+                      : 'text-ink-3 hover:text-ink hover:bg-surface/60 border border-transparent'
                   }`}
                 >
-                  <Icon className={`w-4 h-4 ${isActive ? 'text-cyan-400' : 'text-slate-400'}`} />
+                  <Icon className={`w-4 h-4 ${isActive ? 'text-cyan-400' : 'text-ink-3'}`} />
                   <span>{label}</span>
                   {item.badge && (
-                    <span className="px-1.5 py-0.2 rounded text-[10px] font-mono font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                    <span className="px-1.5 py-0.2 rounded text-[10px] font-mono font-bold bg-emerald-500/20 text-signal border border-emerald-500/30">
                       {item.badge}
                     </span>
                   )}
@@ -191,7 +191,7 @@ export default function Navbar({
               <button
                 type="button"
                 onClick={() => setDropdownOpen(!dropdownOpen)}
-                className="flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-slate-200 hover:text-white hover:border-slate-700 text-xs sm:text-sm font-medium transition-all shadow-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/40"
+                className="flex items-center gap-2 px-3 py-2 rounded-[10px] bg-surface/60 border border-line text-ink-2 hover:text-ink hover:border-line text-xs sm:text-sm font-medium transition-all shadow-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/40"
                 aria-haspopup="true"
                 aria-expanded={dropdownOpen}
                 aria-label="Select Language"
@@ -199,15 +199,15 @@ export default function Navbar({
                 <Globe2 className="w-4 h-4 text-cyan-400" />
                 <span className="hidden sm:inline text-xs font-semibold">{activeLang.flag}</span>
                 <span className="text-xs font-semibold">{activeLang.nativeName}</span>
-                <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 ${dropdownOpen ? 'rotate-180' : ''}`} />
+                <ChevronDown className={`w-3.5 h-3.5 text-ink-3 transition-transform duration-200 ${dropdownOpen ? 'rotate-180' : ''}`} />
               </button>
 
               {dropdownOpen && (
                 <div 
-                  className="absolute right-0 mt-2 w-44 rounded-xl bg-slate-900 border border-slate-800 shadow-2xl p-1 z-50 animate-in fade-in zoom-in-95 duration-100"
+                  className="absolute right-0 mt-2 w-44 rounded-[10px] bg-surface/60 border border-line shadow-2xl p-1 z-50 animate-in fade-in zoom-in-95 duration-100"
                   role="menu"
                 >
-                  <div className="px-3 py-1.5 text-[10px] font-mono text-slate-400 uppercase tracking-wider border-b border-slate-800/80">
+                  <div className="px-3 py-1.5 text-[10px] font-mono text-ink-3 uppercase tracking-wider border-b border-line">
                     Language / භාෂාව / மொழி
                   </div>
                   <div className="py-1">
@@ -218,10 +218,10 @@ export default function Navbar({
                           key={lang.code}
                           type="button"
                           onClick={() => handleLanguageSelect(lang.code)}
-                          className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition-colors ${
+                          className={`w-full flex items-center justify-between px-3 py-2 rounded-[8px] text-xs font-medium transition-colors ${
                             isSelected
                               ? 'bg-cyan-500/20 text-cyan-300 font-semibold'
-                              : 'text-slate-300 hover:text-white hover:bg-slate-800/60'
+                              : 'text-ink-2 hover:text-ink hover:bg-surface-2/60'
                           }`}
                           role="menuitem"
                         >
@@ -242,18 +242,18 @@ export default function Navbar({
             <button
               type="button"
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="md:hidden p-2 rounded-xl bg-slate-900 border border-slate-800 text-slate-300 hover:text-white hover:border-slate-700 transition"
+              className="md:hidden p-2 rounded-[10px] bg-surface/60 border border-line text-ink-2 hover:text-ink hover:border-line transition"
               aria-label="Toggle Navigation Menu"
               aria-expanded={mobileMenuOpen}
             >
-              {mobileMenuOpen ? <X className="w-5 h-5 text-white" /> : <Menu className="w-5 h-5 text-slate-300" />}
+              {mobileMenuOpen ? <X className="w-5 h-5 text-white" /> : <Menu className="w-5 h-5 text-ink-2" />}
             </button>
           </div>
         </div>
 
         {/* Mobile Dropdown Navigation Menu */}
         {mobileMenuOpen && (
-          <div className="md:hidden border-t border-slate-800/80 py-3 space-y-1 animate-in fade-in slide-in-from-top-2 duration-150">
+          <div className="md:hidden border-t border-line py-3 space-y-1 animate-in fade-in slide-in-from-top-2 duration-150">
             {NAV_ITEMS.map((item) => {
               const isActive = activeTab === item.id;
               const Icon = item.icon;
@@ -264,18 +264,18 @@ export default function Navbar({
                   key={item.id}
                   type="button"
                   onClick={() => handleNavClick(item.id)}
-                  className={`w-full flex items-center justify-between px-4 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition ${
+                  className={`w-full flex items-center justify-between px-4 py-2.5 rounded-[10px] text-xs sm:text-sm font-semibold transition ${
                     isActive
                       ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30'
-                      : 'text-slate-300 hover:text-white hover:bg-slate-900'
+                      : 'text-ink-2 hover:text-ink hover:bg-surface/60'
                   }`}
                 >
                   <div className="flex items-center gap-3">
-                    <Icon className={`w-4 h-4 ${isActive ? 'text-cyan-400' : 'text-slate-400'}`} />
+                    <Icon className={`w-4 h-4 ${isActive ? 'text-cyan-400' : 'text-ink-3'}`} />
                     <span>{label}</span>
                   </div>
                   {item.badge && (
-                    <span className="px-1.5 py-0.2 rounded text-[10px] font-mono font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                    <span className="px-1.5 py-0.2 rounded text-[10px] font-mono font-bold bg-emerald-500/20 text-signal border border-emerald-500/30">
                       {item.badge}
                     </span>
                   )}

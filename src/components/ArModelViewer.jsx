@@ -153,7 +153,7 @@ const StableModelViewerCanvas = memo(function StableModelViewerCanvas({
       {/* Elevated AR launch button with slot="ar-button" */}
       <button
         slot="ar-button"
-        className="absolute bottom-5 right-5 z-20 px-4 py-2.5 rounded-2xl bg-gradient-to-r from-cyan-500 via-blue-600 to-indigo-600 hover:from-cyan-400 hover:to-indigo-500 text-white font-mono text-xs font-bold shadow-2xl shadow-cyan-500/40 border border-cyan-300/40 flex items-center gap-2 cursor-pointer transition transform hover:scale-105 active:scale-95 backdrop-blur-md"
+        className="absolute bottom-5 right-5 z-20 px-4 py-2.5 rounded-[14px] bg-gradient-to-r from-cyan-500 via-blue-600 to-indigo-600 hover:from-cyan-400 hover:to-indigo-500 text-white font-mono text-xs font-bold shadow-2xl shadow-cyan-500/40 border border-cyan-300/40 flex items-center gap-2 cursor-pointer transition transform hover:scale-105 active:scale-95 backdrop-blur-md"
       >
         <Camera className="w-4 h-4 text-cyan-200" />
         <span>PROJECT IN REAL SPACE (AR)</span>
@@ -162,7 +162,7 @@ const StableModelViewerCanvas = memo(function StableModelViewerCanvas({
       {/* AR Guidance Prompt Overlay with slot="ar-prompt" */}
       <div
         slot="ar-prompt"
-        className="absolute bottom-20 left-1/2 -translate-x-1/2 z-20 px-4 py-2 rounded-2xl bg-slate-950/90 border border-cyan-500/40 text-cyan-200 text-xs font-mono shadow-2xl pointer-events-none flex items-center gap-2 backdrop-blur-md whitespace-nowrap"
+        className="absolute bottom-20 left-1/2 -translate-x-1/2 z-20 px-4 py-2 rounded-[14px] bg-abyss/85 border border-cyan-500/40 text-cyan-200 text-xs font-mono shadow-2xl pointer-events-none flex items-center gap-2 backdrop-blur-md whitespace-nowrap"
       >
         <Sparkles className="w-3.5 h-3.5 text-cyan-400 animate-spin" />
         <span>Point camera at a flat ground surface and move device gently</span>
@@ -367,16 +367,16 @@ export function ArModelViewer({
   const mobileArUrl = typeof window !== 'undefined' ? window.location.href : '';
 
   return (
-    <div className={`w-full bg-slate-900/90 border border-slate-800 rounded-3xl p-4 sm:p-6 shadow-2xl space-y-5 font-sans text-slate-100 backdrop-blur-xl relative overflow-hidden ${className}`}>
+    <div className={`w-full bg-surface/65 border border-line rounded-3xl p-4 sm:p-6 shadow-2xl space-y-5 font-sans text-ink backdrop-blur-xl relative overflow-hidden ${className}`}>
       {/* Background Ambient Glows */}
       <div className="absolute -top-32 -right-32 w-72 h-72 bg-cyan-600/10 rounded-full blur-3xl pointer-events-none" />
       <div className="absolute -bottom-32 -left-32 w-72 h-72 bg-purple-600/10 rounded-full blur-3xl pointer-events-none" />
 
       {/* Top Header Bar */}
-      <div className="relative z-10 flex items-center justify-between gap-3 flex-wrap border-b border-slate-800 pb-4">
+      <div className="relative z-10 flex items-center justify-between gap-3 flex-wrap border-b border-line pb-4">
         <div className="flex items-center gap-3">
-          <div className="relative w-11 h-11 rounded-2xl bg-gradient-to-tr from-cyan-500 via-blue-600 to-indigo-600 p-0.5 flex items-center justify-center shadow-lg shadow-cyan-900/40 shrink-0">
-            <div className="w-full h-full bg-slate-950 rounded-[14px] flex items-center justify-center">
+          <div className="relative w-11 h-11 rounded-[14px] bg-gradient-to-tr from-cyan-500 via-blue-600 to-indigo-600 p-0.5 flex items-center justify-center shadow-lg shadow-cyan-900/40 shrink-0">
+            <div className="w-full h-full bg-abyss rounded-[14px] flex items-center justify-center">
               <Glasses className="w-5 h-5 text-cyan-400" />
             </div>
             <span className="absolute -top-1 -right-1 w-3 h-3 bg-emerald-400 rounded-full border-2 border-slate-950 animate-pulse" />
@@ -384,7 +384,7 @@ export function ArModelViewer({
 
           <div>
             <div className="flex items-center gap-2 flex-wrap">
-              <h3 className="font-['Orbitron'] font-bold text-base sm:text-lg text-white tracking-wide">
+              <h3 className="font-display font-bold text-base sm:text-lg text-white tracking-wide">
                 {lang === 'si' ? 'WebXR අතථ්‍ය අභ්‍යවකාශ AR නරඹනය' :
                  lang === 'ta' ? 'WebXR ஆக்மென்டட் ரியாலிட்டி (AR) பார்வையாளர்' :
                  'WebXR Augmented Reality (AR) Space Viewer'}
@@ -393,11 +393,11 @@ export function ArModelViewer({
                 <Sparkles className="w-3 h-3 text-cyan-400" />
                 @google/model-viewer
               </span>
-              <span className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-purple-500/15 border border-purple-500/30 text-purple-300">
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-purple-500/15 border border-purple-500/30 text-derived">
                 GLTF / GLB • Real Scale
               </span>
             </div>
-            <p className="text-xs text-slate-400 font-mono mt-0.5">
+            <p className="text-xs text-ink-3 font-mono mt-0.5">
               {lang === 'si' ? 'කැමරාව මඟින් ත්‍රිමාණ අභ්‍යවකාශ යානා සහ ගගනගාමීන් සැබෑ ලෝකයට ප්‍රක්ෂේපණය කරන්න' :
                lang === 'ta' ? 'உங்கள் கேமரா மூலம் 3D விண்கலங்கள் மற்றும் விண்வெளி வீரர்களை உண்மையான இடத்தில் நிறுவுங்கள்' :
                'Project photorealistic 3D NASA hardware into real-world physical space via WebXR & Scene Viewer'}
@@ -411,7 +411,7 @@ export function ArModelViewer({
           <button
             type="button"
             onClick={() => setShowQrModal(prev => !prev)}
-            className="px-3 py-2 rounded-xl bg-slate-800/80 border border-slate-700 hover:border-cyan-400/60 text-slate-300 hover:text-white font-mono text-xs flex items-center gap-1.5 transition cursor-pointer shadow-sm"
+            className="px-3 py-2 rounded-[10px] bg-surface-2/70 border border-line hover:border-cyan-400/60 text-ink-2 hover:text-ink font-mono text-xs flex items-center gap-1.5 transition cursor-pointer shadow-sm"
             title="Scan QR Code to project on Phone/Tablet"
           >
             <QrCode className="w-4 h-4 text-cyan-400" />
@@ -422,7 +422,7 @@ export function ArModelViewer({
           <button
             type="button"
             onClick={handleTriggerAR}
-            className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 via-blue-600 to-indigo-600 hover:from-cyan-400 hover:to-indigo-500 text-white font-mono text-xs font-bold transition shadow-lg shadow-cyan-900/40 flex items-center gap-2 cursor-pointer active:scale-95 transform"
+            className="px-4 py-2.5 rounded-[10px] bg-gradient-to-r from-cyan-500 via-blue-600 to-indigo-600 hover:from-cyan-400 hover:to-indigo-500 text-white font-mono text-xs font-bold transition shadow-lg shadow-cyan-900/40 flex items-center gap-2 cursor-pointer active:scale-95 transform"
             title="Launch Augmented Reality camera mode"
           >
             <Smartphone className="w-4 h-4 text-cyan-200" />
@@ -435,7 +435,7 @@ export function ArModelViewer({
       <div className="relative z-10 space-y-3">
         <div className="flex items-center justify-between gap-2 flex-wrap">
           <div className="flex items-center gap-2 overflow-x-auto pb-1 select-none scrollbar-none flex-1">
-            <span className="text-[10px] font-mono text-slate-400 uppercase tracking-wider shrink-0 flex items-center gap-1 pl-1">
+            <span className="text-[10px] font-mono text-ink-3 uppercase tracking-wider shrink-0 flex items-center gap-1 pl-1">
               <Box className="w-3 h-3 text-cyan-400" />
               {lang === 'si' ? 'ආකෘති:' : lang === 'ta' ? 'மாதிரிகள்:' : 'Models:'}
             </span>
@@ -447,10 +447,10 @@ export function ArModelViewer({
                   key={m.id}
                   type="button"
                   onClick={() => handleSelectCatalogModel(m)}
-                  className={`px-3 py-1.5 rounded-xl border text-xs font-mono transition whitespace-nowrap cursor-pointer flex items-center gap-1.5 shadow-sm ${
+                  className={`px-3 py-1.5 rounded-[10px] border text-xs font-mono transition whitespace-nowrap cursor-pointer flex items-center gap-1.5 shadow-sm ${
                     isSelected
                       ? 'bg-cyan-500/20 border-cyan-400 text-cyan-200 font-bold'
-                      : 'bg-slate-800/80 border-slate-700/80 text-slate-300 hover:text-white hover:border-slate-600'
+                      : 'bg-surface-2/70 border-line text-ink-2 hover:text-ink hover:border-line-strong'
                   }`}
                 >
                   <span>{getModelTitle(m)}</span>
@@ -469,13 +469,13 @@ export function ArModelViewer({
               value={customSrc}
               onChange={(e) => setCustomSrc(e.target.value)}
               placeholder="Paste any custom .glb or .gltf URL to project in AR (e.g. https://.../model.glb)"
-              className="w-full pl-3.5 pr-3 py-2 rounded-xl bg-slate-950/80 border border-slate-800 focus:border-cyan-400 text-white placeholder-slate-500 text-xs font-mono focus:outline-none transition shadow-inner"
+              className="w-full pl-3.5 pr-3 py-2 rounded-[10px] bg-abyss/70 border border-line focus:border-cyan-400 text-white placeholder-slate-500 text-xs font-mono focus:outline-none transition shadow-inner"
             />
           </div>
           <button
             type="submit"
             disabled={!customSrc.trim()}
-            className="px-3.5 py-2 rounded-xl bg-slate-800 border border-slate-700 hover:border-cyan-400 text-cyan-300 font-bold disabled:opacity-40 transition cursor-pointer disabled:cursor-not-allowed shrink-0"
+            className="px-3.5 py-2 rounded-[10px] bg-surface-2 border border-line hover:border-cyan-400 text-cyan-300 font-bold disabled:opacity-40 transition cursor-pointer disabled:cursor-not-allowed shrink-0"
           >
             Load Custom GLB
           </button>
@@ -483,23 +483,23 @@ export function ArModelViewer({
       </div>
 
       {/* 3D WebGL / WebXR Viewport */}
-      <div className="relative w-full h-[380px] sm:h-[480px] rounded-2xl overflow-hidden border border-slate-800/90 bg-gradient-to-b from-[#020617] via-[#070e28] to-[#020617] select-none shadow-2xl flex items-center justify-center">
+      <div className="relative w-full h-[380px] sm:h-[480px] rounded-[14px] overflow-hidden border border-line/90 bg-gradient-to-b from-[#020617] via-[#070e28] to-[#020617] select-none shadow-2xl flex items-center justify-center">
         {hasModelError ? (
           /* Error Fallback View */
           <div className="p-6 text-center space-y-3 max-w-md">
-            <div className="w-12 h-12 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-400 flex items-center justify-center mx-auto">
+            <div className="w-12 h-12 rounded-[14px] bg-rose-500/10 border border-rose-500/30 text-critical flex items-center justify-center mx-auto">
               <AlertCircle className="w-6 h-6" />
             </div>
-            <h4 className="font-['Orbitron'] font-bold text-sm text-white">
+            <h4 className="font-display font-bold text-sm text-white">
               Unable to Load 3D GLB Asset
             </h4>
-            <p className="text-xs text-slate-400 font-mono">
+            <p className="text-xs text-ink-3 font-mono">
               The external 3D asset URL may be blocked by CORS or unavailable. Please try switching back to the Apollo Astronaut catalog model.
             </p>
             <button
               type="button"
               onClick={handleResetToDefault}
-              className="px-4 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-mono text-xs font-bold transition shadow-lg cursor-pointer"
+              className="px-4 py-2 rounded-[10px] bg-cyan-600 hover:bg-cyan-500 text-white font-mono text-xs font-bold transition shadow-lg cursor-pointer"
             >
               Reset to Apollo Astronaut
             </button>
@@ -524,25 +524,25 @@ export function ArModelViewer({
 
         {/* Viewport Floating Controls */}
         <div className="absolute top-4 left-4 z-10 flex items-center gap-2 flex-wrap pointer-events-none">
-          <span className="px-2.5 py-1 rounded-xl bg-slate-950/80 border border-slate-800 text-[10px] font-mono text-cyan-300 backdrop-blur-md flex items-center gap-1.5 shadow-md">
+          <span className="px-2.5 py-1 rounded-[10px] bg-abyss/70 border border-line text-[10px] font-mono text-cyan-300 backdrop-blur-md flex items-center gap-1.5 shadow-md">
             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
             WEBXR READY
           </span>
-          <span className="px-2.5 py-1 rounded-xl bg-slate-950/80 border border-slate-800 text-[10px] font-mono text-slate-300 backdrop-blur-md">
+          <span className="px-2.5 py-1 rounded-[10px] bg-abyss/70 border border-line text-[10px] font-mono text-ink-2 backdrop-blur-md">
             DRAG TO ORBIT • PINCH TO ZOOM
           </span>
         </div>
 
         {/* Quick Toolbar on Bottom Left */}
-        <div className="absolute bottom-4 left-4 z-10 flex items-center gap-1.5 bg-slate-950/80 border border-slate-800 rounded-xl p-1 backdrop-blur-md">
+        <div className="absolute bottom-4 left-4 z-10 flex items-center gap-1.5 bg-abyss/70 border border-line rounded-[10px] p-1 backdrop-blur-md">
           {/* Auto-Rotate Toggle */}
           <button
             type="button"
             onClick={() => setIsRotating(prev => !prev)}
-            className={`p-1.5 rounded-lg border text-xs font-mono transition cursor-pointer ${
+            className={`p-1.5 rounded-[8px] border text-xs font-mono transition cursor-pointer ${
               isRotating 
                 ? 'bg-cyan-500/20 border-cyan-400 text-cyan-300' 
-                : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white'
+                : 'bg-surface/60 border-line text-ink-3 hover:text-ink'
             }`}
             title="Toggle Auto-Rotation"
           >
@@ -553,7 +553,7 @@ export function ArModelViewer({
           <button
             type="button"
             onClick={handleResetCamera}
-            className="p-1.5 rounded-lg bg-slate-900 border border-slate-800 text-slate-400 hover:text-white text-xs font-mono transition cursor-pointer"
+            className="p-1.5 rounded-[8px] bg-surface/60 border border-line text-ink-3 hover:text-ink text-xs font-mono transition cursor-pointer"
             title="Reset Camera View"
           >
             <RefreshCw className="w-3.5 h-3.5" />
@@ -563,39 +563,39 @@ export function ArModelViewer({
           <button
             type="button"
             onClick={() => setExposure(prev => prev >= 1.5 ? 0.75 : prev + 0.25)}
-            className="p-1.5 rounded-lg bg-slate-900 border border-slate-800 text-slate-400 hover:text-white text-xs font-mono transition cursor-pointer flex items-center gap-1"
+            className="p-1.5 rounded-[8px] bg-surface/60 border border-line text-ink-3 hover:text-ink text-xs font-mono transition cursor-pointer flex items-center gap-1"
             title="Adjust Lighting Exposure"
           >
-            <Sun className="w-3.5 h-3.5 text-amber-400" />
+            <Sun className="w-3.5 h-3.5 text-caution" />
             <span className="text-[10px] font-mono">{exposure.toFixed(1)}x</span>
           </button>
         </div>
       </div>
 
       {/* Model Telemetry & Engineering Specs */}
-      <div className="relative z-10 p-4 rounded-2xl bg-slate-950/60 border border-slate-800 flex items-center justify-between gap-4 flex-wrap">
+      <div className="relative z-10 p-4 rounded-[14px] bg-abyss/60 border border-line flex items-center justify-between gap-4 flex-wrap">
         <div className="space-y-1">
           <div className="flex items-center gap-2">
             <span className="text-[10px] font-mono text-cyan-400 uppercase tracking-wider font-bold">
               {isCustomActive ? 'Custom User Asset' : selectedModel.category}
             </span>
-            <span className="text-slate-600">•</span>
-            <span className="text-[10px] font-mono text-emerald-400">
+            <span className="text-ink-4">•</span>
+            <span className="text-[10px] font-mono text-signal">
               {memoizedArModes}
             </span>
           </div>
 
-          <h4 className="text-sm font-bold text-white font-['Orbitron']">
+          <h4 className="text-sm font-bold text-white font-display">
             {isCustomActive ? 'Custom GLTF 3D Exploration Asset' : getModelTitle(selectedModel)}
           </h4>
-          <p className="text-xs text-slate-400 font-sans max-w-2xl leading-relaxed">
+          <p className="text-xs text-ink-3 font-sans max-w-2xl leading-relaxed">
             {isCustomActive ? `Rendering custom 3D model asset from: ${customSrc}` : selectedModel.desc}
           </p>
         </div>
 
-        <div className="flex items-center gap-3 text-xs font-mono text-slate-400 shrink-0">
+        <div className="flex items-center gap-3 text-xs font-mono text-ink-3 shrink-0">
           <div className="text-right">
-            <span className="text-[10px] text-slate-500 block uppercase">AR Standard</span>
+            <span className="text-[10px] text-ink-4 block uppercase">AR Standard</span>
             <span className="text-cyan-300 font-bold">WebXR / Quick-Look</span>
           </div>
         </div>
@@ -604,30 +604,30 @@ export function ArModelViewer({
       {/* Desktop QR Modal for Instant Mobile Phone Testing */}
       {showQrModal && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-cyan-500/40 rounded-3xl p-6 max-w-md w-full space-y-4 shadow-2xl relative text-center">
+          <div className="bg-surface/60 border border-cyan-500/40 rounded-3xl p-6 max-w-md w-full space-y-4 shadow-2xl relative text-center">
             <button
               type="button"
               onClick={() => setShowQrModal(false)}
-              className="absolute top-4 right-4 text-slate-400 hover:text-white font-mono text-sm cursor-pointer"
+              className="absolute top-4 right-4 text-ink-3 hover:text-ink font-mono text-sm cursor-pointer"
             >
               ✕
             </button>
 
-            <div className="w-12 h-12 rounded-2xl bg-cyan-500/20 border border-cyan-400/40 text-cyan-300 flex items-center justify-center mx-auto shadow-lg shadow-cyan-950/50">
+            <div className="w-12 h-12 rounded-[14px] bg-cyan-500/20 border border-cyan-400/40 text-cyan-300 flex items-center justify-center mx-auto shadow-lg shadow-cyan-950/50">
               <Camera className="w-6 h-6" />
             </div>
 
             <div className="space-y-1">
-              <h3 className="font-['Orbitron'] font-bold text-lg text-white">
+              <h3 className="font-display font-bold text-lg text-white">
                 Scan with Smartphone Camera
               </h3>
-              <p className="text-xs text-slate-400 font-mono">
+              <p className="text-xs text-ink-3 font-mono">
                 Point your iPhone (iOS Quick Look) or Android (Scene Viewer / WebXR) camera at this QR code to view the 3D model in your physical room:
               </p>
             </div>
 
             {/* Generated QR Code Container */}
-            <div className="p-4 bg-white rounded-2xl inline-block shadow-2xl mx-auto">
+            <div className="p-4 bg-white rounded-[14px] inline-block shadow-2xl mx-auto">
               <img
                 src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(mobileArUrl)}`}
                 alt="Mobile AR Projector QR Code"

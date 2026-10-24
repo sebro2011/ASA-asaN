@@ -339,11 +339,11 @@ export function SpaceAudioPlayer({ className = '', lang = 'en' }) {
   }, [isPlaying]);
 
   return (
-    <div className={`bg-slate-900/90 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-4 font-sans text-slate-100 ${className}`}>
+    <div className={`bg-surface/65 border border-line rounded-[14px] p-5 shadow-xl space-y-4 font-sans text-ink ${className}`}>
       {/* Top Banner */}
-      <div className="flex items-center justify-between gap-3 flex-wrap border-b border-slate-800 pb-3">
+      <div className="flex items-center justify-between gap-3 flex-wrap border-b border-line pb-3">
         <div className="flex items-center gap-3">
-          <div className="relative w-9 h-9 rounded-xl bg-gradient-to-tr from-cyan-600 to-indigo-600 p-0.5 flex items-center justify-center shadow-md shrink-0">
+          <div className="relative w-9 h-9 rounded-[10px] bg-gradient-to-tr from-cyan-600 to-indigo-600 p-0.5 flex items-center justify-center shadow-md shrink-0">
             <Headphones className="w-5 h-5 text-white" />
             {isPlaying && (
               <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-cyan-400 rounded-full animate-ping" />
@@ -353,7 +353,7 @@ export function SpaceAudioPlayer({ className = '', lang = 'en' }) {
             <span className="text-[10px] font-mono text-cyan-400 uppercase tracking-wider block font-semibold leading-none">
               NASA Planetary Acoustic Telemetry
             </span>
-            <h3 className="text-base font-bold font-['Orbitron'] text-white leading-tight mt-1">
+            <h3 className="text-base font-bold font-display text-white leading-tight mt-1">
               {lang === 'si' ? 'අභ්‍යවකාශ සංගීත හා ශබ්ද තරංග' :
                lang === 'ta' ? 'விண்வெளி ஒலி அலைகள்' :
                'Deep Space Ambient Soundscape'}
@@ -365,15 +365,15 @@ export function SpaceAudioPlayer({ className = '', lang = 'en' }) {
         <button
           type="button"
           onClick={handleTogglePlay}
-          className={`px-4 py-2 rounded-xl text-xs font-mono font-bold transition cursor-pointer flex items-center gap-2 shadow-md ${
+          className={`px-4 py-2 rounded-[10px] text-xs font-mono font-bold transition cursor-pointer flex items-center gap-2 shadow-md ${
             isPlaying 
-              ? 'bg-rose-500/20 text-rose-300 border border-rose-500/50 hover:bg-rose-500/30' 
+              ? 'bg-rose-500/20 text-critical border border-rose-500/50 hover:bg-rose-500/30' 
               : 'bg-cyan-500/20 text-cyan-300 border border-cyan-400/50 hover:bg-cyan-500/30'
           }`}
         >
           {isPlaying ? (
             <>
-              <Pause className="w-4 h-4 text-rose-400" />
+              <Pause className="w-4 h-4 text-critical" />
               <span>{lang === 'si' ? 'නවත්වන්න' : lang === 'ta' ? 'நிறுத்து' : 'Mute Soundscape'}</span>
             </>
           ) : (
@@ -395,26 +395,26 @@ export function SpaceAudioPlayer({ className = '', lang = 'en' }) {
               key={t.id}
               type="button"
               onClick={() => handleSelectTrack(t.id)}
-              className={`p-3.5 rounded-xl border text-left transition cursor-pointer flex flex-col justify-between space-y-2 ${
+              className={`p-3.5 rounded-[10px] border text-left transition cursor-pointer flex flex-col justify-between space-y-2 ${
                 isSelected && isPlaying
-                  ? 'bg-slate-800/90 border-cyan-400 shadow-md shadow-cyan-950/40 ring-1 ring-cyan-400/50'
+                  ? 'bg-surface-2/90 border-cyan-400 shadow-md shadow-cyan-950/40 ring-1 ring-cyan-400/50'
                   : isSelected
-                  ? 'bg-slate-800/60 border-slate-700'
-                  : 'bg-slate-950/60 border-slate-800/80 hover:border-slate-700'
+                  ? 'bg-surface-2/60 border-line'
+                  : 'bg-abyss/60 border-line hover:border-line'
               }`}
             >
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <div className={`p-1.5 rounded-lg ${isSelected && isPlaying ? 'bg-cyan-500/20 text-cyan-300' : 'bg-slate-900 text-slate-400'}`}>
+                  <div className={`p-1.5 rounded-[8px] ${isSelected && isPlaying ? 'bg-cyan-500/20 text-cyan-300' : 'bg-surface/60 text-ink-3'}`}>
                     <Icon className="w-4 h-4" />
                   </div>
                   <span className="font-bold text-xs text-white">{t.name}</span>
                 </div>
-                <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-slate-900 border border-slate-800 text-cyan-300">
+                <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-surface/60 border border-line text-cyan-300">
                   {t.badge}
                 </span>
               </div>
-              <p className="text-[11px] text-slate-400 leading-snug line-clamp-2">
+              <p className="text-[11px] text-ink-3 leading-snug line-clamp-2">
                 {t.desc}
               </p>
             </button>
@@ -423,29 +423,29 @@ export function SpaceAudioPlayer({ className = '', lang = 'en' }) {
       </div>
 
       {/* Volume & Spectrum Visualizer Strip */}
-      <div className="pt-2 border-t border-slate-800 flex items-center justify-between gap-4 flex-wrap">
+      <div className="pt-2 border-t border-line flex items-center justify-between gap-4 flex-wrap">
         <div className="flex items-center gap-3 w-full sm:w-auto">
-          {volume === 0 ? <VolumeX className="w-4 h-4 text-slate-500" /> : <Volume2 className="w-4 h-4 text-cyan-400" />}
+          {volume === 0 ? <VolumeX className="w-4 h-4 text-ink-4" /> : <Volume2 className="w-4 h-4 text-cyan-400" />}
           <input
             type="range"
             min="0"
             max="100"
             value={volume}
             onChange={handleVolumeChange}
-            className="w-32 sm:w-40 h-1.5 bg-slate-800 rounded-lg accent-cyan-400 cursor-pointer"
+            className="w-32 sm:w-40 h-1.5 bg-surface-2 rounded-[8px] accent-cyan-400 cursor-pointer"
             title="Volume"
           />
-          <span className="text-xs font-mono text-slate-400">{volume}%</span>
+          <span className="text-xs font-mono text-ink-3">{volume}%</span>
         </div>
 
         {/* Real-time Spectrum Canvas */}
         <div className="flex items-center gap-2">
-          <span className="text-[10px] font-mono text-slate-500">SPECTRUM:</span>
+          <span className="text-[10px] font-mono text-ink-4">SPECTRUM:</span>
           <canvas
             ref={canvasRef}
             width={96}
             height={22}
-            className="rounded bg-slate-950/80 border border-slate-800"
+            className="rounded bg-abyss/70 border border-line"
           />
         </div>
       </div>
@@ -476,7 +476,7 @@ export function CosmicAudioHeaderButton({ lang = 'en' }) {
       className={`px-2.5 py-1 rounded-full border text-xs font-mono transition flex items-center gap-1.5 cursor-pointer shadow-sm ${
         isPlaying
           ? 'bg-cyan-500/20 border-cyan-400/60 text-cyan-300 ring-1 ring-cyan-400/40 shadow-cyan-950/50'
-          : 'bg-slate-800/80 border-slate-700 text-slate-400 hover:text-slate-200 hover:border-slate-600'
+          : 'bg-surface-2/70 border-line text-ink-3 hover:text-ink-2 hover:border-line-strong'
       }`}
       title={isPlaying ? 'Mute Ambient Space Soundscape' : 'Play Voyager Plasma Waves Soundscape'}
     >
@@ -491,7 +491,7 @@ export function CosmicAudioHeaderButton({ lang = 'en' }) {
         </>
       ) : (
         <>
-          <VolumeX className="w-3.5 h-3.5 text-slate-400" />
+          <VolumeX className="w-3.5 h-3.5 text-ink-3" />
           <span className="text-[10px] hidden sm:inline">SOUNDSCAPE</span>
         </>
       )}

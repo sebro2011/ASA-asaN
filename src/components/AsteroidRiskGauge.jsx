@@ -37,13 +37,13 @@ export function AsteroidRiskGauge({ asteroid, className = '' }) {
       <div className="flex items-center justify-between border-b border-white/10 pb-3">
         <div className="flex items-center gap-2.5">
           {tier === 'CRITICAL' && <ShieldAlert className="w-5 h-5 text-rose-500 animate-pulse" />}
-          {tier === 'MODERATE' && <AlertTriangle className="w-5 h-5 text-amber-400" />}
-          {tier === 'LOW' && <ShieldCheck className="w-5 h-5 text-emerald-400" />}
+          {tier === 'MODERATE' && <AlertTriangle className="w-5 h-5 text-caution" />}
+          {tier === 'LOW' && <ShieldCheck className="w-5 h-5 text-signal" />}
           <div>
-            <h4 className="font-['Orbitron'] font-bold text-xs uppercase tracking-wider text-white">
+            <h4 className="font-display font-bold text-xs uppercase tracking-wider text-white">
               Asteroid Hazard Index
             </h4>
-            <p className="text-[10px] font-mono text-slate-400">
+            <p className="text-[10px] font-mono text-ink-3">
               Deterministic 0–100% Impact Assessment
             </p>
           </div>
@@ -94,10 +94,10 @@ export function AsteroidRiskGauge({ asteroid, className = '' }) {
 
           {/* Central Score readout */}
           <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
-            <span className="font-['Orbitron'] text-3xl font-black text-white tracking-tight">
+            <span className="font-display text-3xl font-black text-white tracking-tight">
               {riskScore}%
             </span>
-            <span className="text-[9px] font-mono uppercase tracking-widest text-slate-400 -mt-1">
+            <span className="text-[9px] font-mono uppercase tracking-widest text-ink-3 -mt-1">
               RISK SCORE
             </span>
           </div>
@@ -107,13 +107,13 @@ export function AsteroidRiskGauge({ asteroid, className = '' }) {
         <div className="flex-1 w-full space-y-2.5 text-xs font-mono">
           <div>
             <div className="flex items-center justify-between text-[11px] mb-1">
-              <span className="text-slate-400 flex items-center gap-1">
+              <span className="text-ink-3 flex items-center gap-1">
                 <Ruler className="w-3 h-3 text-cyan-400" />
                 Diameter Weight ({details.diameterKm} km)
               </span>
-              <span className="text-slate-200 font-bold">{factors.diameterScore}/40</span>
+              <span className="text-ink-2 font-bold">{factors.diameterScore}/40</span>
             </div>
-            <div className="w-full h-1.5 rounded-full bg-slate-900/90 overflow-hidden border border-white/10">
+            <div className="w-full h-1.5 rounded-full bg-surface/65 overflow-hidden border border-white/10">
               <div
                 className="h-full rounded-full bg-cyan-400 transition-all duration-700 shadow-sm"
                 style={{ width: `${(factors.diameterScore / 40) * 100}%` }}
@@ -123,13 +123,13 @@ export function AsteroidRiskGauge({ asteroid, className = '' }) {
 
           <div>
             <div className="flex items-center justify-between text-[11px] mb-1">
-              <span className="text-slate-400 flex items-center gap-1">
-                <Zap className="w-3 h-3 text-amber-400" />
+              <span className="text-ink-3 flex items-center gap-1">
+                <Zap className="w-3 h-3 text-caution" />
                 Velocity Vector ({details.velocityKmh.toLocaleString()} km/h)
               </span>
-              <span className="text-slate-200 font-bold">{factors.velocityScore}/30</span>
+              <span className="text-ink-2 font-bold">{factors.velocityScore}/30</span>
             </div>
-            <div className="w-full h-1.5 rounded-full bg-slate-900/90 overflow-hidden border border-white/10">
+            <div className="w-full h-1.5 rounded-full bg-surface/65 overflow-hidden border border-white/10">
               <div
                 className="h-full rounded-full bg-amber-400 transition-all duration-700 shadow-sm"
                 style={{ width: `${(factors.velocityScore / 30) * 100}%` }}
@@ -139,13 +139,13 @@ export function AsteroidRiskGauge({ asteroid, className = '' }) {
 
           <div>
             <div className="flex items-center justify-between text-[11px] mb-1">
-              <span className="text-slate-400 flex items-center gap-1">
+              <span className="text-ink-3 flex items-center gap-1">
                 <Compass className="w-3 h-3 text-indigo-400" />
                 Miss Distance ({details.lunarDistanceRatio} LD)
               </span>
-              <span className="text-slate-200 font-bold">{factors.proximityScore}/30</span>
+              <span className="text-ink-2 font-bold">{factors.proximityScore}/30</span>
             </div>
-            <div className="w-full h-1.5 rounded-full bg-slate-900/90 overflow-hidden border border-white/10">
+            <div className="w-full h-1.5 rounded-full bg-surface/65 overflow-hidden border border-white/10">
               <div
                 className="h-full rounded-full bg-indigo-400 transition-all duration-700 shadow-sm"
                 style={{ width: `${(factors.proximityScore / 30) * 100}%` }}

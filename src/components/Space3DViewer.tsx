@@ -25,7 +25,7 @@ export const Space3DViewer: React.FC<Space3DViewerProps> = React.memo(({ lang })
   return (
     <div className="w-full space-y-6">
       {/* Sub-navigation mode & Hardware Performance Optimizer Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-3 apple-liquid-glass p-4 sm:p-5 rounded-2xl">
+      <div className="flex flex-wrap items-center justify-between gap-3 apple-liquid-glass p-4 sm:p-5 rounded-[14px]">
         <div className="flex items-center gap-2.5">
           <div className={`w-2.5 h-2.5 rounded-full ${isOptimizedModeActive ? 'bg-emerald-400' : 'bg-cyan-400'} animate-ping`} />
           <span className="text-xs font-mono text-cyan-300 font-semibold uppercase tracking-wider">
@@ -42,16 +42,16 @@ export const Space3DViewer: React.FC<Space3DViewerProps> = React.memo(({ lang })
           <button
             type="button"
             onClick={() => setUserMode(isOptimizedModeActive ? 'high' : 'optimized')}
-            className={`px-3 py-1.5 rounded-xl text-[11px] font-mono font-bold flex items-center gap-1.5 border transition cursor-pointer ${
+            className={`px-3 py-1.5 rounded-[10px] text-[11px] font-mono font-bold flex items-center gap-1.5 border transition cursor-pointer ${
               isOptimizedModeActive
-                ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 hover:bg-emerald-500/30'
+                ? 'bg-emerald-500/20 text-signal border-emerald-500/40 hover:bg-emerald-500/30'
                 : 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40 hover:bg-cyan-500/30'
             }`}
             title="Click to toggle between Eco Parallax Mode and Full WebGL 3D Canvas"
           >
             {isOptimizedModeActive ? (
               <>
-                <Zap className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
+                <Zap className="w-3.5 h-3.5 text-signal animate-pulse" />
                 <span>ECO PARALLAX ({cores} CORES)</span>
               </>
             ) : (
@@ -64,14 +64,14 @@ export const Space3DViewer: React.FC<Space3DViewerProps> = React.memo(({ lang })
 
           {/* Sub-mode buttons for full 3D Canvas mode */}
           {!isOptimizedModeActive && (
-            <div className="flex items-center gap-1.5 apple-liquid-glass p-1 rounded-xl flex-wrap">
+            <div className="flex items-center gap-1.5 apple-liquid-glass p-1 rounded-[10px] flex-wrap">
               <button
                 type="button"
                 onClick={() => setLabMode('starmap')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer ${
+                className={`px-3 py-1.5 rounded-[8px] text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer ${
                   labMode === 'starmap'
                     ? 'bg-gradient-to-r from-cyan-600 to-blue-600 text-white shadow-md shadow-cyan-600/30 font-bold'
-                    : 'text-slate-300 hover:text-white'
+                    : 'text-ink-2 hover:text-ink'
                 }`}
               >
                 <Compass className="w-3.5 h-3.5 text-cyan-300" />
@@ -80,10 +80,10 @@ export const Space3DViewer: React.FC<Space3DViewerProps> = React.memo(({ lang })
               <button
                 type="button"
                 onClick={() => setLabMode('focused')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer ${
+                className={`px-3 py-1.5 rounded-[8px] text-xs font-semibold transition cursor-pointer ${
                   labMode === 'focused'
                     ? 'bg-gradient-to-r from-cyan-600 to-blue-600 text-white shadow-md shadow-cyan-600/30 font-bold'
-                    : 'text-slate-300 hover:text-white'
+                    : 'text-ink-2 hover:text-ink'
                 }`}
               >
                 {lang === 'si' ? 'අඟහරු • සඳ • JWST' : lang === 'ta' ? 'செவ்வாய் • நிலவு' : 'Mars • Moon • JWST'}
@@ -91,10 +91,10 @@ export const Space3DViewer: React.FC<Space3DViewerProps> = React.memo(({ lang })
               <button
                 type="button"
                 onClick={() => setLabMode('full')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer ${
+                className={`px-3 py-1.5 rounded-[8px] text-xs font-semibold transition cursor-pointer ${
                   labMode === 'full'
                     ? 'bg-gradient-to-r from-cyan-600 to-blue-600 text-white shadow-md shadow-cyan-600/30 font-bold'
-                    : 'text-slate-300 hover:text-white'
+                    : 'text-ink-2 hover:text-ink'
                 }`}
               >
                 {lang === 'si' ? 'සම්පූර්ණ පද්ධතිය' : lang === 'ta' ? 'முழு அமைப்பு' : 'Full Celestial System'}

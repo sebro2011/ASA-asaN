@@ -307,14 +307,14 @@ export const MissionsTimeline: React.FC<MissionsTimelineProps> = React.memo(({ l
     <div className="w-full space-y-6">
       
       {/* Missions Module Sub-Navigation Switcher: Explorer Timeline vs Analytics */}
-      <div className="bg-slate-950/80 p-2 sm:p-2.5 rounded-2xl border border-slate-800/80 backdrop-blur-xl shadow-xl flex items-center justify-between gap-3 flex-wrap hover:border-cyan-500/50 hover:shadow-[0_0_25px_rgba(34,211,238,0.15)] transition-all duration-300">
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-[14px] border border-line bg-surface/40 p-1.5 sm:p-2">
         <div className="flex items-center gap-2 flex-wrap">
           <button
             onClick={() => setSubTab('timeline')}
-            className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold font-mono flex items-center gap-2 transition-all cursor-pointer ${
+            className={`px-4 py-2 rounded-[10px] text-xs sm:text-sm font-semibold font-mono flex items-center gap-2 transition-all cursor-pointer ${
               subTab === 'timeline'
-                ? 'bg-gradient-to-r from-cyan-600 to-blue-600 text-white shadow-lg shadow-cyan-600/30 border border-cyan-400/60'
-                : 'bg-slate-900/60 text-slate-400 hover:text-white hover:bg-slate-800/60 border border-slate-800'
+                ? 'border border-atmo/40 bg-atmo/10 text-ink'
+                : 'border border-transparent text-ink-3 hover:bg-surface-2/60 hover:text-ink'
             }`}
           >
             <Rocket className="w-4 h-4 text-cyan-300" />
@@ -329,10 +329,10 @@ export const MissionsTimeline: React.FC<MissionsTimelineProps> = React.memo(({ l
 
           <button
             onClick={() => setSubTab('analytics')}
-            className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold font-mono flex items-center gap-2 transition-all cursor-pointer relative ${
+            className={`px-4 py-2 rounded-[10px] text-xs sm:text-sm font-semibold font-mono flex items-center gap-2 transition-all cursor-pointer relative ${
               subTab === 'analytics'
-                ? 'bg-gradient-to-r from-cyan-600 to-blue-600 text-white shadow-lg shadow-cyan-600/30 border border-cyan-400/60'
-                : 'bg-slate-900/60 text-slate-400 hover:text-white hover:bg-slate-800/60 border border-slate-800'
+                ? 'border border-atmo/40 bg-atmo/10 text-ink'
+                : 'border border-transparent text-ink-3 hover:bg-surface-2/60 hover:text-ink'
             }`}
           >
             <BarChart3 className="w-4 h-4 text-cyan-300" />
@@ -343,24 +343,35 @@ export const MissionsTimeline: React.FC<MissionsTimelineProps> = React.memo(({ l
                 ? 'வரலாற்றுப் பகுப்பாய்வு (Analytics)'
                 : 'Mission Analytics & Trends'}
             </span>
-            <span className="px-1.5 py-0.5 rounded-full text-[9px] font-mono bg-cyan-400 text-slate-950 font-bold ml-0.5 shadow-sm">
-              RECHARTS
+            <span className="ml-0.5 rounded-full border border-line px-1.5 py-0.5 font-mono text-[9px] text-ink-4">
+              CHARTS
             </span>
           </button>
         </div>
 
-        <div className="hidden md:flex items-center gap-2 text-xs font-mono text-slate-400 pr-2">
-          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-          <span>NASA HISTORICAL FLIGHT ARCHIVES</span>
-        </div>
+        <p className="hidden pr-2 font-mono text-[10px] uppercase tracking-[0.14em] text-ink-4 md:block">
+          Curated archive · not a live feed
+        </p>
       </div>
 
       {subTab === 'analytics' ? (
-        <MissionsAnalytics lang={lang} />
+        <div className="space-y-4">
+          <div className="flex flex-wrap items-start gap-3 rounded-[12px] border border-line bg-surface/40 p-4">
+            <Info className="mt-0.5 h-4 w-4 shrink-0 text-ink-3" strokeWidth={1.8} />
+            <p className="max-w-4xl text-[11.5px] leading-relaxed text-ink-3">
+              {lang === 'si'
+                ? 'පහත සංඛ්‍යා ඓතිහාසික මෙහෙයුම් වාර්තාවලින් සකසන ලද සාරාංශ වන අතර, සජීවී ටෙලිමෙට්‍රිය නොවේ. ප්‍රමාණයන් වාර්තාගත දියත්කිරීම් ගණන් කිරීම් මත පදනම් වේ.'
+                : lang === 'ta'
+                  ? 'கீழே உள்ள எண்கள் வரலாற்றுப் பணிப் பதிவுகளிலிருந்து தொகுக்கப்பட்டவை; நேரடி அளவீடுகள் அல்ல.'
+                  : 'The figures below are summaries compiled from the historical mission record, not live telemetry. Percentages describe reported missions in this curated set.'}
+            </p>
+          </div>
+          <MissionsAnalytics lang={lang} />
+        </div>
       ) : (
         <>
           {/* Search Header Bar with Real-Time Millisecond Execution Badge */}
-          <div className="bg-slate-950/80 p-4 sm:p-5 rounded-2xl border border-slate-800/80 backdrop-blur-xl shadow-2xl space-y-4 hover:border-cyan-500/50 hover:shadow-[0_0_25px_rgba(34,211,238,0.15)] transition-all duration-300">
+          <div className="space-y-4 rounded-[14px] border border-line bg-surface/40 p-4 sm:p-5">
         <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
           <div className="flex-1 max-w-xl">
             <VoiceSearchInput
@@ -380,19 +391,19 @@ export const MissionsTimeline: React.FC<MissionsTimelineProps> = React.memo(({ l
 
           {/* Real-Time Millisecond Telemetry & Results Counter */}
           <div className="flex items-center gap-2 self-start md:self-auto flex-wrap">
-            <div className="px-3 py-1.5 rounded-xl bg-cyan-950/80 border border-cyan-500/40 text-cyan-200 text-xs font-mono font-bold flex items-center gap-1.5 shadow-md shadow-cyan-950/50">
-              <Zap className="w-3.5 h-3.5 text-amber-400 fill-amber-400 animate-pulse" />
+            <div className="flex items-center gap-1.5 rounded-[8px] border border-line px-2.5 py-1.5 font-mono text-[11px] text-ink-4">
+              <Clock className="h-3 w-3" strokeWidth={1.8} />
               <span>
                 {lang === 'si'
-                  ? `${searchExecutionMs.toFixed(1)} ms තුළ සෙවිණි`
+                  ? `${searchExecutionMs.toFixed(1)} ms`
                   : lang === 'ta'
-                  ? `${searchExecutionMs.toFixed(1)} ms இல் தேடப்பட்டது`
-                  : `Searched in ${searchExecutionMs.toFixed(1)} ms`}
+                  ? `${searchExecutionMs.toFixed(1)} ms`
+                  : `${searchExecutionMs.toFixed(1)} ms query`}
               </span>
             </div>
 
-            <div className="px-3 py-1.5 rounded-xl bg-slate-950/70 border border-slate-800 text-slate-300 text-xs font-mono flex items-center gap-1.5">
-              <Sparkles className="w-3 h-3 text-cyan-400" />
+            <div className="flex items-center gap-1.5 rounded-[8px] border border-line px-2.5 py-1.5 font-mono text-[11px] text-ink-2">
+              <Sparkles className="h-3 w-3 text-atmo" strokeWidth={1.8} />
               <span>
                 {lang === 'si'
                   ? `ප්‍රතිඵල ${filteredMissions.length} ක්`
@@ -405,7 +416,7 @@ export const MissionsTimeline: React.FC<MissionsTimelineProps> = React.memo(({ l
             {searchQuery && (
               <button
                 onClick={handleClearSearch}
-                className="px-2.5 py-1.5 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-white text-xs font-mono transition flex items-center gap-1"
+                className="flex items-center gap-1 rounded-[8px] border border-line px-2.5 py-1.5 font-mono text-[11px] text-ink-3 transition-colors hover:bg-surface-2/70 hover:text-ink"
                 title="Clear search query"
               >
                 <RotateCcw className="w-3 h-3 text-cyan-400" />
@@ -417,7 +428,7 @@ export const MissionsTimeline: React.FC<MissionsTimelineProps> = React.memo(({ l
 
         {/* Instant 1-Click Suggestion / Filter Chips */}
         <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
-          <span className="text-[10px] font-mono text-slate-500 uppercase tracking-wider shrink-0 flex items-center gap-1 pr-1">
+          <span className="text-[10px] font-mono text-ink-4 uppercase tracking-wider shrink-0 flex items-center gap-1 pr-1">
             <Rocket className="w-3 h-3 text-cyan-500" />
             {lang === 'si' ? 'ඉක්මන් සෙවුම්:' : lang === 'ta' ? 'விரைவு தேடல்:' : 'Quick Filters:'}
           </span>
@@ -427,10 +438,10 @@ export const MissionsTimeline: React.FC<MissionsTimelineProps> = React.memo(({ l
               <button
                 key={chip.id}
                 onClick={() => handleChipClick(chip)}
-                className={`px-3 py-1 rounded-xl text-xs font-semibold whitespace-nowrap transition-all border ${
+                className={`px-3 py-1 rounded-[10px] text-xs font-semibold whitespace-nowrap transition-all border ${
                   isSelected
-                    ? 'bg-gradient-to-r from-cyan-600 to-blue-600 text-white border-cyan-400/60 shadow-md shadow-cyan-600/30 scale-105'
-                    : 'bg-slate-950/60 text-slate-400 hover:text-white border-slate-800 hover:border-slate-700'
+                    ? 'border-atmo/50 bg-atmo/10 text-ink'
+                    : 'bg-abyss/60 text-ink-3 hover:text-ink border-line hover:border-line'
                 }`}
               >
                 {chip.label[lang] || chip.label.en}
@@ -440,19 +451,23 @@ export const MissionsTimeline: React.FC<MissionsTimelineProps> = React.memo(({ l
         </div>
 
         {/* Google Grounded Discovery Trending Highlights Strip */}
-        <div className="pt-2 border-t border-slate-800/70 space-y-2">
+        <div className="pt-2 border-t border-line/70 space-y-2">
           <div className="flex items-center justify-between gap-3 flex-wrap">
             <div className="flex items-center gap-2 text-xs font-mono text-cyan-300 font-semibold">
-              <Globe className="w-3.5 h-3.5 text-cyan-400 animate-pulse" />
+              <Globe className="h-3.5 w-3.5 text-atmo" strokeWidth={1.8} />
               <span>
-                {lang === 'si' ? 'Google Search Grounding සමඟ සජීවීව සොයන්න:' : lang === 'ta' ? 'கூகுள் தேடல் மூலம் நேரடித் தகவல்:' : 'Search Live Web via Google Grounding:'}
+                {lang === 'si'
+                  ? 'මූලාශ්‍ර සහිත AI සෙවුම (අන්තර්ජාලය හරහා):'
+                  : lang === 'ta'
+                    ? 'மூலங்களுடன் கூடிய AI தேடல் (இணையம் வழியாக):'
+                    : 'Grounded AI search with cited sources:'}
               </span>
             </div>
 
             <button
               onClick={() => handleGroundedSearch(searchQuery || 'NASA Space Missions 2026 Telemetry')}
               disabled={isGroundedSearching}
-              className="px-3 py-1 rounded-xl bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white text-xs font-mono font-bold flex items-center gap-1.5 transition shadow-lg shadow-cyan-600/20 disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 rounded-[8px] border border-atmo/40 bg-atmo/10 px-3 py-1.5 font-mono text-[11px] font-semibold text-atmo transition-colors hover:bg-atmo/15 disabled:opacity-50"
             >
               {isGroundedSearching ? (
                 <>
@@ -462,7 +477,7 @@ export const MissionsTimeline: React.FC<MissionsTimelineProps> = React.memo(({ l
               ) : (
                 <>
                   <Search className="w-3.5 h-3.5" />
-                  <span>{lang === 'si' ? 'සජීවී සෙවුම අරඹන්න' : lang === 'ta' ? 'நேரடித் தேடல்' : 'Search Live Web'}</span>
+                  <span>{lang === 'si' ? 'සෙවීම අරඹන්න' : lang === 'ta' ? 'தேடலைத் தொடங்கு' : 'Run grounded search'}</span>
                 </>
               )}
             </button>
@@ -477,7 +492,7 @@ export const MissionsTimeline: React.FC<MissionsTimelineProps> = React.memo(({ l
                   setSearchQuery(topic.name[lang] || topic.name.en);
                   handleGroundedSearch(topic.query);
                 }}
-                className="px-2.5 py-1 rounded-lg bg-blue-950/40 hover:bg-blue-900/60 text-cyan-300 hover:text-white border border-blue-500/30 text-[11px] font-medium whitespace-nowrap transition flex items-center gap-1 shadow-sm"
+                className="px-2.5 py-1 rounded-[8px] bg-blue-950/40 hover:bg-blue-900/60 text-cyan-300 hover:text-ink border border-blue-500/30 text-[11px] font-medium whitespace-nowrap transition flex items-center gap-1 shadow-sm"
               >
                 <Compass className="w-3 h-3 text-cyan-400" />
                 <span>{topic.name[lang] || topic.name.en}</span>
@@ -489,25 +504,25 @@ export const MissionsTimeline: React.FC<MissionsTimelineProps> = React.memo(({ l
 
       {/* Google Search Grounded Briefing Card */}
       {showGroundedSection && (
-        <div className="p-6 rounded-3xl bg-gradient-to-br from-slate-900/95 via-[#071126]/95 to-slate-950 border border-cyan-500/40 shadow-2xl space-y-4 backdrop-blur-2xl">
+        <div className="space-y-4 rounded-[14px] border border-line bg-surface/40 p-5 sm:p-6">
           <div className="flex items-center justify-between border-b border-cyan-500/20 pb-4 flex-wrap gap-3">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-cyan-600 to-blue-600 p-[1.5px] shadow-lg shadow-cyan-500/30">
-                <div className="w-full h-full bg-slate-950 rounded-[14px] flex items-center justify-center">
+              <div className="h-10 w-10 rounded-[10px] border border-atmo/30 bg-atmo/10 p-[1.5px]">
+                <div className="w-full h-full bg-abyss rounded-[14px] flex items-center justify-center">
                   <Globe className="w-5 h-5 text-cyan-400" />
                 </div>
               </div>
               <div>
                 <div className="flex items-center gap-2">
-                  <h4 className="text-base font-bold text-white font-['Orbitron']">
+                  <h4 className="text-base font-bold text-white font-display">
                     Google Search Grounded Discovery
                   </h4>
-                  <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center gap-1">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                  <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-emerald-500/20 text-signal border border-emerald-500/40 flex items-center gap-1">
+                    <span className="h-1.5 w-1.5 rounded-full bg-signal" />
                     gemini-3.5-flash
                   </span>
                 </div>
-                <p className="text-xs text-slate-400 font-mono">
+                <p className="text-xs text-ink-3 font-mono">
                   {lang === 'si' 
                     ? `"${groundedResult?.query || searchQuery}" පිළිබඳ සජීවීව තහවුරු කළ විද්‍යාත්මක තොරතුරු` 
                     : lang === 'ta' 
@@ -521,10 +536,10 @@ export const MissionsTimeline: React.FC<MissionsTimelineProps> = React.memo(({ l
             <div className="flex items-center gap-2">
               <button
                 onClick={handleToggleSpeech}
-                className={`px-3 py-1.5 rounded-xl border text-xs font-semibold flex items-center gap-1.5 transition ${
+                className={`px-3 py-1.5 rounded-[10px] border text-xs font-semibold flex items-center gap-1.5 transition ${
                   isSpeaking
-                    ? 'bg-amber-500/20 border-amber-500/50 text-amber-300 animate-pulse'
-                    : 'bg-slate-900 border-slate-700 text-slate-300 hover:text-white'
+                    ? 'border-caution/40 bg-caution/10 text-caution'
+                    : 'bg-surface/60 border-line text-ink-2 hover:text-ink'
                 }`}
                 title="Read aloud in your language"
               >
@@ -534,10 +549,10 @@ export const MissionsTimeline: React.FC<MissionsTimelineProps> = React.memo(({ l
 
               <button
                 onClick={handleCopyBriefing}
-                className="px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-700 hover:border-cyan-500/40 text-slate-300 hover:text-white text-xs font-semibold flex items-center gap-1.5 transition"
+                className="px-3 py-1.5 rounded-[10px] bg-surface/60 border border-line hover:border-cyan-500/40 text-ink-2 hover:text-ink text-xs font-semibold flex items-center gap-1.5 transition"
                 title="Copy briefing"
               >
-                {copiedBriefing ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5 text-cyan-400" />}
+                {copiedBriefing ? <Check className="w-3.5 h-3.5 text-signal" /> : <Copy className="w-3.5 h-3.5 text-cyan-400" />}
                 <span>{copiedBriefing ? (lang === 'si' ? 'පිටපත් විය!' : 'Copied!') : (lang === 'si' ? 'පිටපත්' : lang === 'ta' ? 'நகல்' : 'Copy')}</span>
               </button>
 
@@ -549,7 +564,7 @@ export const MissionsTimeline: React.FC<MissionsTimelineProps> = React.memo(({ l
                     setIsSpeaking(false);
                   }
                 }}
-                className="text-xs font-mono text-slate-400 hover:text-white px-2.5 py-1.5 rounded-xl hover:bg-slate-800 border border-transparent hover:border-slate-700"
+                className="text-xs font-mono text-ink-3 hover:text-ink px-2.5 py-1.5 rounded-[10px] hover:bg-surface-2 border border-transparent hover:border-line"
               >
                 ✕
               </button>
@@ -558,10 +573,10 @@ export const MissionsTimeline: React.FC<MissionsTimelineProps> = React.memo(({ l
 
           {/* Search Queries Executed */}
           {groundedResult?.searchQueries && groundedResult.searchQueries.length > 0 && (
-            <div className="flex items-center gap-2 flex-wrap text-[11px] font-mono text-slate-400">
-              <span className="text-slate-500">{lang === 'si' ? 'සෙවූ විමසුම්:' : lang === 'ta' ? 'தேடல் கேள்விகள்:' : 'Queries Executed:'}</span>
+            <div className="flex items-center gap-2 flex-wrap text-[11px] font-mono text-ink-3">
+              <span className="text-ink-4">{lang === 'si' ? 'සෙවූ විමසුම්:' : lang === 'ta' ? 'தேடல் கேள்விகள்:' : 'Queries Executed:'}</span>
               {groundedResult.searchQueries.map((sq, i) => (
-                <span key={i} className="px-2 py-0.5 rounded-md bg-slate-950 border border-slate-800 text-cyan-300">
+                <span key={i} className="px-2 py-0.5 rounded-md bg-abyss border border-line text-cyan-300">
                   🔍 {sq}
                 </span>
               ))}
@@ -573,7 +588,7 @@ export const MissionsTimeline: React.FC<MissionsTimelineProps> = React.memo(({ l
             <div className="py-12 flex flex-col items-center justify-center gap-3 text-cyan-300 font-mono text-xs">
               <div className="relative">
                 <div className="w-12 h-12 rounded-full border-2 border-cyan-500/20 border-t-cyan-400 animate-spin" />
-                <Globe className="w-5 h-5 text-cyan-400 absolute inset-0 m-auto animate-pulse" />
+                <Globe className="absolute inset-0 m-auto h-5 w-5 text-atmo" strokeWidth={1.6} />
               </div>
               <span>
                 {lang === 'si' 
@@ -586,14 +601,14 @@ export const MissionsTimeline: React.FC<MissionsTimelineProps> = React.memo(({ l
           ) : groundedResult ? (
             <div className="space-y-4">
               {/* Formatted Answer Body */}
-              <div className="text-slate-200 text-xs sm:text-sm leading-relaxed whitespace-pre-line bg-slate-950/70 p-5 rounded-2xl border border-cyan-500/20 font-sans shadow-inner space-y-2">
+              <div className="text-ink-2 text-xs sm:text-sm leading-relaxed whitespace-pre-line bg-abyss/70 p-5 rounded-[14px] border border-cyan-500/20 font-sans shadow-inner space-y-2">
                 {groundedResult.answer}
               </div>
 
               {/* Web Sources & Grounding Citations */}
               {groundedResult.sources && groundedResult.sources.length > 0 && (
                 <div className="pt-2">
-                  <span className="text-[11px] font-mono text-slate-400 uppercase tracking-wider block mb-2 font-semibold">
+                  <span className="text-[11px] font-mono text-ink-3 uppercase tracking-wider block mb-2 font-semibold">
                     {lang === 'si' ? 'තහවුරු කළ නිල මූලාශ්‍ර සහ සබැඳි:' : lang === 'ta' ? 'சரிபார்க்கப்பட்ட அதிகாரப்பூர்வ இணைப்புகள்:' : 'Verified Official Sources & Grounding Citations:'}
                   </span>
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
@@ -603,18 +618,18 @@ export const MissionsTimeline: React.FC<MissionsTimelineProps> = React.memo(({ l
                         href={src.url}
                         target="_blank"
                         rel="noreferrer"
-                        className="p-2.5 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-slate-800 hover:border-cyan-500/50 text-cyan-300 hover:text-cyan-200 flex items-center justify-between gap-2 font-mono text-xs transition group shadow-sm"
+                        className="p-2.5 rounded-[10px] bg-surface/65 hover:bg-surface-2 border border-line hover:border-cyan-500/50 text-cyan-300 hover:text-cyan-200 flex items-center justify-between gap-2 font-mono text-xs transition group shadow-sm"
                       >
                         <div className="flex items-center gap-2 truncate">
                           <span className="w-2 h-2 rounded-full bg-cyan-400 shrink-0" />
                           <div className="truncate">
                             <div className="truncate font-semibold text-white group-hover:text-cyan-200">{src.title}</div>
                             {src.domain && (
-                              <div className="text-[10px] text-slate-500">{src.domain}</div>
+                              <div className="text-[10px] text-ink-4">{src.domain}</div>
                             )}
                           </div>
                         </div>
-                        <ExternalLink className="w-3.5 h-3.5 text-slate-400 group-hover:text-cyan-300 shrink-0" />
+                        <ExternalLink className="w-3.5 h-3.5 text-ink-3 group-hover:text-cyan-300 shrink-0" />
                       </a>
                     ))}
                   </div>
@@ -627,8 +642,8 @@ export const MissionsTimeline: React.FC<MissionsTimelineProps> = React.memo(({ l
 
       {/* No Local Results Fallback Card */}
       {filteredMissions.length === 0 && (
-        <div className="p-8 rounded-3xl bg-slate-900/60 border border-slate-800 text-center space-y-4">
-          <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center mx-auto text-amber-400">
+        <div className="p-8 rounded-3xl bg-surface/50 border border-line text-center space-y-4">
+          <div className="w-12 h-12 rounded-[14px] bg-amber-500/10 border border-amber-500/30 flex items-center justify-center mx-auto text-caution">
             <Search className="w-6 h-6" />
           </div>
           <div>
@@ -639,7 +654,7 @@ export const MissionsTimeline: React.FC<MissionsTimelineProps> = React.memo(({ l
                 ? `"${searchQuery}" க்கான உள்ளூர் பணிகள் எதுவும் கிடைக்கவில்லை`
                 : `No local missions matching "${searchQuery}"`}
             </h4>
-            <p className="text-xs text-slate-400 mt-1 max-w-md mx-auto">
+            <p className="text-xs text-ink-3 mt-1 max-w-md mx-auto">
               {lang === 'si'
                 ? 'කෙසේ වෙතත්, ඔබට Google Search Grounding මඟින් මෙම මෙහෙයුම ගැන සජීවී තොරතුරු ලබාගත හැක.'
                 : lang === 'ta'
@@ -651,14 +666,14 @@ export const MissionsTimeline: React.FC<MissionsTimelineProps> = React.memo(({ l
           <div className="flex items-center justify-center gap-3">
             <button
               onClick={() => handleGroundedSearch()}
-              className="px-4 py-2 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 text-white text-xs font-semibold flex items-center gap-2 shadow-lg shadow-cyan-600/30 hover:brightness-110 transition"
+              className="inline-flex items-center gap-2 rounded-[8px] bg-atmo px-3.5 py-2 text-[12px] font-semibold text-[#04202b] transition-colors hover:bg-atmo-soft"
             >
               <Globe className="w-4 h-4" />
               <span>{lang === 'si' ? 'Google සමඟ සජීවීව සොයන්න' : lang === 'ta' ? 'கூகுள் மூலம் தேடு' : 'Search Live on Web'}</span>
             </button>
             <button
               onClick={handleClearSearch}
-              className="px-4 py-2 rounded-xl bg-slate-800 text-slate-300 hover:text-white text-xs font-semibold transition"
+              className="px-4 py-2 rounded-[10px] bg-surface-2 text-ink-2 hover:text-ink text-xs font-semibold transition"
             >
               {lang === 'si' ? 'සියල්ල පෙන්වන්න' : lang === 'ta' ? 'அனைத்தையும் காட்டு' : 'Reset All'}
             </button>
@@ -668,7 +683,7 @@ export const MissionsTimeline: React.FC<MissionsTimelineProps> = React.memo(({ l
 
       {/* Mission Tabs Bar */}
       {filteredMissions.length > 0 && (
-        <div className="flex items-center gap-2 overflow-x-auto pb-2 border-b border-slate-800 scrollbar-thin">
+        <div className="flex items-center gap-2 overflow-x-auto pb-2 border-b border-line scrollbar-thin">
           {filteredMissions.map(mission => {
             const isSelected = mission.id === currentMission.id;
             const isFav = isMissionSaved(mission.id);
@@ -679,10 +694,10 @@ export const MissionsTimeline: React.FC<MissionsTimelineProps> = React.memo(({ l
                   setSelectedMissionId(mission.id);
                   setActiveStepIndex(0);
                 }}
-                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-xs whitespace-nowrap transition-all border ${
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-[10px] font-semibold text-xs whitespace-nowrap transition-all border ${
                   isSelected
-                    ? 'bg-gradient-to-r from-cyan-600 to-blue-600 text-white border-cyan-400/50 shadow-lg shadow-cyan-500/20'
-                    : 'bg-slate-900/60 text-slate-400 hover:text-slate-200 border-slate-800 hover:border-slate-700'
+                    ? 'border-atmo/50 bg-atmo/10 text-ink'
+                    : 'bg-surface/50 text-ink-3 hover:text-ink-2 border-line hover:border-line'
                 }`}
               >
                 <Rocket className={`w-3.5 h-3.5 ${isSelected ? 'text-white' : 'text-cyan-400'}`} />
@@ -701,7 +716,7 @@ export const MissionsTimeline: React.FC<MissionsTimelineProps> = React.memo(({ l
 
       {/* Main Mission Display Card */}
       {currentMission && (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 apple-liquid-glass rounded-2xl p-6 sm:p-8 shadow-2xl">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 apple-liquid-glass rounded-[14px] p-6 sm:p-8 shadow-2xl">
           {/* Left Column: Mission Overview & Facts */}
           <div className="lg:col-span-5 space-y-5">
             <div className="relative rounded-3xl overflow-hidden apple-liquid-glass aspect-video group">
@@ -713,10 +728,10 @@ export const MissionsTimeline: React.FC<MissionsTimelineProps> = React.memo(({ l
               {/* Save to Favorites Button */}
               <button
                 onClick={() => toggleSaveMission(currentMission.id)}
-                className={`absolute top-3 right-3 px-3.5 py-1.5 rounded-2xl transition flex items-center gap-1.5 text-xs font-semibold shadow-lg ${
+                className={`absolute top-3 right-3 px-3.5 py-1.5 rounded-[14px] transition flex items-center gap-1.5 text-xs font-semibold shadow-lg ${
                   isMissionSaved(currentMission.id)
                     ? 'bg-pink-600/90 text-white border border-pink-400 shadow-pink-500/30'
-                    : 'apple-liquid-glass text-slate-200 hover:text-white'
+                    : 'apple-liquid-glass text-ink-2 hover:text-ink'
                 }`}
                 title={isMissionSaved(currentMission.id) ? t.removeFromFavorites : t.saveToFavorites}
               >
@@ -724,13 +739,13 @@ export const MissionsTimeline: React.FC<MissionsTimelineProps> = React.memo(({ l
                 <span>{isMissionSaved(currentMission.id) ? t.savedInFavorites : t.saveToFavorites}</span>
               </button>
 
-              <div className="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-slate-950/20 to-transparent flex items-end p-5 pointer-events-none rounded-3xl">
+              <div className="pointer-events-none absolute inset-0 flex items-end rounded-[14px] bg-gradient-to-t from-void/95 via-void/25 to-transparent p-5">
                 <div>
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-semibold bg-emerald-500/20 text-signal border border-emerald-500/40">
                     <ShieldCheck className="w-3 h-3" />
                     {currentMission.status[lang] || currentMission.status.en}
                   </span>
-                  <h3 className="text-xl font-bold text-white mt-1 font-['Orbitron']">
+                  <h3 className="text-xl font-bold text-white mt-1 font-display">
                     {currentMission.name[lang] || currentMission.name.en}
                   </h3>
                   <p className="text-xs text-cyan-300 font-medium">
@@ -741,23 +756,23 @@ export const MissionsTimeline: React.FC<MissionsTimelineProps> = React.memo(({ l
             </div>
 
             {/* Summary */}
-            <div className="p-5 rounded-3xl apple-liquid-glass text-slate-200 text-sm leading-relaxed">
+            <div className="p-5 rounded-3xl apple-liquid-glass text-ink-2 text-sm leading-relaxed">
               {currentMission.summary[lang] || currentMission.summary.en}
             </div>
 
             {/* Quick Facts Grid */}
             <div className="grid grid-cols-2 gap-3">
               {currentMission.facts.map((fact, idx) => (
-                <div key={idx} className="p-3.5 rounded-2xl apple-liquid-glass">
-                  <div className="text-[11px] text-slate-400 font-medium">{fact.label[lang] || fact.label.en}</div>
+                <div key={idx} className="p-3.5 rounded-[14px] apple-liquid-glass">
+                  <div className="text-[11px] text-ink-3 font-medium">{fact.label[lang] || fact.label.en}</div>
                   <div className="text-xs font-semibold text-cyan-200 mt-0.5">{fact.value}</div>
                 </div>
               ))}
             </div>
 
-            <div className="flex items-center justify-between text-xs text-slate-300 p-3.5 rounded-2xl apple-liquid-glass">
+            <div className="flex items-center justify-between text-xs text-ink-2 p-3.5 rounded-[14px] apple-liquid-glass">
               <span className="flex items-center gap-1.5">
-                <Radio className="w-3.5 h-3.5 text-cyan-400 animate-pulse" />
+                <Radio className="h-3.5 w-3.5 text-atmo" strokeWidth={1.8} />
                 <span>{t.missionOperator}:</span>
               </span>
               <span className="font-semibold text-white">{currentMission.operator}</span>
@@ -768,11 +783,11 @@ export const MissionsTimeline: React.FC<MissionsTimelineProps> = React.memo(({ l
           <div className="lg:col-span-7 flex flex-col justify-between space-y-4">
             <div>
               <div className="flex items-center justify-between mb-3">
-                <h4 className="text-sm font-bold text-white flex items-center gap-2 font-['Orbitron']">
+                <h4 className="text-sm font-bold text-white flex items-center gap-2 font-display">
                   <Milestone className="w-4 h-4 text-cyan-400" />
                   {t.stepBreakdown}
                 </h4>
-                <span className="text-xs text-slate-400 font-mono">
+                <span className="text-xs text-ink-3 font-mono">
                   Stage {activeStepIndex + 1} of {currentMission.steps.length}
                 </span>
               </div>
@@ -785,10 +800,10 @@ export const MissionsTimeline: React.FC<MissionsTimelineProps> = React.memo(({ l
                     <button
                       key={idx}
                       onClick={() => setActiveStepIndex(idx)}
-                      className={`p-3 rounded-2xl text-left transition border text-xs ${
+                      className={`p-3 rounded-[14px] text-left transition border text-xs ${
                         isActive
                           ? 'bg-cyan-950/70 border-cyan-500/60 text-cyan-200 shadow-md ring-1 ring-cyan-400/50'
-                          : 'apple-liquid-glass text-slate-300 hover:text-white'
+                          : 'apple-liquid-glass text-ink-2 hover:text-ink'
                       }`}
                     >
                       <div className="text-[10px] font-mono text-cyan-400 font-bold mb-1">
@@ -808,17 +823,17 @@ export const MissionsTimeline: React.FC<MissionsTimelineProps> = React.memo(({ l
                       <CheckCircle2 className="w-3.5 h-3.5 text-cyan-400" />
                       {currentMission.steps[activeStepIndex].phase}
                     </div>
-                    <div className="flex items-center gap-1.5 text-xs font-mono text-slate-300">
-                      <Gauge className="w-3.5 h-3.5 text-amber-400" />
+                    <div className="flex items-center gap-1.5 text-xs font-mono text-ink-2">
+                      <Gauge className="w-3.5 h-3.5 text-caution" />
                       <span>{currentMission.steps[activeStepIndex].telemetry}</span>
                     </div>
                   </div>
 
-                  <h5 className="text-base font-bold text-white font-['Orbitron']">
+                  <h5 className="text-base font-bold text-white font-display">
                     {currentMission.steps[activeStepIndex].title[lang] || currentMission.steps[activeStepIndex].title.en}
                   </h5>
 
-                  <p className="text-sm text-slate-200 leading-relaxed">
+                  <p className="text-sm text-ink-2 leading-relaxed">
                     {currentMission.steps[activeStepIndex].description[lang] || currentMission.steps[activeStepIndex].description.en}
                   </p>
                 </div>
@@ -830,14 +845,14 @@ export const MissionsTimeline: React.FC<MissionsTimelineProps> = React.memo(({ l
               <button
                 onClick={() => setActiveStepIndex(prev => Math.max(0, prev - 1))}
                 disabled={activeStepIndex === 0}
-                className="px-4 py-2 rounded-2xl text-xs font-semibold apple-liquid-glass text-slate-300 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed transition"
+                className="px-4 py-2 rounded-[14px] text-xs font-semibold apple-liquid-glass text-ink-2 hover:text-ink disabled:opacity-40 disabled:cursor-not-allowed transition"
               >
                 ← {lang === 'si' ? 'පෙර අදියර' : lang === 'ta' ? 'முந்தைய நிலை' : 'Previous Phase'}
               </button>
               <button
                 onClick={() => setActiveStepIndex(prev => Math.min(currentMission.steps.length - 1, prev + 1))}
                 disabled={activeStepIndex === currentMission.steps.length - 1}
-                className="px-4 py-2 rounded-2xl text-xs font-semibold bg-cyan-600 text-white hover:bg-cyan-500 disabled:opacity-40 disabled:cursor-not-allowed transition flex items-center gap-1 shadow-lg shadow-cyan-600/30"
+                className="px-4 py-2 rounded-[14px] text-xs font-semibold bg-cyan-600 text-white hover:bg-cyan-500 disabled:opacity-40 disabled:cursor-not-allowed transition flex items-center gap-1 shadow-lg shadow-cyan-600/30"
               >
                 {lang === 'si' ? 'මීළඟ අදියර' : lang === 'ta' ? 'அடுத்த நிலை' : 'Next Phase'} →
               </button>

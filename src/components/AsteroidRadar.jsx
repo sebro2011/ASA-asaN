@@ -73,39 +73,39 @@ export function getAsteroidThreatInfo(ast) {
 
   let level = 'LOW';
   let badgeColor = 'emerald';
-  let labelEn = 'Low Threat';
-  let labelSi = 'අවම තර්ජනය';
+  let labelEn = 'No hazard flag';
+  let labelSi = 'අවදානම් ධජයක් නැත';
   let labelTa = 'குறைந்த அச்சுறுத்தல்';
   const reasons = [];
 
   if (isDiameterExceeded && isCloseApproach) {
     level = 'CRITICAL';
     badgeColor = 'rose';
-    labelEn = 'CRITICAL THREAT';
-    labelSi = 'අතිශය බරපතල තර්ජනයක්';
-    labelTa = 'மிகக் கடுமையான அச்சுறுத்தல்';
+    labelEn = 'PHA · within 10 LD';
+    labelSi = 'PHA · LD 10ට තුළ';
+    labelTa = 'PHA · 10 LD உள்ளே';
     reasons.push(`Diameter (${diameter}m ≥ ${THREAT_THRESHOLDS.DIAMETER_METERS}m)`);
     reasons.push(`Close Approach (${lunarDist} LD ≤ ${THREAT_THRESHOLDS.CLOSE_APPROACH_LD} LD)`);
   } else if (isDiameterExceeded) {
     level = 'HIGH';
     badgeColor = 'rose';
-    labelEn = 'HIGH THREAT';
-    labelSi = 'ඉහළ තර්ජනයක්';
-    labelTa = 'அதிக அச்சுறுத்தல்';
+    labelEn = 'Hazard flag';
+    labelSi = 'අවදානම් ධජය';
+    labelTa = 'அபாயக் கொடி';
     reasons.push(`Diameter Exceeded (${diameter}m ≥ ${THREAT_THRESHOLDS.DIAMETER_METERS}m)`);
   } else if (isCloseApproach) {
     level = 'HIGH';
     badgeColor = 'rose';
-    labelEn = 'HIGH THREAT';
-    labelSi = 'ඉහළ තර්ජනයක්';
-    labelTa = 'அதிக அச்சுறுத்தல்';
+    labelEn = 'Hazard flag';
+    labelSi = 'අවදානම් ධජය';
+    labelTa = 'அபாயக் கொடி';
     reasons.push(`Close Approach Proximity (${lunarDist} LD ≤ ${THREAT_THRESHOLDS.CLOSE_APPROACH_LD} LD)`);
   } else if (isPha) {
     level = 'HIGH';
     badgeColor = 'rose';
-    labelEn = 'HIGH THREAT';
-    labelSi = 'ඉහළ තර්ජනයක්';
-    labelTa = 'அதிக அச்சுறுத்தல்';
+    labelEn = 'Hazard flag';
+    labelSi = 'අවදානම් ධජය';
+    labelTa = 'அபாயக் கொடி';
     reasons.push('NASA PHA Designated Orbit');
   } else if (diameter >= 70 || lunarDist <= 20) {
     level = 'MODERATE';
@@ -117,7 +117,7 @@ export function getAsteroidThreatInfo(ast) {
   } else {
     level = 'LOW';
     badgeColor = 'emerald';
-    labelEn = 'LOW / SAFE';
+    labelEn = 'No hazard flag';
     labelSi = 'ආරක්ෂිත කක්ෂය';
     labelTa = 'பாதுகாப்பானது';
     reasons.push('Safe astronomical distance');
@@ -429,9 +429,9 @@ function AsteroidRadar({ lang = 'en' }) {
         if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
           try {
             const notif = new Notification(
-              `🚨 NASA CRITICAL CLOSE APPROACH: ${ast.name}`,
+              `Close approach: ${ast.name}`,
               {
-                body: `Passes within ${ast.missDistanceKm} km (~${ast.lunarDistance} LD) from Earth at ${ast.velocityKmh} km/h on ${ast.closeApproachDate}!`,
+                body: `Nominal approach distance ${ast.missDistanceKm} km (~${ast.lunarDistance} LD) on ${ast.closeApproachDate}. Distance notice only — no impact is predicted.`,
                 icon: '/favicon.ico',
                 tag: `asteroid-close-approach-${ast.id}`,
                 requireInteraction: true
@@ -474,7 +474,7 @@ function AsteroidRadar({ lang = 'en' }) {
     if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
       try {
         const notif = new Notification(
-          `🚨 [TEST] NASA CLOSE APPROACH: ${sampleAst.name}`,
+          `[TEST] Close approach notice: ${sampleAst.name}`,
           {
             body: `Passes within ${sampleAst.missDistanceKm} km (~${sampleAst.lunarDistance} LD) from Earth! Relative velocity: ${sampleAst.velocityKmh} km/h.`,
             icon: '/favicon.ico',
@@ -646,13 +646,13 @@ function AsteroidRadar({ lang = 'en' }) {
       subtitle: 'Real-time 7-day tracking of close-approach asteroids, orbital velocities, and hazardous threat levels',
       refresh: 'Refresh NeoWs Feed',
       filterAll: 'All Near-Earth Objects',
-      filterRedThreat: '🚨 Red Threat Level',
-      filterHazardous: 'Potentially Hazardous (PHA)',
+      filterRedThreat: 'PHA-designated',
+      filterHazardous: 'NASA PHA flag',
       filterClose: 'Closest Approaches (< 10 LD)',
       filterLarge: 'Largest Objects (> 100m)',
       searchPlaceholder: 'Search asteroid name or JPL ID...',
-      hazardousTag: 'Potentially Hazardous',
-      safeTag: 'Non-Hazardous Orbit',
+      hazardousTag: 'PHA-designated (JPL)',
+      safeTag: 'Not PHA-designated',
       missDistance: 'Miss Distance',
       velocity: 'Relative Velocity',
       diameter: 'Estimated Diameter',
@@ -662,20 +662,20 @@ function AsteroidRadar({ lang = 'en' }) {
       jplDatabase: 'NASA JPL Small-Body Database',
       radarLegend: 'Target Range: 0 to 30 Million KM',
       sizeBenchmark: 'Size Equivalent',
-      machSpeed: 'Mach Number Scale',
-      closeApproachTelemetry: 'Close Approach Vector',
-      offlineActive: 'OFFLINE / CACHED TELEMETRY ACTIVE',
-      liveActive: 'LIVE NASA NEOWS FEED',
-      threatLevelHeader: 'RED THREAT CRITERIA',
-      threatCriteriaNote: 'Diameter ≥ 140m OR Close Approach ≤ 10 LD (7.5M km)',
-      flaggedRed: 'Flagged Red Threat',
-      safeTrajectory: 'Safe Trajectory',
-      threatAssessmentTitle: 'Planetary Defense Threat Classification',
-      notifEnabled: 'Alerts Active (< 1M km)',
+      machSpeed: 'Speed relative to Earth',
+      closeApproachTelemetry: 'Close approach geometry',
+      offlineActive: 'Reference sample · NeoWs unreachable',
+      liveActive: 'NASA NeoWs · 7-day window',
+      threatLevelHeader: 'HAZARD CLASSIFICATION',
+      threatCriteriaNote: 'PHA = absolute magnitude H ≤ 22 and MOID ≤ 0.05 AU (NASA/JPL). Not an impact prediction.',
+      flaggedRed: 'PHA-designated',
+      safeTrajectory: 'No PHA flag',
+      threatAssessmentTitle: 'Hazard classification (JPL criteria)',
+      notifEnabled: 'Close-approach alerts on (< 1M km)',
       notifEnableBtn: 'Enable Close Approach Alerts (< 1M km)',
       notifBlocked: 'Alerts Blocked in Browser',
       testAlertBtn: 'Simulate Alert (< 1M km)',
-      criticalCloseApproachTag: 'CRITICAL CLOSE APPROACH < 1,000,000 KM',
+      criticalCloseApproachTag: 'CLOSE APPROACH · WITHIN 1,000,000 KM',
       inspectTarget: 'Inspect Target',
       dismissAlert: 'Dismiss Alert'
     },
@@ -684,13 +684,13 @@ function AsteroidRadar({ lang = 'en' }) {
       subheading: 'පෘථිවියට ආසන්නව ගමන් කරන උල්කාෂ්ම, ප්‍රවේග සහ අවදානම් මට්ටම් තත්‍ය කාලීනව නිරීක්ෂණය කරන්න',
       refresh: 'දත්ත යාවත්කාලීන කරන්න',
       filterAll: 'සියලුම වස්තූන්',
-      filterRedThreat: '🚨 රතු තර්ජන මට්ටම',
+      filterRedThreat: 'PHA ලෙස නම් කළ',
       filterHazardous: 'අනතුරුදායක වස්තූන් (PHA)',
       filterClose: 'ආසන්නතම ගමන් (< 10 LD)',
       filterLarge: 'විශාලතම වස්තූන් (> 100m)',
       searchPlaceholder: 'වස්තුවේ නම හෝ ID ඇතුළත් කරන්න...',
-      hazardousTag: 'අනතුරුදායක විය හැක',
-      safeTag: 'ආරක්ෂිත කක්ෂය',
+      hazardousTag: 'PHA (JPL)',
+      safeTag: 'PHA නොවේ',
       missDistance: 'පෘථිවියේ සිට දුර',
       velocity: 'සාපේක්ෂ වේගය',
       diameter: 'ඇස්තමේන්තුගත විෂ්කම්භය',
@@ -703,17 +703,17 @@ function AsteroidRadar({ lang = 'en' }) {
       machSpeed: 'මැක් වේග සාපේක්ෂතාව',
       closeApproachTelemetry: 'ආසන්න වීමේ ටෙලිමෙට්‍රි දත්ත',
       offlineActive: 'නොබැඳි / කැෂේ දත්ත සක්‍රියයි',
-      liveActive: 'සජීවී නාසා NEOWS දත්ත',
-      threatLevelHeader: 'රතු තර්ජන නිර්ණායක',
+      liveActive: 'NASA NeoWs · දින 7 ක කවුළුව',
+      threatLevelHeader: 'අවදානම් වර්ගීකරණය',
       threatCriteriaNote: 'විෂ්කම්භය ≥ 140m හෝ ආසන්න ගමන් ≤ 10 LD (කි.මී. 7.5M)',
-      flaggedRed: 'රතු තර්ජන සලකුණු කර ඇත',
+      flaggedRed: 'PHA ලෙස නම් කළ',
       safeTrajectory: 'ආරක්ෂිත කක්ෂය',
       threatAssessmentTitle: 'ග්‍රහලෝක ආරක්ෂණ තර්ජන වර්ගීකරණය',
       notifEnabled: 'දැනුම්දීම් සක්‍රියයි (< කි.මී. 1M)',
       notifEnableBtn: 'ආසන්න ගමන් දැනුම්දීම් සක්‍රිය කරන්න (< කි.මී. 1M)',
       notifBlocked: 'බ්‍රවුසරයේ දැනුම්දීම් අවහිර කර ඇත',
       testAlertBtn: 'දැනුම්දීම අත්හදා බලන්න',
-      criticalCloseApproachTag: 'අතිශය ආසන්න ගමනක් < කි.මී. 1,000,000',
+      criticalCloseApproachTag: 'ආසන්න ගමනක් · කි.මී. 1,000,000 තුළ',
       inspectTarget: 'ඉලක්කය පරීක්ෂා කරන්න',
       dismissAlert: 'ඉවත් කරන්න'
     },
@@ -722,13 +722,13 @@ function AsteroidRadar({ lang = 'en' }) {
       subheading: 'பூமியை நெருங்கும் சிறுகோள்கள், வேகம் மற்றும் அபாய அளவுகளை நேரலையில் கண்காணிக்கவும்',
       refresh: 'தரவைப் புதுப்பிக்கவும்',
       filterAll: 'அனைத்து பொருட்கள்',
-      filterRedThreat: '🚨 சிவப்பு அச்சுறுத்தல்',
+      filterRedThreat: 'PHA எனக் குறிக்கப்பட்டவை',
       filterHazardous: 'அபாயகரமானவை (PHA)',
       filterClose: 'மிக அருகில் (< 10 LD)',
       filterLarge: 'பெரியவை (> 100m)',
       searchPlaceholder: 'பெயர் அல்லது ID தேடுக...',
-      hazardousTag: 'சாத்தியமான அபாயம்',
-      safeTag: 'பாதுகாப்பான சுற்றுப்பாதை',
+      hazardousTag: 'PHA (JPL)',
+      safeTag: 'PHA அல்ல',
       missDistance: 'பூமியிலிருந்து தொலைவு',
       velocity: 'சார்பு வேகம்',
       diameter: 'மதிப்பிடப்பட்ட விட்டம்',
@@ -741,17 +741,17 @@ function AsteroidRadar({ lang = 'en' }) {
       machSpeed: 'வேக ஒப்பீடு',
       closeApproachTelemetry: 'நெருங்கும் தொலைநிலை அளவீடுகள்',
       offlineActive: 'ஆஃப்லைன் / சேமிக்கப்பட்ட தரவு',
-      liveActive: 'நேரலை நாசா NEOWS தரவு',
-      threatLevelHeader: 'சிவப்பு அச்சுறுத்தல் அளவுகோல்',
+      liveActive: 'NASA NeoWs · 7 நாள் சாளரம்',
+      threatLevelHeader: 'அபாய வகைப்பாடு',
       threatCriteriaNote: 'விட்டம் ≥ 140m அல்லது நெருங்கிய பாதை ≤ 10 LD (7.5M km)',
-      flaggedRed: 'சிவப்பு குறியிடப்பட்டது',
+      flaggedRed: 'PHA குறியிடப்பட்டவை',
       safeTrajectory: 'பாதுகாப்பான சுற்றுப்பாதை',
       threatAssessmentTitle: 'கோள் பாதுகாப்பு அச்சுறுத்தல் வகைப்பாடு',
       notifEnabled: 'எச்சரிக்கை செயலில் உள்ளது (< 1M கி.மீ)',
       notifEnableBtn: 'நெருங்கிய பாதை எச்சரிக்கையை இயக்கு (< 1M கி.மீ)',
       notifBlocked: 'உலாவியில் எச்சரிக்கை தடுக்கப்பட்டது',
       testAlertBtn: 'எச்சரிக்கை சோதனை',
-      criticalCloseApproachTag: 'அதி தீவிர நெருங்கிய பாதை < 1,000,000 கி.மீ',
+      criticalCloseApproachTag: 'நெருங்கிய அணுகல் · 1,000,000 கி.மீக்குள்',
       inspectTarget: 'இலக்கை ஆராய்க',
       dismissAlert: 'நீக்குக'
     }
@@ -778,44 +778,51 @@ function AsteroidRadar({ lang = 'en' }) {
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <div className="flex items-center gap-2 flex-wrap mb-2">
-              <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full apple-liquid-glass text-rose-300 text-xs font-mono border-rose-500/30">
-                <Radio className="w-3.5 h-3.5 text-rose-400 animate-pulse" />
+              <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full apple-liquid-glass text-critical text-xs font-mono border-rose-500/30">
+                <Radio className="h-3.5 w-3.5 text-atmo" strokeWidth={1.8} />
                 <span>NASA NeoWs 7-DAY ORBITAL RADAR</span>
               </div>
 
               {/* Live / Offline Fallback Badge */}
               {isFallback ? (
                 <div className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full bg-amber-500/20 border border-amber-400/40 text-amber-300 text-[11px] font-mono font-bold">
-                  <WifiOff className="w-3 h-3 text-amber-400" />
+                  <WifiOff className="w-3 h-3 text-caution" />
                   <span>{t.offlineActive}</span>
                 </div>
               ) : (
-                <div className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 text-[11px] font-mono font-bold">
-                  <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                <div className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full bg-emerald-500/20 border border-emerald-400/40 text-signal text-[11px] font-mono font-bold">
+                  <CheckCircle2 className="w-3 h-3 text-signal" />
                   <span>{t.liveActive}</span>
                 </div>
               )}
             </div>
 
-            <h2 className="text-xl sm:text-2xl font-black font-['Orbitron'] text-white tracking-wide">
+            <h2 className="text-xl sm:text-2xl font-black font-display text-white tracking-wide">
               {t.title}
             </h2>
-            <p className="text-xs sm:text-sm text-slate-300 mt-1 max-w-2xl font-sans">
+            <p className="text-xs sm:text-sm text-ink-2 mt-1 max-w-2xl font-sans">
               {t.subtitle} {dateRangeInfo.start ? `(${dateRangeInfo.start} to ${dateRangeInfo.end})` : ''}
+            </p>
+            <p className="mt-2 max-w-2xl text-[11px] leading-relaxed text-ink-4">
+              {lang === 'si'
+                ? 'PHA යනු NASA/JPL විසින් ප්‍රමාණය සහ කක්ෂය (H ≤ 22, MOID ≤ 0.05 AU) අනුව ලබා දෙන වර්ගීකරණයකි. එය ගැටුම් අනාවැකියක් නොවේ; මෙහි ලැයිස්තුගත කිසිදු වස්තුවක් ගැටුම් මාර්ගයක නොවේ.'
+                : lang === 'ta'
+                  ? 'PHA என்பது NASA/JPL அளவு மற்றும் சுற்றுப்பாதையின் அடிப்படையில் (H ≤ 22, MOID ≤ 0.05 AU) வழங்கும் வகைப்பாடு. இது மோதல் முன்னறிவிப்பு அல்ல; இங்குள்ள எந்த வான்பொருளும் மோதல் பாதையில் இல்லை.'
+                  : 'PHA is NASA/JPL’s classification based on size and orbit (H ≤ 22, MOID ≤ 0.05 AU). It is not an impact prediction — no object listed here is on an impact trajectory.'}
             </p>
           </div>
 
           <div className="flex items-center gap-2 flex-wrap self-start md:self-auto">
             {/* Browser Notification Status Control (< 1,000,000 km alerts) */}
             {notificationPermission === 'granted' ? (
-              <div className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-2xl bg-emerald-500/20 border border-emerald-400/50 text-emerald-300 text-xs font-mono font-bold">
-                <Bell className="w-3.5 h-3.5 text-emerald-400" />
+              <div className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-[14px] bg-emerald-500/20 border border-emerald-400/50 text-signal text-xs font-mono font-bold">
+                <Bell className="w-3.5 h-3.5 text-signal" />
                 <span className="hidden sm:inline">{t.notifEnabled}</span>
                 <span className="sm:hidden">ALERTS ON</span>
               </div>
             ) : notificationPermission === 'denied' ? (
-              <div className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-2xl bg-rose-500/20 border border-rose-400/40 text-rose-300 text-xs font-mono">
-                <BellOff className="w-3.5 h-3.5 text-rose-400" />
+              <div className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-[14px] bg-rose-500/20 border border-rose-400/40 text-critical text-xs font-mono">
+                <BellOff className="w-3.5 h-3.5 text-critical" />
                 <span className="hidden sm:inline">{t.notifBlocked}</span>
                 <span className="sm:hidden">BLOCKED</span>
               </div>
@@ -823,9 +830,9 @@ function AsteroidRadar({ lang = 'en' }) {
               <button
                 type="button"
                 onClick={handleRequestNotificationPermission}
-                className="px-3.5 py-2 rounded-2xl bg-amber-500/20 hover:bg-amber-500/30 border border-amber-400/50 text-amber-300 text-xs font-mono font-bold transition cursor-pointer flex items-center gap-2 shadow-sm animate-pulse"
+                className="px-3.5 py-2 rounded-[14px] bg-amber-500/20 hover:bg-amber-500/30 border border-amber-400/50 text-amber-300 text-xs font-mono font-bold transition cursor-pointer flex items-center gap-2 shadow-sm animate-pulse"
               >
-                <BellRing className="w-3.5 h-3.5 text-amber-400" />
+                <BellRing className="w-3.5 h-3.5 text-caution" />
                 <span>{t.notifEnableBtn}</span>
               </button>
             )}
@@ -835,7 +842,7 @@ function AsteroidRadar({ lang = 'en' }) {
               type="button"
               onClick={handleTestNotification}
               title="Test real-time browser notification (< 1M km)"
-              className="px-3 py-2 rounded-2xl apple-liquid-glass hover:text-cyan-300 text-slate-300 text-xs font-mono transition cursor-pointer flex items-center gap-1.5"
+              className="px-3 py-2 rounded-[14px] apple-liquid-glass hover:text-cyan-300 text-ink-2 text-xs font-mono transition cursor-pointer flex items-center gap-1.5"
             >
               <span>{t.testAlertBtn}</span>
             </button>
@@ -844,7 +851,7 @@ function AsteroidRadar({ lang = 'en' }) {
               type="button"
               onClick={fetchAsteroids}
               disabled={loading}
-              className="px-4 py-2 rounded-2xl apple-liquid-glass hover:text-white text-cyan-300 text-xs font-mono font-bold flex items-center gap-2 transition cursor-pointer shadow-lg shadow-cyan-950/40"
+              className="px-4 py-2 rounded-[14px] apple-liquid-glass hover:text-ink text-cyan-300 text-xs font-mono font-bold flex items-center gap-2 transition cursor-pointer shadow-lg shadow-cyan-950/40"
             >
               <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-cyan-400' : ''}`} />
               <span>{t.refresh}</span>
@@ -855,24 +862,21 @@ function AsteroidRadar({ lang = 'en' }) {
         {/* Threat Level Thresholds & Summary Ribbon */}
         <div className="mt-5 pt-3.5 border-t border-white/10 flex flex-wrap items-center justify-between gap-3 text-xs font-mono">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="flex h-2.5 w-2.5 relative">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-rose-500"></span>
-            </span>
-            <span className="text-rose-300 font-bold tracking-wider">{t.threatLevelHeader}:</span>
-            <span className="text-slate-300 text-[11px] sm:text-xs">
+            <span className="h-2 w-2 rounded-full bg-caution" aria-hidden="true" />
+            <span className="font-semibold tracking-[0.1em] text-ink-2">{t.threatLevelHeader}:</span>
+            <span className="text-ink-2 text-[11px] sm:text-xs">
               {t.threatCriteriaNote}
             </span>
           </div>
 
-          <div className="inline-flex items-center gap-3 px-3 py-1.5 rounded-xl apple-liquid-glass text-[11px]">
-            <span className="text-rose-400 font-bold flex items-center gap-1.5">
-              <AlertOctagon className="w-3.5 h-3.5 text-rose-400 animate-pulse" />
+          <div className="inline-flex items-center gap-3 px-3 py-1.5 rounded-[10px] apple-liquid-glass text-[11px]">
+            <span className="text-critical font-bold flex items-center gap-1.5">
+              <AlertOctagon className="h-3.5 w-3.5 text-caution" strokeWidth={1.8} />
               <span>{asteroids.filter(a => getAsteroidThreatInfo(a).isRedThreat).length} {t.flaggedRed}</span>
             </span>
-            <span className="text-slate-500">•</span>
-            <span className="text-emerald-400 font-bold flex items-center gap-1.5">
-              <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+            <span className="text-ink-4">•</span>
+            <span className="text-signal font-bold flex items-center gap-1.5">
+              <ShieldCheck className="w-3.5 h-3.5 text-signal" />
               <span>{asteroids.filter(a => !getAsteroidThreatInfo(a).isRedThreat).length} {t.safeTrajectory}</span>
             </span>
           </div>
@@ -886,26 +890,26 @@ function AsteroidRadar({ lang = 'en' }) {
             initial={{ opacity: 0, y: -15, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -15, scale: 0.98 }}
-            className="rounded-3xl p-5 bg-gradient-to-r from-rose-950/90 via-red-900/60 to-slate-900/95 border-2 border-rose-500 shadow-[0_0_35px_rgba(244,63,94,0.4)] backdrop-blur-xl flex flex-col md:flex-row md:items-center justify-between gap-4 font-sans select-none"
+            className="flex flex-col justify-between gap-4 rounded-[14px] border border-caution/35 bg-caution/[0.07] p-5 font-sans select-none md:flex-row md:items-center"
           >
             <div className="flex items-start gap-3.5">
-              <div className="p-3 rounded-2xl bg-rose-500/25 text-rose-400 border border-rose-500/60 animate-pulse mt-0.5">
+              <div className="mt-0.5 rounded-[10px] border border-caution/40 bg-caution/10 p-3 text-caution">
                 <AlertOctagon className="w-6 h-6" />
               </div>
               <div className="space-y-1">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <span className="px-3 py-0.5 rounded-full bg-rose-500 text-white text-[10px] font-mono font-black uppercase tracking-wider animate-pulse shadow-md shadow-rose-950">
+                  <span className="rounded-full border border-caution/40 px-3 py-0.5 font-mono text-[10px] uppercase tracking-[0.12em] text-caution">
                     {t.criticalCloseApproachTag}
                   </span>
-                  <span className="text-xs font-mono text-rose-300 font-bold">
+                  <span className="text-xs font-mono text-critical font-bold">
                     {activeCloseApproachAlert.closeApproachDate}
                   </span>
                 </div>
-                <h3 className="text-base sm:text-lg font-bold font-['Orbitron'] text-white">
+                <h3 className="text-base sm:text-lg font-bold font-display text-white">
                   {activeCloseApproachAlert.name}
                 </h3>
-                <p className="text-xs font-mono text-slate-300">
-                  Miss Distance: <span className="text-rose-400 font-bold">{activeCloseApproachAlert.missDistanceKm} km</span> ({activeCloseApproachAlert.lunarDistance} LD) • Velocity: {activeCloseApproachAlert.velocityKmh} km/h • Diameter: ~{activeCloseApproachAlert.avgDiameterMeters}m
+                <p className="text-xs font-mono text-ink-2">
+                  Miss Distance: <span className="text-critical font-bold">{activeCloseApproachAlert.missDistanceKm} km</span> ({activeCloseApproachAlert.lunarDistance} LD) • Velocity: {activeCloseApproachAlert.velocityKmh} km/h • Diameter: ~{activeCloseApproachAlert.avgDiameterMeters}m
                 </p>
               </div>
             </div>
@@ -914,7 +918,7 @@ function AsteroidRadar({ lang = 'en' }) {
               <button
                 type="button"
                 onClick={() => setSelectedAsteroid(activeCloseApproachAlert)}
-                className="px-4 py-2.5 rounded-2xl bg-rose-600 hover:bg-rose-500 text-white font-mono font-bold text-xs transition cursor-pointer shadow-lg shadow-rose-950/60 flex items-center gap-2"
+                className="px-4 py-2.5 rounded-[14px] bg-rose-600 hover:bg-rose-500 text-white font-mono font-bold text-xs transition cursor-pointer shadow-lg shadow-rose-950/60 flex items-center gap-2"
               >
                 <Target className="w-4 h-4" />
                 <span>{t.inspectTarget}</span>
@@ -922,7 +926,7 @@ function AsteroidRadar({ lang = 'en' }) {
               <button
                 type="button"
                 onClick={() => setActiveCloseApproachAlert(null)}
-                className="p-2.5 rounded-2xl apple-liquid-glass text-slate-400 hover:text-white transition cursor-pointer"
+                className="p-2.5 rounded-[14px] apple-liquid-glass text-ink-3 hover:text-ink transition cursor-pointer"
                 title={t.dismissAlert}
               >
                 <X className="w-4 h-4" />
@@ -939,9 +943,9 @@ function AsteroidRadar({ lang = 'en' }) {
         <div className="lg:col-span-6 flex flex-col gap-6">
           
           {/* Earth Centered Radar Visualizer Card */}
-          <div className="w-full rounded-2xl apple-liquid-glass p-5 sm:p-7 shadow-2xl flex flex-col items-center justify-between relative overflow-hidden min-h-[480px]">
+          <div className="w-full rounded-[14px] apple-liquid-glass p-5 sm:p-7 shadow-2xl flex flex-col items-center justify-between relative overflow-hidden min-h-[480px]">
             {/* Dedicated Radar Scope Header Bar - Fully decoupled from blips and callouts */}
-            <div className="w-full px-4 py-3 rounded-2xl bg-[#060b1e]/90 border border-cyan-500/25 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-[11px] font-mono text-slate-300 relative z-20 shadow-md">
+            <div className="w-full px-4 py-3 rounded-[14px] bg-[#060b1e]/90 border border-cyan-500/25 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-[11px] font-mono text-ink-2 relative z-20 shadow-md">
               <div className="flex items-center gap-2">
                 <div className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse shadow-[0_0_8px_#22d3ee]" />
                 <span className="flex items-center gap-1.5 text-cyan-300 font-bold tracking-wider">
@@ -952,7 +956,7 @@ function AsteroidRadar({ lang = 'en' }) {
                   7-DAY NEO RANGE
                 </span>
               </div>
-              <span className="text-slate-400 text-[10px] hidden sm:inline font-mono">
+              <span className="text-ink-3 text-[10px] hidden sm:inline font-mono">
                 {t.radarLegend}
               </span>
             </div>
@@ -1022,27 +1026,25 @@ function AsteroidRadar({ lang = 'en' }) {
                     <div className="relative flex items-center justify-center">
                       {threat.isRedThreat ? (
                         <>
-                          <div className="absolute w-7 h-7 rounded-full bg-rose-500/50 animate-ping" />
-                          <div className="absolute w-5 h-5 rounded-full bg-rose-600/30 animate-pulse" />
-                          <div className={`w-3.5 h-3.5 rounded-full bg-rose-500 border-2 border-white shadow-[0_0_15px_#ef4444] transition-transform ${isSelected ? 'scale-150 ring-4 ring-rose-500/70' : 'group-hover:scale-125'}`} />
+                          <div className="absolute h-6 w-6 rounded-full border border-caution/40" />
+                          <div className={`h-3 w-3 rounded-full border border-void bg-caution transition-transform ${isSelected ? 'scale-150 ring-4 ring-caution/40' : 'group-hover:scale-125'}`} />
                         </>
                       ) : (
                         <>
-                          <div className="absolute w-4 h-4 rounded-full bg-emerald-500/25 animate-pulse" />
-                          <div className={`w-2.5 h-2.5 rounded-full bg-emerald-400 border border-white shadow-[0_0_10px_#10b981] transition-transform ${isSelected ? 'scale-150 ring-4 ring-emerald-500/50' : 'group-hover:scale-125'}`} />
+                          <div className={`h-2.5 w-2.5 rounded-full border border-void bg-atmo/80 transition-transform ${isSelected ? 'scale-150 ring-4 ring-atmo/30' : 'group-hover:scale-125'}`} />
                         </>
                       )}
                     </div>
 
                     {/* Hover Callout Tag with Threat Level */}
-                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 px-3 py-1.5 rounded-xl apple-liquid-glass text-[10px] font-mono text-white whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none shadow-2xl border border-white/20 z-30">
+                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 px-3 py-1.5 rounded-[10px] apple-liquid-glass text-[10px] font-mono text-white whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none shadow-2xl border border-white/20 z-30">
                       <div className="flex items-center gap-1.5">
                         <span className="font-bold text-white">{ast.name}</span>
-                        <span className={`px-1.5 py-0.2 rounded font-black ${threat.isRedThreat ? 'bg-rose-500/30 text-rose-300 border border-rose-500/60' : 'bg-emerald-500/20 text-emerald-300'}`}>
+                        <span className={`px-1.5 py-0.2 rounded font-black ${threat.isRedThreat ? 'bg-rose-500/30 text-critical border border-rose-500/60' : 'bg-emerald-500/20 text-signal'}`}>
                           {threat.level}
                         </span>
                       </div>
-                      <div className="text-[9px] text-slate-300">
+                      <div className="text-[9px] text-ink-2">
                         Dist: {ast.lunarDistance} LD • Diam: ~{ast.avgDiameterMeters}m
                       </div>
                     </div>
@@ -1052,17 +1054,17 @@ function AsteroidRadar({ lang = 'en' }) {
             </div>
 
             {/* Status Pills with proper vertical spacing and z-index to avoid bleeding */}
-            <div className="w-full flex items-center justify-between text-xs font-mono text-slate-300 pt-4 mt-2 border-t border-slate-800/80 flex-wrap gap-2.5 relative z-10">
-              <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-900/90 border border-rose-500/40 text-rose-300 shadow-sm">
-                <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-ping" />
-                <span className="font-bold">
-                  Red Threat Level: {asteroids.filter(a => getAsteroidThreatInfo(a).isRedThreat).length}
+            <div className="w-full flex items-center justify-between text-xs font-mono text-ink-2 pt-4 mt-2 border-t border-line flex-wrap gap-2.5 relative z-10">
+              <div className="flex items-center gap-2 rounded-full border border-caution/35 bg-surface/60 px-3 py-1.5 text-caution">
+                <span className="h-2 w-2 rounded-full bg-caution" />
+                <span className="font-medium">
+                  PHA-designated: {asteroids.filter(a => getAsteroidThreatInfo(a).isRedThreat).length}
                 </span>
               </div>
-              <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-900/90 border border-emerald-500/40 text-emerald-300 shadow-sm">
-                <span className="w-2.5 h-2.5 rounded-full bg-emerald-400" />
+              <div className="flex items-center gap-2 rounded-full border border-line bg-surface/60 px-3 py-1.5 text-ink-2">
+                <span className="h-2 w-2 rounded-full bg-atmo" />
                 <span>
-                  Safe Orbit: {asteroids.filter(a => !getAsteroidThreatInfo(a).isRedThreat).length}
+                  No PHA flag: {asteroids.filter(a => !getAsteroidThreatInfo(a).isRedThreat).length}
                 </span>
               </div>
             </div>
@@ -1076,16 +1078,16 @@ function AsteroidRadar({ lang = 'en' }) {
             const isTargetActive = selectedAsteroid?.id === activeThreatAst.id;
 
             return (
-              <div className="bg-slate-950/95 backdrop-blur-2xl border border-slate-800/80 z-20 relative shadow-2xl rounded-2xl p-5 sm:p-6 space-y-4 hover:border-cyan-500/50 hover:shadow-[0_0_25px_rgba(34,211,238,0.15)] transition-all duration-300">
+              <div className="bg-abyss/95 backdrop-blur-2xl border border-line z-20 relative shadow-2xl rounded-[14px] p-5 sm:p-6 space-y-4 hover:border-cyan-500/50 hover:shadow-[0_0_25px_rgba(34,211,238,0.15)] transition-all duration-300">
                 {/* Header with Title and Target Status - Clean responsive flow */}
-                <div className="flex flex-col sm:flex-row sm:items-start md:items-center justify-between gap-3 border-b border-slate-800/80 pb-3.5">
+                <div className="flex flex-col sm:flex-row sm:items-start md:items-center justify-between gap-3 border-b border-line pb-3.5">
                   <div className="flex items-start sm:items-center gap-3 min-w-0 flex-1">
-                    <div className={`p-2.5 rounded-2xl shrink-0 mt-0.5 sm:mt-0 ${threat.isRedThreat ? 'bg-rose-500/20 text-rose-400 border border-rose-500/40 shadow-[0_0_12px_rgba(244,63,94,0.3)]' : 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/40'}`}>
+                    <div className={`p-2.5 rounded-[14px] shrink-0 mt-0.5 sm:mt-0 ${threat.isRedThreat ? 'bg-rose-500/20 text-critical border border-rose-500/40 shadow-[0_0_12px_rgba(244,63,94,0.3)]' : 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/40'}`}>
                       {threat.isRedThreat ? <AlertOctagon className="w-5 h-5 animate-pulse" /> : <ShieldCheck className="w-5 h-5" />}
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-[10px] font-mono text-slate-400 uppercase tracking-wider block">
+                        <span className="text-[10px] font-mono text-ink-3 uppercase tracking-wider block">
                           {t.threatAssessmentTitle}
                         </span>
                         {isTargetActive && (
@@ -1094,24 +1096,24 @@ function AsteroidRadar({ lang = 'en' }) {
                           </span>
                         )}
                       </div>
-                      <h3 className="font-['Orbitron'] font-bold text-white text-base sm:text-lg truncate">
+                      <h3 className="font-display font-bold text-white text-base sm:text-lg truncate">
                         {activeThreatAst.name}
                       </h3>
-                      <p className="text-[11px] font-mono text-slate-400">
+                      <p className="text-[11px] font-mono text-ink-3">
                         JPL SPK-ID: {activeThreatAst.id} • Approach: {activeThreatAst.closeApproachDate}
                       </p>
                     </div>
                   </div>
 
                   <div className="flex items-center gap-2 shrink-0 self-start sm:self-auto">
-                    <span className={`px-3 py-1 rounded-full text-xs font-mono font-black uppercase tracking-wider ${threat.isRedThreat ? 'bg-rose-500 text-white shadow-lg shadow-rose-900/60 animate-pulse' : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'}`}>
+                    <span className={`px-3 py-1 rounded-full text-xs font-mono font-black uppercase tracking-wider ${threat.isRedThreat ? 'bg-rose-500 text-white shadow-lg shadow-rose-900/60 animate-pulse' : 'bg-emerald-500/20 text-signal border border-emerald-500/40'}`}>
                       {threat.level}
                     </span>
                     {selectedAsteroid && (
                       <button
                         type="button"
                         onClick={() => setSelectedAsteroid(null)}
-                        className="p-1.5 rounded-xl bg-slate-900 text-slate-400 hover:text-white border border-slate-800 transition cursor-pointer"
+                        className="p-1.5 rounded-[10px] bg-surface/60 text-ink-3 hover:text-ink border border-line transition cursor-pointer"
                         title="Deselect Target"
                       >
                         <X className="w-4 h-4" />
@@ -1122,40 +1124,40 @@ function AsteroidRadar({ lang = 'en' }) {
 
                 {/* Threat Criteria Breakdown Grid */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 font-mono text-xs">
-                  <div className={`p-3 rounded-2xl border ${threat.isDiameterExceeded ? 'bg-rose-500/10 border-rose-500/50 text-rose-200' : 'bg-slate-900/60 border-slate-800 text-slate-300'}`}>
+                  <div className={`p-3 rounded-[14px] border ${threat.isDiameterExceeded ? 'bg-rose-500/10 border-rose-500/50 text-critical' : 'bg-surface/50 border-line text-ink-2'}`}>
                     <div className="flex items-center justify-between mb-1">
-                      <span className="text-[10px] text-slate-400 uppercase">Diameter Criterion (≥ 140m)</span>
-                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${threat.isDiameterExceeded ? 'bg-rose-500/20 text-rose-400 border border-rose-500/40' : 'bg-emerald-500/10 text-emerald-400'}`}>
+                      <span className="text-[10px] text-ink-3 uppercase">Diameter Criterion (≥ 140m)</span>
+                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${threat.isDiameterExceeded ? 'bg-rose-500/20 text-critical border border-rose-500/40' : 'bg-emerald-500/10 text-signal'}`}>
                         {threat.isDiameterExceeded ? 'EXCEEDED' : 'PASS'}
                       </span>
                     </div>
                     <p className="font-bold text-sm">~{activeThreatAst.avgDiameterMeters} meters</p>
-                    <p className="text-[10px] text-slate-400 mt-0.5">Threshold: 140m (Catastrophic regional impact limit)</p>
+                    <p className="text-[10px] text-ink-3 mt-0.5">Threshold: 140m (Catastrophic regional impact limit)</p>
                   </div>
 
-                  <div className={`p-3 rounded-2xl border ${threat.isCloseApproach ? 'bg-rose-500/10 border-rose-500/50 text-rose-200' : 'bg-slate-900/60 border-slate-800 text-slate-300'}`}>
+                  <div className={`p-3 rounded-[14px] border ${threat.isCloseApproach ? 'bg-rose-500/10 border-rose-500/50 text-critical' : 'bg-surface/50 border-line text-ink-2'}`}>
                     <div className="flex items-center justify-between mb-1">
-                      <span className="text-[10px] text-slate-400 uppercase">Close Approach (≤ 10 LD)</span>
-                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${threat.isCloseApproach ? 'bg-rose-500/20 text-rose-400 border border-rose-500/40' : 'bg-emerald-500/10 text-emerald-400'}`}>
+                      <span className="text-[10px] text-ink-3 uppercase">Close Approach (≤ 10 LD)</span>
+                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${threat.isCloseApproach ? 'bg-rose-500/20 text-critical border border-rose-500/40' : 'bg-emerald-500/10 text-signal'}`}>
                         {threat.isCloseApproach ? 'CLOSE' : 'PASS'}
                       </span>
                     </div>
                     <p className="font-bold text-sm">{activeThreatAst.lunarDistance} Lunar Distances</p>
-                    <p className="text-[10px] text-slate-400 mt-0.5">Miss Distance: {activeThreatAst.missDistanceKm} km</p>
+                    <p className="text-[10px] text-ink-3 mt-0.5">Miss Distance: {activeThreatAst.missDistanceKm} km</p>
                   </div>
                 </div>
 
                 {/* Physical Telemetry Row & Action */}
-                <div className="flex items-center justify-between pt-2 border-t border-slate-800/80 flex-wrap gap-2 text-xs font-mono">
-                  <div className="flex items-center gap-3 text-slate-300 flex-wrap">
-                    <span>Velocity: <span className="text-amber-400 font-bold">{activeThreatAst.velocityKmh} km/h</span></span>
+                <div className="flex items-center justify-between pt-2 border-t border-line flex-wrap gap-2 text-xs font-mono">
+                  <div className="flex items-center gap-3 text-ink-2 flex-wrap">
+                    <span>Velocity: <span className="text-caution font-bold">{activeThreatAst.velocityKmh} km/h</span></span>
                     <span className="hidden sm:inline">•</span>
                     <span>Scale: <span className="text-indigo-300">{getSizeComparison(activeThreatAst.avgDiameterMeters)}</span></span>
                   </div>
                   <button
                     type="button"
                     onClick={() => setSelectedAsteroid(activeThreatAst)}
-                    className="px-3.5 py-1.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-mono font-bold text-xs transition shadow-md flex items-center gap-1.5 cursor-pointer ml-auto"
+                    className="px-3.5 py-1.5 rounded-[10px] bg-cyan-600 hover:bg-cyan-500 text-white font-mono font-bold text-xs transition shadow-md flex items-center gap-1.5 cursor-pointer ml-auto"
                   >
                     <Target className="w-3.5 h-3.5" />
                     <span>View Dossier</span>
@@ -1172,13 +1174,13 @@ function AsteroidRadar({ lang = 'en' }) {
           {/* Search & Filter Bar */}
           <div className="p-4 sm:p-5 rounded-3xl apple-liquid-glass space-y-3">
             <div className="relative">
-              <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+              <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-3" />
               <input
                 type="text"
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
                 placeholder={t.searchPlaceholder}
-                className="w-full pl-10 pr-4 py-2.5 rounded-2xl apple-liquid-glass text-xs font-mono text-white placeholder-slate-400 focus:outline-none focus:border-cyan-500/60"
+                className="w-full pl-10 pr-4 py-2.5 rounded-[14px] apple-liquid-glass text-xs font-mono text-white placeholder-slate-400 focus:outline-none focus:border-cyan-500/60"
               />
             </div>
 
@@ -1195,14 +1197,14 @@ function AsteroidRadar({ lang = 'en' }) {
                   key={f.id}
                   type="button"
                   onClick={() => setFilter(f.id)}
-                  className={`px-3.5 py-1.5 rounded-2xl whitespace-nowrap transition cursor-pointer ${
+                  className={`px-3.5 py-1.5 rounded-[14px] whitespace-nowrap transition cursor-pointer ${
                     filter === f.id
                       ? f.id === 'RED_THREAT'
                         ? 'bg-gradient-to-r from-rose-600 to-amber-600 text-white font-black shadow-lg shadow-rose-950/60 border border-rose-400'
                         : 'bg-gradient-to-r from-cyan-600 to-indigo-600 text-white font-bold shadow-md shadow-cyan-950/50'
                       : f.id === 'RED_THREAT'
-                        ? 'apple-liquid-glass text-rose-300 hover:text-white border-rose-500/40'
-                        : 'apple-liquid-glass text-slate-300 hover:text-white'
+                        ? 'apple-liquid-glass text-critical hover:text-ink border-rose-500/40'
+                        : 'apple-liquid-glass text-ink-2 hover:text-ink'
                   }`}
                 >
                   {f.label}
@@ -1222,19 +1224,19 @@ function AsteroidRadar({ lang = 'en' }) {
                     className="p-4 rounded-3xl apple-liquid-glass animate-pulse space-y-3"
                   >
                     <div className="flex justify-between items-center">
-                      <div className="h-4 w-40 bg-white/10 rounded-lg" />
+                      <div className="h-4 w-40 bg-white/10 rounded-[8px]" />
                       <div className="h-5 w-24 bg-white/10 rounded-full" />
                     </div>
                     <div className="grid grid-cols-3 gap-2 pt-1">
-                      <div className="h-8 bg-white/5 rounded-xl" />
-                      <div className="h-8 bg-white/5 rounded-xl" />
-                      <div className="h-8 bg-white/5 rounded-xl" />
+                      <div className="h-8 bg-white/5 rounded-[10px]" />
+                      <div className="h-8 bg-white/5 rounded-[10px]" />
+                      <div className="h-8 bg-white/5 rounded-[10px]" />
                     </div>
                   </div>
                 ))}
               </div>
             ) : filteredAsteroids.length === 0 ? (
-              <div className="p-8 text-center font-mono text-xs text-slate-400 apple-liquid-glass rounded-3xl">
+              <div className="p-8 text-center font-mono text-xs text-ink-3 apple-liquid-glass rounded-3xl">
                 No matching asteroids found in current 7-day orbital window.
               </div>
             ) : (
@@ -1257,17 +1259,14 @@ function AsteroidRadar({ lang = 'en' }) {
                       <div className="flex items-start gap-2.5">
                         <div className="mt-1">
                           {threat.isRedThreat ? (
-                            <span className="flex h-3 w-3 relative">
-                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-80"></span>
-                              <span className="relative inline-flex rounded-full h-3 w-3 bg-rose-500 shadow-[0_0_8px_#ef4444]"></span>
-                            </span>
+                            <span className="h-2.5 w-2.5 rounded-full bg-caution" aria-hidden="true" />
                           ) : (
-                            <div className="w-2.5 h-2.5 rounded-full bg-emerald-400 mt-0.5 shadow-[0_0_6px_#10b981]" />
+                            <div className="mt-0.5 h-2.5 w-2.5 rounded-full bg-atmo/80" aria-hidden="true" />
                           )}
                         </div>
                         <div>
                           <div className="flex items-center gap-2 flex-wrap">
-                            <h4 className="font-['Orbitron'] font-bold text-white text-sm sm:text-base">
+                            <h4 className="font-display font-bold text-white text-sm sm:text-base">
                               {ast.name}
                             </h4>
                             {ast.isHazardous && (
@@ -1276,7 +1275,7 @@ function AsteroidRadar({ lang = 'en' }) {
                               </span>
                             )}
                           </div>
-                          <span className="text-[10px] font-mono text-slate-400 block mt-0.5">
+                          <span className="text-[10px] font-mono text-ink-3 block mt-0.5">
                             Approach: {ast.closeApproachDate} • Target ID: {ast.id}
                           </span>
                         </div>
@@ -1286,19 +1285,19 @@ function AsteroidRadar({ lang = 'en' }) {
                       <div className="flex flex-col items-end gap-1">
                         {threat.isRedThreat ? (
                           <div className="flex flex-col items-end gap-1">
-                            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-mono font-black uppercase tracking-wider bg-rose-500/25 text-rose-300 border-2 border-rose-500/80 shadow-[0_0_15px_rgba(244,63,94,0.4)] animate-pulse">
-                              <AlertOctagon className="w-3.5 h-3.5 text-rose-400" />
+                            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-mono font-black uppercase tracking-wider bg-rose-500/25 text-critical border-2 border-rose-500/80 shadow-[0_0_15px_rgba(244,63,94,0.4)] animate-pulse">
+                              <AlertOctagon className="w-3.5 h-3.5 text-critical" />
                               <span>THREAT: {threat.label[lang] || threat.label.en}</span>
                             </span>
                             {threat.reasons.length > 0 && (
-                              <span className="text-[9px] font-mono font-semibold text-rose-300 bg-rose-950/80 px-2 py-0.5 rounded-md border border-rose-500/30">
+                              <span className="text-[9px] font-mono font-semibold text-critical bg-rose-950/80 px-2 py-0.5 rounded-md border border-rose-500/30">
                                 {threat.reasons[0]}
                               </span>
                             )}
                           </div>
                         ) : (
-                          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-mono font-bold uppercase tracking-wider bg-emerald-500/15 text-emerald-300 border border-emerald-500/40">
-                            <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+                          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-mono font-bold uppercase tracking-wider bg-emerald-500/15 text-signal border border-emerald-500/40">
+                            <ShieldCheck className="w-3.5 h-3.5 text-signal" />
                             <span>THREAT: {threat.label[lang] || threat.label.en}</span>
                           </span>
                         )}
@@ -1307,18 +1306,18 @@ function AsteroidRadar({ lang = 'en' }) {
 
                   {/* Key Telemetry Badges */}
                   <div className="grid grid-cols-3 gap-2 font-mono text-[11px]">
-                    <div className="p-2.5 rounded-2xl apple-liquid-glass">
-                      <span className="text-slate-400 block text-[9px] uppercase">Miss Distance</span>
+                    <div className="p-2.5 rounded-[14px] apple-liquid-glass">
+                      <span className="text-ink-3 block text-[9px] uppercase">Miss Distance</span>
                       <span className="text-cyan-300 font-bold">{ast.lunarDistance} LD</span>
                     </div>
 
-                    <div className="p-2.5 rounded-2xl apple-liquid-glass">
-                      <span className="text-slate-400 block text-[9px] uppercase">Velocity</span>
+                    <div className="p-2.5 rounded-[14px] apple-liquid-glass">
+                      <span className="text-ink-3 block text-[9px] uppercase">Velocity</span>
                       <span className="text-amber-300 font-bold">{ast.velocityKms} km/s</span>
                     </div>
 
-                    <div className="p-2.5 rounded-2xl apple-liquid-glass">
-                      <span className="text-slate-400 block text-[9px] uppercase">Est. Diameter</span>
+                    <div className="p-2.5 rounded-[14px] apple-liquid-glass">
+                      <span className="text-ink-3 block text-[9px] uppercase">Est. Diameter</span>
                       <span className="text-indigo-300 font-bold">{ast.avgDiameterMeters} m</span>
                     </div>
                   </div>
@@ -1338,18 +1337,18 @@ function AsteroidRadar({ lang = 'en' }) {
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="w-full max-w-2xl rounded-3xl apple-liquid-glass p-6 sm:p-8 shadow-2xl space-y-6 text-slate-200 font-sans max-h-[90vh] overflow-y-auto"
+              className="w-full max-w-2xl rounded-3xl apple-liquid-glass p-6 sm:p-8 shadow-2xl space-y-6 text-ink-2 font-sans max-h-[90vh] overflow-y-auto"
             >
               <div className="flex items-center justify-between border-b border-white/10 pb-4">
                 <div className="flex items-center gap-3">
-                  <div className={`p-3 rounded-2xl ${selectedAsteroid.isHazardous ? 'bg-rose-500/20 text-rose-400 border border-rose-500/40' : 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/40'}`}>
+                  <div className={`p-3 rounded-[14px] ${selectedAsteroid.isHazardous ? 'bg-rose-500/20 text-critical border border-rose-500/40' : 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/40'}`}>
                     <Target className="w-6 h-6" />
                   </div>
                   <div>
-                    <h3 className="font-['Orbitron'] font-bold text-white text-lg sm:text-xl">
+                    <h3 className="font-display font-bold text-white text-lg sm:text-xl">
                       {selectedAsteroid.name}
                     </h3>
-                    <p className="text-xs font-mono text-slate-400">
+                    <p className="text-xs font-mono text-ink-3">
                       JPL SPK-ID: {selectedAsteroid.id} • Approach: {selectedAsteroid.closeApproachDate}
                     </p>
                   </div>
@@ -1358,7 +1357,7 @@ function AsteroidRadar({ lang = 'en' }) {
                 <button
                   type="button"
                   onClick={() => setSelectedAsteroid(null)}
-                  className="p-2 rounded-xl apple-liquid-glass text-slate-400 hover:text-white transition cursor-pointer"
+                  className="p-2 rounded-[10px] apple-liquid-glass text-ink-3 hover:text-ink transition cursor-pointer"
                 >
                   <X className="w-5 h-5" />
                 </button>
@@ -1368,49 +1367,49 @@ function AsteroidRadar({ lang = 'en' }) {
               {(() => {
                 const threat = getAsteroidThreatInfo(selectedAsteroid);
                 return (
-                  <div className={`p-4 sm:p-5 rounded-3xl bg-slate-950/95 backdrop-blur-xl border border-slate-800 relative z-10 shadow-2xl space-y-3 ${threat.isRedThreat ? 'ring-1 ring-rose-500/50 shadow-[0_0_25px_rgba(244,63,94,0.25)]' : 'ring-1 ring-emerald-500/30'}`}>
+                  <div className={`p-4 sm:p-5 rounded-3xl bg-abyss/95 backdrop-blur-xl border border-line relative z-10 shadow-2xl space-y-3 ${threat.isRedThreat ? 'ring-1 ring-rose-500/50 shadow-[0_0_25px_rgba(244,63,94,0.25)]' : 'ring-1 ring-emerald-500/30'}`}>
                     <div className="flex items-center justify-between flex-wrap gap-2">
                       <div className="flex items-center gap-2.5">
-                        <div className={`p-2 rounded-xl ${threat.isRedThreat ? 'bg-rose-500/20 text-rose-400' : 'bg-emerald-500/20 text-emerald-400'}`}>
+                        <div className={`p-2 rounded-[10px] ${threat.isRedThreat ? 'bg-rose-500/20 text-critical' : 'bg-emerald-500/20 text-signal'}`}>
                           {threat.isRedThreat ? <AlertOctagon className="w-5 h-5 animate-pulse" /> : <ShieldCheck className="w-5 h-5" />}
                         </div>
                         <div>
-                          <span className="text-[10px] font-mono text-slate-400 uppercase tracking-wider block">
+                          <span className="text-[10px] font-mono text-ink-3 uppercase tracking-wider block">
                             {t.threatAssessmentTitle}
                           </span>
-                          <h4 className={`font-['Orbitron'] font-bold text-sm sm:text-base ${threat.isRedThreat ? 'text-rose-300' : 'text-emerald-300'}`}>
+                          <h4 className={`font-display font-bold text-sm sm:text-base ${threat.isRedThreat ? 'text-critical' : 'text-signal'}`}>
                             {threat.label[lang] || threat.label.en}
                           </h4>
                         </div>
                       </div>
 
-                      <span className={`px-3 py-1 rounded-full text-xs font-mono font-black uppercase tracking-wider ${threat.isRedThreat ? 'bg-rose-500 text-white shadow-lg shadow-rose-900/60 animate-pulse' : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'}`}>
+                      <span className={`px-3 py-1 rounded-full text-xs font-mono font-black uppercase tracking-wider ${threat.isRedThreat ? 'bg-rose-500 text-white shadow-lg shadow-rose-900/60 animate-pulse' : 'bg-emerald-500/20 text-signal border border-emerald-500/40'}`}>
                         {threat.level}
                       </span>
                     </div>
 
                     {/* Threat Evaluation Breakdown */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 font-mono text-xs pt-1">
-                      <div className={`p-3 rounded-2xl border ${threat.isDiameterExceeded ? 'bg-rose-500/10 border-rose-500/50 text-rose-200' : 'bg-slate-900/40 border-slate-800 text-slate-300'}`}>
+                      <div className={`p-3 rounded-[14px] border ${threat.isDiameterExceeded ? 'bg-rose-500/10 border-rose-500/50 text-critical' : 'bg-surface/60/40 border-line text-ink-2'}`}>
                         <div className="flex items-center justify-between mb-1">
-                          <span className="text-[10px] text-slate-400 uppercase">Diameter Criterion (≥ 140m)</span>
-                          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${threat.isDiameterExceeded ? 'bg-rose-500/20 text-rose-400 border border-rose-500/40' : 'bg-emerald-500/10 text-emerald-400'}`}>
+                          <span className="text-[10px] text-ink-3 uppercase">Diameter Criterion (≥ 140m)</span>
+                          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${threat.isDiameterExceeded ? 'bg-rose-500/20 text-critical border border-rose-500/40' : 'bg-emerald-500/10 text-signal'}`}>
                             {threat.isDiameterExceeded ? 'EXCEEDED' : 'PASS'}
                           </span>
                         </div>
                         <p className="font-bold text-sm">~{selectedAsteroid.avgDiameterMeters} meters</p>
-                        <p className="text-[10px] text-slate-400 mt-0.5">Threshold: 140m (Catastrophic regional impact limit)</p>
+                        <p className="text-[10px] text-ink-3 mt-0.5">Threshold: 140m (Catastrophic regional impact limit)</p>
                       </div>
 
-                      <div className={`p-3 rounded-2xl border ${threat.isCloseApproach ? 'bg-rose-500/10 border-rose-500/50 text-rose-200' : 'bg-slate-900/40 border-slate-800 text-slate-300'}`}>
+                      <div className={`p-3 rounded-[14px] border ${threat.isCloseApproach ? 'bg-rose-500/10 border-rose-500/50 text-critical' : 'bg-surface/60/40 border-line text-ink-2'}`}>
                         <div className="flex items-center justify-between mb-1">
-                          <span className="text-[10px] text-slate-400 uppercase">Close Approach Criterion (≤ 10 LD)</span>
-                          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${threat.isCloseApproach ? 'bg-rose-500/20 text-rose-400 border border-rose-500/40' : 'bg-emerald-500/10 text-emerald-400'}`}>
+                          <span className="text-[10px] text-ink-3 uppercase">Close Approach Criterion (≤ 10 LD)</span>
+                          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${threat.isCloseApproach ? 'bg-rose-500/20 text-critical border border-rose-500/40' : 'bg-emerald-500/10 text-signal'}`}>
                             {threat.isCloseApproach ? 'CLOSE' : 'PASS'}
                           </span>
                         </div>
                         <p className="font-bold text-sm">{selectedAsteroid.lunarDistance} Lunar Distances</p>
-                        <p className="text-[10px] text-slate-400 mt-0.5">Distance: {selectedAsteroid.missDistanceKm} km</p>
+                        <p className="text-[10px] text-ink-3 mt-0.5">Distance: {selectedAsteroid.missDistanceKm} km</p>
                       </div>
                     </div>
                   </div>
@@ -1422,28 +1421,28 @@ function AsteroidRadar({ lang = 'en' }) {
 
               {/* Detailed Physical Parameters */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 font-mono text-xs">
-                <div className="p-3.5 rounded-2xl apple-liquid-glass space-y-1">
-                  <span className="text-slate-400 block text-[10px] uppercase">Miss Distance Breakdown</span>
+                <div className="p-3.5 rounded-[14px] apple-liquid-glass space-y-1">
+                  <span className="text-ink-3 block text-[10px] uppercase">Miss Distance Breakdown</span>
                   <span className="text-white font-bold text-sm">{selectedAsteroid.missDistanceKm} km</span>
                   <span className="text-cyan-400 block text-[11px]">({selectedAsteroid.lunarDistance}x Lunar Distances)</span>
                 </div>
 
-                <div className="p-3.5 rounded-2xl apple-liquid-glass space-y-1">
-                  <span className="text-slate-400 block text-[10px] uppercase">Orbital Velocity</span>
+                <div className="p-3.5 rounded-[14px] apple-liquid-glass space-y-1">
+                  <span className="text-ink-3 block text-[10px] uppercase">Orbital Velocity</span>
                   <span className="text-white font-bold text-sm">{selectedAsteroid.velocityKmh} km/h</span>
-                  <span className="text-amber-400 block text-[11px]">({selectedAsteroid.velocityKms} km/s • ~Mach {Math.round(parseFloat(selectedAsteroid.velocityKms) * 2916)})</span>
+                  <span className="text-caution block text-[11px]">({selectedAsteroid.velocityKms} km/s • ~Mach {Math.round(parseFloat(selectedAsteroid.velocityKms) * 2916)})</span>
                 </div>
 
-                <div className="p-3.5 rounded-2xl apple-liquid-glass space-y-1">
-                  <span className="text-slate-400 block text-[10px] uppercase">Size Benchmark</span>
+                <div className="p-3.5 rounded-[14px] apple-liquid-glass space-y-1">
+                  <span className="text-ink-3 block text-[10px] uppercase">Size Benchmark</span>
                   <span className="text-white font-bold text-sm">~{selectedAsteroid.avgDiameterMeters} meters</span>
                   <span className="text-indigo-400 block text-[11px]">{getSizeComparison(selectedAsteroid.avgDiameterMeters)}</span>
                 </div>
 
-                <div className="p-3.5 rounded-2xl apple-liquid-glass space-y-1">
-                  <span className="text-slate-400 block text-[10px] uppercase">Primary Orbiting Body</span>
+                <div className="p-3.5 rounded-[14px] apple-liquid-glass space-y-1">
+                  <span className="text-ink-3 block text-[10px] uppercase">Primary Orbiting Body</span>
                   <span className="text-white font-bold text-sm">{selectedAsteroid.orbitingBody}</span>
-                  <span className="text-slate-400 block text-[11px]">Heliocentric / Earth Intersection</span>
+                  <span className="text-ink-3 block text-[11px]">Heliocentric / Earth Intersection</span>
                 </div>
               </div>
 
@@ -1452,7 +1451,7 @@ function AsteroidRadar({ lang = 'en' }) {
                   href={selectedAsteroid.jplUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="px-4 py-2.5 rounded-xl apple-liquid-glass text-cyan-300 font-mono text-xs flex items-center gap-1.5 transition hover:border-cyan-400"
+                  className="px-4 py-2.5 rounded-[10px] apple-liquid-glass text-cyan-300 font-mono text-xs flex items-center gap-1.5 transition hover:border-cyan-400"
                 >
                   <span>{t.jplDatabase}</span>
                   <ExternalLink className="w-3.5 h-3.5" />
@@ -1461,7 +1460,7 @@ function AsteroidRadar({ lang = 'en' }) {
                 <button
                   type="button"
                   onClick={() => setSelectedAsteroid(null)}
-                  className="px-5 py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-slate-950 font-mono font-bold text-xs transition cursor-pointer"
+                  className="px-5 py-2.5 rounded-[10px] bg-cyan-600 hover:bg-cyan-500 text-slate-950 font-mono font-bold text-xs transition cursor-pointer"
                 >
                   Close Dossier
                 </button>

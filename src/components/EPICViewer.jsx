@@ -189,10 +189,10 @@ function EPICViewer({ lang = 'en' }) {
               <Satellite className="w-3.5 h-3.5 text-cyan-400 animate-pulse" />
               <span>DSCOVR EPIC • LAGRANGE POINT L1</span>
             </div>
-            <h2 className="text-xl sm:text-2xl font-black font-['Orbitron'] text-white tracking-wide">
+            <h2 className="text-xl sm:text-2xl font-black font-display text-white tracking-wide">
               {t.title}
             </h2>
-            <p className="text-xs sm:text-sm text-slate-300 mt-1 max-w-2xl font-sans">
+            <p className="text-xs sm:text-sm text-ink-2 mt-1 max-w-2xl font-sans">
               {t.subtitle}
             </p>
           </div>
@@ -202,7 +202,7 @@ function EPICViewer({ lang = 'en' }) {
               type="button"
               onClick={fetchEpicData}
               disabled={loading}
-              className="px-3.5 py-2 rounded-2xl liquid-glass text-cyan-300 text-xs font-mono font-bold flex items-center gap-1.5 transition cursor-pointer hover:text-white"
+              className="px-3.5 py-2 rounded-[14px] liquid-glass text-cyan-300 text-xs font-mono font-bold flex items-center gap-1.5 transition cursor-pointer hover:text-ink"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-cyan-400' : ''}`} />
               <span className="hidden sm:inline">{t.refresh}</span>
@@ -211,7 +211,7 @@ function EPICViewer({ lang = 'en' }) {
             <button
               type="button"
               onClick={() => setIsFullscreen(!isFullscreen)}
-              className="p-2 rounded-2xl liquid-glass text-slate-300 hover:text-white transition cursor-pointer"
+              className="p-2 rounded-[14px] liquid-glass text-ink-2 hover:text-ink transition cursor-pointer"
               title={t.fullscreen}
             >
               {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
@@ -227,7 +227,7 @@ function EPICViewer({ lang = 'en' }) {
         <LiquidGlassCard className="lg:col-span-7 p-4 sm:p-6 flex flex-col items-center justify-between relative overflow-hidden min-h-[460px]">
           
           {/* Top Info Bar */}
-          <div className="w-full flex items-center justify-between text-xs font-mono text-slate-400 z-10 mb-3">
+          <div className="w-full flex items-center justify-between text-xs font-mono text-ink-3 z-10 mb-3">
             <span className="flex items-center gap-1.5 text-cyan-300 font-bold">
               <Globe className="w-4 h-4 text-cyan-400" />
               SUNLIT FULL-DISC EARTH
@@ -240,7 +240,7 @@ function EPICViewer({ lang = 'en' }) {
           {/* Earth Image Frame Container */}
           <div className="relative w-full aspect-square max-w-[380px] sm:max-w-[420px] rounded-3xl apple-liquid-glass shadow-[0_0_60px_rgba(6,182,212,0.2)] flex items-center justify-center overflow-hidden my-2">
             {loading ? (
-              <div className="p-8 text-center font-mono text-xs text-slate-400 space-y-3">
+              <div className="p-8 text-center font-mono text-xs text-ink-3 space-y-3">
                 <RefreshCw className="w-8 h-8 animate-spin mx-auto text-cyan-400" />
                 <p>Downloading DSCOVR EPIC Full-Disc Telemetry...</p>
               </div>
@@ -273,7 +273,7 @@ function EPICViewer({ lang = 'en' }) {
                 max={Math.max(0, frames.length - 1)}
                 value={currentIndex}
                 onChange={e => setCurrentIndex(parseInt(e.target.value, 10))}
-                className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-cyan-400"
+                className="w-full h-1.5 bg-surface-2 rounded-[8px] appearance-none cursor-pointer accent-cyan-400"
               />
             </div>
 
@@ -283,7 +283,7 @@ function EPICViewer({ lang = 'en' }) {
                 <button
                   type="button"
                   onClick={() => setCurrentIndex(prev => (prev - 1 + frames.length) % frames.length)}
-                  className="p-2 rounded-xl liquid-glass text-slate-300 hover:text-white cursor-pointer"
+                  className="p-2 rounded-[10px] liquid-glass text-ink-2 hover:text-ink cursor-pointer"
                   title={t.prev}
                 >
                   <SkipBack className="w-4 h-4" />
@@ -292,7 +292,7 @@ function EPICViewer({ lang = 'en' }) {
                 <button
                   type="button"
                   onClick={() => setIsPlaying(!isPlaying)}
-                  className="px-4 py-2 rounded-xl bg-gradient-to-r from-cyan-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 text-white font-bold flex items-center gap-1.5 shadow-md shadow-cyan-950/50 cursor-pointer"
+                  className="px-4 py-2 rounded-[10px] bg-gradient-to-r from-cyan-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 text-white font-bold flex items-center gap-1.5 shadow-md shadow-cyan-950/50 cursor-pointer"
                 >
                   {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
                   <span>{isPlaying ? t.pause : t.play}</span>
@@ -301,7 +301,7 @@ function EPICViewer({ lang = 'en' }) {
                 <button
                   type="button"
                   onClick={() => setCurrentIndex(prev => (prev + 1) % frames.length)}
-                  className="p-2 rounded-xl liquid-glass text-slate-300 hover:text-white cursor-pointer"
+                  className="p-2 rounded-[10px] liquid-glass text-ink-2 hover:text-ink cursor-pointer"
                   title={t.next}
                 >
                   <SkipForward className="w-4 h-4" />
@@ -309,9 +309,9 @@ function EPICViewer({ lang = 'en' }) {
               </div>
 
               {/* Speed Selector */}
-              <div className="flex items-center gap-1.5 liquid-glass px-3 py-1.5 rounded-xl border border-white/10">
-                <Sliders className="w-3.5 h-3.5 text-slate-400" />
-                <span className="text-[10px] text-slate-400">{t.speed}:</span>
+              <div className="flex items-center gap-1.5 liquid-glass px-3 py-1.5 rounded-[10px] border border-white/10">
+                <Sliders className="w-3.5 h-3.5 text-ink-3" />
+                <span className="text-[10px] text-ink-3">{t.speed}:</span>
                 {[
                   { label: '0.5s', val: 500 },
                   { label: '1.5s', val: 1500 },
@@ -322,7 +322,7 @@ function EPICViewer({ lang = 'en' }) {
                     type="button"
                     onClick={() => setPlaySpeed(s.val)}
                     className={`px-2 py-0.5 rounded text-[10px] cursor-pointer ${
-                      playSpeed === s.val ? 'bg-cyan-500/20 text-cyan-300 font-bold border border-cyan-500/40' : 'text-slate-400 hover:text-slate-200'
+                      playSpeed === s.val ? 'bg-cyan-500/20 text-cyan-300 font-bold border border-cyan-500/40' : 'text-ink-3 hover:text-ink-2'
                     }`}
                   >
                     {s.label}
@@ -343,7 +343,7 @@ function EPICViewer({ lang = 'en' }) {
               <span>{t.captureTime}</span>
             </div>
 
-            <div className="p-3.5 rounded-2xl liquid-glass space-y-1">
+            <div className="p-3.5 rounded-[14px] liquid-glass space-y-1">
               <span className="text-xl font-bold font-mono text-white tracking-wide">
                 {currentFrame.date || 'Synchronizing...'}
               </span>
@@ -354,8 +354,8 @@ function EPICViewer({ lang = 'en' }) {
 
             {/* Coordinates Grid */}
             <div className="grid grid-cols-2 gap-3 font-mono text-xs">
-              <div className="p-3.5 rounded-2xl liquid-glass liquid-glass-edge">
-                <span className="text-[10px] text-slate-400 block mb-1">{t.centroid}</span>
+              <div className="p-3.5 rounded-[14px] liquid-glass liquid-glass-edge">
+                <span className="text-[10px] text-ink-3 block mb-1">{t.centroid}</span>
                 <span className="text-cyan-300 font-bold text-sm">
                   {currentFrame.centroid_coordinates?.lat ? `${currentFrame.centroid_coordinates.lat.toFixed(2)}° N` : '0.00°'}
                 </span>
@@ -364,12 +364,12 @@ function EPICViewer({ lang = 'en' }) {
                 </span>
               </div>
 
-              <div className="p-3.5 rounded-2xl liquid-glass liquid-glass-edge">
-                <span className="text-[10px] text-slate-400 block mb-1">{t.satelliteDist}</span>
+              <div className="p-3.5 rounded-[14px] liquid-glass liquid-glass-edge">
+                <span className="text-[10px] text-ink-3 block mb-1">{t.satelliteDist}</span>
                 <span className="text-amber-300 font-bold text-xs block">
                   {currentFrame.lunar_distance || '1,500,000 km'}
                 </span>
-                <span className="text-[10px] text-slate-500 mt-1 block">
+                <span className="text-[10px] text-ink-4 mt-1 block">
                   {t.lagrangeL1}
                 </span>
               </div>
@@ -378,29 +378,29 @@ function EPICViewer({ lang = 'en' }) {
 
           {/* Sun-Earth Position Vector Card */}
           <LiquidGlassCard className="p-5 space-y-3">
-            <div className="flex items-center gap-2 text-xs font-mono font-bold text-amber-400">
-              <Sun className="w-4 h-4 text-amber-400" />
+            <div className="flex items-center gap-2 text-xs font-mono font-bold text-caution">
+              <Sun className="w-4 h-4 text-caution" />
               <span>{t.sunPos}</span>
             </div>
 
             <div className="grid grid-cols-3 gap-2 font-mono text-xs">
-              <div className="p-2.5 rounded-xl liquid-glass">
-                <span className="text-[9px] text-slate-400 block">X Vector</span>
-                <span className="text-slate-200 font-bold text-[11px]">
+              <div className="p-2.5 rounded-[10px] liquid-glass">
+                <span className="text-[9px] text-ink-3 block">X Vector</span>
+                <span className="text-ink-2 font-bold text-[11px]">
                   {currentFrame.sun_j2000_position?.x ? `${Math.round(currentFrame.sun_j2000_position.x / 1000).toLocaleString()} km` : 'N/A'}
                 </span>
               </div>
 
-              <div className="p-2.5 rounded-xl liquid-glass">
-                <span className="text-[9px] text-slate-400 block">Y Vector</span>
-                <span className="text-slate-200 font-bold text-[11px]">
+              <div className="p-2.5 rounded-[10px] liquid-glass">
+                <span className="text-[9px] text-ink-3 block">Y Vector</span>
+                <span className="text-ink-2 font-bold text-[11px]">
                   {currentFrame.sun_j2000_position?.y ? `${Math.round(currentFrame.sun_j2000_position.y / 1000).toLocaleString()} km` : 'N/A'}
                 </span>
               </div>
 
-              <div className="p-2.5 rounded-xl liquid-glass">
-                <span className="text-[9px] text-slate-400 block">Z Vector</span>
-                <span className="text-slate-200 font-bold text-[11px]">
+              <div className="p-2.5 rounded-[10px] liquid-glass">
+                <span className="text-[9px] text-ink-3 block">Z Vector</span>
+                <span className="text-ink-2 font-bold text-[11px]">
                   {currentFrame.sun_j2000_position?.z ? `${Math.round(currentFrame.sun_j2000_position.z / 1000).toLocaleString()} km` : 'N/A'}
                 </span>
               </div>
@@ -408,12 +408,12 @@ function EPICViewer({ lang = 'en' }) {
           </LiquidGlassCard>
 
           {/* Scientific Overview Box */}
-          <div className="p-4 rounded-3xl liquid-glass text-xs text-slate-300 space-y-2">
+          <div className="p-4 rounded-3xl liquid-glass text-xs text-ink-2 space-y-2">
             <span className="font-bold font-mono text-cyan-300 flex items-center gap-1.5">
               <Info className="w-3.5 h-3.5" />
               {t.captionTitle}
             </span>
-            <p className="leading-relaxed font-sans text-slate-300 text-[11px]">
+            <p className="leading-relaxed font-sans text-ink-2 text-[11px]">
               {currentFrame.caption || 'DSCOVR EPIC captures full-disc daylight perspectives of Earth from Lagrange Point L1, tracking ozone levels, cloud dynamics, vegetation health, and solar irradiance across the globe.'}
             </p>
           </div>
