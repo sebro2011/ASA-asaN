@@ -343,7 +343,7 @@ export default function TrendDetective({ area, onAreaChange, onPowerResolved, re
             </div>
 
             <div className="h-64 w-full sm:h-80" data-no-swipe>
-              <ResponsiveContainer width="100%" height="100%">
+              <ResponsiveContainer width="100%" height="100%" minHeight={256}>
                 <ComposedChart data={chartRows} margin={{ top: 8, right: 12, left: -8, bottom: 0 }}>
                   <CartesianGrid stroke="#1e293b" strokeDasharray="3 3" />
                   <XAxis dataKey="date" stroke="#64748b" tick={{ fontSize: 10 }} minTickGap={32} />
@@ -384,7 +384,7 @@ export default function TrendDetective({ area, onAreaChange, onPowerResolved, re
             </div>
 
             <div className="h-56 w-full" data-no-swipe>
-              <ResponsiveContainer width="100%" height="100%">
+              <ResponsiveContainer width="100%" height="100%" minHeight={224}>
                 <ComposedChart data={annualRows} margin={{ top: 8, right: 12, left: -8, bottom: 0 }}>
                   <CartesianGrid stroke="#1e293b" strokeDasharray="3 3" />
                   <XAxis dataKey="year" stroke="#64748b" tick={{ fontSize: 10 }} minTickGap={20} />

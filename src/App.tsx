@@ -376,45 +376,48 @@ export default function App() {
         
         {/* Sleek Hero Banner - Deep Dark Space UI with Embedded 3D Earth Background */}
         <section className="relative">
-          <div className="bg-gradient-to-b from-[#010409] via-[#020817] to-[#010409] border border-slate-800/80 rounded-2xl py-10 sm:py-12 md:py-14 px-6 sm:px-8 md:px-10 relative overflow-hidden shadow-2xl flex flex-col lg:flex-row items-center justify-between gap-6 sm:gap-8 min-h-[420px] md:min-h-[460px]">
+          <div className="bg-gradient-to-b from-[#010409] via-[#020817] to-[#010409] border border-slate-800/80 rounded-2xl py-12 sm:py-16 md:py-20 px-6 sm:px-8 md:px-10 relative overflow-hidden shadow-2xl flex flex-col lg:flex-row items-center justify-between gap-8 sm:gap-10 min-h-[500px] md:min-h-[580px]">
             
             {/* Embedded Auto-Rotating 3D Earth Background with Atmospheric Glow & Mouse Parallax */}
             <HeroBackgroundEarth />
+
+            {/* Legibility scrim — keeps hero copy readable over the photographic background */}
+            <div className="absolute inset-0 z-[1] bg-gradient-to-r from-[#010409] via-[#010409]/80 to-transparent pointer-events-none" />
 
             {/* Subtle atmospheric blue gradient accents */}
             <div className="absolute -bottom-24 -right-24 w-[480px] h-[480px] rounded-full bg-radial from-cyan-500/10 via-blue-600/5 to-transparent blur-3xl pointer-events-none z-[1]" />
             <div className="absolute -top-32 left-1/4 w-96 h-96 rounded-full bg-radial from-sky-400/10 to-transparent blur-3xl pointer-events-none z-[1]" />
 
-            <div className="relative z-10 max-w-3xl space-y-4 sm:space-y-5">
-              <div className="inline-flex items-center gap-2 px-3 py-1 sm:px-3.5 sm:py-1.5 rounded-full bg-slate-950/80 border border-slate-800/80 font-mono text-cyan-400 text-[11px] sm:text-xs font-semibold shadow-inner max-w-full overflow-hidden text-ellipsis backdrop-blur-md">
+            <div className="relative z-10 w-full min-w-0 max-w-3xl space-y-4 sm:space-y-5 lg:w-auto">
+              <div className="inline-flex min-w-0 max-w-full items-center gap-2 px-3 py-1 sm:px-3.5 sm:py-1.5 rounded-full bg-slate-950/80 border border-slate-800/80 font-mono text-cyan-400 text-[11px] sm:text-xs font-semibold shadow-inner overflow-hidden text-ellipsis backdrop-blur-md">
                 <span className="relative flex h-2 w-2 shrink-0">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75" />
                   <span className="relative inline-flex rounded-full h-2 w-2 bg-cyan-400" />
                 </span>
                 <Sparkles className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
-                <span className="tracking-wide truncate">
+                <span className="min-w-0 truncate tracking-wide">
                   {lang === 'en' && 'Real-Time NASA Feed & Keyless AI Dynamic Translation'}
                   {lang === 'si' && 'නාසා සජීවී දත්ත සහ Keyless AI ස්වභාවික සිංහල පරිවර්තනය'}
                   {lang === 'ta' && 'நாசா நேரலை தரவு & Keyless AI துல்லிய தமிழ் மொழிபெயர்ப்பு'}
                 </span>
               </div>
 
-              <h1 className="text-2xl sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-serif tracking-tight text-white leading-[1.12] drop-shadow-md">
+              <h1 className="text-3xl sm:text-5xl md:text-6xl lg:text-7xl font-serif tracking-tight text-white leading-[1.05] drop-shadow-md">
                 {lang === 'en' && (
-                  <>Explore the Cosmos in <span className="bg-gradient-to-r from-cyan-400 via-sky-300 to-blue-500 bg-clip-text text-transparent">Three Languages</span></>
+                  <>Explore Beyond the <span className="bg-gradient-to-r from-cyan-300 via-sky-300 to-blue-400 bg-clip-text text-transparent">Horizon.</span></>
                 )}
                 {lang === 'si' && (
-                  <>විශ්වයේ විස්මිත අසිරිය <span className="bg-gradient-to-r from-cyan-400 via-sky-300 to-blue-500 bg-clip-text text-transparent">සිංහල බසින්</span> විඳගන්න</>
+                  <>ක්ෂිතිජයෙන් <span className="bg-gradient-to-r from-cyan-300 via-sky-300 to-blue-400 bg-clip-text text-transparent">ඔබ්බට.</span></>
                 )}
                 {lang === 'ta' && (
-                  <>பிரபஞ்சத்தின் அதிசயங்களை <span className="bg-gradient-to-r from-cyan-400 via-sky-300 to-blue-500 bg-clip-text text-transparent">தமிழில்</span> ஆராயுங்கள்</>
+                  <>அடிவானத்திற்கு <span className="bg-gradient-to-r from-cyan-300 via-sky-300 to-blue-400 bg-clip-text text-transparent">அப்பால்.</span></>
                 )}
               </h1>
 
-              <p className="text-xs sm:text-sm md:text-base lg:text-lg text-slate-300 leading-relaxed max-w-2xl font-sans drop-shadow-sm">
-                {lang === 'en' && 'Astronomy Picture of the Day (APOD), interactive 3D celestial mechanics, landmark spaceflight breakdowns from Apollo to Artemis, and live deep-space discoveries translated dynamically on-the-fly.'}
-                {lang === 'si' && 'නාසා ආයතනයේ දවසේ තාරකා විද්‍යා ඡායාරූපය (APOD), ත්‍රිමාන (3D) අභ්‍යවකාශ ආකෘති, ඇපලෝ සිට ආටෙමිස් දක්වා ඓතිහාසික චන්ද්‍ර මෙහෙයුම් සහ සජීවී විද්‍යා පුවත් එකම වේදිකාවකින්.'}
-                {lang === 'ta' && 'நாசாவின் நாளின் வானியல் புகைப்படம் (APOD), 3D கோளப் பார்வை, வரலாற்று விண்வெளி பயணங்களின் விரிவான தகவல்கள் மற்றும் நேரலைச் செய்திகள்.'}
+              <p className="text-sm sm:text-base md:text-lg text-slate-300/90 leading-relaxed max-w-xl font-sans drop-shadow-sm">
+                {lang === 'en' && 'Discover our changing planet, follow missions across the solar system, and explore the universe through real scientific data.'}
+                {lang === 'si' && 'වෙනස් වන අපගේ පෘථිවිය සොයා බලන්න, සෞරග්‍රහ මණ්ඩලය පුරා මෙහෙයුම් අනුගමනය කරන්න, සහ සැබෑ විද්‍යාත්මක දත්ත හරහා විශ්වය ගවේෂණය කරන්න.'}
+                {lang === 'ta' && 'மாறிவரும் நமது பூமியைக் கண்டறியுங்கள், சூரியக் குடும்பம் முழுவதும் பயணங்களைப் பின்தொடருங்கள், உண்மையான அறிவியல் தரவு வழியாக பிரபஞ்சத்தை ஆராயுங்கள்.'}
               </p>
 
               {/* Fast Direct Exploration Action Triggers (Replaces legacy slider with high-efficiency 1-click CTA) */}
