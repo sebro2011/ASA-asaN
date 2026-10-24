@@ -131,23 +131,23 @@ export default function AnalystPanel({ context, lang, aiCapable }: AnalystPanelP
             placeholder={t('earthAnalystPlaceholder')}
             rows={3}
             maxLength={600}
-            className="w-full resize-y rounded-xl border border-slate-700 bg-slate-900/80 p-3 text-sm text-slate-100 placeholder:text-slate-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-400"
+            className="w-full resize-y rounded-[10px] border border-line bg-surface/60 p-3 text-sm text-ink placeholder:text-ink-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-atmo"
           />
           <div className="flex flex-wrap items-center gap-2">
             <button
               type="submit"
               disabled={loading || !question.trim()}
-              className="flex items-center gap-2 rounded-lg border border-cyan-500/50 bg-cyan-500/15 px-4 py-2 text-sm text-cyan-100 transition hover:bg-cyan-500/25 disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-400"
+              className="flex items-center gap-2 rounded-[8px] border border-atmo/45 bg-atmo/10 px-4 py-2 text-sm text-atmo-soft transition hover:bg-cyan-500/25 disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-atmo"
             >
               {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
               {loading ? t('earthAnalystThinking') : t('earthAnalystAsk')}
             </button>
-            <span className="text-[11px] text-slate-500">{question.length}/600</span>
+            <span className="text-[11px] text-ink-4">{question.length}/600</span>
           </div>
         </form>
 
         <div>
-          <p className="mb-1.5 text-[11px] uppercase tracking-wide text-slate-500">{t('earthAnalystSuggested')}</p>
+          <p className="mb-1.5 text-[11px] uppercase tracking-wide text-ink-4">{t('earthAnalystSuggested')}</p>
           <div className="flex flex-wrap gap-1.5">
             {suggestions.map((suggestion) => (
               <button
@@ -157,7 +157,7 @@ export default function AnalystPanel({ context, lang, aiCapable }: AnalystPanelP
                   setQuestion(suggestion);
                   submit(suggestion);
                 }}
-                className="rounded-lg border border-slate-700 bg-slate-900/70 px-2.5 py-1.5 text-xs text-slate-300 transition hover:border-cyan-500/50 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-400"
+                className="rounded-[8px] border border-line bg-surface/60 px-2.5 py-1.5 text-xs text-ink-2 transition hover:border-atmo/45 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-atmo"
               >
                 {suggestion}
               </button>
@@ -183,7 +183,7 @@ export default function AnalystPanel({ context, lang, aiCapable }: AnalystPanelP
                 </Pill>
               ) : null}
             </div>
-            <p className="text-[11px] text-slate-500">{t('earthAnalystGeneratedAt', { time: formatDateTime(answer.generatedAt) })}</p>
+            <p className="text-[11px] text-ink-4">{t('earthAnalystGeneratedAt', { time: formatDateTime(answer.generatedAt) })}</p>
           </div>
 
           <div className="grid gap-3 lg:grid-cols-2">
@@ -193,13 +193,13 @@ export default function AnalystPanel({ context, lang, aiCapable }: AnalystPanelP
                 const style = SECTION_STYLES[section.kind] || SECTION_STYLES.interpretation;
                 const border: Record<string, string> = {
                   emerald: 'border-emerald-500/30 bg-emerald-950/10',
-                  violet: 'border-violet-500/30 bg-violet-950/10',
-                  cyan: 'border-cyan-500/30 bg-cyan-950/10',
-                  amber: 'border-amber-500/30 bg-amber-950/10',
+                  violet: 'border-violet-500/30 bg-derived/[0.05]',
+                  cyan: 'border-atmo/25 bg-cyan-950/10',
+                  amber: 'border-amber-500/30 bg-caution/[0.04]',
                   rose: 'border-rose-500/30 bg-rose-950/10'
                 };
                 return (
-                  <div key={`${section.kind}-${index}`} className={`rounded-xl border p-3 ${border[style.tone]}`}>
+                  <div key={`${section.kind}-${index}`} className={`rounded-[10px] border p-3 ${border[style.tone]}`}>
                     <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-white">
                       {section.kind === 'limitations' || section.kind === 'gaps' ? (
                         <TriangleAlert className="h-3.5 w-3.5" />
@@ -208,7 +208,7 @@ export default function AnalystPanel({ context, lang, aiCapable }: AnalystPanelP
                       )}
                       {t(style.key)}
                     </p>
-                    <ul className="mt-2 space-y-1.5 text-xs leading-relaxed text-slate-200">
+                    <ul className="mt-2 space-y-1.5 text-xs leading-relaxed text-ink-2">
                       {section.bullets.map((bullet) => (
                         <li key={bullet} className="flex gap-2">
                           <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-slate-400" />
@@ -223,22 +223,22 @@ export default function AnalystPanel({ context, lang, aiCapable }: AnalystPanelP
 
           {answer.sources.length ? (
             <div>
-              <p className="mb-1.5 flex items-center gap-2 text-[11px] uppercase tracking-wide text-slate-500">
+              <p className="mb-1.5 flex items-center gap-2 text-[11px] uppercase tracking-wide text-ink-4">
                 <Link2 className="h-3.5 w-3.5" />
                 {t('earthAnalystSources')}
               </p>
               <ul className="space-y-1.5">
                 {answer.sources.map((source) => (
-                  <li key={`${source.url}-${source.label}`} className="rounded-lg border border-slate-800 bg-slate-950/60 p-2.5 text-xs">
+                  <li key={`${source.url}-${source.label}`} className="rounded-[8px] border border-line bg-abyss/70 p-2.5 text-xs">
                     <a
                       href={source.url}
                       target="_blank"
                       rel="noreferrer"
-                      className="inline-flex items-center gap-1 break-all text-cyan-300 underline decoration-dotted"
+                      className="inline-flex items-center gap-1 break-all text-atmo underline decoration-dotted"
                     >
                       {source.label} <ExternalLink className="h-3 w-3 shrink-0" />
                     </a>
-                    <p className="mt-0.5 text-[11px] text-slate-500">
+                    <p className="mt-0.5 text-[11px] text-ink-4">
                       {t('earthProvenanceRetrieved')}: {formatDateTime(source.retrievedAt)}
                       {source.detail ? ` · ${source.detail}` : ''}
                     </p>

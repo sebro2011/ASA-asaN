@@ -82,11 +82,11 @@ export const FloatingLanguageSwitcher: React.FC<{ className?: string }> = ({ cla
 
         <div className="flex items-center gap-1.5 text-xs sm:text-sm font-semibold tracking-wide">
           <span className="text-sm sm:text-base leading-none">{currentLang.flag}</span>
-          <span className="font-sans font-bold text-slate-100">{currentLang.nativeName}</span>
+          <span className="font-sans font-bold text-ink">{currentLang.nativeName}</span>
         </div>
 
         <ChevronDown
-          className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 ${
+          className={`w-3.5 h-3.5 text-ink-3 transition-transform duration-200 ${
             isOpen ? 'rotate-180 text-cyan-400' : ''
           }`}
         />
@@ -100,7 +100,7 @@ export const FloatingLanguageSwitcher: React.FC<{ className?: string }> = ({ cla
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 8, scale: 0.95 }}
             transition={{ type: 'spring', stiffness: 450, damping: 28 }}
-            className="absolute right-0 mt-2.5 w-64 sm:w-72 rounded-3xl apple-liquid-glass shadow-[0_20px_50px_rgba(0,0,0,0.85)] p-3.5 text-slate-200"
+            className="absolute right-0 mt-2.5 w-64 sm:w-72 rounded-3xl apple-liquid-glass shadow-[0_20px_50px_rgba(0,0,0,0.85)] p-3.5 text-ink-2"
           >
             {/* Header with Cosmic Badge */}
             <div className="flex items-center justify-between px-2.5 py-1.5 mb-1.5 border-b border-white/10">
@@ -108,7 +108,7 @@ export const FloatingLanguageSwitcher: React.FC<{ className?: string }> = ({ cla
                 <Sparkles className="w-3 h-3 text-cyan-400" />
                 <span>Trilingual i18n</span>
               </div>
-              <span className="text-[10px] font-mono text-slate-400 font-semibold">
+              <span className="text-[10px] font-mono text-ink-3 font-semibold">
                 NASA & Keyless AI
               </span>
             </div>
@@ -125,10 +125,10 @@ export const FloatingLanguageSwitcher: React.FC<{ className?: string }> = ({ cla
                     onClick={() => handleSelectLanguage(lang.code)}
                     whileHover={{ x: 2 }}
                     whileTap={{ scale: 0.98 }}
-                    className={`w-full flex items-center justify-between p-2.5 rounded-2xl transition-all select-none text-left ${
+                    className={`w-full flex items-center justify-between p-2.5 rounded-[14px] transition-all select-none text-left ${
                       isSelected
                         ? 'bg-gradient-to-r from-cyan-950/80 via-blue-950/70 to-indigo-950/80 border border-cyan-400/50 shadow-md shadow-cyan-950/40'
-                        : 'hover:bg-white/10 border border-transparent text-slate-300 hover:text-white'
+                        : 'hover:bg-white/10 border border-transparent text-ink-2 hover:text-ink'
                     }`}
                   >
                     <div className="flex items-center gap-3">
@@ -137,16 +137,16 @@ export const FloatingLanguageSwitcher: React.FC<{ className?: string }> = ({ cla
                         <div className="flex items-center gap-1.5">
                           <span
                             className={`font-sans font-bold text-sm ${
-                              isSelected ? 'text-cyan-200' : 'text-slate-200'
+                              isSelected ? 'text-cyan-200' : 'text-ink-2'
                             }`}
                           >
                             {lang.nativeName}
                           </span>
-                          <span className="text-[10px] font-mono text-slate-400 uppercase">
+                          <span className="text-[10px] font-mono text-ink-3 uppercase">
                             ({lang.code})
                           </span>
                         </div>
-                        <span className="text-[11px] text-slate-400 font-mono block">
+                        <span className="text-[11px] text-ink-3 font-mono block">
                           {lang.englishName} • {lang.region}
                         </span>
                       </div>
@@ -163,7 +163,7 @@ export const FloatingLanguageSwitcher: React.FC<{ className?: string }> = ({ cla
             </div>
 
             {/* AI Auto-Translation Status Note */}
-            <div className="mt-2.5 pt-2 border-t border-slate-800/80 px-2 text-[10px] font-mono text-slate-400 text-center">
+            <div className="mt-2.5 pt-2 border-t border-line px-2 text-[10px] font-mono text-ink-3 text-center">
               <span>Dynamic deep-space text translated on-the-fly</span>
             </div>
           </motion.div>

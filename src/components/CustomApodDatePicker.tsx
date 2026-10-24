@@ -160,10 +160,10 @@ export const CustomApodDatePicker: React.FC<CustomApodDatePickerProps> = ({
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-2.5 px-3.5 py-2 rounded-xl apple-liquid-glass text-xs font-semibold text-white shadow-lg transition-all hover:scale-[1.02] active:scale-[0.98]"
+        className="flex items-center gap-2.5 px-3.5 py-2 rounded-[10px] apple-liquid-glass text-xs font-semibold text-white shadow-lg transition-all hover:scale-[1.02] active:scale-[0.98]"
         aria-label="Select NASA APOD date"
       >
-        <div className="w-6 h-6 rounded-lg bg-cyan-500/20 border border-cyan-500/40 flex items-center justify-center text-cyan-300">
+        <div className="w-6 h-6 rounded-[8px] bg-cyan-500/20 border border-cyan-500/40 flex items-center justify-center text-cyan-300">
           <CalendarIcon className="w-3.5 h-3.5 text-cyan-400" />
         </div>
         <div className="text-left">
@@ -184,13 +184,13 @@ export const CustomApodDatePicker: React.FC<CustomApodDatePickerProps> = ({
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 8, scale: 0.96 }}
             transition={{ type: 'spring', stiffness: 450, damping: 30 }}
-            className="absolute left-0 mt-2 z-50 w-[330px] sm:w-[360px] rounded-3xl apple-liquid-glass shadow-[0_20px_60px_rgba(0,0,0,0.6)] p-4 sm:p-5 text-slate-200"
+            className="absolute left-0 mt-2 z-50 w-[330px] sm:w-[360px] rounded-3xl apple-liquid-glass shadow-[0_20px_60px_rgba(0,0,0,0.6)] p-4 sm:p-5 text-ink-2"
           >
             {/* Header Controls */}
             <div className="flex items-center justify-between border-b border-white/10 pb-3 mb-3">
               <div className="flex items-center gap-2">
                 <Telescope className="w-4 h-4 text-cyan-400" />
-                <span className="font-['Orbitron'] text-xs font-bold text-white tracking-wide">
+                <span className="font-display text-xs font-bold text-white tracking-wide">
                   NASA APOD Archive
                 </span>
               </div>
@@ -198,19 +198,19 @@ export const CustomApodDatePicker: React.FC<CustomApodDatePickerProps> = ({
               <button
                 type="button"
                 onClick={() => setIsOpen(false)}
-                className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition"
+                className="p-1 rounded-[8px] text-ink-3 hover:text-ink hover:bg-white/10 transition"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
             {/* Month & Year Jump Selectors */}
-            <div className="flex items-center justify-between gap-2 mb-4 apple-liquid-glass p-2 rounded-2xl">
+            <div className="flex items-center justify-between gap-2 mb-4 apple-liquid-glass p-2 rounded-[14px]">
               <button
                 type="button"
                 onClick={handlePrevMonth}
                 disabled={viewYear === 1995 && viewMonth <= 5}
-                className="p-1.5 rounded-xl hover:bg-white/10 text-slate-300 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition"
+                className="p-1.5 rounded-[10px] hover:bg-white/10 text-ink-2 hover:text-ink disabled:opacity-30 disabled:cursor-not-allowed transition"
               >
                 <ChevronLeft className="w-4 h-4 text-cyan-400" />
               </button>
@@ -220,10 +220,10 @@ export const CustomApodDatePicker: React.FC<CustomApodDatePickerProps> = ({
                 <select
                   value={viewMonth}
                   onChange={(e) => setViewMonth(parseInt(e.target.value, 10))}
-                  className="bg-white/10 border border-white/20 text-white rounded-lg px-2 py-1 text-xs font-medium outline-none focus:border-cyan-400 cursor-pointer"
+                  className="bg-white/10 border border-white/20 text-white rounded-[8px] px-2 py-1 text-xs font-medium outline-none focus:border-cyan-400 cursor-pointer"
                 >
                   {MONTH_NAMES[lang]?.map((m, idx) => (
-                    <option key={idx} value={idx} disabled={viewYear === 1995 && idx < 5} className="bg-slate-900 text-white">
+                    <option key={idx} value={idx} disabled={viewYear === 1995 && idx < 5} className="bg-surface/60 text-white">
                       {m}
                     </option>
                   ))}
@@ -233,10 +233,10 @@ export const CustomApodDatePicker: React.FC<CustomApodDatePickerProps> = ({
                 <select
                   value={viewYear}
                   onChange={(e) => setViewYear(parseInt(e.target.value, 10))}
-                  className="bg-white/10 border border-white/20 text-cyan-300 font-mono font-bold rounded-lg px-2 py-1 text-xs outline-none focus:border-cyan-400 cursor-pointer"
+                  className="bg-white/10 border border-white/20 text-cyan-300 font-mono font-bold rounded-[8px] px-2 py-1 text-xs outline-none focus:border-cyan-400 cursor-pointer"
                 >
                   {yearOptions.map((y) => (
-                    <option key={y} value={y} className="bg-slate-900 text-cyan-300">
+                    <option key={y} value={y} className="bg-surface/60 text-cyan-300">
                       {y}
                     </option>
                   ))}
@@ -247,14 +247,14 @@ export const CustomApodDatePicker: React.FC<CustomApodDatePickerProps> = ({
                 type="button"
                 onClick={handleNextMonth}
                 disabled={viewYear === today.getFullYear() && viewMonth >= today.getMonth()}
-                className="p-1.5 rounded-xl hover:bg-slate-800 text-slate-300 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition"
+                className="p-1.5 rounded-[10px] hover:bg-surface-2 text-ink-2 hover:text-ink disabled:opacity-30 disabled:cursor-not-allowed transition"
               >
                 <ChevronRight className="w-4 h-4 text-cyan-400" />
               </button>
             </div>
 
             {/* Weekday Labels */}
-            <div className="grid grid-cols-7 gap-1 text-center text-[11px] font-mono text-slate-500 font-bold mb-1.5">
+            <div className="grid grid-cols-7 gap-1 text-center text-[11px] font-mono text-ink-4 font-bold mb-1.5">
               {WEEKDAYS[lang]?.map((w, i) => (
                 <div key={i} className="py-1">
                   {w}
@@ -287,14 +287,14 @@ export const CustomApodDatePicker: React.FC<CustomApodDatePickerProps> = ({
                     type="button"
                     onClick={() => handleSelectDay(day)}
                     disabled={isDisabled}
-                    className={`h-8 w-8 mx-auto flex items-center justify-center rounded-xl text-xs font-medium transition-all ${
+                    className={`h-8 w-8 mx-auto flex items-center justify-center rounded-[10px] text-xs font-medium transition-all ${
                       isSelected
                         ? 'bg-gradient-to-tr from-cyan-600 to-blue-600 text-white font-bold shadow-lg shadow-cyan-600/40 scale-105 border border-cyan-300'
                         : isCurrentDay
                         ? 'bg-cyan-950/80 text-cyan-300 border border-cyan-500/40 font-bold'
                         : isDisabled
-                        ? 'text-slate-700 cursor-not-allowed opacity-30'
-                        : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                        ? 'text-ink-4 cursor-not-allowed opacity-30'
+                        : 'text-ink-2 hover:bg-surface-2 hover:text-ink'
                     }`}
                   >
                     {day}
@@ -304,9 +304,9 @@ export const CustomApodDatePicker: React.FC<CustomApodDatePickerProps> = ({
             </div>
 
             {/* Landmark Historical Highlights */}
-            <div className="border-t border-slate-800/80 pt-3 space-y-2">
-              <div className="flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-wider text-slate-400">
-                <Sparkles className="w-3 h-3 text-amber-400" />
+            <div className="border-t border-line pt-3 space-y-2">
+              <div className="flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-wider text-ink-3">
+                <Sparkles className="w-3 h-3 text-caution" />
                 <span>
                   {lang === 'si' ? 'ඓතිහාසික ප්‍රමුඛ දිනයන්:' : lang === 'ta' ? 'வரலாற்று சிறப்பு நாட்கள்:' : 'Landmark Historical Archives:'}
                 </span>
@@ -321,10 +321,10 @@ export const CustomApodDatePicker: React.FC<CustomApodDatePickerProps> = ({
                       onSelectDate(lm.date);
                       setIsOpen(false);
                     }}
-                    className={`px-2 py-1 rounded-lg text-[10px] font-medium transition border ${
+                    className={`px-2 py-1 rounded-[8px] text-[10px] font-medium transition border ${
                       selectedDate === lm.date
                         ? 'bg-cyan-600 text-white border-cyan-400 font-bold'
-                        : 'bg-slate-900 text-slate-300 hover:text-white border-slate-800 hover:border-slate-700'
+                        : 'bg-surface/60 text-ink-2 hover:text-ink border-line hover:border-line'
                     }`}
                   >
                     {lm.label[lang] || lm.label.en}
@@ -334,11 +334,11 @@ export const CustomApodDatePicker: React.FC<CustomApodDatePickerProps> = ({
             </div>
 
             {/* Quick Action Footer */}
-            <div className="border-t border-slate-800 pt-3 mt-3 flex items-center justify-between gap-2">
+            <div className="border-t border-line pt-3 mt-3 flex items-center justify-between gap-2">
               <button
                 type="button"
                 onClick={handleRandomDate}
-                className="flex-1 py-1.5 px-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-cyan-300 text-xs font-semibold flex items-center justify-center gap-1.5 transition"
+                className="flex-1 py-1.5 px-2.5 rounded-[10px] bg-surface/60 hover:bg-surface-2 border border-line text-cyan-300 text-xs font-semibold flex items-center justify-center gap-1.5 transition"
               >
                 <Shuffle className="w-3.5 h-3.5 text-cyan-400" />
                 <span>{lang === 'si' ? 'අහඹු දිනයක්' : lang === 'ta' ? 'ரேண்டம் நாள்' : 'Random Day'}</span>
@@ -347,7 +347,7 @@ export const CustomApodDatePicker: React.FC<CustomApodDatePickerProps> = ({
               <button
                 type="button"
                 onClick={handleTodayJump}
-                className="flex-1 py-1.5 px-2.5 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white text-xs font-semibold flex items-center justify-center gap-1.5 shadow-md shadow-cyan-600/30 transition"
+                className="flex-1 py-1.5 px-2.5 rounded-[10px] bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white text-xs font-semibold flex items-center justify-center gap-1.5 shadow-md shadow-cyan-600/30 transition"
               >
                 <Rocket className="w-3.5 h-3.5" />
                 <span>{lang === 'si' ? 'අද දිනට' : lang === 'ta' ? 'இன்றைய படம்' : 'Today’s APOD'}</span>

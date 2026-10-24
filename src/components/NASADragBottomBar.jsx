@@ -145,7 +145,7 @@ export default function NASADragBottomBar({
   return (
     <div className={`fixed bottom-0 left-0 right-0 z-50 md:hidden pointer-events-auto select-none ${className}`}>
       {/* Outer Cosmic Glassmorphic Container */}
-      <nav className="bg-slate-900/80 backdrop-blur-2xl border-t border-slate-800/80 px-3 pt-2 pb-safe shadow-[0_-12px_32px_rgba(0,0,0,0.85)]">
+      <nav className="bg-surface/60 backdrop-blur-2xl border-t border-line px-3 pt-2 pb-safe shadow-[0_-12px_32px_rgba(0,0,0,0.85)]">
         
         {/* Subtle Top Drag Indicator Pill */}
         <div className="flex items-center justify-center gap-1 mb-1.5 opacity-60">
@@ -173,7 +173,7 @@ export default function NASADragBottomBar({
               whileTap={{ scale: 0.94 }}
               className="absolute top-0 bottom-0 z-10 p-1 cursor-grab active:cursor-grabbing touch-none"
             >
-              <div className="w-full h-full rounded-2xl bg-gradient-to-r from-indigo-600/30 via-purple-600/25 to-indigo-600/30 border border-indigo-400/40 shadow-[0_0_20px_rgba(99,102,241,0.35)] backdrop-blur-md flex flex-col items-center justify-between py-1">
+              <div className="w-full h-full rounded-[14px] bg-gradient-to-r from-indigo-600/30 via-purple-600/25 to-indigo-600/30 border border-indigo-400/40 shadow-[0_0_20px_rgba(99,102,241,0.35)] backdrop-blur-md flex flex-col items-center justify-between py-1">
                 {/* Micro Drag Handle Grip Bar */}
                 <div className="w-5 h-0.5 bg-indigo-300/60 rounded-full" />
                 {/* Bottom Neon Accent Line */}
@@ -210,7 +210,7 @@ export default function NASADragBottomBar({
                     className={`w-5 h-5 transition-all duration-200 ${
                       isActive
                         ? 'text-indigo-300 drop-shadow-[0_0_12px_rgba(129,140,248,0.9)]'
-                        : 'text-slate-400 group-hover:text-slate-200'
+                        : 'text-ink-3 group-hover:text-ink-2'
                     }`}
                   />
                 </motion.div>
@@ -225,7 +225,7 @@ export default function NASADragBottomBar({
                   className={`text-[11px] font-sans tracking-tight mt-0.5 truncate max-w-[68px] text-center transition-colors duration-200 ${
                     isActive
                       ? 'text-indigo-200 font-bold drop-shadow-[0_0_6px_rgba(129,140,248,0.6)]'
-                      : 'text-slate-400 group-hover:text-slate-300 font-medium'
+                      : 'text-ink-3 group-hover:text-ink-2 font-medium'
                   }`}
                 >
                   {label}
@@ -236,7 +236,7 @@ export default function NASADragBottomBar({
         </div>
 
         {/* iOS Home Indicator Bar */}
-        <div className="w-28 h-1 bg-slate-800/80 rounded-full mx-auto mt-2 mb-1" />
+        <div className="w-28 h-1 bg-surface-2/70 rounded-full mx-auto mt-2 mb-1" />
       </nav>
     </div>
   );

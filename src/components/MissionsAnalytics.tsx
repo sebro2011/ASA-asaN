@@ -13,7 +13,6 @@ import {
   XAxis,
   YAxis,
   Tooltip,
-  Legend,
   CartesianGrid,
   TooltipProps
 } from 'recharts';
@@ -308,13 +307,13 @@ export const MissionsAnalytics: React.FC<MissionsAnalyticsProps> = ({ lang }) =>
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
       return (
-        <div className="bg-slate-950/95 border border-cyan-500/40 rounded-xl p-3 shadow-2xl backdrop-blur-xl font-mono text-xs space-y-1.5 z-50">
-          <div className="font-bold text-white border-b border-slate-800 pb-1 flex items-center gap-1.5">
+        <div className="bg-abyss/95 border border-cyan-500/40 rounded-[10px] p-3 shadow-2xl backdrop-blur-xl font-mono text-xs space-y-1.5 z-50">
+          <div className="font-bold text-white border-b border-line pb-1 flex items-center gap-1.5">
             <span className="w-2 h-2 rounded-full bg-cyan-400" />
             <span>{label}</span>
           </div>
           {payload.map((entry: any, index: number) => (
-            <div key={`item-${index}`} className="flex items-center justify-between gap-4 text-slate-300">
+            <div key={`item-${index}`} className="flex items-center justify-between gap-4 text-ink-2">
               <span className="flex items-center gap-1" style={{ color: entry.color || entry.fill }}>
                 <span>{entry.name}:</span>
               </span>
@@ -339,74 +338,74 @@ export const MissionsAnalytics: React.FC<MissionsAnalyticsProps> = ({ lang }) =>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
         
         {/* Metric 1: Tracked Historical Missions */}
-        <div className="bg-slate-950/80 backdrop-blur-xl border border-slate-800/80 rounded-2xl p-4 shadow-xl hover:border-cyan-500/50 hover:shadow-[0_0_25px_rgba(34,211,238,0.15)] transition-all">
-          <div className="flex items-center justify-between text-slate-400 mb-2">
+        <div className="bg-abyss/70 backdrop-blur-xl border border-line rounded-[14px] p-4 shadow-xl hover:border-cyan-500/50 hover:shadow-[0_0_25px_rgba(34,211,238,0.15)] transition-all">
+          <div className="flex items-center justify-between text-ink-3 mb-2">
             <span className="text-[11px] font-mono uppercase tracking-wider">
               {lang === 'si' ? 'ඓතිහාසික මෙහෙයුම්' : lang === 'ta' ? 'வரலாற்றுப் பணிகள்' : 'Landmark Missions'}
             </span>
-            <div className="w-7 h-7 rounded-lg bg-cyan-500/15 border border-cyan-500/30 flex items-center justify-center text-cyan-300">
+            <div className="w-7 h-7 rounded-[8px] bg-cyan-500/15 border border-cyan-500/30 flex items-center justify-center text-cyan-300">
               <Rocket className="w-3.5 h-3.5" />
             </div>
           </div>
-          <div className="text-2xl sm:text-3xl font-bold font-['Orbitron'] text-white">
+          <div className="text-2xl sm:text-3xl font-bold font-display text-white">
             168<span className="text-cyan-400 text-lg font-normal">+</span>
           </div>
-          <p className="text-[10px] text-slate-400 font-mono mt-1">
+          <p className="text-[10px] text-ink-3 font-mono mt-1">
             {lang === 'si' ? '1960 සිට 2026 දක්වා වාර්තාගත' : lang === 'ta' ? '1960 முதல் 2026 வரை' : 'Documented 1960 to 2026'}
           </p>
         </div>
 
         {/* Metric 2: Overall Mission Success Frequency */}
-        <div className="bg-slate-950/80 backdrop-blur-xl border border-slate-800/80 rounded-2xl p-4 shadow-xl hover:border-cyan-500/50 hover:shadow-[0_0_25px_rgba(34,211,238,0.15)] transition-all">
-          <div className="flex items-center justify-between text-slate-400 mb-2">
+        <div className="bg-abyss/70 backdrop-blur-xl border border-line rounded-[14px] p-4 shadow-xl hover:border-cyan-500/50 hover:shadow-[0_0_25px_rgba(34,211,238,0.15)] transition-all">
+          <div className="flex items-center justify-between text-ink-3 mb-2">
             <span className="text-[11px] font-mono uppercase tracking-wider">
               {lang === 'si' ? 'සාර්ථකත්ව අනුපාතය' : lang === 'ta' ? 'வெற்றி விகிதம்' : 'Success Frequency'}
             </span>
-            <div className="w-7 h-7 rounded-lg bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-300">
+            <div className="w-7 h-7 rounded-[8px] bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-signal">
               <ShieldCheck className="w-3.5 h-3.5" />
             </div>
           </div>
-          <div className="text-2xl sm:text-3xl font-bold font-['Orbitron'] text-emerald-400">
-            95.2<span className="text-emerald-300 text-lg font-normal">%</span>
+          <div className="text-2xl sm:text-3xl font-bold font-display text-signal">
+            95.2<span className="text-signal text-lg font-normal">%</span>
           </div>
-          <p className="text-[10px] text-emerald-400/90 font-mono mt-1 flex items-center gap-1">
+          <p className="text-[10px] text-signal/90 font-mono mt-1 flex items-center gap-1">
             <TrendingUp className="w-3 h-3 inline" />
             <span>{lang === 'si' ? '2010 සිට 100% සාර්ථකත්වය' : lang === 'ta' ? '2010 முதல் 100% வெற்றி' : '100% since 2010 to date'}</span>
           </p>
         </div>
 
         {/* Metric 3: Deepest Active Human Mission Distance */}
-        <div className="bg-slate-950/80 backdrop-blur-xl border border-slate-800/80 rounded-2xl p-4 shadow-xl hover:border-cyan-500/50 hover:shadow-[0_0_25px_rgba(34,211,238,0.15)] transition-all">
-          <div className="flex items-center justify-between text-slate-400 mb-2">
+        <div className="bg-abyss/70 backdrop-blur-xl border border-line rounded-[14px] p-4 shadow-xl hover:border-cyan-500/50 hover:shadow-[0_0_25px_rgba(34,211,238,0.15)] transition-all">
+          <div className="flex items-center justify-between text-ink-3 mb-2">
             <span className="text-[11px] font-mono uppercase tracking-wider">
               {lang === 'si' ? 'දුරම සක්‍රීය යානය' : lang === 'ta' ? 'மிக தொலைதூர விண்கலம்' : 'Farthest Active'}
             </span>
-            <div className="w-7 h-7 rounded-lg bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-300">
+            <div className="w-7 h-7 rounded-[8px] bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-300">
               <Compass className="w-3.5 h-3.5" />
             </div>
           </div>
-          <div className="text-2xl sm:text-3xl font-bold font-['Orbitron'] text-amber-300">
-            24.5<span className="text-amber-400 text-sm font-normal"> B km</span>
+          <div className="text-2xl sm:text-3xl font-bold font-display text-amber-300">
+            24.5<span className="text-caution text-sm font-normal"> B km</span>
           </div>
-          <p className="text-[10px] text-slate-400 font-mono mt-1">
+          <p className="text-[10px] text-ink-3 font-mono mt-1">
             Voyager 1 • 163.8 AU from Sun
           </p>
         </div>
 
         {/* Metric 4: Longest Continuous Mission Flight */}
-        <div className="bg-slate-950/80 backdrop-blur-xl border border-slate-800/80 rounded-2xl p-4 shadow-xl hover:border-cyan-500/50 hover:shadow-[0_0_25px_rgba(34,211,238,0.15)] transition-all">
-          <div className="flex items-center justify-between text-slate-400 mb-2">
+        <div className="bg-abyss/70 backdrop-blur-xl border border-line rounded-[14px] p-4 shadow-xl hover:border-cyan-500/50 hover:shadow-[0_0_25px_rgba(34,211,238,0.15)] transition-all">
+          <div className="flex items-center justify-between text-ink-3 mb-2">
             <span className="text-[11px] font-mono uppercase tracking-wider">
               {lang === 'si' ? 'දීර්ඝතම මෙහෙයුම් කාලය' : lang === 'ta' ? 'நீண்ட கால பயணம்' : 'Longest Flight'}
             </span>
-            <div className="w-7 h-7 rounded-lg bg-purple-500/15 border border-purple-500/30 flex items-center justify-center text-purple-300">
+            <div className="w-7 h-7 rounded-[8px] bg-purple-500/15 border border-purple-500/30 flex items-center justify-center text-derived">
               <Clock className="w-3.5 h-3.5" />
             </div>
           </div>
-          <div className="text-2xl sm:text-3xl font-bold font-['Orbitron'] text-purple-300">
-            47.6<span className="text-purple-400 text-sm font-normal"> Yrs</span>
+          <div className="text-2xl sm:text-3xl font-bold font-display text-derived">
+            47.6<span className="text-derived text-sm font-normal"> Yrs</span>
           </div>
-          <p className="text-[10px] text-slate-400 font-mono mt-1">
+          <p className="text-[10px] text-ink-3 font-mono mt-1">
             {lang === 'si' ? 'වොයේජර් 1 සහ 2 (1977 සිට)' : lang === 'ta' ? 'வாயேஜர் 1 & 2 (1977 முதல்)' : 'Voyager 1 & 2 (Launched 1977)'}
           </p>
         </div>
@@ -414,14 +413,15 @@ export const MissionsAnalytics: React.FC<MissionsAnalyticsProps> = ({ lang }) =>
       </div>
 
       {/* Sub-Metric Selector Navigation */}
-      <div className="bg-slate-950/80 backdrop-blur-xl border border-slate-800/80 rounded-2xl p-2.5 sm:p-3 flex items-center justify-between gap-2 flex-wrap shadow-xl">
+      <div className="bg-abyss/70 backdrop-blur-xl border border-line rounded-[14px] p-2.5 sm:p-3 flex items-center justify-between gap-2 flex-wrap shadow-xl">
         <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 scrollbar-none w-full sm:w-auto">
           <button
             onClick={() => setActiveMetricTab('success')}
-            className={`px-3.5 py-2 rounded-xl text-xs font-semibold font-mono flex items-center gap-2 transition-all ${
+            aria-pressed={activeMetricTab === 'success'}
+            className={`px-3.5 py-2 rounded-[10px] text-xs font-semibold font-mono flex items-center gap-2 transition-all ${
               activeMetricTab === 'success'
                 ? 'bg-gradient-to-r from-cyan-600 to-blue-600 text-white shadow-lg shadow-cyan-600/25 border border-cyan-400/50'
-                : 'bg-slate-900/60 text-slate-400 hover:text-white hover:bg-slate-800/60 border border-transparent'
+                : 'bg-surface/50 text-ink-3 hover:text-ink hover:bg-surface-2/60 border border-transparent'
             }`}
           >
             <TrendingUp className="w-3.5 h-3.5" />
@@ -430,10 +430,11 @@ export const MissionsAnalytics: React.FC<MissionsAnalyticsProps> = ({ lang }) =>
 
           <button
             onClick={() => setActiveMetricTab('duration')}
-            className={`px-3.5 py-2 rounded-xl text-xs font-semibold font-mono flex items-center gap-2 transition-all ${
+            aria-pressed={activeMetricTab === 'duration'}
+            className={`px-3.5 py-2 rounded-[10px] text-xs font-semibold font-mono flex items-center gap-2 transition-all ${
               activeMetricTab === 'duration'
                 ? 'bg-gradient-to-r from-cyan-600 to-blue-600 text-white shadow-lg shadow-cyan-600/25 border border-cyan-400/50'
-                : 'bg-slate-900/60 text-slate-400 hover:text-white hover:bg-slate-800/60 border border-transparent'
+                : 'bg-surface/50 text-ink-3 hover:text-ink hover:bg-surface-2/60 border border-transparent'
             }`}
           >
             <Clock className="w-3.5 h-3.5" />
@@ -442,10 +443,11 @@ export const MissionsAnalytics: React.FC<MissionsAnalyticsProps> = ({ lang }) =>
 
           <button
             onClick={() => setActiveMetricTab('destinations')}
-            className={`px-3.5 py-2 rounded-xl text-xs font-semibold font-mono flex items-center gap-2 transition-all ${
+            aria-pressed={activeMetricTab === 'destinations'}
+            className={`px-3.5 py-2 rounded-[10px] text-xs font-semibold font-mono flex items-center gap-2 transition-all ${
               activeMetricTab === 'destinations'
                 ? 'bg-gradient-to-r from-cyan-600 to-blue-600 text-white shadow-lg shadow-cyan-600/25 border border-cyan-400/50'
-                : 'bg-slate-900/60 text-slate-400 hover:text-white hover:bg-slate-800/60 border border-transparent'
+                : 'bg-surface/50 text-ink-3 hover:text-ink hover:bg-surface-2/60 border border-transparent'
             }`}
           >
             <Compass className="w-3.5 h-3.5" />
@@ -454,10 +456,11 @@ export const MissionsAnalytics: React.FC<MissionsAnalyticsProps> = ({ lang }) =>
 
           <button
             onClick={() => setActiveMetricTab('launchers')}
-            className={`px-3.5 py-2 rounded-xl text-xs font-semibold font-mono flex items-center gap-2 transition-all ${
+            aria-pressed={activeMetricTab === 'launchers'}
+            className={`px-3.5 py-2 rounded-[10px] text-xs font-semibold font-mono flex items-center gap-2 transition-all ${
               activeMetricTab === 'launchers'
                 ? 'bg-gradient-to-r from-cyan-600 to-blue-600 text-white shadow-lg shadow-cyan-600/25 border border-cyan-400/50'
-                : 'bg-slate-900/60 text-slate-400 hover:text-white hover:bg-slate-800/60 border border-transparent'
+                : 'bg-surface/50 text-ink-3 hover:text-ink hover:bg-surface-2/60 border border-transparent'
             }`}
           >
             <Rocket className="w-3.5 h-3.5" />
@@ -466,19 +469,19 @@ export const MissionsAnalytics: React.FC<MissionsAnalyticsProps> = ({ lang }) =>
         </div>
 
         {activeMetricTab === 'duration' && (
-          <div className="flex items-center gap-1 bg-slate-900/80 p-1 rounded-xl border border-slate-800 text-[11px] font-mono shrink-0">
+          <div className="flex items-center gap-1 bg-surface/60 p-1 rounded-[10px] border border-line text-[11px] font-mono shrink-0">
             <button
               onClick={() => setDurationUnit('years')}
-              className={`px-2.5 py-1 rounded-lg transition ${
-                durationUnit === 'years' ? 'bg-cyan-500 text-slate-950 font-bold' : 'text-slate-400 hover:text-white'
+              className={`px-2.5 py-1 rounded-[8px] transition ${
+                durationUnit === 'years' ? 'bg-cyan-500 text-slate-950 font-bold' : 'text-ink-3 hover:text-ink'
               }`}
             >
               {lang === 'si' ? 'වසර' : lang === 'ta' ? 'ஆண்டுகள்' : 'Years'}
             </button>
             <button
               onClick={() => setDurationUnit('days')}
-              className={`px-2.5 py-1 rounded-lg transition ${
-                durationUnit === 'days' ? 'bg-cyan-500 text-slate-950 font-bold' : 'text-slate-400 hover:text-white'
+              className={`px-2.5 py-1 rounded-[8px] transition ${
+                durationUnit === 'days' ? 'bg-cyan-500 text-slate-950 font-bold' : 'text-ink-3 hover:text-ink'
               }`}
             >
               {lang === 'si' ? 'දින' : lang === 'ta' ? 'நாட்கள்' : 'Days'}
@@ -491,10 +494,10 @@ export const MissionsAnalytics: React.FC<MissionsAnalyticsProps> = ({ lang }) =>
 
       {/* TAB 1: Launch Success Frequency by Decade */}
       {activeMetricTab === 'success' && (
-        <div className="bg-slate-950/80 backdrop-blur-xl border border-slate-800/80 rounded-2xl p-5 sm:p-7 shadow-2xl space-y-6 hover:border-cyan-500/50 hover:shadow-[0_0_25px_rgba(34,211,238,0.15)] transition-all">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-slate-800/80 pb-4">
+        <div className="bg-abyss/70 backdrop-blur-xl border border-line rounded-[14px] p-5 sm:p-7 shadow-2xl space-y-6 hover:border-cyan-500/50 hover:shadow-[0_0_25px_rgba(34,211,238,0.15)] transition-all">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-line pb-4">
             <div>
-              <h3 className="text-base sm:text-lg font-bold text-white font-['Orbitron'] flex items-center gap-2">
+              <h3 className="text-base sm:text-lg font-bold text-white font-display flex items-center gap-2">
                 <TrendingUp className="w-5 h-5 text-cyan-400" />
                 <span>
                   {lang === 'si'
@@ -504,7 +507,7 @@ export const MissionsAnalytics: React.FC<MissionsAnalyticsProps> = ({ lang }) =>
                     : 'NASA Historical Launch Success Frequency (1960s – 2020s)'}
                 </span>
               </h3>
-              <p className="text-xs text-slate-400 font-mono mt-1">
+              <p className="text-xs text-ink-3 font-mono mt-1">
                 {lang === 'si'
                   ? 'ඇපලෝ, ෂටල්, අඟහරු රෝවර සහ නූතන ගැඹුරු අභ්‍යවකාශ මෙහෙයුම් සංසන්දනය'
                   : lang === 'ta'
@@ -516,18 +519,18 @@ export const MissionsAnalytics: React.FC<MissionsAnalyticsProps> = ({ lang }) =>
             <div className="flex items-center gap-4 text-xs font-mono">
               <div className="flex items-center gap-1.5">
                 <span className="w-3 h-3 rounded-full bg-cyan-400" />
-                <span className="text-slate-300">{lang === 'si' ? 'සාර්ථක මෙහෙයුම්' : lang === 'ta' ? 'வெற்றிகரமானவை' : 'Successful'}</span>
+                <span className="text-ink-2">{lang === 'si' ? 'සාර්ථක මෙහෙයුම්' : lang === 'ta' ? 'வெற்றிகரமானவை' : 'Successful'}</span>
               </div>
               <div className="flex items-center gap-1.5">
                 <span className="w-3 h-3 rounded-full bg-emerald-400" />
-                <span className="text-slate-300">{lang === 'si' ? 'සාර්ථකත්ව අනුපාතය (%)' : lang === 'ta' ? 'வெற்றி விகிதம் (%)' : 'Success Rate (%)'}</span>
+                <span className="text-ink-2">{lang === 'si' ? 'සාර්ථකත්ව අනුපාතය (%)' : lang === 'ta' ? 'வெற்றி விகிதம் (%)' : 'Success Rate (%)'}</span>
               </div>
             </div>
           </div>
 
           {/* Recharts Area / Bar Combined Visualizer */}
-          <div className="w-full h-80 sm:h-96">
-            <ResponsiveContainer width="100%" height="100%">
+          <div className="w-full">
+            <ResponsiveContainer width="100%" height={330} minWidth={280} initialDimension={{ width: 720, height: 330 }}>
               <AreaChart data={HISTORICAL_LAUNCH_DATA} margin={{ top: 15, right: 25, left: -10, bottom: 25 }}>
                 <defs>
                   <linearGradient id="cyanAreaGradient" x1="0" y1="0" x2="0" y2="1">
@@ -589,12 +592,12 @@ export const MissionsAnalytics: React.FC<MissionsAnalyticsProps> = ({ lang }) =>
           {/* Decade Summary Insight Strip */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-2">
             {HISTORICAL_LAUNCH_DATA.slice(-4).map((d) => (
-              <div key={d.decade} className="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 text-xs space-y-1 font-mono">
-                <div className="flex items-center justify-between text-slate-300 font-bold">
+              <div key={d.decade} className="p-3.5 rounded-[10px] bg-surface/50 border border-line text-xs space-y-1 font-mono">
+                <div className="flex items-center justify-between text-ink-2 font-bold">
                   <span>{d.decade}</span>
-                  <span className="text-emerald-400">{d.successRate}%</span>
+                  <span className="text-signal">{d.successRate}%</span>
                 </div>
-                <div className="text-[11px] text-slate-400 line-clamp-1">
+                <div className="text-[11px] text-ink-3 line-clamp-1">
                   {d.highlight[lang] || d.highlight.en}
                 </div>
                 <div className="text-[10px] text-cyan-400/80">
@@ -608,10 +611,10 @@ export const MissionsAnalytics: React.FC<MissionsAnalyticsProps> = ({ lang }) =>
 
       {/* TAB 2: Mission Duration Distribution */}
       {activeMetricTab === 'duration' && (
-        <div className="bg-slate-950/80 backdrop-blur-xl border border-slate-800/80 rounded-2xl p-5 sm:p-7 shadow-2xl space-y-6 hover:border-cyan-500/50 hover:shadow-[0_0_25px_rgba(34,211,238,0.15)] transition-all">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-slate-800/80 pb-4">
+        <div className="bg-abyss/70 backdrop-blur-xl border border-line rounded-[14px] p-5 sm:p-7 shadow-2xl space-y-6 hover:border-cyan-500/50 hover:shadow-[0_0_25px_rgba(34,211,238,0.15)] transition-all">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-line pb-4">
             <div>
-              <h3 className="text-base sm:text-lg font-bold text-white font-['Orbitron'] flex items-center gap-2">
+              <h3 className="text-base sm:text-lg font-bold text-white font-display flex items-center gap-2">
                 <Clock className="w-5 h-5 text-cyan-400" />
                 <span>
                   {lang === 'si'
@@ -621,7 +624,7 @@ export const MissionsAnalytics: React.FC<MissionsAnalyticsProps> = ({ lang }) =>
                     : 'Landmark Mission Operating Flight Duration Distribution'}
                 </span>
               </h3>
-              <p className="text-xs text-slate-400 font-mono mt-1">
+              <p className="text-xs text-ink-3 font-mono mt-1">
                 {lang === 'si'
                   ? 'මිනිසුන් සහිත ඇපලෝ සිට වසර 47 ක වොයේජර් දක්වා මෙහෙයුම් දිගුකාලීනත්වය'
                   : lang === 'ta'
@@ -640,8 +643,8 @@ export const MissionsAnalytics: React.FC<MissionsAnalyticsProps> = ({ lang }) =>
           </div>
 
           {/* Horizontal / Vertical Bar Chart */}
-          <div className="w-full h-80 sm:h-96">
-            <ResponsiveContainer width="100%" height="100%">
+          <div className="w-full">
+            <ResponsiveContainer width="100%" height={330} minWidth={280} initialDimension={{ width: 720, height: 330 }}>
               <BarChart 
                 data={MISSION_DURATION_DATA} 
                 margin={{ top: 20, right: 20, left: 10, bottom: 45 }}
@@ -678,32 +681,32 @@ export const MissionsAnalytics: React.FC<MissionsAnalyticsProps> = ({ lang }) =>
 
           {/* Quick Highlight Cards */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <div className="p-4 rounded-xl bg-slate-900/60 border border-slate-800 space-y-1">
+            <div className="p-4 rounded-[10px] bg-surface/50 border border-line space-y-1">
               <div className="text-xs font-mono text-cyan-400 font-semibold">
                 {lang === 'si' ? 'වේගවත්ම සඳ මෙහෙයුම්' : lang === 'ta' ? 'நிலவுப் பயணம்' : 'Shortest Lunar Manned'}
               </div>
               <div className="text-sm font-bold text-white">Apollo 11 (8.1 Days)</div>
-              <p className="text-[11px] text-slate-400 font-mono">
+              <p className="text-[11px] text-ink-3 font-mono">
                 {lang === 'si' ? 'පැය 21.5 ක් සඳ මතුපිට, ආරක්ෂිතව සාගරයට පැමිණීම.' : lang === 'ta' ? 'நிலவில் 21.5 மணி நேரம் ஆய்வு செய்து திரும்பியது.' : '21.5 hours on surface, landed safely in Pacific Ocean.'}
               </p>
             </div>
 
-            <div className="p-4 rounded-xl bg-slate-900/60 border border-slate-800 space-y-1">
-              <div className="text-xs font-mono text-amber-400 font-semibold">
+            <div className="p-4 rounded-[10px] bg-surface/50 border border-line space-y-1">
+              <div className="text-xs font-mono text-caution font-semibold">
                 {lang === 'si' ? 'දීර්ඝතම අඟහරු රෝවරය' : lang === 'ta' ? 'செவ்வாய் சாதனை ரோவர்' : 'Longest Mars Surface'}
               </div>
               <div className="text-sm font-bold text-white">Opportunity (15.1 Years)</div>
-              <p className="text-[11px] text-slate-400 font-mono">
+              <p className="text-[11px] text-ink-3 font-mono">
                 {lang === 'si' ? 'දින 90 ක මුල් මෙහෙයුම වසර 15 ක් දක්වා විහිදී කි.මී. 45 ක් ගමන් කළේය.' : lang === 'ta' ? '90 நாள் திட்டமிடல் 15 ஆண்டுகள் வரை நீடித்தது.' : 'Planned for 90 days, survived 5,498 days and 45.16 km.'}
               </p>
             </div>
 
-            <div className="p-4 rounded-xl bg-slate-900/60 border border-slate-800 space-y-1">
-              <div className="text-xs font-mono text-emerald-400 font-semibold">
+            <div className="p-4 rounded-[10px] bg-surface/50 border border-line space-y-1">
+              <div className="text-xs font-mono text-signal font-semibold">
                 {lang === 'si' ? 'අන්තර්තාරකා ජයග්‍රහණය' : lang === 'ta' ? 'விண்மீன்களிடை சாதனை' : 'Farthest Interstellar Flight'}
               </div>
               <div className="text-sm font-bold text-white">Voyager 1 & 2 (47.6 Years)</div>
-              <p className="text-[11px] text-slate-400 font-mono">
+              <p className="text-[11px] text-ink-3 font-mono">
                 {lang === 'si' ? 'තවමත් සූර්යයාගේ ආධිපත්‍යයෙන් ඔබ්බට සංඥා විකාශය කරයි.' : lang === 'ta' ? 'சூரியக் குடும்பத்தைக் கடந்து தரவுகளை அனுப்புகிறது.' : 'Still transmitting telemetry from outside the Heliosphere.'}
               </p>
             </div>
@@ -713,9 +716,9 @@ export const MissionsAnalytics: React.FC<MissionsAnalyticsProps> = ({ lang }) =>
 
       {/* TAB 3: Destination Breakdown */}
       {activeMetricTab === 'destinations' && (
-        <div className="bg-slate-950/80 backdrop-blur-xl border border-slate-800/80 rounded-2xl p-5 sm:p-7 shadow-2xl space-y-6 hover:border-cyan-500/50 hover:shadow-[0_0_25px_rgba(34,211,238,0.15)] transition-all">
-          <div className="border-b border-slate-800/80 pb-4">
-            <h3 className="text-base sm:text-lg font-bold text-white font-['Orbitron'] flex items-center gap-2">
+        <div className="bg-abyss/70 backdrop-blur-xl border border-line rounded-[14px] p-5 sm:p-7 shadow-2xl space-y-6 hover:border-cyan-500/50 hover:shadow-[0_0_25px_rgba(34,211,238,0.15)] transition-all">
+          <div className="border-b border-line pb-4">
+            <h3 className="text-base sm:text-lg font-bold text-white font-display flex items-center gap-2">
               <Compass className="w-5 h-5 text-cyan-400" />
               <span>
                 {lang === 'si'
@@ -725,7 +728,7 @@ export const MissionsAnalytics: React.FC<MissionsAnalyticsProps> = ({ lang }) =>
                   : 'Planetary Target & Destination Distribution Ratio'}
               </span>
             </h3>
-            <p className="text-xs text-slate-400 font-mono mt-1">
+            <p className="text-xs text-ink-3 font-mono mt-1">
               {lang === 'si'
                 ? 'සඳ, අඟහරු, බාහිර ග්‍රහලෝක සහ ගැඹුරු අභ්‍යවකාශයට යැවූ යානා ප්‍රතිශත'
                 : lang === 'ta'
@@ -736,8 +739,8 @@ export const MissionsAnalytics: React.FC<MissionsAnalyticsProps> = ({ lang }) =>
 
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
             {/* Donut Pie Chart */}
-            <div className="lg:col-span-6 h-72 sm:h-80">
-              <ResponsiveContainer width="100%" height="100%">
+            <div className="lg:col-span-6">
+              <ResponsiveContainer width="100%" height={290} minWidth={260} initialDimension={{ width: 380, height: 290 }}>
                 <PieChart>
                   <Pie
                     data={DESTINATION_DATA}
@@ -765,17 +768,17 @@ export const MissionsAnalytics: React.FC<MissionsAnalyticsProps> = ({ lang }) =>
               {DESTINATION_DATA.map((dest, idx) => (
                 <div 
                   key={idx}
-                  className="p-3 rounded-xl bg-slate-900/60 border border-slate-800 flex items-center justify-between gap-3 text-xs"
+                  className="p-3 rounded-[10px] bg-surface/50 border border-line flex items-center justify-between gap-3 text-xs"
                 >
                   <div className="flex items-center gap-2.5">
                     <span className="w-3.5 h-3.5 rounded-full shrink-0" style={{ backgroundColor: dest.color }} />
-                    <span className="text-slate-200 font-medium">
+                    <span className="text-ink-2 font-medium">
                       {dest.name[lang] || dest.name.en}
                     </span>
                   </div>
                   <div className="flex items-center gap-3 shrink-0">
-                    <span className="text-slate-400 font-bold">{dest.count} {lang === 'si' ? 'මෙහෙයුම්' : lang === 'ta' ? 'பணிகள்' : 'missions'}</span>
-                    <span className="px-2 py-0.5 rounded-md bg-slate-800 text-white font-bold" style={{ color: dest.color }}>
+                    <span className="text-ink-3 font-bold">{dest.count} {lang === 'si' ? 'මෙහෙයුම්' : lang === 'ta' ? 'பணிகள்' : 'missions'}</span>
+                    <span className="px-2 py-0.5 rounded-md bg-surface-2 text-white font-bold" style={{ color: dest.color }}>
                       {dest.percentage}%
                     </span>
                   </div>
@@ -788,9 +791,9 @@ export const MissionsAnalytics: React.FC<MissionsAnalyticsProps> = ({ lang }) =>
 
       {/* TAB 4: Launcher Payload Capacities */}
       {activeMetricTab === 'launchers' && (
-        <div className="bg-slate-950/80 backdrop-blur-xl border border-slate-800/80 rounded-2xl p-5 sm:p-7 shadow-2xl space-y-6 hover:border-cyan-500/50 hover:shadow-[0_0_25px_rgba(34,211,238,0.15)] transition-all">
-          <div className="border-b border-slate-800/80 pb-4">
-            <h3 className="text-base sm:text-lg font-bold text-white font-['Orbitron'] flex items-center gap-2">
+        <div className="bg-abyss/70 backdrop-blur-xl border border-line rounded-[14px] p-5 sm:p-7 shadow-2xl space-y-6 hover:border-cyan-500/50 hover:shadow-[0_0_25px_rgba(34,211,238,0.15)] transition-all">
+          <div className="border-b border-line pb-4">
+            <h3 className="text-base sm:text-lg font-bold text-white font-display flex items-center gap-2">
               <Rocket className="w-5 h-5 text-cyan-400" />
               <span>
                 {lang === 'si'
@@ -800,7 +803,7 @@ export const MissionsAnalytics: React.FC<MissionsAnalyticsProps> = ({ lang }) =>
                   : 'NASA Historical Heavy Launch Vehicle Payload Comparison (LEO vs Moon TLI)'}
               </span>
             </h3>
-            <p className="text-xs text-slate-400 font-mono mt-1">
+            <p className="text-xs text-ink-3 font-mono mt-1">
               {lang === 'si'
                 ? 'සැටර්න් V, SLS, අභ්‍යවකාශ ෂටල්, සහ ඩෙල්ටා IV රොකට්වල එසවුම් ශක්තිය'
                 : lang === 'ta'
@@ -809,8 +812,8 @@ export const MissionsAnalytics: React.FC<MissionsAnalyticsProps> = ({ lang }) =>
             </p>
           </div>
 
-          <div className="w-full h-80 sm:h-96">
-            <ResponsiveContainer width="100%" height="100%">
+          <div className="w-full">
+            <ResponsiveContainer width="100%" height={330} minWidth={280} initialDimension={{ width: 720, height: 330 }}>
               <BarChart data={LAUNCHER_PAYLOAD_DATA} margin={{ top: 20, right: 20, left: 10, bottom: 45 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" opacity={0.6} />
                 <XAxis 
@@ -829,9 +832,6 @@ export const MissionsAnalytics: React.FC<MissionsAnalyticsProps> = ({ lang }) =>
                   tickLine={{ stroke: '#334155' }}
                 />
                 <Tooltip content={<CustomTooltip />} />
-                <Legend 
-                  wrapperStyle={{ paddingTop: 10, fontFamily: 'monospace', fontSize: 12 }} 
-                />
                 <Bar 
                   dataKey="payloadLeoTons" 
                   name={lang === 'si' ? 'පෘථිවි පහළ කක්ෂයට භාරය (LEO)' : lang === 'ta' ? 'பூமி சுற்றுப்பாதை சுமை (LEO)' : 'Low Earth Orbit (LEO Tons)'} 
@@ -846,6 +846,20 @@ export const MissionsAnalytics: React.FC<MissionsAnalyticsProps> = ({ lang }) =>
                 />
               </BarChart>
             </ResponsiveContainer>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-5 border-t border-line/60 pt-3 font-mono text-[11px] text-ink-3">
+            <span className="inline-flex items-center gap-2">
+              <span className="h-2.5 w-2.5 rounded-[2px] bg-[#06b6d4]" aria-hidden="true" />
+              {lang === 'si' ? 'පෘථිවි පහළ කක්ෂයට භාරය (t)' : lang === 'ta' ? 'பூமி சுற்றுப்பாதை சுமை (t)' : 'Low Earth Orbit payload (t)'}
+            </span>
+            <span className="inline-flex items-center gap-2">
+              <span className="h-2.5 w-2.5 rounded-[2px] bg-[#f59e0b]" aria-hidden="true" />
+              {lang === 'si' ? 'චන්ද්‍ර ගමනට භාරය (t)' : lang === 'ta' ? 'நிலவுப் பயண சுமை (t)' : 'Translunar injection payload (t)'}
+            </span>
+            <span className="text-ink-4">
+              {lang === 'si' ? 'මූලාශ්‍රය: NASA ප්‍රකාශිත රොකට් පිරිවිතර' : lang === 'ta' ? 'மூலம்: NASA வெளியிட்ட ராக்கெட் விவரக்குறிப்புகள்' : 'Source: published NASA launcher specifications'}
+            </span>
           </div>
         </div>
       )}

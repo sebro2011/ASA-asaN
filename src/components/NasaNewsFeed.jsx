@@ -275,7 +275,7 @@ function NasaNewsFeed() {
   };
 
   return (
-    <section className="w-full space-y-8 py-4 font-sans text-slate-100">
+    <section className="w-full space-y-8 py-4 font-sans text-ink">
       {/* Section Header */}
       <div className="flex flex-wrap items-center justify-between gap-4 border-b border-cyan-500/20 pb-5">
         <div>
@@ -291,7 +291,7 @@ function NasaNewsFeed() {
               {currentLang === 'en' && 'NASA News Releases & Cosmic Discoveries'}
             </span>
           </h2>
-          <p className="text-xs sm:text-sm text-slate-400 mt-1 max-w-2xl">
+          <p className="text-xs sm:text-sm text-ink-3 mt-1 max-w-2xl">
             {currentLang === 'si' && 'නාසා නිල මාධ්‍ය නිවේදන සහ දවසේ තාරකා විද්‍යා ඡායාරූපය (APOD) ස්වයංක්‍රීයව සිංහල බසින් කියවන්න.'}
             {currentLang === 'ta' && 'நாசாவின் அதிகாரப்பூர்வ செய்திகள் மற்றும் நாளின் வானியல் புகைப்படம் (APOD) உடனுக்குடன் தமிழில்.'}
             {currentLang === 'en' && 'Live press releases direct from NASA Headquarters with automatic real-time translation into Sinhala and Tamil.'}
@@ -302,7 +302,7 @@ function NasaNewsFeed() {
         <div className="flex items-center gap-2">
           <button
             onClick={() => { fetchApod(); fetchNewsFeed(); }}
-            className="p-2.5 rounded-xl bg-slate-900/90 border border-slate-700/80 text-slate-300 hover:text-cyan-400 hover:border-cyan-500/50 transition shadow-md flex items-center gap-2 text-xs font-semibold"
+            className="p-2.5 rounded-[10px] bg-surface/65 border border-line text-ink-2 hover:text-cyan-400 hover:border-cyan-500/50 transition shadow-md flex items-center gap-2 text-xs font-semibold"
             title="Refresh Feed"
           >
             <RotateCw className={`w-4 h-4 ${newsLoading ? 'animate-spin' : ''}`} />
@@ -316,7 +316,7 @@ function NasaNewsFeed() {
         <div className="relative rounded-3xl overflow-hidden border border-cyan-500/25 bg-gradient-to-r from-[#0B0F19] via-[#0e1626] to-[#0B0F19] p-1 shadow-2xl backdrop-blur-2xl">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 p-6 sm:p-8 items-center">
             {/* APOD Media Preview */}
-            <div className="lg:col-span-5 relative rounded-2xl overflow-hidden aspect-video lg:aspect-square bg-[#05070d] border border-cyan-500/20 shadow-xl group">
+            <div className="lg:col-span-5 relative rounded-[14px] overflow-hidden aspect-video lg:aspect-square bg-[#05070d] border border-cyan-500/20 shadow-xl group">
               <img
                 src={apod.url}
                 alt={apod.title}
@@ -333,19 +333,19 @@ function NasaNewsFeed() {
             {/* APOD Content Summary */}
             <div className="lg:col-span-7 space-y-4">
               <div className="flex items-center gap-2">
-                <span className="px-2.5 py-0.5 rounded text-[11px] font-mono font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                <span className="px-2.5 py-0.5 rounded text-[11px] font-mono font-bold bg-emerald-500/15 text-signal border border-emerald-500/30">
                   FEATURED DISCOVERY
                 </span>
-                <span className="text-xs text-slate-400 font-mono">
+                <span className="text-xs text-ink-3 font-mono">
                   {currentLang === 'si' ? 'භාෂාව: සිංහල' : currentLang === 'ta' ? 'மொழி: தமிழ்' : 'Language: English'}
                 </span>
               </div>
 
-              <h3 className="text-xl sm:text-2xl font-black text-white leading-snug font-['Orbitron']">
+              <h3 className="text-xl sm:text-2xl font-black text-white leading-snug font-display">
                 {apodDisplay?.title || apod.title}
               </h3>
 
-              <p className="text-sm text-slate-300 leading-relaxed line-clamp-4 font-sans">
+              <p className="text-sm text-ink-2 leading-relaxed line-clamp-4 font-sans">
                 {apodDisplay?.explanation || apod.explanation}
               </p>
 
@@ -354,14 +354,14 @@ function NasaNewsFeed() {
                   href={apod.hdurl || apod.url}
                   target="_blank"
                   rel="noreferrer"
-                  className="px-4 py-2 rounded-xl text-xs font-bold bg-cyan-600 hover:bg-cyan-500 text-white transition flex items-center gap-2 shadow-lg shadow-cyan-600/30"
+                  className="px-4 py-2 rounded-[10px] text-xs font-bold bg-cyan-600 hover:bg-cyan-500 text-white transition flex items-center gap-2 shadow-lg shadow-cyan-600/30"
                 >
                   <span>Explore Ultra HD</span>
                   <ExternalLink className="w-3.5 h-3.5" />
                 </a>
 
                 {apod.copyright && (
-                  <span className="text-xs text-slate-400 italic">
+                  <span className="text-xs text-ink-3 italic">
                     © {apod.copyright}
                   </span>
                 )}
@@ -393,10 +393,10 @@ function NasaNewsFeed() {
             <button
               key={cat}
               onClick={() => setSelectedCategory(cat)}
-              className={`px-3.5 py-1.5 rounded-2xl text-xs font-semibold whitespace-nowrap transition border ${
+              className={`px-3.5 py-1.5 rounded-[14px] text-xs font-semibold whitespace-nowrap transition border ${
                 selectedCategory === cat
                   ? 'bg-cyan-600 text-white border-cyan-400 shadow-md shadow-cyan-600/20 font-bold'
-                  : 'apple-liquid-glass text-slate-300 hover:text-white'
+                  : 'apple-liquid-glass text-ink-2 hover:text-ink'
               }`}
             >
               {cat}
@@ -407,12 +407,12 @@ function NasaNewsFeed() {
 
       {/* News Cards Grid */}
       {newsLoading ? (
-        <div className="py-24 flex flex-col items-center justify-center gap-3 text-slate-400">
+        <div className="py-24 flex flex-col items-center justify-center gap-3 text-ink-3">
           <div className="w-10 h-10 border-2 border-cyan-500/20 border-t-cyan-400 rounded-full animate-spin"></div>
           <p className="text-xs font-mono">Connecting to NASA News RSS Feed...</p>
         </div>
       ) : filteredNews.length === 0 ? (
-        <div className="py-16 text-center text-slate-400 apple-liquid-glass rounded-3xl">
+        <div className="py-16 text-center text-ink-3 apple-liquid-glass rounded-3xl">
           <Info className="w-8 h-8 text-cyan-400 mx-auto mb-2 opacity-60" />
           <p className="text-sm">No space news found matching your search.</p>
         </div>
@@ -451,7 +451,7 @@ function NasaNewsFeed() {
                   {/* Bookmark Button */}
                   <button
                     onClick={() => toggleBookmark(article.guid)}
-                    className="absolute top-3 right-3 p-2 rounded-xl apple-liquid-glass text-slate-300 hover:text-white transition"
+                    className="absolute top-3 right-3 p-2 rounded-[10px] apple-liquid-glass text-ink-2 hover:text-ink transition"
                     title="Bookmark Article"
                   >
                     <Bookmark className={`w-3.5 h-3.5 ${isBookmarked ? 'fill-cyan-400 text-cyan-400' : ''}`} />
@@ -462,19 +462,19 @@ function NasaNewsFeed() {
                 <div className="p-5 flex-1 flex flex-col justify-between space-y-4">
                   <div className="space-y-2.5">
                     {/* Date & Translation Indicator */}
-                    <div className="flex items-center justify-between text-[11px] text-slate-400 font-mono">
+                    <div className="flex items-center justify-between text-[11px] text-ink-3 font-mono">
                       <div className="flex items-center gap-1.5">
                         <Calendar className="w-3 h-3 text-cyan-400" />
                         <span>{article.pubDate ? new Date(article.pubDate).toLocaleDateString() : 'Recent'}</span>
                       </div>
 
                       {isTranslating ? (
-                        <span className="flex items-center gap-1 text-amber-400 text-[10px]">
+                        <span className="flex items-center gap-1 text-caution text-[10px]">
                           <Sparkles className="w-3 h-3 animate-spin" />
                           Translating...
                         </span>
                       ) : currentLang !== 'en' ? (
-                        <span className="flex items-center gap-1 text-emerald-400 text-[10px]">
+                        <span className="flex items-center gap-1 text-signal text-[10px]">
                           <Sparkles className="w-3 h-3" />
                           {currentLang === 'si' ? 'සිංහල' : 'தமிழ்'}
                         </span>
@@ -487,20 +487,20 @@ function NasaNewsFeed() {
                     </h4>
 
                     {/* Excerpt */}
-                    <p className="text-xs text-slate-300 leading-relaxed line-clamp-3">
+                    <p className="text-xs text-ink-2 leading-relaxed line-clamp-3">
                       {displayDesc}
                     </p>
                   </div>
 
                   {/* Footer Action Links */}
-                  <div className="pt-3 border-t border-slate-800/80 flex items-center justify-between">
+                  <div className="pt-3 border-t border-line flex items-center justify-between">
                     <button
                       onClick={() => copyArticleLink(article.guid, article.link)}
-                      className="text-xs text-slate-400 hover:text-slate-200 transition flex items-center gap-1"
+                      className="text-xs text-ink-3 hover:text-ink-2 transition flex items-center gap-1"
                       title="Copy Link"
                     >
                       {copiedId === article.guid ? (
-                        <Check className="w-3.5 h-3.5 text-emerald-400" />
+                        <Check className="w-3.5 h-3.5 text-signal" />
                       ) : (
                         <Share2 className="w-3.5 h-3.5" />
                       )}

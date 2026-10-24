@@ -71,14 +71,14 @@ function MarsImageTagger({
       {/* Header Bar */}
       <div className="flex items-center justify-between gap-3 flex-wrap border-b border-white/10 pb-4">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-rose-600 to-amber-600 flex items-center justify-center shadow-lg shadow-rose-950/40">
+          <div className="w-10 h-10 rounded-[14px] bg-gradient-to-tr from-rose-600 to-amber-600 flex items-center justify-center shadow-lg shadow-rose-950/40">
             <Target className="w-5 h-5 text-white" />
           </div>
           <div>
-            <span className="text-[10px] font-mono text-rose-400 uppercase tracking-wider block font-semibold">
+            <span className="text-[10px] font-mono text-critical uppercase tracking-wider block font-semibold">
               NASA JPL Mars 2020 Exploration
             </span>
-            <h3 className="text-base font-bold font-['Orbitron'] text-white">
+            <h3 className="text-base font-bold font-display text-white">
               Mars Rover Image Hotspot Tagger
             </h3>
           </div>
@@ -90,7 +90,7 @@ function MarsImageTagger({
       </div>
 
       {/* Main Interactive 2D Coordinate Viewport Container */}
-      <div className="relative w-full rounded-2xl overflow-hidden border border-white/10 bg-slate-950 group aspect-[16/10] sm:aspect-[16/9] shadow-inner">
+      <div className="relative w-full rounded-[14px] overflow-hidden border border-white/10 bg-abyss group aspect-[16/10] sm:aspect-[16/9] shadow-inner">
         
         {/* Background Mars Image */}
         <img
@@ -128,8 +128,8 @@ function MarsImageTagger({
                 title={hs.title}
                 className={`relative w-7 h-7 sm:w-8 sm:h-8 rounded-full border-2 flex items-center justify-center transition-all shadow-xl cursor-pointer ${
                   isActive
-                    ? 'scale-125 border-white bg-slate-950 text-white shadow-cyan-500/50 ring-4 ring-cyan-500/30'
-                    : 'border-white/80 bg-slate-950/80 text-white/90 hover:scale-110 hover:border-white'
+                    ? 'scale-125 border-white bg-abyss text-white shadow-cyan-500/50 ring-4 ring-cyan-500/30'
+                    : 'border-white/80 bg-abyss/70 text-white/90 hover:scale-110 hover:border-white'
                 }`}
                 style={{ borderColor: isActive ? '#ffffff' : beaconColor }}
               >
@@ -149,7 +149,7 @@ function MarsImageTagger({
               initial={{ opacity: 0, y: 15, scale: 0.95 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 10, scale: 0.95 }}
-              className="absolute bottom-4 left-4 right-4 sm:right-auto sm:max-w-md p-4 rounded-2xl liquid-glass border border-white/20 shadow-2xl z-30 space-y-2 text-slate-200"
+              className="absolute bottom-4 left-4 right-4 sm:right-auto sm:max-w-md p-4 rounded-[14px] liquid-glass border border-white/20 shadow-2xl z-30 space-y-2 text-ink-2"
             >
               <div className="flex items-start justify-between gap-2 border-b border-white/10 pb-2">
                 <div>
@@ -164,7 +164,7 @@ function MarsImageTagger({
                   >
                     {activeHotspot.category}
                   </span>
-                  <h4 className="font-['Orbitron'] font-bold text-white text-sm">
+                  <h4 className="font-display font-bold text-white text-sm">
                     {activeHotspot.title}
                   </h4>
                 </div>
@@ -172,13 +172,13 @@ function MarsImageTagger({
                 <button
                   type="button"
                   onClick={() => setActiveHotspot(null)}
-                  className="p-1 rounded-lg bg-white/[0.05] hover:bg-white/[0.1] text-slate-400 hover:text-white transition"
+                  className="p-1 rounded-[8px] bg-white/[0.05] hover:bg-white/[0.1] text-ink-3 hover:text-ink transition"
                 >
                   <X className="w-4 h-4" />
                 </button>
               </div>
 
-              <p className="text-xs text-slate-300 font-sans leading-relaxed">
+              <p className="text-xs text-ink-2 font-sans leading-relaxed">
                 {activeHotspot.description}
               </p>
             </motion.div>
@@ -195,13 +195,13 @@ function MarsImageTagger({
               key={hs.id}
               type="button"
               onClick={() => setActiveHotspot(hs)}
-              className={`p-3 rounded-2xl border text-left transition cursor-pointer flex flex-col justify-between ${
+              className={`p-3 rounded-[14px] border text-left transition cursor-pointer flex flex-col justify-between ${
                 isSelected
                   ? 'liquid-glass border-cyan-400 shadow-md shadow-cyan-950/40'
-                  : 'bg-white/[0.02] hover:bg-white/[0.05] border-white/10 text-slate-400 hover:text-white'
+                  : 'bg-white/[0.02] hover:bg-white/[0.05] border-white/10 text-ink-3 hover:text-ink'
               }`}
             >
-              <span className="text-[10px] text-slate-400 block truncate">{hs.category}</span>
+              <span className="text-[10px] text-ink-3 block truncate">{hs.category}</span>
               <span className="font-bold text-white truncate block mt-0.5">{hs.title}</span>
             </button>
           );

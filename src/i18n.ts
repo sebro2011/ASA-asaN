@@ -1,6 +1,8 @@
 import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
 import { earthIntelligenceTranslations } from './i18n/earthIntelligence';
+import { interfaceCopy } from './i18n/interfaceCopy';
+import { pageCopy } from './i18n/pageCopy';
 
 export const resources = {
   en: {
@@ -416,6 +418,9 @@ export const resources = {
   const bucket = (resources as any)?.[lang]?.translation;
   if (bucket) {
     Object.assign(bucket, earthIntelligenceTranslations[lang]);
+    // Redesigned shell / home / page-framing copy.
+    Object.assign(bucket, interfaceCopy[lang]);
+    Object.assign(bucket, pageCopy[lang]);
   }
 });
 

@@ -15,7 +15,6 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import L from 'leaflet';
-import 'leaflet/dist/leaflet.css';
 import { Minus, Move, Plus, RotateCcw } from 'lucide-react';
 import { imagerySource } from '../../lib/earth/gibsClient';
 import type { GibsLayerMeta } from '../../lib/earth/types';
@@ -333,12 +332,12 @@ export default function ImageryMap({
 
   return (
     <div className="space-y-2">
-      <div ref={containerRef} className="relative h-[320px] w-full overflow-hidden rounded-xl border border-slate-800 sm:h-[420px] lg:h-[520px]">
+      <div ref={containerRef} className="relative h-[320px] w-full overflow-hidden rounded-[10px] border border-line sm:h-[420px] lg:h-[520px]">
         {/* Secondary (comparison) map sits underneath in swipe mode. */}
         <div
           ref={secondaryRef}
           className={`absolute inset-0 z-0 ${mode === 'single' ? 'hidden' : 'block'} ${
-            mode === 'side' ? 'left-1/2 w-1/2 border-l border-cyan-500/40' : ''
+            mode === 'side' ? 'left-1/2 w-1/2 border-l border-atmo/35' : ''
           }`}
           aria-hidden={mode === 'single'}
           style={mode === 'swipe' ? { clipPath: `inset(0 0 0 ${divider}%)` } : undefined}
@@ -351,19 +350,19 @@ export default function ImageryMap({
           tabIndex={0}
           aria-label={`${labels.primary}. ${layer.title}, ${date}`}
           onKeyDown={onMapKeyDown}
-          className={`absolute inset-0 z-10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-cyan-400 ${
+          className={`absolute inset-0 z-10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-atmo ${
             mode === 'swipe' ? 'pointer-events-none' : ''
           } ${mode === 'side' ? 'w-1/2' : ''}`}
           style={mode === 'swipe' ? { clipPath: `inset(0 ${100 - divider}% 0 0)` } : undefined}
         />
 
         {mode === 'side' ? (
-          <div className="pointer-events-none absolute top-2 left-2 z-20 rounded-full border border-cyan-500/40 bg-slate-950/80 px-2 py-0.5 font-mono text-[10px] text-cyan-200">
+          <div className="pointer-events-none absolute top-2 left-2 z-20 rounded-full border border-atmo/35 bg-abyss/70 px-2 py-0.5 font-mono text-[10px] text-atmo-soft">
             {labels.primary} · {date}
           </div>
         ) : null}
         {mode === 'side' && compareDate ? (
-          <div className="pointer-events-none absolute top-2 right-2 z-20 rounded-full border border-amber-500/40 bg-slate-950/80 px-2 py-0.5 font-mono text-[10px] text-amber-200">
+          <div className="pointer-events-none absolute top-2 right-2 z-20 rounded-full border border-caution/35 bg-abyss/70 px-2 py-0.5 font-mono text-[10px] text-caution">
             {labels.comparison} · {compareDate}
           </div>
         ) : null}
@@ -392,7 +391,7 @@ export default function ImageryMap({
                 else return;
                 event.preventDefault();
               }}
-              className="absolute top-1/2 left-1/2 flex h-9 w-9 -translate-x-1/2 -translate-y-1/2 cursor-ew-resize items-center justify-center rounded-full border border-cyan-400/70 bg-slate-950/90 text-cyan-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-300"
+              className="absolute top-1/2 left-1/2 flex h-9 w-9 -translate-x-1/2 -translate-y-1/2 cursor-ew-resize items-center justify-center rounded-full border border-atmo/60 bg-abyss/70/90 text-atmo-soft focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-300"
             >
               <Move className="h-4 w-4" />
             </div>
@@ -402,7 +401,7 @@ export default function ImageryMap({
       {blocked ? (
         <div
           role="status"
-          className="absolute inset-x-3 bottom-6 z-40 rounded-xl border border-amber-500/40 bg-slate-950/95 p-3 text-xs leading-relaxed text-amber-100 sm:inset-x-8"
+          className="absolute inset-x-3 bottom-6 z-40 rounded-[10px] border border-caution/35 bg-abyss/70/95 p-3 text-xs leading-relaxed text-caution sm:inset-x-8"
         >
           {blocked.reason}
         </div>
@@ -414,7 +413,7 @@ export default function ImageryMap({
             type="button"
             onClick={() => zoom(1)}
             aria-label={labels.zoomIn}
-            className="rounded-md border border-slate-700 bg-slate-950/85 p-1.5 text-slate-200 hover:border-cyan-500/60 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-cyan-400"
+            className="rounded-md border border-line bg-abyss/70/85 p-1.5 text-ink-2 hover:border-cyan-500/60 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-atmo"
           >
             <Plus className="h-4 w-4" />
           </button>
@@ -422,7 +421,7 @@ export default function ImageryMap({
             type="button"
             onClick={() => zoom(-1)}
             aria-label={labels.zoomOut}
-            className="rounded-md border border-slate-700 bg-slate-950/85 p-1.5 text-slate-200 hover:border-cyan-500/60 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-cyan-400"
+            className="rounded-md border border-line bg-abyss/70/85 p-1.5 text-ink-2 hover:border-cyan-500/60 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-atmo"
           >
             <Minus className="h-4 w-4" />
           </button>
@@ -430,16 +429,16 @@ export default function ImageryMap({
             type="button"
             onClick={reset}
             aria-label={labels.reset}
-            className="rounded-md border border-slate-700 bg-slate-950/85 p-1.5 text-slate-200 hover:border-cyan-500/60 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-cyan-400"
+            className="rounded-md border border-line bg-abyss/70/85 p-1.5 text-ink-2 hover:border-cyan-500/60 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-atmo"
           >
             <RotateCcw className="h-4 w-4" />
           </button>
         </div>
       </div>
 
-      {mode === 'swipe' ? <p className="text-[11px] text-slate-500">{labels.swipeHint}</p> : null}
+      {mode === 'swipe' ? <p className="text-[11px] text-ink-4">{labels.swipeHint}</p> : null}
       {tileErrors > 4 ? (
-        <p className="text-[11px] text-amber-300">
+        <p className="text-[11px] text-caution">
           {tileErrors} tile requests failed for this layer/date. GIBS may have no imagery for the requested day in this
           area, or the layer may not be renderable in this projection.
         </p>

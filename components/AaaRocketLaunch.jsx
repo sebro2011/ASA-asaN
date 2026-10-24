@@ -859,7 +859,7 @@ export function AaaRocketLaunch({
   return (
     <div 
       ref={containerRef}
-      className={`relative w-full h-[620px] sm:h-[720px] rounded-2xl overflow-hidden border border-slate-800/80 bg-slate-950/90 shadow-2xl flex flex-col justify-between selection:bg-cyan-500/30 hover:border-cyan-500/40 hover:shadow-[0_0_25px_rgba(34,211,238,0.15)] transition-all duration-300 ${className}`}
+      className={`relative w-full h-[620px] sm:h-[720px] rounded-[14px] overflow-hidden border border-line bg-abyss/85 shadow-2xl flex flex-col justify-between selection:bg-cyan-500/30 hover:border-cyan-500/40 hover:shadow-[0_0_25px_rgba(34,211,238,0.15)] transition-all duration-300 ${className}`}
     >
       {/* ===================================================== */}
       {/* 3D WEBGL CANVAS VIEWPORT */}
@@ -952,20 +952,20 @@ export function AaaRocketLaunch({
       <div className="relative z-10 p-4 sm:p-6 flex items-start justify-between gap-4 pointer-events-none">
         
         {/* Left Telemetry Stamp Badge */}
-        <div className="pointer-events-auto bg-slate-950/80 backdrop-blur-xl border border-cyan-500/40 rounded-2xl p-3 shadow-2xl flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-cyan-500/20 border border-cyan-500/40 flex items-center justify-center shrink-0">
+        <div className="pointer-events-auto bg-abyss/70 backdrop-blur-xl border border-cyan-500/40 rounded-[14px] p-3 shadow-2xl flex items-center gap-3">
+          <div className="w-10 h-10 rounded-[10px] bg-cyan-500/20 border border-cyan-500/40 flex items-center justify-center shrink-0">
             <Rocket className="w-5 h-5 text-cyan-400 animate-pulse" />
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <span className="font-['Orbitron'] font-black text-xs sm:text-sm text-white tracking-wider">
+              <span className="font-display font-black text-xs sm:text-sm text-white tracking-wider">
                 TITAN-V LAUNCH SYSTEM
               </span>
               <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase tracking-wider ${
-                flightStage === 'orbit' ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' :
-                flightStage === 'failed' ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40' :
+                flightStage === 'orbit' ? 'bg-emerald-500/20 text-signal border border-emerald-500/40' :
+                flightStage === 'failed' ? 'bg-rose-500/20 text-critical border border-rose-500/40' :
                 flightStage === 'launched' ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 animate-ping' :
-                'bg-slate-800 text-slate-300'
+                'bg-surface-2 text-ink-2'
               }`}>
                 {flightStage}
               </span>
@@ -977,17 +977,17 @@ export function AaaRocketLaunch({
         </div>
 
         {/* Right Camera & Audio Mode Toolbar */}
-        <div className="pointer-events-auto flex items-center gap-2 bg-slate-950/80 backdrop-blur-xl border border-slate-800 rounded-2xl p-1.5 shadow-2xl">
+        <div className="pointer-events-auto flex items-center gap-2 bg-abyss/70 backdrop-blur-xl border border-line rounded-[14px] p-1.5 shadow-2xl">
           {/* Camera View Toggles */}
           {(['PAD', 'CHASE', 'ORBIT', 'NOSE']).map((mode) => (
             <button
               key={mode}
               type="button"
               onClick={() => setCameraMode(mode)}
-              className={`px-2.5 py-1.5 rounded-xl font-mono text-[10px] font-bold transition flex items-center gap-1 cursor-pointer ${
+              className={`px-2.5 py-1.5 rounded-[10px] font-mono text-[10px] font-bold transition flex items-center gap-1 cursor-pointer ${
                 cameraMode === mode
                   ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40'
-                  : 'text-slate-400 hover:text-white'
+                  : 'text-ink-3 hover:text-ink'
               }`}
             >
               <Eye className="w-3 h-3" />
@@ -995,14 +995,14 @@ export function AaaRocketLaunch({
             </button>
           ))}
 
-          <div className="w-[1px] h-4 bg-slate-800 mx-1" />
+          <div className="w-[1px] h-4 bg-surface-2 mx-1" />
 
           {/* Sound Toggle */}
           <button
             type="button"
             onClick={() => setSoundEnabled(!soundEnabled)}
-            className={`p-2 rounded-xl transition cursor-pointer ${
-              soundEnabled ? 'text-cyan-400 hover:bg-cyan-500/10' : 'text-slate-500 hover:bg-slate-800'
+            className={`p-2 rounded-[10px] transition cursor-pointer ${
+              soundEnabled ? 'text-cyan-400 hover:bg-cyan-500/10' : 'text-ink-4 hover:bg-surface-2'
             }`}
             title={soundEnabled ? 'Thruster Audio Active' : 'Audio Muted'}
           >
@@ -1010,14 +1010,14 @@ export function AaaRocketLaunch({
           </button>
 
           {/* Quick SFX Audition Buttons */}
-          <div className="hidden sm:flex items-center gap-1 pl-1 border-l border-slate-800">
+          <div className="hidden sm:flex items-center gap-1 pl-1 border-l border-line">
             <button
               type="button"
               onClick={() => {
                 globalRocketAudio?.playIgnitionSound();
                 triggerAudioNotice('⚡ ENGINE IGNITION: RS-25 Pyro Ignition Triggered', 'ignition');
               }}
-              className="px-2 py-1 rounded-lg bg-orange-500/10 hover:bg-orange-500/20 text-orange-300 border border-orange-500/30 text-[9px] font-mono font-bold transition flex items-center gap-1 cursor-pointer"
+              className="px-2 py-1 rounded-[8px] bg-orange-500/10 hover:bg-orange-500/20 text-orange-300 border border-orange-500/30 text-[9px] font-mono font-bold transition flex items-center gap-1 cursor-pointer"
               title="Test Engine Ignition Sound Effect"
             >
               <span>🔥 Ignition FX</span>
@@ -1028,7 +1028,7 @@ export function AaaRocketLaunch({
                 globalRocketAudio?.playStageSeparationSound();
                 triggerAudioNotice('💥 STAGE SEPARATION: Bolt Detonation & Pneumatic Pushers', 'separation');
               }}
-              className="px-2 py-1 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[9px] font-mono font-bold transition flex items-center gap-1 cursor-pointer"
+              className="px-2 py-1 rounded-[8px] bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[9px] font-mono font-bold transition flex items-center gap-1 cursor-pointer"
               title="Test Stage Separation Sound Effect"
             >
               <span>💥 Sep FX</span>
@@ -1039,7 +1039,7 @@ export function AaaRocketLaunch({
                 globalRocketAudio?.playAtmosphereExitSound();
                 triggerAudioNotice('🌌 ATMOSPHERE EXIT: Kármán Vacuum Entry Resonance', 'vacuum');
               }}
-              className="px-2 py-1 rounded-lg bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 text-[9px] font-mono font-bold transition flex items-center gap-1 cursor-pointer"
+              className="px-2 py-1 rounded-[8px] bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 text-[9px] font-mono font-bold transition flex items-center gap-1 cursor-pointer"
               title="Test Atmosphere Exit Sound Effect"
             >
               <span>🌌 Exit FX</span>
@@ -1050,7 +1050,7 @@ export function AaaRocketLaunch({
           <button
             type="button"
             onClick={toggleFullscreen}
-            className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition cursor-pointer"
+            className="p-2 rounded-[10px] text-ink-3 hover:text-ink hover:bg-surface-2 transition cursor-pointer"
             title="Toggle Viewport Fullscreen"
           >
             {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
@@ -1065,7 +1065,7 @@ export function AaaRocketLaunch({
             initial={{ opacity: 0, y: -15, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -15, scale: 0.95 }}
-            className={`absolute top-24 left-1/2 -translate-x-1/2 z-30 px-4 py-2.5 rounded-2xl backdrop-blur-xl border shadow-2xl flex items-center gap-2.5 font-mono text-xs font-bold pointer-events-none ${
+            className={`absolute top-24 left-1/2 -translate-x-1/2 z-30 px-4 py-2.5 rounded-[14px] backdrop-blur-xl border shadow-2xl flex items-center gap-2.5 font-mono text-xs font-bold pointer-events-none ${
               audioNotification.type === 'ignition' 
                 ? 'bg-orange-950/90 border-orange-500/70 text-orange-200 shadow-orange-500/25'
                 : audioNotification.type === 'separation'
@@ -1097,45 +1097,45 @@ export function AaaRocketLaunch({
       <div className="relative z-10 p-4 sm:p-6 flex flex-col md:flex-row items-stretch md:items-end justify-between gap-4 pointer-events-none">
         
         {/* Left Flight Metrics Array */}
-        <div className="pointer-events-auto bg-slate-950/85 backdrop-blur-xl border border-slate-800/80 rounded-2xl p-4 sm:p-5 shadow-2xl space-y-4 max-w-lg w-full">
+        <div className="pointer-events-auto bg-abyss/85 backdrop-blur-xl border border-line rounded-[14px] p-4 sm:p-5 shadow-2xl space-y-4 max-w-lg w-full">
           
           {/* Primary Telemetry Grid */}
           <div className="grid grid-cols-3 gap-3">
             
             {/* Metric 1: Altitude */}
-            <div className="p-2.5 rounded-xl bg-slate-900/80 border border-slate-800/80">
-              <div className="text-[10px] font-mono text-slate-400 uppercase tracking-wider flex items-center justify-between">
+            <div className="p-2.5 rounded-[10px] bg-surface/60 border border-line">
+              <div className="text-[10px] font-mono text-ink-3 uppercase tracking-wider flex items-center justify-between">
                 <span>ALTITUDE</span>
                 <Compass className="w-3 h-3 text-cyan-400" />
               </div>
-              <div className="text-lg sm:text-xl font-black text-white font-['Orbitron'] mt-1">
+              <div className="text-lg sm:text-xl font-black text-white font-display mt-1">
                 {altitude} <span className="text-[10px] font-mono font-normal text-cyan-300">KM</span>
               </div>
-              <div className="text-[9px] font-mono text-slate-500">LEO: 400 KM</div>
+              <div className="text-[9px] font-mono text-ink-4">LEO: 400 KM</div>
             </div>
 
             {/* Metric 2: Velocity */}
-            <div className="p-2.5 rounded-xl bg-slate-900/80 border border-slate-800/80">
-              <div className="text-[10px] font-mono text-slate-400 uppercase tracking-wider flex items-center justify-between">
+            <div className="p-2.5 rounded-[10px] bg-surface/60 border border-line">
+              <div className="text-[10px] font-mono text-ink-3 uppercase tracking-wider flex items-center justify-between">
                 <span>VELOCITY</span>
-                <TrendingUp className="w-3 h-3 text-emerald-400" />
+                <TrendingUp className="w-3 h-3 text-signal" />
               </div>
-              <div className="text-lg sm:text-xl font-black text-white font-['Orbitron'] mt-1">
-                {velocity.toLocaleString()} <span className="text-[10px] font-mono font-normal text-emerald-300">KM/H</span>
+              <div className="text-lg sm:text-xl font-black text-white font-display mt-1">
+                {velocity.toLocaleString()} <span className="text-[10px] font-mono font-normal text-signal">KM/H</span>
               </div>
-              <div className="text-[9px] font-mono text-slate-500">7.78 KM/S</div>
+              <div className="text-[9px] font-mono text-ink-4">7.78 KM/S</div>
             </div>
 
             {/* Metric 3: Mach Speed Indicator */}
-            <div className="p-2.5 rounded-xl bg-slate-900/80 border border-slate-800/80">
-              <div className="text-[10px] font-mono text-slate-400 uppercase tracking-wider flex items-center justify-between">
+            <div className="p-2.5 rounded-[10px] bg-surface/60 border border-line">
+              <div className="text-[10px] font-mono text-ink-3 uppercase tracking-wider flex items-center justify-between">
                 <span>MACH</span>
-                <Flame className="w-3 h-3 text-orange-400" />
+                <Flame className="w-3 h-3 text-caution" />
               </div>
-              <div className="text-lg sm:text-xl font-black text-white font-['Orbitron'] mt-1">
+              <div className="text-lg sm:text-xl font-black text-white font-display mt-1">
                 M {machSpeed}
               </div>
-              <div className="text-[9px] font-mono text-orange-400 font-semibold truncate">
+              <div className="text-[9px] font-mono text-caution font-semibold truncate">
                 {velocity > 6100 ? 'HYPERSONIC' : velocity > 1225 ? 'SUPERSONIC' : 'SUBSONIC'}
               </div>
             </div>
@@ -1144,15 +1144,15 @@ export function AaaRocketLaunch({
           {/* Propellant & Flight Progress Dual Meter */}
           <div className="space-y-2">
             <div className="flex justify-between text-xs font-mono">
-              <span className="text-slate-400 flex items-center gap-1.5">
+              <span className="text-ink-3 flex items-center gap-1.5">
                 <Flame className="w-3 h-3 text-cyan-400" />
                 <span>PROPELLANT RESERVES:</span>
               </span>
-              <span className={`font-bold ${fuel < 40 ? 'text-rose-400' : 'text-cyan-300'}`}>
+              <span className={`font-bold ${fuel < 40 ? 'text-critical' : 'text-cyan-300'}`}>
                 {fuel}% {fuel < 40 ? '(ABORT THRESHOLD)' : ''}
               </span>
             </div>
-            <div className="w-full h-2 bg-slate-900 rounded-full overflow-hidden border border-slate-800">
+            <div className="w-full h-2 bg-surface/60 rounded-full overflow-hidden border border-line">
               <div 
                 className={`h-full transition-all duration-150 ${fuel < 40 ? 'bg-rose-500' : 'bg-gradient-to-r from-cyan-500 to-blue-500'}`}
                 style={{ width: `${fuel}%` }}
@@ -1169,7 +1169,7 @@ export function AaaRocketLaunch({
               whileTap={{ scale: 0.96 }}
               type="button"
               onClick={handleInitiateLaunch}
-              className="px-6 sm:px-8 py-4 rounded-2xl bg-gradient-to-r from-orange-600 via-amber-600 to-cyan-600 hover:from-orange-500 hover:to-cyan-500 text-white font-mono font-black text-xs sm:text-sm tracking-wider shadow-2xl shadow-orange-500/30 flex items-center gap-2.5 cursor-pointer border border-orange-400/40"
+              className="px-6 sm:px-8 py-4 rounded-[14px] bg-gradient-to-r from-orange-600 via-amber-600 to-cyan-600 hover:from-orange-500 hover:to-cyan-500 text-white font-mono font-black text-xs sm:text-sm tracking-wider shadow-2xl shadow-orange-500/30 flex items-center gap-2.5 cursor-pointer border border-orange-400/40"
             >
               <Flame className="w-5 h-5 text-white animate-pulse" />
               <span>IGNITE LAUNCH SEQUENCE</span>
@@ -1177,7 +1177,7 @@ export function AaaRocketLaunch({
           )}
 
           {flightStage === 'countdown' && (
-            <div className="px-6 py-3.5 rounded-2xl bg-amber-950/80 border border-amber-500 text-amber-300 font-mono font-black text-sm flex items-center gap-3 shadow-xl backdrop-blur-xl">
+            <div className="px-6 py-3.5 rounded-[14px] bg-amber-950/80 border border-amber-500 text-amber-300 font-mono font-black text-sm flex items-center gap-3 shadow-xl backdrop-blur-xl">
               <span className="w-3 h-3 rounded-full bg-amber-400 animate-ping" />
               <span>T-MINUS 00:0{countdown} SECONDS</span>
             </div>
@@ -1187,7 +1187,7 @@ export function AaaRocketLaunch({
             <button
               type="button"
               onClick={handleReset}
-              className="px-5 py-3.5 rounded-2xl bg-slate-900/90 hover:bg-slate-800 border border-slate-700 text-slate-200 font-mono text-xs font-bold transition flex items-center gap-2 cursor-pointer shadow-xl backdrop-blur-xl"
+              className="px-5 py-3.5 rounded-[14px] bg-surface/65 hover:bg-surface-2 border border-line text-ink-2 font-mono text-xs font-bold transition flex items-center gap-2 cursor-pointer shadow-xl backdrop-blur-xl"
             >
               <RotateCcw className="w-4 h-4" />
               <span>RESET SIMULATOR</span>

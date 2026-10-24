@@ -37,19 +37,19 @@ export const OfflineIndicator: React.FC<OfflineIndicatorProps> = ({ lang = 'en' 
           className="fixed bottom-20 sm:bottom-6 left-4 sm:left-6 z-50 font-sans select-none"
         >
           {/* Offline Mode Active with Queued Request Counter */}
-          <div className="flex items-center gap-3 px-4 py-3 rounded-2xl bg-amber-500/95 border border-amber-300 text-slate-950 shadow-2xl backdrop-blur-xl">
+          <div className="flex items-center gap-3 px-4 py-3 rounded-[14px] bg-amber-500/95 border border-amber-300 text-slate-950 shadow-2xl backdrop-blur-xl">
             <div className="relative">
               <WifiOff className="w-5 h-5 text-slate-950" />
               <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-rose-600 animate-ping" />
             </div>
 
             <div>
-              <div className="font-['Orbitron'] text-xs font-bold uppercase tracking-wider flex items-center gap-1.5">
+              <div className="font-display text-xs font-bold uppercase tracking-wider flex items-center gap-1.5">
                 <span>
                   {lang === 'si' ? 'නොබැඳි මාදිලිය' : lang === 'ta' ? 'ஆஃப்லைன் பயன்முறை' : 'Offline Mode Active'}
                 </span>
                 {pendingCount > 0 && (
-                  <span className="px-2 py-0.5 rounded-full bg-slate-950 text-amber-300 font-mono text-[10px]">
+                  <span className="px-2 py-0.5 rounded-full bg-abyss text-amber-300 font-mono text-[10px]">
                     {pendingCount} Queued
                   </span>
                 )}

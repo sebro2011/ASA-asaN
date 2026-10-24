@@ -51,7 +51,7 @@ export default function ProvenancePanel({ entries, report }: ProvenancePanelProp
       ) : (
         <div className="space-y-3">
           {entries.map((entry) => (
-            <div key={entry.key} className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
+            <div key={entry.key} className="rounded-[10px] border border-line bg-abyss/70 p-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <p className="text-sm font-semibold text-white">{entry.title}</p>
                 <StatusBadge status={entry.status} note={entry.note} />
@@ -60,7 +60,7 @@ export default function ProvenancePanel({ entries, report }: ProvenancePanelProp
                 <DefinitionRow label={t('earthProvenanceDataset')}>{entry.dataset}</DefinitionRow>
                 <DefinitionRow label={t('earthProvenanceProvider')}>{entry.provider}</DefinitionRow>
                 <DefinitionRow label={t('earthProvenanceSourceUrl')}>
-                  <a href={entry.sourceUrl} target="_blank" rel="noreferrer" className="break-all text-cyan-300 underline decoration-dotted">
+                  <a href={entry.sourceUrl} target="_blank" rel="noreferrer" className="break-all text-atmo underline decoration-dotted">
                     {entry.sourceUrl}
                   </a>
                 </DefinitionRow>
@@ -73,8 +73,8 @@ export default function ProvenancePanel({ entries, report }: ProvenancePanelProp
               </dl>
               {entry.limitations && entry.limitations.length ? (
                 <div className="mt-2">
-                  <p className="text-[11px] uppercase tracking-wide text-slate-500">{t('earthProvenanceLimitations')}</p>
-                  <ul className="mt-1 space-y-1 text-[11px] leading-relaxed text-slate-300">
+                  <p className="text-[11px] uppercase tracking-wide text-ink-4">{t('earthProvenanceLimitations')}</p>
+                  <ul className="mt-1 space-y-1 text-[11px] leading-relaxed text-ink-2">
                     {entry.limitations.slice(0, 5).map((line) => (
                       <li key={line} className="flex gap-2">
                         <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-amber-400" />
@@ -90,12 +90,12 @@ export default function ProvenancePanel({ entries, report }: ProvenancePanelProp
       )}
 
       <div className="flex flex-wrap items-center gap-2">
-        <span className="text-[11px] uppercase tracking-wide text-slate-500">{t('earthExportTitle')}</span>
+        <span className="text-[11px] uppercase tracking-wide text-ink-4">{t('earthExportTitle')}</span>
         <button
           type="button"
           disabled={!report}
           onClick={() => report && downloadTextFile(`${report.filenameBase}.md`, report.markdown, 'text/markdown')}
-          className="flex items-center gap-2 rounded-lg border border-cyan-500/40 bg-cyan-500/10 px-3 py-1.5 text-xs text-cyan-100 transition hover:bg-cyan-500/20 disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-400"
+          className="flex items-center gap-2 rounded-[8px] border border-atmo/35 bg-atmo/[0.08] px-3 py-1.5 text-xs text-atmo-soft transition hover:bg-cyan-500/20 disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-atmo"
         >
           <FileText className="h-3.5 w-3.5" />
           {t('earthExportMarkdown')}
@@ -104,7 +104,7 @@ export default function ProvenancePanel({ entries, report }: ProvenancePanelProp
           type="button"
           disabled={!report}
           onClick={() => report && downloadTextFile(`${report.filenameBase}.json`, report.json, 'application/json')}
-          className="flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-1.5 text-xs text-slate-200 transition hover:border-cyan-500/50 disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-400"
+          className="flex items-center gap-2 rounded-[8px] border border-line bg-surface/60 px-3 py-1.5 text-xs text-ink-2 transition hover:border-atmo/45 disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-atmo"
         >
           <FileJson className="h-3.5 w-3.5" />
           {t('earthExportJson')}
@@ -113,13 +113,13 @@ export default function ProvenancePanel({ entries, report }: ProvenancePanelProp
           type="button"
           disabled={!report?.csv}
           onClick={() => report?.csv && downloadTextFile(`${report.filenameBase}.csv`, report.csv, 'text/csv')}
-          className="flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-1.5 text-xs text-slate-200 transition hover:border-cyan-500/50 disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-400"
+          className="flex items-center gap-2 rounded-[8px] border border-line bg-surface/60 px-3 py-1.5 text-xs text-ink-2 transition hover:border-atmo/45 disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-atmo"
         >
           <FileSpreadsheet className="h-3.5 w-3.5" />
           {t('earthExportCsv')}
         </button>
-        {!report ? <span className="text-[11px] text-slate-500">{t('earthExportDisabled')}</span> : null}
-        {report ? <Download className="h-3.5 w-3.5 text-slate-500" aria-hidden /> : null}
+        {!report ? <span className="text-[11px] text-ink-4">{t('earthExportDisabled')}</span> : null}
+        {report ? <Download className="h-3.5 w-3.5 text-ink-4" aria-hidden /> : null}
       </div>
     </Panel>
   );

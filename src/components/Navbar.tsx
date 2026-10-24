@@ -104,7 +104,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   };
 
   return (
-    <header className="sticky top-0 z-40 w-full border-b border-cyan-500/20 bg-slate-950/85 backdrop-blur-2xl transition-all">
+    <header className="sticky top-0 z-40 w-full border-b border-cyan-500/20 bg-abyss/85 backdrop-blur-2xl transition-all">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-20 gap-4">
           {/* Brand Logo */}
@@ -116,7 +116,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 
             <div>
               <div className="flex items-center gap-2">
-                <span className="font-['Orbitron'] font-bold text-base md:text-lg tracking-tight text-white group-hover:text-cyan-200 transition-colors">
+                <span className="font-display font-bold text-base md:text-lg tracking-tight text-white group-hover:text-cyan-200 transition-colors">
                   {t('appName')}
                 </span>
                 <span className="hidden lg:inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-cyan-500/15 text-cyan-300 border border-cyan-500/30">
@@ -124,20 +124,20 @@ export const Navbar: React.FC<NavbarProps> = ({
                   i18n
                 </span>
               </div>
-              <p className="text-[11px] text-slate-400 font-medium tracking-wide">
+              <p className="text-[11px] text-ink-3 font-medium tracking-wide">
                 {t('appSubtitle')}
               </p>
             </div>
           </div>
 
           {/* Desktop Navigation Links */}
-          <nav className="hidden md:flex items-center gap-1.5 p-1 rounded-xl bg-slate-900/70 border border-slate-800">
+          <nav className="hidden md:flex items-center gap-1.5 p-1 rounded-[10px] bg-surface/60 border border-line">
             <button
               onClick={() => onTabChange('apod')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-[8px] text-xs font-semibold transition ${
                 activeTab === 'apod'
                   ? 'bg-cyan-600 text-white shadow-md shadow-cyan-600/30'
-                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+                  : 'text-ink-3 hover:text-ink-2 hover:bg-surface-2/50'
               }`}
             >
               <Compass className="w-3.5 h-3.5" />
@@ -146,10 +146,10 @@ export const Navbar: React.FC<NavbarProps> = ({
 
             <button
               onClick={() => onTabChange('3d')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-[8px] text-xs font-semibold transition ${
                 activeTab === '3d'
                   ? 'bg-cyan-600 text-white shadow-md shadow-cyan-600/30'
-                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+                  : 'text-ink-3 hover:text-ink-2 hover:bg-surface-2/50'
               }`}
             >
               <Orbit className="w-3.5 h-3.5" />
@@ -158,10 +158,10 @@ export const Navbar: React.FC<NavbarProps> = ({
 
             <button
               onClick={() => onTabChange('missions')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-[8px] text-xs font-semibold transition ${
                 activeTab === 'missions'
                   ? 'bg-cyan-600 text-white shadow-md shadow-cyan-600/30'
-                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+                  : 'text-ink-3 hover:text-ink-2 hover:bg-surface-2/50'
               }`}
             >
               <Rocket className="w-3.5 h-3.5" />
@@ -170,22 +170,22 @@ export const Navbar: React.FC<NavbarProps> = ({
 
             <button
               onClick={() => onTabChange('launch')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-[8px] text-xs font-semibold transition ${
                 activeTab === 'launch'
                   ? 'bg-orange-600 text-white shadow-md shadow-orange-600/30'
-                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+                  : 'text-ink-3 hover:text-ink-2 hover:bg-surface-2/50'
               }`}
             >
-              <Flame className="w-3.5 h-3.5 text-orange-400" />
+              <Flame className="w-3.5 h-3.5 text-caution" />
               <span>Launch Sim</span>
             </button>
 
             <button
               onClick={() => onTabChange('news')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-[8px] text-xs font-semibold transition ${
                 activeTab === 'news'
                   ? 'bg-cyan-600 text-white shadow-md shadow-cyan-600/30'
-                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+                  : 'text-ink-3 hover:text-ink-2 hover:bg-surface-2/50'
               }`}
             >
               <Newspaper className="w-3.5 h-3.5" />
@@ -200,7 +200,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               <button
                 type="button"
                 onClick={() => setDropdownOpen(!dropdownOpen)}
-                className="flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-900/90 border border-cyan-500/30 text-white hover:border-cyan-400 text-xs font-semibold transition-all shadow-md hover:shadow-cyan-500/20"
+                className="flex items-center gap-2 px-3 py-2 rounded-[10px] bg-surface/65 border border-cyan-500/30 text-white hover:border-cyan-400 text-xs font-semibold transition-all shadow-md hover:shadow-cyan-500/20"
                 aria-expanded={dropdownOpen}
                 aria-haspopup="true"
               >
@@ -212,10 +212,10 @@ export const Navbar: React.FC<NavbarProps> = ({
               {/* Dropdown Menu */}
               {dropdownOpen && (
                 <div 
-                  className="absolute right-0 mt-2 w-52 rounded-2xl bg-slate-900/95 border border-cyan-500/30 shadow-2xl backdrop-blur-xl p-1.5 z-50 animate-in fade-in zoom-in-95 duration-150"
+                  className="absolute right-0 mt-2 w-52 rounded-[14px] bg-surface/60/95 border border-cyan-500/30 shadow-2xl backdrop-blur-xl p-1.5 z-50 animate-in fade-in zoom-in-95 duration-150"
                   role="menu"
                 >
-                  <div className="px-3 py-2 border-b border-slate-800 text-[10px] font-mono text-cyan-400 uppercase tracking-wider">
+                  <div className="px-3 py-2 border-b border-line text-[10px] font-mono text-cyan-400 uppercase tracking-wider">
                     {t('selectLanguage')}
                   </div>
                   <div className="py-1 space-y-1">
@@ -225,10 +225,10 @@ export const Navbar: React.FC<NavbarProps> = ({
                         <button
                           key={lang.code}
                           onClick={() => changeLanguage(lang.code)}
-                          className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-all ${
+                          className={`w-full flex items-center justify-between px-3 py-2 rounded-[10px] text-xs font-semibold transition-all ${
                             isSelected
                               ? 'bg-gradient-to-r from-blue-600 to-cyan-600 text-white shadow-md'
-                              : 'text-slate-300 hover:text-white hover:bg-slate-800/70'
+                              : 'text-ink-2 hover:text-ink hover:bg-surface-2/70'
                           }`}
                           role="menuitem"
                         >
@@ -252,7 +252,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             <button
               onClick={exportToPdf}
               disabled={isExportingPdf}
-              className="hidden lg:flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-slate-900/90 hover:bg-slate-800 text-slate-200 border border-slate-700 hover:border-cyan-500/40 transition shadow-sm disabled:opacity-50"
+              className="hidden lg:flex items-center gap-1.5 px-3 py-2 rounded-[10px] text-xs font-semibold bg-surface/65 hover:bg-surface-2 text-ink-2 border border-line hover:border-cyan-500/40 transition shadow-sm disabled:opacity-50"
               title={t('exportPdf')}
             >
               <FileText className="w-3.5 h-3.5 text-cyan-400" />
@@ -262,17 +262,17 @@ export const Navbar: React.FC<NavbarProps> = ({
             {/* Single HTML Export shortcut button */}
             <button
               onClick={onOpenExportModal}
-              className="hidden sm:flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 transition shadow-sm"
+              className="hidden sm:flex items-center gap-1.5 px-3 py-2 rounded-[10px] text-xs font-semibold bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 transition shadow-sm"
               title={t('navExportHtml')}
             >
-              <FileCode className="w-3.5 h-3.5 text-amber-400" />
+              <FileCode className="w-3.5 h-3.5 text-caution" />
               <span className="hidden md:inline">{t('navExportHtml')}</span>
             </button>
 
             {/* Mobile menu hamburger button */}
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="md:hidden p-2 rounded-xl text-slate-300 hover:text-white hover:bg-slate-800/80 transition"
+              className="md:hidden p-2 rounded-[10px] text-ink-2 hover:text-ink hover:bg-surface-2/70 transition"
               aria-label="Toggle menu"
             >
               {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
@@ -282,12 +282,12 @@ export const Navbar: React.FC<NavbarProps> = ({
 
         {/* Mobile Navigation Drawer */}
         {mobileMenuOpen && (
-          <div className="md:hidden py-4 border-t border-slate-800 space-y-2 animate-in slide-in-from-top duration-200">
+          <div className="md:hidden py-4 border-t border-line space-y-2 animate-in slide-in-from-top duration-200">
             <div className="grid grid-cols-2 gap-2 pb-3">
               <button
                 onClick={() => { onTabChange('apod'); setMobileMenuOpen(false); }}
-                className={`p-2.5 rounded-xl font-semibold text-xs flex items-center gap-2 ${
-                  activeTab === 'apod' ? 'bg-cyan-600 text-white' : 'bg-slate-900 text-slate-300'
+                className={`p-2.5 rounded-[10px] font-semibold text-xs flex items-center gap-2 ${
+                  activeTab === 'apod' ? 'bg-cyan-600 text-white' : 'bg-surface/60 text-ink-2'
                 }`}
               >
                 <Compass className="w-4 h-4" />
@@ -296,8 +296,8 @@ export const Navbar: React.FC<NavbarProps> = ({
 
               <button
                 onClick={() => { onTabChange('3d'); setMobileMenuOpen(false); }}
-                className={`p-2.5 rounded-xl font-semibold text-xs flex items-center gap-2 ${
-                  activeTab === '3d' ? 'bg-cyan-600 text-white' : 'bg-slate-900 text-slate-300'
+                className={`p-2.5 rounded-[10px] font-semibold text-xs flex items-center gap-2 ${
+                  activeTab === '3d' ? 'bg-cyan-600 text-white' : 'bg-surface/60 text-ink-2'
                 }`}
               >
                 <Orbit className="w-4 h-4" />
@@ -306,8 +306,8 @@ export const Navbar: React.FC<NavbarProps> = ({
 
               <button
                 onClick={() => { onTabChange('missions'); setMobileMenuOpen(false); }}
-                className={`p-2.5 rounded-xl font-semibold text-xs flex items-center gap-2 ${
-                  activeTab === 'missions' ? 'bg-cyan-600 text-white' : 'bg-slate-900 text-slate-300'
+                className={`p-2.5 rounded-[10px] font-semibold text-xs flex items-center gap-2 ${
+                  activeTab === 'missions' ? 'bg-cyan-600 text-white' : 'bg-surface/60 text-ink-2'
                 }`}
               >
                 <Rocket className="w-4 h-4" />
@@ -316,8 +316,8 @@ export const Navbar: React.FC<NavbarProps> = ({
 
               <button
                 onClick={() => { onTabChange('news'); setMobileMenuOpen(false); }}
-                className={`p-2.5 rounded-xl font-semibold text-xs flex items-center gap-2 ${
-                  activeTab === 'news' ? 'bg-cyan-600 text-white' : 'bg-slate-900 text-slate-300'
+                className={`p-2.5 rounded-[10px] font-semibold text-xs flex items-center gap-2 ${
+                  activeTab === 'news' ? 'bg-cyan-600 text-white' : 'bg-surface/60 text-ink-2'
                 }`}
               >
                 <Newspaper className="w-4 h-4" />
@@ -325,10 +325,10 @@ export const Navbar: React.FC<NavbarProps> = ({
               </button>
             </div>
 
-            <div className="flex items-center justify-between pt-2 border-t border-slate-800/80">
+            <div className="flex items-center justify-between pt-2 border-t border-line">
               <button
                 onClick={() => { exportToPdf(); setMobileMenuOpen(false); }}
-                className="px-3 py-2 rounded-xl text-xs font-semibold bg-slate-900 text-slate-200 border border-slate-800 flex items-center gap-1.5"
+                className="px-3 py-2 rounded-[10px] text-xs font-semibold bg-surface/60 text-ink-2 border border-line flex items-center gap-1.5"
               >
                 <FileText className="w-3.5 h-3.5 text-cyan-400" />
                 <span>{t('exportPdf')}</span>
@@ -336,9 +336,9 @@ export const Navbar: React.FC<NavbarProps> = ({
 
               <button
                 onClick={() => { onOpenExportModal(); setMobileMenuOpen(false); }}
-                className="px-3 py-2 rounded-xl text-xs font-semibold bg-amber-500/10 text-amber-300 border border-amber-500/30 flex items-center gap-1.5"
+                className="px-3 py-2 rounded-[10px] text-xs font-semibold bg-amber-500/10 text-amber-300 border border-amber-500/30 flex items-center gap-1.5"
               >
-                <FileCode className="w-3.5 h-3.5 text-amber-400" />
+                <FileCode className="w-3.5 h-3.5 text-caution" />
                 <span>{t('navExportHtml')}</span>
               </button>
             </div>

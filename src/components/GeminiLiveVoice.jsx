@@ -626,13 +626,13 @@ export function GeminiLiveVoice({
   return (
     <AnimatePresence>
       {isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/80 backdrop-blur-md">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-abyss/70 backdrop-blur-md">
           <motion.div
             initial={{ opacity: 0, scale: 0.92, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.92, y: 20 }}
             transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
-            className={`w-full max-w-2xl bg-[#010409]/95 border border-cyan-500/40 rounded-2xl shadow-[0_0_50px_rgba(6,182,212,0.3)] flex flex-col overflow-hidden text-slate-100 font-sans ${className}`}
+            className={`w-full max-w-2xl bg-void border border-cyan-500/40 rounded-[14px] shadow-[0_0_50px_rgba(6,182,212,0.3)] flex flex-col overflow-hidden text-ink font-sans ${className}`}
             style={{
               boxShadow: '0 25px 60px rgba(0, 0, 0, 0.9), 0 0 40px rgba(6, 182, 212, 0.25)'
             }}
@@ -641,12 +641,12 @@ export function GeminiLiveVoice({
             <div className="h-[2px] w-full bg-gradient-to-r from-transparent via-cyan-400 to-transparent" />
 
             {/* Header */}
-            <div className="px-4 py-3.5 bg-slate-950/90 border-b border-cyan-500/20 flex items-center justify-between gap-3 select-none">
+            <div className="px-4 py-3.5 bg-abyss/85 border-b border-cyan-500/20 flex items-center justify-between gap-3 select-none">
               <div className="flex items-center gap-2.5 min-w-0">
-                <div className={`relative w-8 h-8 rounded-xl flex items-center justify-center shrink-0 border ${
+                <div className={`relative w-8 h-8 rounded-[10px] flex items-center justify-center shrink-0 border ${
                   isConnected
                     ? 'bg-cyan-950/90 border-cyan-400/60 text-cyan-300'
-                    : 'bg-slate-900 border-slate-700 text-slate-400'
+                    : 'bg-surface/60 border-line text-ink-3'
                 }`}>
                   <Radio className={`w-4 h-4 ${isConnected ? 'animate-pulse' : ''}`} />
                   <span className={`absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full ${
@@ -656,7 +656,7 @@ export function GeminiLiveVoice({
 
                 <div className="flex flex-col min-w-0">
                   <div className="flex items-center gap-2">
-                    <h3 className="text-sm sm:text-base font-bold text-white font-['Orbitron'] tracking-wider truncate">
+                    <h3 className="text-sm sm:text-base font-bold text-white font-display tracking-wider truncate">
                       {ui.title}
                     </h3>
                     <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-cyan-950/80 border border-cyan-500/40 text-cyan-300 uppercase tracking-widest hidden sm:inline">
@@ -676,11 +676,11 @@ export function GeminiLiveVoice({
                   value={selectedVoice}
                   disabled={isConnected}
                   onChange={(e) => setSelectedVoice(e.target.value)}
-                  className="px-2 py-1 text-xs rounded-lg bg-slate-900 border border-cyan-500/30 text-slate-200 focus:outline-none focus:border-cyan-400 font-mono disabled:opacity-50 cursor-pointer hidden sm:inline-block"
+                  className="px-2 py-1 text-xs rounded-[8px] bg-surface/60 border border-cyan-500/30 text-ink-2 focus:outline-none focus:border-cyan-400 font-mono disabled:opacity-50 cursor-pointer hidden sm:inline-block"
                   title={ui.selectVoice}
                 >
                   {VOICE_OPTIONS.map((v) => (
-                    <option key={v.id} value={v.id} className="bg-slate-950 text-slate-200">
+                    <option key={v.id} value={v.id} className="bg-abyss text-ink-2">
                       {v.name}
                     </option>
                   ))}
@@ -693,7 +693,7 @@ export function GeminiLiveVoice({
                       cleanupAudioAndSocket();
                       onClose();
                     }}
-                    className="p-1.5 rounded-lg border border-slate-800 hover:border-rose-500/50 text-slate-400 hover:text-rose-400 transition cursor-pointer"
+                    className="p-1.5 rounded-[8px] border border-line hover:border-rose-500/50 text-ink-3 hover:text-critical transition cursor-pointer"
                     title="Close Voice Link"
                   >
                     <X className="w-4 h-4" />
@@ -720,7 +720,7 @@ export function GeminiLiveVoice({
                 <div className={`absolute inset-3 rounded-full border border-dashed transition-all duration-300 ${
                   isConnected 
                     ? (isAiSpeaking ? 'border-cyan-400 animate-spin' : 'border-cyan-500/40') 
-                    : 'border-slate-800'
+                    : 'border-line'
                 }`} style={{ animationDuration: '18s' }} />
 
                 {/* Core Sphere */}
@@ -728,15 +728,15 @@ export function GeminiLiveVoice({
                   isConnected
                     ? (isAiSpeaking 
                         ? 'bg-cyan-950/90 border-cyan-400 shadow-[0_0_40px_rgba(6,182,212,0.6)] text-cyan-200' 
-                        : 'bg-slate-950 border-cyan-500/50 shadow-[0_0_25px_rgba(6,182,212,0.3)] text-cyan-300')
-                    : 'bg-slate-950 border-slate-800 text-slate-500'
+                        : 'bg-abyss border-cyan-500/50 shadow-[0_0_25px_rgba(6,182,212,0.3)] text-cyan-300')
+                    : 'bg-abyss border-line text-ink-4'
                 }`}>
                   {isAiSpeaking ? (
                     <Volume2 className="w-8 h-8 sm:w-10 sm:h-10 animate-bounce text-cyan-300" />
                   ) : isConnected ? (
                     <Mic className="w-8 h-8 sm:w-10 sm:h-10 text-cyan-400" />
                   ) : (
-                    <Radio className="w-8 h-8 sm:w-10 sm:h-10 text-slate-500" />
+                    <Radio className="w-8 h-8 sm:w-10 sm:h-10 text-ink-4" />
                   )}
 
                   <span className="text-[9px] font-mono font-bold uppercase mt-1 tracking-wider">
@@ -761,7 +761,7 @@ export function GeminiLiveVoice({
                           ? 'bg-gradient-to-t from-cyan-500 to-sky-300'
                           : isConnected && !isMicMuted
                           ? 'bg-gradient-to-t from-emerald-500 to-cyan-400'
-                          : 'bg-slate-800'
+                          : 'bg-surface-2'
                       }`}
                     />
                   );
@@ -782,15 +782,15 @@ export function GeminiLiveVoice({
                     {statusText}
                   </p>
                 </div>
-                <p className="text-[11px] text-slate-400 max-w-md mx-auto leading-relaxed">
+                <p className="text-[11px] text-ink-3 max-w-md mx-auto leading-relaxed">
                   {ui.subtitle}
                 </p>
               </div>
 
               {/* Error Alert if any */}
               {errorMessage && (
-                <div className="w-full max-w-md p-3 rounded-xl bg-rose-950/70 border border-rose-800 text-rose-300 text-xs flex items-start gap-2.5">
-                  <AlertTriangle className="w-4 h-4 shrink-0 text-rose-400 mt-0.5" />
+                <div className="w-full max-w-md p-3 rounded-[10px] bg-rose-950/70 border border-rose-800 text-critical text-xs flex items-start gap-2.5">
+                  <AlertTriangle className="w-4 h-4 shrink-0 text-critical mt-0.5" />
                   <div className="flex-1">
                     <span className="font-semibold">Comms Warning: </span>
                     <span>{errorMessage}</span>
@@ -805,7 +805,7 @@ export function GeminiLiveVoice({
                     type="button"
                     onClick={startLiveVoiceSession}
                     disabled={isConnecting}
-                    className="px-6 py-3 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-bold font-['Orbitron'] text-xs sm:text-sm tracking-wider flex items-center gap-2 shadow-[0_0_25px_rgba(6,182,212,0.4)] transition hover:scale-105 active:scale-95 cursor-pointer disabled:opacity-50"
+                    className="px-6 py-3 rounded-[10px] bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-bold font-display text-xs sm:text-sm tracking-wider flex items-center gap-2 shadow-[0_0_25px_rgba(6,182,212,0.4)] transition hover:scale-105 active:scale-95 cursor-pointer disabled:opacity-50"
                   >
                     <Radio className="w-4 h-4" />
                     <span>{isConnecting ? ui.connecting : ui.startVoice}</span>
@@ -815,23 +815,23 @@ export function GeminiLiveVoice({
                     <button
                       type="button"
                       onClick={cleanupAudioAndSocket}
-                      className="px-5 py-2.5 rounded-xl bg-rose-950/80 hover:bg-rose-900 border border-rose-700/80 text-rose-200 font-mono text-xs sm:text-sm flex items-center gap-2 transition hover:scale-105 active:scale-95 cursor-pointer"
+                      className="px-5 py-2.5 rounded-[10px] bg-rose-950/80 hover:bg-rose-900 border border-rose-700/80 text-critical font-mono text-xs sm:text-sm flex items-center gap-2 transition hover:scale-105 active:scale-95 cursor-pointer"
                     >
-                      <Square className="w-4 h-4 text-rose-400" />
+                      <Square className="w-4 h-4 text-critical" />
                       <span>{ui.stopVoice}</span>
                     </button>
 
                     <button
                       type="button"
                       onClick={toggleMute}
-                      className={`px-4 py-2.5 rounded-xl border font-mono text-xs sm:text-sm flex items-center gap-2 transition cursor-pointer ${
+                      className={`px-4 py-2.5 rounded-[10px] border font-mono text-xs sm:text-sm flex items-center gap-2 transition cursor-pointer ${
                         isMicMuted
                           ? 'bg-amber-950/80 border-amber-600 text-amber-300'
-                          : 'bg-slate-900 hover:bg-slate-800 border-cyan-500/40 text-cyan-300'
+                          : 'bg-surface/60 hover:bg-surface-2 border-cyan-500/40 text-cyan-300'
                       }`}
                       title={isMicMuted ? ui.unmuteMic : ui.muteMic}
                     >
-                      {isMicMuted ? <MicOff className="w-4 h-4 text-amber-400" /> : <Mic className="w-4 h-4" />}
+                      {isMicMuted ? <MicOff className="w-4 h-4 text-caution" /> : <Mic className="w-4 h-4" />}
                       <span>{isMicMuted ? ui.unmuteMic : ui.muteMic}</span>
                     </button>
                   </>
@@ -841,7 +841,7 @@ export function GeminiLiveVoice({
 
             {/* Live Comms Transcripts Feed */}
             {transcripts.length > 0 && (
-              <div className="px-4 py-3 bg-slate-950 border-t border-cyan-950/80 max-h-44 overflow-y-auto space-y-2 scrollbar-thin scrollbar-thumb-cyan-900/40">
+              <div className="px-4 py-3 bg-abyss border-t border-cyan-950/80 max-h-44 overflow-y-auto space-y-2 scrollbar-thin scrollbar-thumb-cyan-900/40">
                 <div className="flex items-center gap-1.5 text-[10px] font-mono text-cyan-400 uppercase tracking-wider mb-1">
                   <Sparkles className="w-3 h-3 text-cyan-400" />
                   <span>{ui.transcriptTitle}</span>
@@ -851,22 +851,22 @@ export function GeminiLiveVoice({
                     <span className="text-[10px] px-1.5 py-0.5 rounded bg-cyan-950/80 border border-cyan-500/30 text-cyan-300 shrink-0 font-bold">
                       {ui.novaBadge}
                     </span>
-                    <span className="text-slate-300 leading-relaxed">{t.text}</span>
+                    <span className="text-ink-2 leading-relaxed">{t.text}</span>
                   </div>
                 ))}
               </div>
             )}
 
             {/* Footer Telemetry strip */}
-            <div className="px-4 py-2.5 bg-[#010409] border-t border-cyan-500/20 flex flex-col sm:flex-row items-center justify-between text-[10px] font-mono text-slate-400 gap-2">
+            <div className="px-4 py-2.5 bg-void border-t border-cyan-500/20 flex flex-col sm:flex-row items-center justify-between text-[10px] font-mono text-ink-3 gap-2">
               <div className="flex items-center gap-2 truncate">
                 <span className="w-1.5 h-1.5 rounded-full bg-cyan-400" />
                 <span className="text-cyan-400/90 font-bold">{ui.modelTag}</span>
               </div>
               <div className="flex items-center gap-3 shrink-0">
-                <span className="text-slate-500">PCM 16k In • 24k Out</span>
-                <span className="text-slate-600">|</span>
-                <span className="text-emerald-400">WebSocket Bidi Active</span>
+                <span className="text-ink-4">PCM 16k In • 24k Out</span>
+                <span className="text-ink-4">|</span>
+                <span className="text-signal">WebSocket Bidi Active</span>
               </div>
             </div>
           </motion.div>

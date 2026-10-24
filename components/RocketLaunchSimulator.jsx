@@ -115,7 +115,7 @@ export function RocketLaunchSimulator({ className = '', onComplete = undefined }
 
   // Auto-scroll terminal
   useEffect(() => {
-    terminalEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    terminalEndRef.current?.scrollIntoView?.({ behavior: 'smooth' });
   }, [logs]);
 
   // Log Dispatcher helper
@@ -317,7 +317,7 @@ export function RocketLaunchSimulator({ className = '', onComplete = undefined }
   const labels = useMemo(() => {
     return {
       title: lang === 'si' ? 'නාසා රොකට් දියත්කිරීමේ පාලක සිමියුලේටරය' : lang === 'ta' ? 'நாசா ராக்கெட் ஏவுதள கட்டுப்பாட்டு சிமுலேட்டர்' : 'NASA Rocket Launch Control Simulator',
-      subtitle: lang === 'si' ? 'සජීවී ටෙලිමෙට්‍රි දත්ත, කක්ෂීය ප්‍රවේග ගණනය සහ මෙහෙයුම් පාලන පර්යන්තය' : lang === 'ta' ? 'நேரலை தொலைநிலை அளவீடு, சுற்றுப்பாதை வேகம் மற்றும் மிஷன் கண்ட்ரோல் டெர்மினல்' : 'Interactive Telemetry, Flight Validation & Real-Time Mission Control Terminal',
+      subtitle: lang === 'si' ? 'අන්තර්ක්‍රියාකාරී පියාසැරි ආකෘතිය, අදියර වෙන් කිරීම සහ අනුකරණ මෙහෙයුම් පාලන කොන්සෝලය' : lang === 'ta' ? 'ஊடாடும் பறப்பு மாதிரி, நிலைப் பிரிப்பு மற்றும் உருவகப்படுத்தப்பட்ட பணிக் கட்டுப்பாட்டு முனையம்' : 'Interactive flight model, staging and a simulated mission-control console',
       fuelLevel: lang === 'si' ? 'ඉන්ධන ප්‍රතිශතය (අවම 40%)' : lang === 'ta' ? 'எரிபொருள் அளவு (குறைந்தபட்சம் 40%)' : 'Propellant Level (Min 40%)',
       payload: lang === 'si' ? 'බර ප්‍රමාණය (උපරිම 12,000kg)' : lang === 'ta' ? 'சுமை எடை (அதிகபட்சம் 12,000kg)' : 'Payload Mass (Max 12,000 kg)',
       altitude: lang === 'si' ? 'උන්නතාංශය' : lang === 'ta' ? 'உயரம்' : 'Altitude',
@@ -331,23 +331,23 @@ export function RocketLaunchSimulator({ className = '', onComplete = undefined }
   }, [lang]);
 
   return (
-    <div className={`w-full bg-slate-900/95 border border-cyan-500/30 rounded-3xl p-5 sm:p-8 backdrop-blur-2xl shadow-2xl relative overflow-hidden text-slate-100 ${className}`}>
+    <div className={`w-full bg-surface/60/95 border border-cyan-500/30 rounded-3xl p-5 sm:p-8 backdrop-blur-2xl shadow-2xl relative overflow-hidden text-ink ${className}`}>
       {/* Top Ambient Glow Nebula */}
       <div className="absolute -top-32 -left-32 w-80 h-80 bg-cyan-500/10 rounded-full blur-[100px] pointer-events-none" />
       <div className="absolute -bottom-32 -right-32 w-80 h-80 bg-indigo-500/10 rounded-full blur-[100px] pointer-events-none" />
 
       {/* Header with Telemetry Status Stamp */}
-      <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-slate-800">
+      <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-line">
         <div>
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 text-xs font-mono font-semibold mb-2">
             <Rocket className="w-3.5 h-3.5 text-cyan-400 animate-pulse" />
             <span>KSC LAUNCH COMPLEX 39B • SIMULATOR ACTIVE</span>
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
           </div>
-          <h2 className="text-xl sm:text-2xl md:text-3xl font-black text-white font-['Orbitron'] tracking-wide">
+          <h2 className="text-xl sm:text-2xl md:text-3xl font-black text-white font-display tracking-wide">
             {labels.title}
           </h2>
-          <p className="text-xs sm:text-sm text-slate-400 font-mono mt-1">
+          <p className="text-xs sm:text-sm text-ink-3 font-mono mt-1">
             {labels.subtitle}
           </p>
         </div>
@@ -355,14 +355,14 @@ export function RocketLaunchSimulator({ className = '', onComplete = undefined }
         {/* View Mode & Flight Stage Status Badge */}
         <div className="flex items-center flex-wrap gap-2.5">
           {/* Mode Switcher */}
-          <div className="flex items-center bg-slate-950/80 p-1 rounded-2xl border border-cyan-500/30 shadow-md">
+          <div className="flex items-center bg-abyss/70 p-1 rounded-[14px] border border-cyan-500/30 shadow-md">
             <button
               type="button"
               onClick={() => setSimViewMode('3d')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-mono font-bold transition flex items-center gap-1.5 cursor-pointer ${
+              className={`px-3 py-1.5 rounded-[10px] text-xs font-mono font-bold transition flex items-center gap-1.5 cursor-pointer ${
                 simViewMode === '3d'
                   ? 'bg-gradient-to-r from-orange-600 to-amber-600 text-white shadow-lg'
-                  : 'text-slate-400 hover:text-white'
+                  : 'text-ink-3 hover:text-ink'
               }`}
             >
               <Eye className="w-3.5 h-3.5" />
@@ -371,10 +371,10 @@ export function RocketLaunchSimulator({ className = '', onComplete = undefined }
             <button
               type="button"
               onClick={() => setSimViewMode('telemetry')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-mono font-bold transition flex items-center gap-1.5 cursor-pointer ${
+              className={`px-3 py-1.5 rounded-[10px] text-xs font-mono font-bold transition flex items-center gap-1.5 cursor-pointer ${
                 simViewMode === 'telemetry'
                   ? 'bg-gradient-to-r from-cyan-600 to-blue-600 text-white shadow-lg'
-                  : 'text-slate-400 hover:text-white'
+                  : 'text-ink-3 hover:text-ink'
               }`}
             >
               <Tv className="w-3.5 h-3.5" />
@@ -382,16 +382,16 @@ export function RocketLaunchSimulator({ className = '', onComplete = undefined }
             </button>
           </div>
 
-          <div className={`px-4 py-2 rounded-2xl border font-mono font-bold text-xs uppercase tracking-wider flex items-center gap-2 shadow-lg ${
+          <div className={`px-4 py-2 rounded-[14px] border font-mono font-bold text-xs uppercase tracking-wider flex items-center gap-2 shadow-lg ${
             flightStage === 'orbit' 
-              ? 'bg-emerald-500/20 border-emerald-400 text-emerald-300' 
+              ? 'bg-emerald-500/20 border-emerald-400 text-signal' 
               : flightStage === 'failed'
-              ? 'bg-rose-500/20 border-rose-400 text-rose-300'
+              ? 'bg-rose-500/20 border-rose-400 text-critical'
               : flightStage === 'launched'
               ? 'bg-cyan-500/20 border-cyan-400 text-cyan-300 animate-pulse'
               : flightStage === 'countdown'
               ? 'bg-amber-500/20 border-amber-400 text-amber-300'
-              : 'bg-slate-800/80 border-slate-700 text-slate-300'
+              : 'bg-surface-2/70 border-line text-ink-2'
           }`}>
             <span className={`w-2 h-2 rounded-full ${
               flightStage === 'orbit' ? 'bg-emerald-400' :
@@ -405,7 +405,7 @@ export function RocketLaunchSimulator({ className = '', onComplete = undefined }
           <button
             type="button"
             onClick={handleReset}
-            className="p-2.5 rounded-2xl bg-slate-800/80 hover:bg-slate-700 text-slate-300 border border-slate-700 transition cursor-pointer"
+            className="p-2.5 rounded-[14px] bg-surface-2/70 hover:bg-slate-700 text-ink-2 border border-line transition cursor-pointer"
             title={labels.resetBtn}
           >
             <RotateCcw className="w-4 h-4" />
@@ -428,7 +428,7 @@ export function RocketLaunchSimulator({ className = '', onComplete = undefined }
           
           {/* Quick Vehicle Configuration Presets */}
           <div className="space-y-2">
-            <div className="text-xs font-mono font-semibold text-slate-400 uppercase tracking-wider flex items-center justify-between">
+            <div className="text-xs font-mono font-semibold text-ink-3 uppercase tracking-wider flex items-center justify-between">
               <span>VEHICLE FLIGHT PRESETS</span>
               <span className="text-[10px] text-cyan-400">TEST SCENARIOS</span>
             </div>
@@ -439,32 +439,32 @@ export function RocketLaunchSimulator({ className = '', onComplete = undefined }
                   type="button"
                   disabled={flightStage === 'countdown' || flightStage === 'launched'}
                   onClick={() => applyPreset(preset)}
-                  className={`p-2.5 rounded-xl border text-left transition text-xs font-mono disabled:opacity-50 cursor-pointer ${
+                  className={`p-2.5 rounded-[10px] border text-left transition text-xs font-mono disabled:opacity-50 cursor-pointer ${
                     activePreset === preset.id
                       ? 'bg-cyan-500/20 border-cyan-400 text-cyan-200'
-                      : 'bg-slate-850/60 border-slate-800 hover:border-slate-700 text-slate-300'
+                      : 'bg-slate-850/60 border-line hover:border-line text-ink-2'
                   }`}
                 >
                   <div className="font-bold truncate">{preset.name}</div>
-                  <div className="text-[10px] text-slate-400 truncate mt-0.5">{preset.desc}</div>
+                  <div className="text-[10px] text-ink-3 truncate mt-0.5">{preset.desc}</div>
                 </button>
               ))}
             </div>
           </div>
 
           {/* Configuration Sliders Card */}
-          <div className="p-4 sm:p-5 rounded-2xl bg-slate-950/70 border border-slate-800/90 space-y-5">
+          <div className="p-4 sm:p-5 rounded-[14px] bg-abyss/70 border border-line/90 space-y-5">
             
             {/* Slider 1: Propellant Fuel Level */}
             <div className="space-y-2">
               <div className="flex items-center justify-between text-xs font-mono">
-                <span className="text-slate-300 flex items-center gap-1.5">
-                  <Fuel className={`w-3.5 h-3.5 ${fuel < 40 ? 'text-rose-400 animate-pulse' : 'text-cyan-400'}`} />
+                <span className="text-ink-2 flex items-center gap-1.5">
+                  <Fuel className={`w-3.5 h-3.5 ${fuel < 40 ? 'text-critical animate-pulse' : 'text-cyan-400'}`} />
                   {labels.fuelLevel}
                 </span>
                 <span className={`font-bold px-2 py-0.5 rounded ${
                   fuel < 40 
-                    ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40' 
+                    ? 'bg-rose-500/20 text-critical border border-rose-500/40' 
                     : 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40'
                 }`}>
                   {fuel}%
@@ -481,11 +481,11 @@ export function RocketLaunchSimulator({ className = '', onComplete = undefined }
                   setFuel(Number(e.target.value));
                   setActivePreset(null);
                 }}
-                className="w-full accent-cyan-400 bg-slate-800 rounded-lg h-2 cursor-pointer disabled:opacity-50"
+                className="w-full accent-cyan-400 bg-surface-2 rounded-[8px] h-2 cursor-pointer disabled:opacity-50"
               />
-              <div className="flex justify-between text-[10px] font-mono text-slate-500">
+              <div className="flex justify-between text-[10px] font-mono text-ink-4">
                 <span>0% (Empty)</span>
-                <span className="text-amber-400 font-semibold">40% MIN MARGIN</span>
+                <span className="text-caution font-semibold">40% MIN MARGIN</span>
                 <span>100% (Full)</span>
               </div>
             </div>
@@ -493,13 +493,13 @@ export function RocketLaunchSimulator({ className = '', onComplete = undefined }
             {/* Slider 2: Payload Weight */}
             <div className="space-y-2">
               <div className="flex items-center justify-between text-xs font-mono">
-                <span className="text-slate-300 flex items-center gap-1.5">
-                  <Weight className={`w-3.5 h-3.5 ${payloadWeight > 12000 ? 'text-rose-400 animate-pulse' : 'text-amber-400'}`} />
+                <span className="text-ink-2 flex items-center gap-1.5">
+                  <Weight className={`w-3.5 h-3.5 ${payloadWeight > 12000 ? 'text-critical animate-pulse' : 'text-caution'}`} />
                   {labels.payload}
                 </span>
                 <span className={`font-bold px-2 py-0.5 rounded ${
                   payloadWeight > 12000 
-                    ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40' 
+                    ? 'bg-rose-500/20 text-critical border border-rose-500/40' 
                     : 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
                 }`}>
                   {payloadWeight.toLocaleString()} kg
@@ -516,25 +516,25 @@ export function RocketLaunchSimulator({ className = '', onComplete = undefined }
                   setPayloadWeight(Number(e.target.value));
                   setActivePreset(null);
                 }}
-                className="w-full accent-amber-400 bg-slate-800 rounded-lg h-2 cursor-pointer disabled:opacity-50"
+                className="w-full accent-amber-400 bg-surface-2 rounded-[8px] h-2 cursor-pointer disabled:opacity-50"
               />
-              <div className="flex justify-between text-[10px] font-mono text-slate-500">
+              <div className="flex justify-between text-[10px] font-mono text-ink-4">
                 <span>2,000 kg</span>
-                <span className="text-rose-400 font-semibold">12,000 kg MAX LIMIT</span>
+                <span className="text-critical font-semibold">12,000 kg MAX LIMIT</span>
                 <span>18,000 kg</span>
               </div>
             </div>
 
             {/* Live Safety Check Badge */}
-            <div className="pt-2 border-t border-slate-800/80">
+            <div className="pt-2 border-t border-line">
               {fuel >= 40 && payloadWeight <= 12000 ? (
-                <div className="flex items-center gap-2 text-xs font-mono text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 p-2.5 rounded-xl">
-                  <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
+                <div className="flex items-center gap-2 text-xs font-mono text-signal bg-emerald-500/10 border border-emerald-500/30 p-2.5 rounded-[10px]">
+                  <CheckCircle2 className="w-4 h-4 shrink-0 text-signal" />
                   <span>PRE-FLIGHT CHECKS: Propellant & Weight within nominal LEO envelope.</span>
                 </div>
               ) : (
-                <div className="flex items-center gap-2 text-xs font-mono text-rose-400 bg-rose-500/10 border border-rose-500/30 p-2.5 rounded-xl">
-                  <AlertTriangle className="w-4 h-4 shrink-0 text-rose-400 animate-bounce" />
+                <div className="flex items-center gap-2 text-xs font-mono text-critical bg-rose-500/10 border border-rose-500/30 p-2.5 rounded-[10px]">
+                  <AlertTriangle className="w-4 h-4 shrink-0 text-critical animate-bounce" />
                   <span>
                     WARNING: {fuel < 40 ? 'Fuel below 40% threshold. ' : ''}
                     {payloadWeight > 12000 ? 'Payload exceeds 12,000kg threshold.' : ''}
@@ -550,7 +550,7 @@ export function RocketLaunchSimulator({ className = '', onComplete = undefined }
               type="button"
               disabled={flightStage === 'countdown' || flightStage === 'launched' || flightStage === 'orbit'}
               onClick={handleStartLaunch}
-              className="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-cyan-600 via-blue-600 to-indigo-600 hover:from-cyan-500 hover:to-blue-500 text-white font-mono font-bold text-xs tracking-wider shadow-lg shadow-cyan-500/25 disabled:opacity-40 transition-all flex items-center justify-center gap-2 cursor-pointer"
+              className="w-full py-3.5 px-4 rounded-[10px] bg-gradient-to-r from-cyan-600 via-blue-600 to-indigo-600 hover:from-cyan-500 hover:to-blue-500 text-white font-mono font-bold text-xs tracking-wider shadow-lg shadow-cyan-500/25 disabled:opacity-40 transition-all flex items-center justify-center gap-2 cursor-pointer"
             >
               <Play className="w-4 h-4 fill-current" />
               <span>{labels.launchBtn}</span>
@@ -560,7 +560,7 @@ export function RocketLaunchSimulator({ className = '', onComplete = undefined }
               type="button"
               disabled={flightStage === 'idle' || flightStage === 'orbit' || flightStage === 'failed'}
               onClick={handleAbort}
-              className="w-full py-3.5 px-4 rounded-xl bg-rose-950/80 hover:bg-rose-900 border border-rose-500/60 text-rose-300 font-mono font-bold text-xs tracking-wider shadow-lg disabled:opacity-40 transition-all flex items-center justify-center gap-2 cursor-pointer"
+              className="w-full py-3.5 px-4 rounded-[10px] bg-rose-950/80 hover:bg-rose-900 border border-rose-500/60 text-critical font-mono font-bold text-xs tracking-wider shadow-lg disabled:opacity-40 transition-all flex items-center justify-center gap-2 cursor-pointer"
             >
               <Square className="w-4 h-4 fill-current" />
               <span>{labels.abortBtn}</span>
@@ -568,73 +568,73 @@ export function RocketLaunchSimulator({ className = '', onComplete = undefined }
           </div>
         </div>
 
-        {/* Right Column (7 Cols): Live Telemetry Gauges, Ascent Visualizer & Terminal */}
+        {/* Right column: simulated flight gauges, ascent visualiser and console */}
         <div className="lg:col-span-7 space-y-6 flex flex-col justify-between">
           
-          {/* Real-Time Telemetry Metrics HUD Card */}
+          {/* Flight-model telemetry (simulated, not flight data) */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             
             {/* Metric 1: Altitude */}
-            <div className="p-3.5 rounded-2xl bg-slate-950/80 border border-slate-800 shadow-lg relative overflow-hidden">
-              <div className="text-[10px] font-mono text-slate-400 uppercase tracking-wider flex items-center justify-between">
+            <div className="p-3.5 rounded-[14px] bg-abyss/70 border border-line shadow-lg relative overflow-hidden">
+              <div className="text-[10px] font-mono text-ink-3 uppercase tracking-wider flex items-center justify-between">
                 <span>{labels.altitude}</span>
                 <Compass className="w-3 h-3 text-cyan-400" />
               </div>
-              <div className="text-xl sm:text-2xl font-black text-white font-['Orbitron'] mt-1">
+              <div className="text-xl sm:text-2xl font-black text-white font-display mt-1">
                 {altitude} <span className="text-xs font-mono font-normal text-cyan-300">km</span>
               </div>
-              <div className="text-[10px] font-mono text-slate-500 mt-0.5">
+              <div className="text-[10px] font-mono text-ink-4 mt-0.5">
                 Target: 400 km (LEO)
               </div>
             </div>
 
             {/* Metric 2: Velocity */}
-            <div className="p-3.5 rounded-2xl bg-slate-950/80 border border-slate-800 shadow-lg relative overflow-hidden">
-              <div className="text-[10px] font-mono text-slate-400 uppercase tracking-wider flex items-center justify-between">
+            <div className="p-3.5 rounded-[14px] bg-abyss/70 border border-line shadow-lg relative overflow-hidden">
+              <div className="text-[10px] font-mono text-ink-3 uppercase tracking-wider flex items-center justify-between">
                 <span>{labels.velocity}</span>
-                <TrendingUp className="w-3 h-3 text-emerald-400" />
+                <TrendingUp className="w-3 h-3 text-signal" />
               </div>
-              <div className="text-xl sm:text-2xl font-black text-white font-['Orbitron'] mt-1">
-                {velocity.toLocaleString()} <span className="text-[10px] font-mono font-normal text-emerald-300">km/h</span>
+              <div className="text-xl sm:text-2xl font-black text-white font-display mt-1">
+                {velocity.toLocaleString()} <span className="text-[10px] font-mono font-normal text-signal">km/h</span>
               </div>
-              <div className="text-[10px] font-mono text-slate-500 mt-0.5">
+              <div className="text-[10px] font-mono text-ink-4 mt-0.5">
                 Orbital: 28,000 km/h
               </div>
             </div>
 
             {/* Metric 3: G-Force */}
-            <div className="p-3.5 rounded-2xl bg-slate-950/80 border border-slate-800 shadow-lg relative overflow-hidden">
-              <div className="text-[10px] font-mono text-slate-400 uppercase tracking-wider flex items-center justify-between">
+            <div className="p-3.5 rounded-[14px] bg-abyss/70 border border-line shadow-lg relative overflow-hidden">
+              <div className="text-[10px] font-mono text-ink-3 uppercase tracking-wider flex items-center justify-between">
                 <span>G-FORCE</span>
-                <Activity className="w-3 h-3 text-amber-400" />
+                <Activity className="w-3 h-3 text-caution" />
               </div>
-              <div className="text-xl sm:text-2xl font-black text-white font-['Orbitron'] mt-1">
+              <div className="text-xl sm:text-2xl font-black text-white font-display mt-1">
                 {gForce} <span className="text-xs font-mono font-normal text-amber-300">G</span>
               </div>
-              <div className="text-[10px] font-mono text-slate-500 mt-0.5">
+              <div className="text-[10px] font-mono text-ink-4 mt-0.5">
                 Max-Q: ~3.8 G
               </div>
             </div>
 
             {/* Metric 4: Sub-Stage Status */}
-            <div className="p-3.5 rounded-2xl bg-slate-950/80 border border-slate-800 shadow-lg relative overflow-hidden">
-              <div className="text-[10px] font-mono text-slate-400 uppercase tracking-wider flex items-center justify-between">
+            <div className="p-3.5 rounded-[14px] bg-abyss/70 border border-line shadow-lg relative overflow-hidden">
+              <div className="text-[10px] font-mono text-ink-3 uppercase tracking-wider flex items-center justify-between">
                 <span>STATUS</span>
                 <Cpu className="w-3 h-3 text-indigo-400" />
               </div>
               <div className="text-xs font-mono font-bold text-cyan-300 mt-1 line-clamp-2">
                 {subStage}
               </div>
-              <div className="text-[10px] font-mono text-slate-500 mt-0.5 truncate">
+              <div className="text-[10px] font-mono text-ink-4 mt-0.5 truncate">
                 {flightStage === 'countdown' ? `T-${countdown}s` : flightStage}
               </div>
             </div>
           </div>
 
           {/* Visual Trajectory Progress Bar (Launchpad -> Karman Line -> 400km LEO) */}
-          <div className="p-4 rounded-2xl bg-slate-950/80 border border-slate-800 space-y-2">
+          <div className="p-4 rounded-[14px] bg-abyss/70 border border-line space-y-2">
             <div className="flex items-center justify-between text-xs font-mono">
-              <span className="text-slate-300 flex items-center gap-1.5">
+              <span className="text-ink-2 flex items-center gap-1.5">
                 <Rocket className="w-3.5 h-3.5 text-cyan-400" />
                 <span>TRAJECTORY PROFILE: 0 km ➔ 400 km LOW EARTH ORBIT</span>
               </span>
@@ -644,7 +644,7 @@ export function RocketLaunchSimulator({ className = '', onComplete = undefined }
             </div>
 
             {/* Track Bar with Altitude Milestones */}
-            <div className="relative w-full h-4 bg-slate-900 rounded-full overflow-hidden p-0.5 border border-slate-800">
+            <div className="relative w-full h-4 bg-surface/60 rounded-full overflow-hidden p-0.5 border border-line">
               <motion.div
                 className={`h-full rounded-full transition-all duration-150 ${
                   flightStage === 'failed'
@@ -657,19 +657,19 @@ export function RocketLaunchSimulator({ className = '', onComplete = undefined }
               />
             </div>
 
-            <div className="flex justify-between text-[10px] font-mono text-slate-500 px-1">
+            <div className="flex justify-between text-[10px] font-mono text-ink-4 px-1">
               <span>PAD (0 km)</span>
               <span>TROPO (12 km)</span>
               <span>STRATO (50 km)</span>
               <span>KARMAN (100 km)</span>
-              <span className="text-emerald-400 font-semibold">LEO ORBIT (400 km)</span>
+              <span className="text-signal font-semibold">LEO ORBIT (400 km)</span>
             </div>
           </div>
 
-          {/* Real-Time Mission Control Terminal Console */}
-          <div className="rounded-2xl bg-[#050811] border border-cyan-500/20 shadow-2xl overflow-hidden flex flex-col h-60">
+          {/* Simulated mission-control console */}
+          <div className="rounded-[14px] bg-[#050811] border border-cyan-500/20 shadow-2xl overflow-hidden flex flex-col h-60">
             {/* Terminal Header */}
-            <div className="px-4 py-2.5 bg-slate-950 border-b border-slate-800 flex items-center justify-between">
+            <div className="px-4 py-2.5 bg-abyss border-b border-line flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <div className="flex items-center gap-1.5">
                   <div className="w-2.5 h-2.5 rounded-full bg-rose-500/80" />
@@ -686,9 +686,9 @@ export function RocketLaunchSimulator({ className = '', onComplete = undefined }
                 <button
                   type="button"
                   onClick={handleCopyLogs}
-                  className="text-[10px] font-mono text-slate-400 hover:text-white px-2 py-0.5 rounded bg-slate-900 border border-slate-800 flex items-center gap-1 transition cursor-pointer"
+                  className="text-[10px] font-mono text-ink-3 hover:text-ink px-2 py-0.5 rounded bg-surface/60 border border-line flex items-center gap-1 transition cursor-pointer"
                 >
-                  {copiedLogs ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                  {copiedLogs ? <Check className="w-3 h-3 text-signal" /> : <Copy className="w-3 h-3" />}
                   <span>{copiedLogs ? 'COPIED' : 'COPY'}</span>
                 </button>
               </div>
@@ -701,15 +701,15 @@ export function RocketLaunchSimulator({ className = '', onComplete = undefined }
                   key={log.id} 
                   className={`flex items-start gap-2 leading-relaxed ${
                     log.type === 'error'
-                      ? 'text-rose-400 font-bold bg-rose-950/30 px-1.5 py-0.5 rounded'
+                      ? 'text-critical font-bold bg-rose-950/30 px-1.5 py-0.5 rounded'
                       : log.type === 'success'
-                      ? 'text-emerald-300 font-semibold'
+                      ? 'text-signal font-semibold'
                       : log.type === 'warn'
                       ? 'text-amber-300'
-                      : 'text-slate-300'
+                      : 'text-ink-2'
                   }`}
                 >
-                  <span className="text-slate-500 text-[10px] shrink-0 font-mono select-none">
+                  <span className="text-ink-4 text-[10px] shrink-0 font-mono select-none">
                     [{log.time}]
                   </span>
                   <span className="break-words">
@@ -722,11 +722,11 @@ export function RocketLaunchSimulator({ className = '', onComplete = undefined }
               <div ref={terminalEndRef} />
             </div>
 
-            {/* Terminal Live Prompt Bar */}
-            <div className="px-3.5 py-1.5 bg-slate-950/80 border-t border-slate-900 flex items-center justify-between text-[10px] font-mono text-slate-500">
+            {/* Console prompt */}
+            <div className="px-3.5 py-1.5 bg-abyss/70 border-t border-slate-900 flex items-center justify-between text-[10px] font-mono text-ink-4">
               <div className="flex items-center gap-2">
                 <span className="text-cyan-400 font-bold">telemetry@nasa-ksc:~$</span>
-                <span className="text-slate-400 animate-pulse">_</span>
+                <span className="text-ink-3 animate-pulse">_</span>
               </div>
               <div>STREAM ACTIVE • PORT 8080</div>
             </div>
@@ -741,17 +741,17 @@ export function RocketLaunchSimulator({ className = '', onComplete = undefined }
             initial={{ opacity: 0, y: 15 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 15 }}
-            className="mt-6 p-4 rounded-2xl bg-rose-950/50 border border-rose-500/50 backdrop-blur-md flex items-center justify-between gap-4 flex-wrap"
+            className="mt-6 p-4 rounded-[14px] bg-rose-950/50 border border-rose-500/50 backdrop-blur-md flex items-center justify-between gap-4 flex-wrap"
           >
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-rose-500/20 border border-rose-500/40 flex items-center justify-center shrink-0">
-                <ShieldAlert className="w-5 h-5 text-rose-400" />
+              <div className="w-10 h-10 rounded-[10px] bg-rose-500/20 border border-rose-500/40 flex items-center justify-center shrink-0">
+                <ShieldAlert className="w-5 h-5 text-critical" />
               </div>
               <div>
-                <h4 className="text-sm font-bold text-white font-['Orbitron']">
+                <h4 className="text-sm font-bold text-white font-display">
                   MISSION TERMINATION • ANOMALY FLIGHT STAGE
                 </h4>
-                <p className="text-xs text-rose-300 font-mono mt-0.5">
+                <p className="text-xs text-critical font-mono mt-0.5">
                   {failureReason || 'Vehicle was unable to achieve orbital flight parameters.'}
                 </p>
               </div>
@@ -759,7 +759,7 @@ export function RocketLaunchSimulator({ className = '', onComplete = undefined }
             <button
               type="button"
               onClick={handleReset}
-              className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-mono text-xs font-bold transition shadow-md cursor-pointer"
+              className="px-4 py-2 rounded-[10px] bg-rose-600 hover:bg-rose-500 text-white font-mono text-xs font-bold transition shadow-md cursor-pointer"
             >
               RECONFIGURE & RETRY
             </button>
@@ -774,17 +774,17 @@ export function RocketLaunchSimulator({ className = '', onComplete = undefined }
             initial={{ opacity: 0, y: 15 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 15 }}
-            className="mt-6 p-4 rounded-2xl bg-emerald-950/50 border border-emerald-500/50 backdrop-blur-md flex items-center justify-between gap-4 flex-wrap"
+            className="mt-6 p-4 rounded-[14px] bg-emerald-950/50 border border-emerald-500/50 backdrop-blur-md flex items-center justify-between gap-4 flex-wrap"
           >
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center shrink-0">
-                <Sparkles className="w-5 h-5 text-emerald-400" />
+              <div className="w-10 h-10 rounded-[10px] bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center shrink-0">
+                <Sparkles className="w-5 h-5 text-signal" />
               </div>
               <div>
-                <h4 className="text-sm font-bold text-white font-['Orbitron']">
+                <h4 className="text-sm font-bold text-white font-display">
                   400 KM LOW EARTH ORBIT (LEO) ACHIEVED
                 </h4>
-                <p className="text-xs text-emerald-300 font-mono mt-0.5">
+                <p className="text-xs text-signal font-mono mt-0.5">
                   Orbital velocity confirmed at 28,000 km/h. Flight parameters validated successfully.
                 </p>
               </div>
@@ -792,7 +792,7 @@ export function RocketLaunchSimulator({ className = '', onComplete = undefined }
             <button
               type="button"
               onClick={handleReset}
-              className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-mono text-xs font-bold transition shadow-md cursor-pointer"
+              className="px-4 py-2 rounded-[10px] bg-emerald-600 hover:bg-emerald-500 text-white font-mono text-xs font-bold transition shadow-md cursor-pointer"
             >
               SIMULATE ANOTHER LAUNCH
             </button>

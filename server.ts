@@ -161,9 +161,10 @@ app.get('/api/apod', async (req, res) => {
     if (timeout) clearTimeout(timeout);
   }
 
-  // Graceful fallback from curated astronomical archive
+  // Service unavailable. Return a clearly-labelled reference entry and do NOT
+  // write it to the cache: caching a placeholder would make a later genuine
+  // request look like a successful network read.
   const fallback = FALLBACK_APODS[date] || FALLBACK_APODS[date.slice(0, 10)] || FALLBACK_APODS['2026-09-30'] || FALLBACK_APODS.default;
-  if (date) apodCache.set(date, fallback);
   return res.json({ success: true, data: fallback, isFallback: true });
 });
 

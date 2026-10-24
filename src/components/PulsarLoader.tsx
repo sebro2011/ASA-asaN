@@ -127,7 +127,7 @@ export default function PulsarLoader({ targetTab, lang = 'en' }: PulsarLoaderPro
 
         {/* NASA App Logo Core with Soft Pulsing Animation */}
         <motion.div
-          className="relative z-10 flex items-center justify-center p-2 rounded-2xl bg-slate-950/80 backdrop-blur-md border border-cyan-400/50 shadow-[0_0_35px_rgba(34,211,238,0.9),0_0_70px_rgba(99,102,241,0.6)]"
+          className="relative z-10 flex items-center justify-center p-2 rounded-[14px] bg-abyss/70 backdrop-blur-md border border-cyan-400/50 shadow-[0_0_35px_rgba(34,211,238,0.9),0_0_70px_rgba(99,102,241,0.6)]"
           animate={{ 
             scale: [0.94, 1.06, 0.94],
             boxShadow: [
@@ -154,16 +154,16 @@ export default function PulsarLoader({ targetTab, lang = 'en' }: PulsarLoaderPro
           <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
         </div>
 
-        <h3 className="text-base sm:text-lg font-bold text-white font-['Orbitron'] tracking-wide">
+        <h3 className="text-base sm:text-lg font-bold text-white font-display tracking-wide">
           {statusInfo.title}
         </h3>
 
-        <p className="text-xs text-slate-400 font-mono leading-relaxed">
+        <p className="text-xs text-ink-3 font-mono leading-relaxed">
           {statusInfo.subtitle}
         </p>
 
         {/* Progress Bar Indicator */}
-        <div className="w-48 h-1 bg-slate-800 rounded-full mx-auto overflow-hidden mt-3">
+        <div className="w-48 h-1 bg-surface-2 rounded-full mx-auto overflow-hidden mt-3">
           <motion.div
             className="h-full bg-gradient-to-r from-cyan-500 via-blue-500 to-indigo-500 rounded-full"
             initial={{ x: '-100%' }}

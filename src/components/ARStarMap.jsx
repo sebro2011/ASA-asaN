@@ -842,7 +842,7 @@ function ARStarMap({ lang = 'en', onSelectTarget = null }) {
     <div className="w-full space-y-5 select-none font-sans">
       
       {/* Top Banner & AR Mode Switcher */}
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-slate-950 via-indigo-950/80 to-slate-950 border border-slate-800/80 p-5 sm:p-6 shadow-2xl backdrop-blur-xl">
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-slate-950 via-indigo-950/80 to-slate-950 border border-line p-5 sm:p-6 shadow-2xl backdrop-blur-xl">
         <div className="absolute top-0 right-0 w-80 h-80 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none -mr-20 -mt-20" />
         
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -851,24 +851,24 @@ function ARStarMap({ lang = 'en', onSelectTarget = null }) {
               <Camera className="w-3.5 h-3.5 text-cyan-400 animate-pulse" />
               <span>{arMode === 'real_ar' ? 'REAL WEBRTC CAMERA AR' : '360° CELESTIAL DOME'}</span>
             </div>
-            <h2 className="text-xl sm:text-2xl font-black font-['Orbitron'] text-white tracking-wide">
+            <h2 className="text-xl sm:text-2xl font-black font-display text-white tracking-wide">
               {t.heading}
             </h2>
-            <p className="text-xs sm:text-sm text-slate-300 mt-1 max-w-2xl font-sans">
+            <p className="text-xs sm:text-sm text-ink-2 mt-1 max-w-2xl font-sans">
               {t.subheading}
             </p>
           </div>
 
           {/* AR Mode Toggle Controls */}
           <div className="flex items-center gap-2 flex-wrap">
-            <div className="flex items-center p-1 rounded-2xl bg-slate-900/90 border border-slate-800 shadow-inner">
+            <div className="flex items-center p-1 rounded-[14px] bg-surface/65 border border-line shadow-inner">
               <button
                 type="button"
                 onClick={() => setArMode('real_ar')}
-                className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-mono font-bold transition-all cursor-pointer ${
+                className={`flex items-center gap-2 px-3.5 py-2 rounded-[10px] text-xs font-mono font-bold transition-all cursor-pointer ${
                   arMode === 'real_ar'
                     ? 'bg-gradient-to-r from-cyan-600 to-indigo-600 text-white shadow-lg shadow-cyan-950/50'
-                    : 'text-slate-400 hover:text-slate-200'
+                    : 'text-ink-3 hover:text-ink-2'
                 }`}
               >
                 <Video className="w-4 h-4 text-cyan-300" />
@@ -878,10 +878,10 @@ function ARStarMap({ lang = 'en', onSelectTarget = null }) {
               <button
                 type="button"
                 onClick={() => setArMode('sky_dome')}
-                className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-mono font-bold transition-all cursor-pointer ${
+                className={`flex items-center gap-2 px-3.5 py-2 rounded-[10px] text-xs font-mono font-bold transition-all cursor-pointer ${
                   arMode === 'sky_dome'
                     ? 'bg-gradient-to-r from-cyan-600 to-indigo-600 text-white shadow-lg shadow-cyan-950/50'
-                    : 'text-slate-400 hover:text-slate-200'
+                    : 'text-ink-3 hover:text-ink-2'
                 }`}
               >
                 <Compass className="w-4 h-4 text-indigo-300" />
@@ -893,21 +893,21 @@ function ARStarMap({ lang = 'en', onSelectTarget = null }) {
             <button
               type="button"
               onClick={toggleGyro}
-              className={`p-2.5 rounded-2xl border backdrop-blur-md shadow-xl transition-all cursor-pointer flex items-center gap-1.5 text-xs font-mono font-bold ${
+              className={`p-2.5 rounded-[14px] border backdrop-blur-md shadow-xl transition-all cursor-pointer flex items-center gap-1.5 text-xs font-mono font-bold ${
                 isGyroActive
-                  ? 'bg-emerald-500/20 border-emerald-400 text-emerald-300 shadow-[0_0_15px_rgba(52,211,153,0.4)]'
-                  : 'bg-slate-900/90 hover:bg-slate-800 border-slate-800 text-slate-300 hover:text-white'
+                  ? 'bg-emerald-500/20 border-emerald-400 text-signal shadow-[0_0_15px_rgba(52,211,153,0.4)]'
+                  : 'bg-surface/65 hover:bg-surface-2 border-line text-ink-2 hover:text-ink'
               }`}
               title={isGyroActive ? t.gyroOn : t.gyroOff}
             >
-              <Smartphone className={`w-4 h-4 ${isGyroActive ? 'text-emerald-400 animate-pulse' : ''}`} />
+              <Smartphone className={`w-4 h-4 ${isGyroActive ? 'text-signal animate-pulse' : ''}`} />
               <span className="hidden sm:inline">{isGyroActive ? t.gyroOn : t.gyroOff}</span>
             </button>
           </div>
         </div>
 
         {/* Telemetry Indicator Ribbon */}
-        <div className="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between flex-wrap gap-2 text-xs font-mono text-slate-400">
+        <div className="mt-4 pt-3 border-t border-line flex items-center justify-between flex-wrap gap-2 text-xs font-mono text-ink-3">
           <div className="flex items-center gap-4">
             <span className="flex items-center gap-1.5 text-cyan-300 font-bold">
               <Compass className="w-3.5 h-3.5 text-cyan-400" />
@@ -921,12 +921,12 @@ function ARStarMap({ lang = 'en', onSelectTarget = null }) {
 
           <div className="flex items-center gap-2">
             {isAligned ? (
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/20 border border-emerald-400/50 text-emerald-300 font-bold animate-pulse">
-                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/20 border border-emerald-400/50 text-signal font-bold animate-pulse">
+                <CheckCircle2 className="w-3.5 h-3.5 text-signal" />
                 {t.targetLocked}: {selectedBody.name[lang] || selectedBody.name.en}
               </span>
             ) : (
-              <span className="text-slate-500 text-[11px]">
+              <span className="text-ink-4 text-[11px]">
                 Target: {selectedBody.name[lang] || selectedBody.name.en} (Az: {selectedBody.azimuth}°, Alt: {selectedBody.altitude}°)
               </span>
             )}
@@ -940,7 +940,7 @@ function ARStarMap({ lang = 'en', onSelectTarget = null }) {
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
-        className="relative w-full h-[520px] sm:h-[620px] rounded-3xl overflow-hidden bg-slate-950 border border-slate-800/90 shadow-2xl cursor-grab active:cursor-grabbing select-none"
+        className="relative w-full h-[520px] sm:h-[620px] rounded-3xl overflow-hidden bg-abyss border border-line/90 shadow-2xl cursor-grab active:cursor-grabbing select-none"
       >
         {/* Layer 1: Real Camera Feed Video Backdrop */}
         {arMode === 'real_ar' && (
@@ -965,7 +965,7 @@ function ARStarMap({ lang = 'en', onSelectTarget = null }) {
             {/* Horizon Gradients */}
             <div className="absolute bottom-0 inset-x-0 h-40 bg-gradient-to-t from-slate-950 via-slate-950/60 to-transparent" />
             <div className="absolute bottom-20 inset-x-0 border-b border-dashed border-cyan-500/20 text-center">
-              <span className="px-3 py-0.5 rounded-full bg-slate-950/80 border border-slate-800 text-[10px] font-mono text-cyan-400">
+              <span className="px-3 py-0.5 rounded-full bg-abyss/70 border border-line text-[10px] font-mono text-cyan-400">
                 ASTRONOMICAL HORIZON • 0° ALTITUDE
               </span>
             </div>
@@ -1008,12 +1008,12 @@ function ARStarMap({ lang = 'en', onSelectTarget = null }) {
             }`} />
 
             <Crosshair className={`absolute w-6 h-6 ${
-              isAligned ? 'text-emerald-400' : 'text-cyan-400/80'
+              isAligned ? 'text-signal' : 'text-cyan-400/80'
             }`} />
 
             {/* Alignment Tag */}
             {isAligned && (
-              <div className="absolute -top-10 px-3 py-1 rounded-xl bg-emerald-950/90 border border-emerald-400 text-emerald-300 text-xs font-mono font-bold tracking-wider shadow-2xl whitespace-nowrap">
+              <div className="absolute -top-10 px-3 py-1 rounded-[10px] bg-emerald-950/90 border border-emerald-400 text-signal text-xs font-mono font-bold tracking-wider shadow-2xl whitespace-nowrap">
                 TARGET ACQUIRED
               </div>
             )}
@@ -1119,8 +1119,8 @@ function ARStarMap({ lang = 'en', onSelectTarget = null }) {
                 </div>
 
                 {/* AR HUD Targeting Label Callout */}
-                <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 px-2.5 py-1 rounded-xl bg-slate-950/90 backdrop-blur-md border border-cyan-400/60 shadow-2xl whitespace-nowrap text-center">
-                  <div className="text-[11px] font-bold text-white font-['Orbitron']">
+                <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 px-2.5 py-1 rounded-[10px] bg-abyss/85 backdrop-blur-md border border-cyan-400/60 shadow-2xl whitespace-nowrap text-center">
+                  <div className="text-[11px] font-bold text-white font-display">
                     {body.name[lang] || body.name.en}
                   </div>
                   <div className="text-[9px] font-mono text-cyan-300">
@@ -1144,7 +1144,7 @@ function ARStarMap({ lang = 'en', onSelectTarget = null }) {
                 style={{ left: `${clampedX}px`, top: `${clampedY}px` }}
                 className="absolute -translate-x-1/2 -translate-y-1/2 z-30 cursor-pointer animate-bounce"
               >
-                <div className="px-3 py-1.5 rounded-2xl bg-gradient-to-r from-cyan-600 to-indigo-600 border border-white text-white text-xs font-mono font-bold shadow-[0_0_20px_rgba(6,182,212,0.8)] flex items-center gap-1.5 whitespace-nowrap">
+                <div className="px-3 py-1.5 rounded-[14px] bg-gradient-to-r from-cyan-600 to-indigo-600 border border-white text-white text-xs font-mono font-bold shadow-[0_0_20px_rgba(6,182,212,0.8)] flex items-center gap-1.5 whitespace-nowrap">
                   <Navigation className="w-3.5 h-3.5 text-cyan-300" />
                   <span>Turn {Math.round(pos.distanceAngle)}° towards {body.name[lang]?.split(' ')[0] || body.name.en.split(' ')[0]}</span>
                 </div>
@@ -1166,21 +1166,21 @@ function ARStarMap({ lang = 'en', onSelectTarget = null }) {
                   if (isCameraActive) stopCamera();
                   else startCamera(cameraFacing);
                 }}
-                className={`p-2.5 rounded-2xl border backdrop-blur-xl shadow-xl transition-all cursor-pointer flex items-center justify-center ${
+                className={`p-2.5 rounded-[14px] border backdrop-blur-xl shadow-xl transition-all cursor-pointer flex items-center justify-center ${
                   isCameraActive
-                    ? 'bg-emerald-500/20 border-emerald-400 text-emerald-300 shadow-[0_0_15px_rgba(52,211,153,0.4)]'
-                    : 'bg-slate-900/90 border-slate-800 text-slate-300 hover:text-white'
+                    ? 'bg-emerald-500/20 border-emerald-400 text-signal shadow-[0_0_15px_rgba(52,211,153,0.4)]'
+                    : 'bg-surface/65 border-line text-ink-2 hover:text-ink'
                 }`}
                 title={isCameraActive ? t.stopCamera : t.startCamera}
               >
-                {isCameraActive ? <Video className="w-4 h-4 text-emerald-400" /> : <VideoOff className="w-4 h-4" />}
+                {isCameraActive ? <Video className="w-4 h-4 text-signal" /> : <VideoOff className="w-4 h-4" />}
               </button>
 
               {/* Camera Flip (Rear / Front) */}
               <button
                 type="button"
                 onClick={flipCamera}
-                className="p-2.5 rounded-2xl bg-slate-900/90 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-cyan-400 shadow-xl transition-colors cursor-pointer flex items-center justify-center"
+                className="p-2.5 rounded-[14px] bg-surface/65 hover:bg-surface-2 border border-line text-ink-2 hover:text-cyan-400 shadow-xl transition-colors cursor-pointer flex items-center justify-center"
                 title={t.cameraFlip}
               >
                 <SwitchCamera className="w-4 h-4" />
@@ -1191,10 +1191,10 @@ function ARStarMap({ lang = 'en', onSelectTarget = null }) {
                 <button
                   type="button"
                   onClick={toggleTorch}
-                  className={`p-2.5 rounded-2xl border backdrop-blur-xl shadow-xl transition-all cursor-pointer flex items-center justify-center ${
+                  className={`p-2.5 rounded-[14px] border backdrop-blur-xl shadow-xl transition-all cursor-pointer flex items-center justify-center ${
                     isTorchOn
                       ? 'bg-amber-500/20 border-amber-400 text-amber-300'
-                      : 'bg-slate-900/90 border-slate-800 text-slate-300 hover:text-white'
+                      : 'bg-surface/65 border-line text-ink-2 hover:text-ink'
                   }`}
                   title={isTorchOn ? t.torchOff : t.torchOn}
                 >
@@ -1209,7 +1209,7 @@ function ARStarMap({ lang = 'en', onSelectTarget = null }) {
             type="button"
             onClick={handleCaptureSnapshot}
             disabled={isCapturing}
-            className="p-2.5 rounded-2xl bg-gradient-to-tr from-cyan-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 border border-white/50 text-white shadow-xl shadow-cyan-950/60 transition-all cursor-pointer flex items-center justify-center"
+            className="p-2.5 rounded-[14px] bg-gradient-to-tr from-cyan-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 border border-white/50 text-white shadow-xl shadow-cyan-950/60 transition-all cursor-pointer flex items-center justify-center"
             title={t.capturePhoto}
           >
             <Camera className="w-4 h-4" />
@@ -1219,7 +1219,7 @@ function ARStarMap({ lang = 'en', onSelectTarget = null }) {
           <button
             type="button"
             onClick={() => setSoundEnabled(!soundEnabled)}
-            className="p-2.5 rounded-2xl bg-slate-900/90 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-cyan-400 shadow-xl transition-colors cursor-pointer flex items-center justify-center"
+            className="p-2.5 rounded-[14px] bg-surface/65 hover:bg-surface-2 border border-line text-ink-2 hover:text-cyan-400 shadow-xl transition-colors cursor-pointer flex items-center justify-center"
             title="Audio Feedback"
           >
             {soundEnabled ? <Volume2 className="w-4 h-4 text-cyan-400" /> : <VolumeX className="w-4 h-4" />}
@@ -1228,10 +1228,10 @@ function ARStarMap({ lang = 'en', onSelectTarget = null }) {
 
         {/* Bottom Floating Telemetry Overlay Card */}
         <div className="absolute bottom-4 inset-x-4 z-30 pointer-events-none">
-          <div className="p-4 rounded-3xl bg-slate-950/85 backdrop-blur-xl border border-slate-800/90 shadow-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 pointer-events-auto">
+          <div className="p-4 rounded-3xl bg-abyss/85 backdrop-blur-xl border border-line/90 shadow-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 pointer-events-auto">
             <div className="flex items-center gap-3">
               <div 
-                className="w-10 h-10 rounded-2xl border flex items-center justify-center shadow-lg"
+                className="w-10 h-10 rounded-[14px] border flex items-center justify-center shadow-lg"
                 style={{
                   background: selectedBody.gradient,
                   borderColor: selectedBody.glowColor,
@@ -1243,14 +1243,14 @@ function ARStarMap({ lang = 'en', onSelectTarget = null }) {
 
               <div>
                 <div className="flex items-center gap-2">
-                  <span className="text-sm sm:text-base font-bold text-white font-['Orbitron']">
+                  <span className="text-sm sm:text-base font-bold text-white font-display">
                     {selectedBody.name[lang] || selectedBody.name.en}
                   </span>
-                  <span className="px-2 py-0.5 rounded-lg bg-cyan-500/20 text-cyan-300 text-[10px] font-mono">
+                  <span className="px-2 py-0.5 rounded-[8px] bg-cyan-500/20 text-cyan-300 text-[10px] font-mono">
                     {selectedBody.details.type}
                   </span>
                 </div>
-                <div className="text-xs text-slate-400 font-sans mt-0.5">
+                <div className="text-xs text-ink-3 font-sans mt-0.5">
                   {selectedBody.subtitle[lang] || selectedBody.subtitle.en}
                 </div>
               </div>
@@ -1261,7 +1261,7 @@ function ARStarMap({ lang = 'en', onSelectTarget = null }) {
               <button
                 type="button"
                 onClick={() => handleSnapToTarget(selectedBody)}
-                className="px-3.5 py-2 rounded-xl bg-slate-800/80 hover:bg-slate-700 border border-slate-700 text-xs font-mono font-bold text-cyan-300 transition-colors flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+                className="px-3.5 py-2 rounded-[10px] bg-surface-2/70 hover:bg-slate-700 border border-line text-xs font-mono font-bold text-cyan-300 transition-colors flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
               >
                 <LocateFixed className="w-3.5 h-3.5" />
                 <span>{t.snapToTarget}</span>
@@ -1270,7 +1270,7 @@ function ARStarMap({ lang = 'en', onSelectTarget = null }) {
               <button
                 type="button"
                 onClick={() => setShowDossierModal(true)}
-                className="px-4 py-2 rounded-xl bg-gradient-to-r from-cyan-600 to-indigo-600 text-white text-xs font-mono font-bold transition-all shadow-lg shadow-cyan-950/50 flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+                className="px-4 py-2 rounded-[10px] bg-gradient-to-r from-cyan-600 to-indigo-600 text-white text-xs font-mono font-bold transition-all shadow-lg shadow-cyan-950/50 flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
               >
                 <Info className="w-3.5 h-3.5" />
                 <span>{t.dossier}</span>
@@ -1281,9 +1281,9 @@ function ARStarMap({ lang = 'en', onSelectTarget = null }) {
       </div>
 
       {/* Target Selector Carousel Bar */}
-      <div className="rounded-3xl bg-slate-900/80 backdrop-blur-xl border border-slate-800 p-5 shadow-xl space-y-3">
+      <div className="rounded-3xl bg-surface/60 backdrop-blur-xl border border-line p-5 shadow-xl space-y-3">
         <div className="flex items-center justify-between flex-wrap gap-2">
-          <div className="flex items-center gap-2 text-xs font-mono font-bold text-slate-300">
+          <div className="flex items-center gap-2 text-xs font-mono font-bold text-ink-2">
             <Target className="w-4 h-4 text-cyan-400" />
             <span>Select Target to Track in Real AR:</span>
           </div>
@@ -1295,10 +1295,10 @@ function ARStarMap({ lang = 'en', onSelectTarget = null }) {
                 key={cat}
                 type="button"
                 onClick={() => setFilterCategory(cat)}
-                className={`px-2.5 py-1 rounded-xl transition-all cursor-pointer ${
+                className={`px-2.5 py-1 rounded-[10px] transition-all cursor-pointer ${
                   filterCategory === cat
                     ? 'bg-cyan-500/20 border border-cyan-400 text-cyan-300 font-bold'
-                    : 'bg-slate-950/60 border border-slate-800 text-slate-400 hover:text-slate-200'
+                    : 'bg-abyss/60 border border-line text-ink-3 hover:text-ink-2'
                 }`}
               >
                 {cat === 'ALL' ? t.filterAll : cat === 'PLANETS' ? t.filterPlanets : cat === 'STARS' ? t.filterStars : t.filterCraft}
@@ -1315,10 +1315,10 @@ function ARStarMap({ lang = 'en', onSelectTarget = null }) {
                 key={body.id}
                 type="button"
                 onClick={() => handleSnapToTarget(body)}
-                className={`p-3 rounded-2xl border text-left transition-all cursor-pointer relative overflow-hidden flex flex-col justify-between ${
+                className={`p-3 rounded-[14px] border text-left transition-all cursor-pointer relative overflow-hidden flex flex-col justify-between ${
                   isSelected
-                    ? 'bg-slate-900 border-cyan-400 shadow-xl shadow-cyan-950/50'
-                    : 'bg-slate-950/60 hover:bg-slate-900/80 border-slate-800'
+                    ? 'bg-surface/60 border-cyan-400 shadow-xl shadow-cyan-950/50'
+                    : 'bg-abyss/60 hover:bg-surface/60 border-line'
                 }`}
               >
                 <div className="flex items-center justify-between">
@@ -1332,10 +1332,10 @@ function ARStarMap({ lang = 'en', onSelectTarget = null }) {
                 </div>
 
                 <div className="mt-2">
-                  <div className="text-xs font-bold text-white font-['Orbitron'] truncate">
+                  <div className="text-xs font-bold text-white font-display truncate">
                     {body.name[lang] || body.name.en}
                   </div>
-                  <div className="text-[10px] font-mono text-slate-400 mt-0.5 truncate">
+                  <div className="text-[10px] font-mono text-ink-3 mt-0.5 truncate">
                     Alt {body.altitude}° • {body.category}
                   </div>
                 </div>
@@ -1348,14 +1348,14 @@ function ARStarMap({ lang = 'en', onSelectTarget = null }) {
       {/* Snapshot Preview & Download Dialog */}
       <AnimatePresence>
         {snapshotDataUrl && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-abyss/85 backdrop-blur-md">
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="relative w-full max-w-2xl rounded-3xl bg-slate-950 border border-slate-800 p-6 shadow-2xl space-y-4"
+              className="relative w-full max-w-2xl rounded-3xl bg-abyss border border-line p-6 shadow-2xl space-y-4"
             >
-              <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center justify-between border-b border-line pb-3">
                 <div className="flex items-center gap-2 font-mono text-sm font-bold text-cyan-300">
                   <Camera className="w-4 h-4" />
                   <span>Real AR Sky Capture Completed</span>
@@ -1363,13 +1363,13 @@ function ARStarMap({ lang = 'en', onSelectTarget = null }) {
                 <button
                   type="button"
                   onClick={() => setSnapshotDataUrl(null)}
-                  className="text-slate-400 hover:text-white"
+                  className="text-ink-3 hover:text-ink"
                 >
                   ✕
                 </button>
               </div>
 
-              <div className="rounded-2xl overflow-hidden border border-slate-800 bg-slate-900">
+              <div className="rounded-[14px] overflow-hidden border border-line bg-surface/60">
                 <img src={snapshotDataUrl} alt="AR Sky Capture" className="w-full h-auto object-cover" />
               </div>
 
@@ -1377,14 +1377,14 @@ function ARStarMap({ lang = 'en', onSelectTarget = null }) {
                 <button
                   type="button"
                   onClick={() => setSnapshotDataUrl(null)}
-                  className="px-4 py-2 rounded-xl bg-slate-800 text-slate-300 text-xs font-mono"
+                  className="px-4 py-2 rounded-[10px] bg-surface-2 text-ink-2 text-xs font-mono"
                 >
                   Close
                 </button>
                 <a
                   href={snapshotDataUrl}
                   download={`NASA_AR_SKY_${Date.now()}.jpg`}
-                  className="px-5 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-slate-950 font-bold text-xs font-mono flex items-center gap-1.5"
+                  className="px-5 py-2 rounded-[10px] bg-cyan-600 hover:bg-cyan-500 text-slate-950 font-bold text-xs font-mono flex items-center gap-1.5"
                 >
                   <Download className="w-3.5 h-3.5" />
                   <span>Save AR Photo</span>
@@ -1398,21 +1398,21 @@ function ARStarMap({ lang = 'en', onSelectTarget = null }) {
       {/* Deep Scientific Dossier Modal */}
       <AnimatePresence>
         {showDossierModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-abyss/85 backdrop-blur-md">
             <motion.div
               initial={{ opacity: 0, scale: 0.95, y: 16 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 16 }}
-              className="relative w-full max-w-xl max-h-[85vh] overflow-y-auto rounded-3xl bg-slate-950 border border-slate-800 p-6 sm:p-7 shadow-2xl space-y-5"
+              className="relative w-full max-w-xl max-h-[85vh] overflow-y-auto rounded-3xl bg-abyss border border-line p-6 sm:p-7 shadow-2xl space-y-5"
             >
-              <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center justify-between border-b border-line pb-3">
                 <div className="flex items-center gap-3">
                   <div
-                    className="w-8 h-8 rounded-xl flex items-center justify-center"
+                    className="w-8 h-8 rounded-[10px] flex items-center justify-center"
                     style={{ background: selectedBody.gradient }}
                   />
                   <div>
-                    <h3 className="text-lg font-bold font-['Orbitron'] text-white">
+                    <h3 className="text-lg font-bold font-display text-white">
                       {selectedBody.name[lang] || selectedBody.name.en}
                     </h3>
                     <div className="text-xs font-mono text-cyan-400">
@@ -1424,7 +1424,7 @@ function ARStarMap({ lang = 'en', onSelectTarget = null }) {
                 <button
                   type="button"
                   onClick={() => setShowDossierModal(false)}
-                  className="text-slate-400 hover:text-white"
+                  className="text-ink-3 hover:text-ink"
                 >
                   ✕
                 </button>
@@ -1432,25 +1432,25 @@ function ARStarMap({ lang = 'en', onSelectTarget = null }) {
 
               {/* Metric Grid */}
               <div className="grid grid-cols-2 gap-3 text-xs font-mono">
-                <div className="p-3 rounded-xl bg-slate-900 border border-slate-800">
-                  <span className="text-slate-400 block text-[10px]">COORDINATES</span>
+                <div className="p-3 rounded-[10px] bg-surface/60 border border-line">
+                  <span className="text-ink-3 block text-[10px]">COORDINATES</span>
                   <span className="text-white font-bold">Az: {selectedBody.azimuth}° • Alt: {selectedBody.altitude}°</span>
                 </div>
-                <div className="p-3 rounded-xl bg-slate-900 border border-slate-800">
-                  <span className="text-slate-400 block text-[10px]">DISTANCE</span>
+                <div className="p-3 rounded-[10px] bg-surface/60 border border-line">
+                  <span className="text-ink-3 block text-[10px]">DISTANCE</span>
                   <span className="text-white font-bold">{selectedBody.details.distance}</span>
                 </div>
-                <div className="p-3 rounded-xl bg-slate-900 border border-slate-800">
-                  <span className="text-slate-400 block text-[10px]">TEMPERATURE</span>
+                <div className="p-3 rounded-[10px] bg-surface/60 border border-line">
+                  <span className="text-ink-3 block text-[10px]">TEMPERATURE</span>
                   <span className="text-white font-bold">{selectedBody.details.temperature}</span>
                 </div>
-                <div className="p-3 rounded-xl bg-slate-900 border border-slate-800">
-                  <span className="text-slate-400 block text-[10px]">APPARENT MAGNITUDE</span>
+                <div className="p-3 rounded-[10px] bg-surface/60 border border-line">
+                  <span className="text-ink-3 block text-[10px]">APPARENT MAGNITUDE</span>
                   <span className="text-white font-bold">{selectedBody.details.apparentMagnitude}</span>
                 </div>
               </div>
 
-              <div className="p-4 rounded-2xl bg-cyan-950/30 border border-cyan-500/30 text-xs text-slate-300 space-y-1">
+              <div className="p-4 rounded-[14px] bg-cyan-950/30 border border-cyan-500/30 text-xs text-ink-2 space-y-1">
                 <div className="font-mono font-bold text-cyan-300">NASA Science Insight:</div>
                 <p className="leading-relaxed font-sans">
                   {selectedBody.details.funFact[lang] || selectedBody.details.funFact.en}
@@ -1461,7 +1461,7 @@ function ARStarMap({ lang = 'en', onSelectTarget = null }) {
                 <button
                   type="button"
                   onClick={() => setShowDossierModal(false)}
-                  className="px-5 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-slate-950 font-bold text-xs font-mono"
+                  className="px-5 py-2 rounded-[10px] bg-cyan-600 hover:bg-cyan-500 text-slate-950 font-bold text-xs font-mono"
                 >
                   Dismiss
                 </button>

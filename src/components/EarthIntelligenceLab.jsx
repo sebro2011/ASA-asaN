@@ -488,30 +488,31 @@ export default function EarthIntelligenceLab({ lang = 'en' }) {
   const coordinatesValid = validateCoordinates(area.latitude, area.longitude);
 
   return (
-    <div className="space-y-4 text-slate-100 sm:space-y-5">
-      {/* ================= Intro / provenance briefing ================= */}
-      <Panel className="space-y-3 border-cyan-500/25 bg-gradient-to-br from-cyan-950/40 via-slate-950 to-emerald-950/25">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="flex items-start gap-3">
-            <div className="rounded-xl border border-cyan-400/30 bg-cyan-400/10 p-2.5">
-              <Globe2 className="h-5 w-5 text-cyan-300" />
-            </div>
-            <div className="min-w-0">
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-cyan-500/30 bg-cyan-500/10 px-2.5 py-0.5 font-mono text-[10px] font-semibold tracking-wide text-cyan-200">
-                <Radar className="h-3 w-3" />
-                {t('earthLabBadge')}
-              </span>
-              <p className="mt-2 max-w-3xl text-xs leading-relaxed text-slate-300 sm:text-sm">{t('earthLabIntro')}</p>
-            </div>
+    <div className="space-y-4 text-ink sm:space-y-5">
+      {/* ================= Lab briefing ================= */}
+      <section className="surface surface-highlight overflow-hidden">
+        <div className="relative grid gap-5 p-5 sm:p-6 lg:grid-cols-[1.7fr_1fr]">
+          <div className="pointer-events-none absolute inset-0 grid-field opacity-40" aria-hidden="true" />
+          <div className="relative min-w-0">
+            <p className="eyebrow flex items-center gap-2">
+              <Radar className="h-3.5 w-3.5 text-atmo" strokeWidth={1.8} />
+              {t('earthLabBadge')}
+            </p>
+            <h3 className="mt-2.5 text-[19px] font-semibold leading-snug tracking-[-0.02em] text-ink sm:text-[22px]">
+              {t('earthLabBriefTitle')}
+            </h3>
+            <p className="prose-measure mt-2.5 max-w-2xl text-[12px] leading-relaxed text-ink-2 sm:text-[12.5px]">
+              {t('earthLabIntro')}
+            </p>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="relative flex flex-wrap content-start items-center gap-1.5 lg:justify-end">
             {capabilities ? (
               <Pill tone={capabilities.serverReachable ? 'emerald' : 'slate'}>
-                {capabilities.serverReachable ? 'validated server proxy' : 'static mode · direct NASA services'}
+                {capabilities.serverReachable ? 'validated proxy' : 'direct NASA services'}
               </Pill>
             ) : null}
-            {capabilities?.aiAnalyst ? <Pill tone="violet">AI analyst online</Pill> : null}
-            {capabilities && !capabilities.firmsHotspots ? <Pill tone="slate">FIRMS: no MAP_KEY</Pill> : null}
+            {capabilities?.aiAnalyst ? <Pill tone="violet">AI analyst</Pill> : null}
+            {capabilities && !capabilities.firmsHotspots ? <Pill tone="slate">FIRMS · no key</Pill> : null}
             {!isOnline ? (
               <Pill tone="amber">
                 <WifiOff className="h-3 w-3" /> offline
@@ -519,14 +520,21 @@ export default function EarthIntelligenceLab({ lang = 'en' }) {
             ) : null}
           </div>
         </div>
+        <div className="relative flex flex-wrap items-center gap-x-5 gap-y-1.5 border-t border-line/70 px-5 py-2.5 font-mono text-[9.5px] uppercase tracking-[0.14em] text-ink-4 sm:px-6">
+          <span>NASA POWER · monthly archive</span>
+          <span className="h-2.5 w-px bg-line-strong" aria-hidden="true" />
+          <span>NASA GIBS · EOSDIS imagery</span>
+          <span className="h-3 w-px bg-line-strong" aria-hidden="true" />
+          <span>Estimates, not station measurements</span>
+        </div>
+      </section>
 
-        {isOptimizedModeActive && useGlobe ? (
-          <InfoNote tone="amber">{t('earthGlobeFallback')} ({hardwareReason})</InfoNote>
-        ) : null}
-      </Panel>
+      {isOptimizedModeActive && useGlobe ? (
+        <InfoNote tone="amber">{t('earthGlobeFallback')} ({hardwareReason})</InfoNote>
+      ) : null}
 
-      {/* ============================ Mode tabs ============================ */}
-      <div role="tablist" aria-label={t('earthModesLabel')} className="flex flex-wrap gap-2">
+      {/* ============================ Workspaces ============================ */}
+      <div className="no-scrollbar -mx-4 flex gap-6 overflow-x-auto border-b border-line px-4 sm:mx-0 sm:px-0" role="tablist" aria-label={t('earthModesLabel')}>
         {MODES.map((item) => {
           const Icon = item.icon;
           const active = mode === item.key;
@@ -537,14 +545,13 @@ export default function EarthIntelligenceLab({ lang = 'en' }) {
               aria-selected={active}
               type="button"
               onClick={() => setMode(item.key)}
-              className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-400 sm:text-sm ${
-                active
-                  ? 'border-cyan-400/70 bg-cyan-500/15 text-cyan-100 shadow-[0_0_18px_rgba(34,211,238,0.18)]'
-                  : 'border-slate-800 bg-slate-950/70 text-slate-300 hover:border-cyan-500/50 hover:text-white'
+              className={`relative flex shrink-0 items-center gap-2 pb-3 pt-1 text-[12.5px] font-medium transition-colors ${
+                active ? 'text-ink' : 'text-ink-3 hover:text-ink-2'
               }`}
             >
-              <Icon className="h-4 w-4" />
+              <Icon className={`h-3.5 w-3.5 ${active ? 'text-atmo' : ''}`} />
               {t(item.labelKey)}
+              <span className={`absolute inset-x-0 -bottom-px h-px ${active ? 'bg-atmo' : 'bg-transparent'}`} />
             </button>
           );
         })}
@@ -568,12 +575,12 @@ export default function EarthIntelligenceLab({ lang = 'en' }) {
             value={searchQuery}
             onChange={(event) => setSearchQuery(event.target.value)}
             placeholder={t('earthSearchPlaceholder')}
-            className="min-w-[180px] flex-1 rounded-lg border border-slate-700 bg-slate-900/80 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-400"
+            className="min-w-[180px] flex-1 rounded-[8px] border border-line bg-surface/60 px-3 py-2 text-sm text-ink placeholder:text-ink-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-atmo"
           />
           <button
             type="submit"
             disabled={searchBusy}
-            className="flex items-center gap-2 rounded-lg border border-cyan-500/40 bg-cyan-500/10 px-3 py-2 text-sm text-cyan-100 transition hover:bg-cyan-500/20 disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-400"
+            className="flex items-center gap-2 rounded-[8px] border border-atmo/35 bg-atmo/[0.08] px-3 py-2 text-sm text-atmo-soft transition hover:bg-cyan-500/20 disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-atmo"
           >
             {searchBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
             {searchBusy ? t('earthSearching') : t('earthSearchAction')}
@@ -586,7 +593,7 @@ export default function EarthIntelligenceLab({ lang = 'en' }) {
               key={preset.label}
               type="button"
               onClick={() => setArea({ ...preset, source: 'preset' })}
-              className="rounded-full border border-slate-700 bg-slate-900/70 px-2.5 py-1 text-[11px] text-slate-300 transition hover:border-cyan-500/50 hover:text-white"
+              className="rounded-full border border-line bg-surface/60 px-2.5 py-1 text-[11px] text-ink-2 transition hover:border-atmo/45 hover:text-ink"
             >
               {preset.label}
             </button>
@@ -602,13 +609,13 @@ export default function EarthIntelligenceLab({ lang = 'en' }) {
                 <button
                   type="button"
                   onClick={() => applyPlace(place)}
-                  className="w-full rounded-xl border border-slate-800 bg-slate-950/70 p-3 text-left transition hover:border-cyan-500/50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-400"
+                  className="w-full rounded-[10px] border border-line bg-abyss/70 p-3 text-left transition hover:border-atmo/45 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-atmo"
                 >
                   <p className="text-sm text-white">{place.label}</p>
-                  <p className="mt-0.5 font-mono text-[10px] text-slate-500">
+                  <p className="mt-0.5 font-mono text-[10px] text-ink-4">
                     {place.latitude.toFixed(3)}°, {place.longitude.toFixed(3)}°
                   </p>
-                  <p className="mt-1 text-[10px] text-slate-500">{place.attribution}</p>
+                  <p className="mt-1 text-[10px] text-ink-4">{place.attribution}</p>
                 </button>
               </li>
             ))}
@@ -638,7 +645,7 @@ export default function EarthIntelligenceLab({ lang = 'en' }) {
                       setUseGlobe(next);
                       setGlobeFallback(null);
                     }}
-                    className="flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-900/70 px-2.5 py-1.5 text-[11px] text-slate-200 transition hover:border-cyan-500/50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-400"
+                    className="flex items-center gap-2 rounded-[8px] border border-line bg-surface/60 px-2.5 py-1.5 text-[11px] text-ink-2 transition hover:border-atmo/45 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-atmo"
                     aria-pressed={useGlobe}
                   >
                     <Globe2 className="h-3.5 w-3.5" />
@@ -655,10 +662,10 @@ export default function EarthIntelligenceLab({ lang = 'en' }) {
                   type="button"
                   onClick={() => setCategory(key)}
                   aria-pressed={category === key}
-                  className={`rounded-lg border px-2.5 py-1 text-[11px] transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-400 ${
+                  className={`rounded-[8px] border px-2.5 py-1 text-[11px] transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-atmo ${
                     category === key
-                      ? 'border-lime-400/70 bg-lime-500/15 text-lime-100'
-                      : 'border-slate-700 bg-slate-900/70 text-slate-300 hover:border-lime-500/50 hover:text-white'
+                      ? 'border-signal/60 bg-signal/10 text-signal'
+                      : 'border-line bg-surface/60 text-ink-2 hover:border-lime-500/50 hover:text-ink'
                   }`}
                 >
                   {t(labelKey)}
@@ -672,7 +679,7 @@ export default function EarthIntelligenceLab({ lang = 'en' }) {
                 <select
                   value={layerId}
                   onChange={(event) => setLayerId(event.target.value)}
-                  className="w-full appearance-none rounded-lg border border-slate-700 bg-slate-900/80 px-3 py-2 pr-9 text-sm text-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-400"
+                  className="w-full appearance-none rounded-[8px] border border-line bg-surface/60 px-3 py-2 pr-9 text-sm text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-atmo"
                 >
                   {visibleLayers.map((item) => (
                     <option key={item.id} value={item.id}>
@@ -680,12 +687,12 @@ export default function EarthIntelligenceLab({ lang = 'en' }) {
                     </option>
                   ))}
                 </select>
-                <ChevronDown className="pointer-events-none absolute top-1/2 right-3 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <ChevronDown className="pointer-events-none absolute top-1/2 right-3 h-4 w-4 -translate-y-1/2 text-ink-3" />
               </div>
             </label>
 
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              <label className="flex flex-col gap-1 text-[11px] text-slate-400">
+              <label className="flex flex-col gap-1 text-[11px] text-ink-3">
                 <span className="flex items-center gap-1.5">
                   <Calendar className="h-3.5 w-3.5 text-cyan-400" />
                   {t('earthObservationDate')}
@@ -695,10 +702,10 @@ export default function EarthIntelligenceLab({ lang = 'en' }) {
                   value={date}
                   max={toIsoDate(new Date())}
                   onChange={(event) => setDate(event.target.value)}
-                  className="rounded-lg border border-slate-700 bg-slate-900/80 px-2.5 py-2 text-sm text-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-400"
+                  className="rounded-[8px] border border-line bg-surface/60 px-2.5 py-2 text-sm text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-atmo"
                 />
               </label>
-              <label className="flex flex-col gap-1 text-[11px] text-slate-400">
+              <label className="flex flex-col gap-1 text-[11px] text-ink-3">
                 <span>{t('earthComparisonDate')}</span>
                 <input
                   type="date"
@@ -709,10 +716,10 @@ export default function EarthIntelligenceLab({ lang = 'en' }) {
                     setCompareDate(next);
                     if (next && viewMode === 'single') setViewMode('side');
                   }}
-                  className="rounded-lg border border-slate-700 bg-slate-900/80 px-2.5 py-2 text-sm text-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-400"
+                  className="rounded-[8px] border border-line bg-surface/60 px-2.5 py-2 text-sm text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-atmo"
                 />
               </label>
-              <div className="flex flex-col gap-1 text-[11px] text-slate-400">
+              <div className="flex flex-col gap-1 text-[11px] text-ink-3">
                 <span>{t('earthViewMode')}</span>
                 <div className="flex gap-1">
                   {[
@@ -726,10 +733,10 @@ export default function EarthIntelligenceLab({ lang = 'en' }) {
                       onClick={() => setViewMode(option.key)}
                       aria-pressed={viewMode === option.key}
                       disabled={option.key !== 'single' && !compareDate}
-                      className={`flex-1 rounded-lg border px-2 py-2 text-[11px] transition disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-400 ${
+                      className={`flex-1 rounded-[8px] border px-2 py-2 text-[11px] transition disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-atmo ${
                         viewMode === option.key
-                          ? 'border-cyan-400/70 bg-cyan-500/15 text-cyan-100'
-                          : 'border-slate-700 bg-slate-900/70 text-slate-300 hover:border-cyan-500/50'
+                          ? 'border-atmo/60 bg-atmo/10 text-atmo-soft'
+                          : 'border-line bg-surface/60 text-ink-2 hover:border-atmo/45'
                       }`}
                     >
                       {option.label}
@@ -737,7 +744,7 @@ export default function EarthIntelligenceLab({ lang = 'en' }) {
                   ))}
                 </div>
               </div>
-              <label className="flex flex-col gap-1 text-[11px] text-slate-400">
+              <label className="flex flex-col gap-1 text-[11px] text-ink-3">
                 <span>
                   {t('earthLayerOpacity')} · {Math.round(opacity * 100)}%
                 </span>
@@ -748,12 +755,12 @@ export default function EarthIntelligenceLab({ lang = 'en' }) {
                   step={0.05}
                   value={opacity}
                   onChange={(event) => setOpacity(Number(event.target.value))}
-                  className="mt-2 accent-cyan-400"
+                  className="mt-2 accent-atmo"
                 />
               </label>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
+            <div className="flex flex-wrap items-center gap-2 text-[11px] text-ink-3">
               <Pill tone="cyan">
                 <MapPin className="h-3 w-3" /> {area.label}
               </Pill>
@@ -764,12 +771,12 @@ export default function EarthIntelligenceLab({ lang = 'en' }) {
                 <button
                   type="button"
                   onClick={() => setDate(latestAvailable)}
-                  className="rounded-full border border-slate-700 bg-slate-900/70 px-2.5 py-1 text-[11px] text-slate-300 transition hover:border-cyan-500/50 hover:text-white"
+                  className="rounded-full border border-line bg-surface/60 px-2.5 py-1 text-[11px] text-ink-2 transition hover:border-atmo/45 hover:text-ink"
                 >
                   {t('earthLatestAvailable')}: {latestAvailable}
                 </button>
               ) : null}
-              <span className={`rounded-full border px-2.5 py-1 ${probeState.ok === false ? 'border-amber-500/40 text-amber-200' : 'border-slate-700 text-slate-300'}`}>
+              <span className={`rounded-full border px-2.5 py-1 ${probeState.ok === false ? 'border-caution/35 text-caution' : 'border-line text-ink-2'}`}>
                 {probeLabel}
               </span>
             </div>
@@ -782,7 +789,7 @@ export default function EarthIntelligenceLab({ lang = 'en' }) {
                     <button
                       type="button"
                       onClick={() => setDate(availability.nearestDate)}
-                      className="rounded-full border border-amber-400/50 bg-amber-500/10 px-2.5 py-0.5 text-[11px] text-amber-100 transition hover:bg-amber-500/20"
+                      className="rounded-full border border-caution/45 bg-caution/[0.08] px-2.5 py-0.5 text-[11px] text-caution transition hover:bg-amber-500/20"
                     >
                       {t('earthJumpToNearest', { date: availability.nearestDate })}
                     </button>
@@ -838,8 +845,8 @@ export default function EarthIntelligenceLab({ lang = 'en' }) {
 
             {globeFallback === 'texture' ? <InfoNote tone="amber">{t('earthGlobeFallback')}</InfoNote> : null}
 
-            <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
-              <span className="font-mono text-cyan-300/80">{layer.id}</span>
+            <div className="flex flex-wrap items-center gap-2 text-[11px] text-ink-4">
+              <span className="font-mono text-atmo/80">{layer.id}</span>
               <span>
                 {t('earthProvenanceCoverage')}: {describeCoverage(domainState.domain) || '—'}
               </span>
@@ -849,8 +856,8 @@ export default function EarthIntelligenceLab({ lang = 'en' }) {
                 </span>
               ) : null}
             </div>
-            <p className="text-[11px] text-slate-500">{GIBS_ATTRIBUTION}</p>
-            <p className="text-[11px] text-slate-500">{t('earthMapKeyboardHint')}</p>
+            <p className="text-[11px] text-ink-4">{GIBS_ATTRIBUTION}</p>
+            <p className="text-[11px] text-ink-4">{t('earthMapKeyboardHint')}</p>
           </Panel>
 
           {compareDate && area.bounds ? (
@@ -865,23 +872,23 @@ export default function EarthIntelligenceLab({ lang = 'en' }) {
                 type="button"
                 onClick={computeDifference}
                 disabled={differenceBusy}
-                className="flex items-center gap-2 rounded-lg border border-violet-500/40 bg-violet-500/10 px-3 py-2 text-xs text-violet-100 transition hover:bg-violet-500/20 disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet-300"
+                className="flex items-center gap-2 rounded-[8px] border border-derived/35 bg-derived/[0.08] px-3 py-2 text-xs text-derived transition hover:bg-violet-500/20 disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-derived"
               >
                 {differenceBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Activity className="h-3.5 w-3.5" />}
                 {t('earthPixelCompare')} · {date} ↔ {compareDate}
               </button>
               {difference ? (
                 <div className="grid gap-3 sm:grid-cols-3">
-                  <div className="rounded-xl border border-violet-500/30 bg-violet-950/10 p-3">
-                    <p className="text-[11px] text-slate-400">{t('earthPixelCompareMean')}</p>
+                  <div className="rounded-[10px] border border-violet-500/30 bg-derived/[0.05] p-3">
+                    <p className="text-[11px] text-ink-3">{t('earthPixelCompareMean')}</p>
                     <p className="text-lg font-bold text-white">{difference.meanAbsoluteDifference}</p>
                   </div>
-                  <div className="rounded-xl border border-violet-500/30 bg-violet-950/10 p-3">
-                    <p className="text-[11px] text-slate-400">{t('earthPixelCompareChanged')}</p>
+                  <div className="rounded-[10px] border border-violet-500/30 bg-derived/[0.05] p-3">
+                    <p className="text-[11px] text-ink-3">{t('earthPixelCompareChanged')}</p>
                     <p className="text-lg font-bold text-white">{(difference.changedFraction * 100).toFixed(2)}%</p>
                   </div>
-                  <div className="rounded-xl border border-violet-500/30 bg-violet-950/10 p-3">
-                    <p className="text-[11px] text-slate-400">{t('earthPixelCompareTransparent')}</p>
+                  <div className="rounded-[10px] border border-violet-500/30 bg-derived/[0.05] p-3">
+                    <p className="text-[11px] text-ink-3">{t('earthPixelCompareTransparent')}</p>
                     <p className="text-lg font-bold text-white">{(difference.transparentFraction * 100).toFixed(2)}%</p>
                   </div>
                 </div>
@@ -896,7 +903,7 @@ export default function EarthIntelligenceLab({ lang = 'en' }) {
                     <button
                       type="button"
                       onClick={() => setCompareDate(compareAvailability.nearestDate)}
-                      className="ml-2 rounded-full border border-amber-400/50 bg-amber-500/10 px-2.5 py-0.5 text-[11px] text-amber-100"
+                      className="ml-2 rounded-full border border-caution/45 bg-caution/[0.08] px-2.5 py-0.5 text-[11px] text-caution"
                     >
                       {t('earthJumpToNearest', { date: compareAvailability.nearestDate })}
                     </button>
@@ -909,37 +916,37 @@ export default function EarthIntelligenceLab({ lang = 'en' }) {
           <Panel>
             <SectionHeading icon={Layers} title={t('earthDatasetDescription')} subtitle={layer.summary} />
             <div className="mt-3 grid gap-3 lg:grid-cols-2">
-              <div className="space-y-1.5 text-xs text-slate-300">
+              <div className="space-y-1.5 text-xs text-ink-2">
                 <p>
-                  <span className="text-slate-500">{t('earthPlatformLabel')}: </span>
+                  <span className="text-ink-4">{t('earthPlatformLabel')}: </span>
                   {layer.platform} · {layer.instrument}
                 </p>
                 <p>
-                  <span className="text-slate-500">{t('earthParameterLabel')}: </span>
+                  <span className="text-ink-4">{t('earthParameterLabel')}: </span>
                   {layer.parameter}
                 </p>
                 <p>
-                  <span className="text-slate-500">{t('earthProvenanceUnits')}: </span>
+                  <span className="text-ink-4">{t('earthProvenanceUnits')}: </span>
                   {layer.unit}
                 </p>
                 <p>
-                  <span className="text-slate-500">{t('earthResolutionLabel')}: </span>
+                  <span className="text-ink-4">{t('earthResolutionLabel')}: </span>
                   {layer.resolution}
                 </p>
                 <p>
-                  <span className="text-slate-500">{t('earthPeriodLabel')}: </span>
+                  <span className="text-ink-4">{t('earthPeriodLabel')}: </span>
                   {layer.period}
                 </p>
                 <p>
-                  <span className="text-slate-500">{t('earthVerificationLabel')}: </span>
+                  <span className="text-ink-4">{t('earthVerificationLabel')}: </span>
                   {layer.verification === 'describe-domains' ? t('earthVerificationDescribeDomains') : t('earthVerificationCatalog')} ·{' '}
                   {t('earthVerifiedOn', { date: layer.verifiedOn })}
                 </p>
               </div>
               <div className="space-y-3">
                 <div>
-                  <p className="text-[11px] uppercase tracking-wide text-slate-500">{t('earthDatasetAppropriateFor')}</p>
-                  <ul className="mt-1 space-y-1 text-xs text-slate-300">
+                  <p className="text-[11px] uppercase tracking-wide text-ink-4">{t('earthDatasetAppropriateFor')}</p>
+                  <ul className="mt-1 space-y-1 text-xs text-ink-2">
                     {layer.appropriateFor.map((item) => (
                       <li key={item} className="flex gap-2">
                         <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-emerald-400" />
@@ -948,9 +955,9 @@ export default function EarthIntelligenceLab({ lang = 'en' }) {
                     ))}
                   </ul>
                 </div>
-                <div className="rounded-xl border border-amber-500/25 bg-amber-950/10 p-3">
-                  <p className="text-[11px] uppercase tracking-wide text-amber-300/80">{t('earthDatasetLimitations')}</p>
-                  <p className="mt-1 text-xs leading-relaxed text-amber-100">{layer.limitations}</p>
+                <div className="rounded-[10px] border border-amber-500/25 bg-caution/[0.04] p-3">
+                  <p className="text-[11px] uppercase tracking-wide text-caution/80">{t('earthDatasetLimitations')}</p>
+                  <p className="mt-1 text-xs leading-relaxed text-caution">{layer.limitations}</p>
                 </div>
               </div>
             </div>
@@ -997,7 +1004,7 @@ export default function EarthIntelligenceLab({ lang = 'en' }) {
               <button
                 type="button"
                 onClick={() => setMode('trends')}
-                className="rounded-lg border border-cyan-500/40 bg-cyan-500/10 px-3 py-2 text-xs text-cyan-100 transition hover:bg-cyan-500/20"
+                className="rounded-[8px] border border-atmo/35 bg-atmo/[0.08] px-3 py-2 text-xs text-atmo-soft transition hover:bg-cyan-500/20"
               >
                 {t('earthModeTrends')} →
               </button>
@@ -1013,7 +1020,7 @@ export default function EarthIntelligenceLab({ lang = 'en' }) {
       <ProvenancePanel entries={provenanceEntries} report={report} />
 
       {!isOnline ? <InfoNote tone="amber">{t('earthOffline')}</InfoNote> : null}
-      {reducedMotion ? <p className="text-[11px] text-slate-500">{t('earthReducedMotion')}</p> : null}
+      {reducedMotion ? <p className="text-[11px] text-ink-4">{t('earthReducedMotion')}</p> : null}
     </div>
   );
 }

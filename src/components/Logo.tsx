@@ -61,7 +61,7 @@ export const Logo: React.FC<LogoProps> = ({
             loading={priority ? 'eager' : 'lazy'}
             decoding="async"
             onError={() => setHasError(true)}
-            className="w-full h-full object-contain filter drop-shadow-[0_0_12px_rgba(34,211,238,0.3)] rounded-xl transition-all duration-300 ease-out transform group-hover:scale-110 group-hover:drop-shadow-[0_0_22px_rgba(56,189,248,0.85)] group-hover:brightness-110 hover:scale-110 hover:drop-shadow-[0_0_22px_rgba(56,189,248,0.85)] hover:brightness-110"
+            className="w-full h-full object-contain filter drop-shadow-[0_0_12px_rgba(34,211,238,0.3)] rounded-[10px] transition-all duration-300 ease-out transform group-hover:scale-110 group-hover:drop-shadow-[0_0_22px_rgba(56,189,248,0.85)] group-hover:brightness-110 hover:scale-110 hover:drop-shadow-[0_0_22px_rgba(56,189,248,0.85)] hover:brightness-110"
           />
         ) : (
           /* High-Fidelity SVG Fallback matching NASA Web App Rocket Badge */
@@ -124,7 +124,7 @@ export const Logo: React.FC<LogoProps> = ({
 
       {showLabel && (
         <div className="flex flex-col text-left">
-          <span className="font-['Orbitron'] font-black text-white text-base md:text-lg tracking-wider bg-gradient-to-r from-white via-slate-100 to-cyan-300 bg-clip-text text-transparent">
+          <span className="font-display font-black text-white text-base md:text-lg tracking-wider bg-gradient-to-r from-white via-slate-100 to-cyan-300 bg-clip-text text-transparent">
             NASA
           </span>
           <span className="text-[10px] font-mono tracking-widest text-cyan-400 font-semibold uppercase -mt-0.5">

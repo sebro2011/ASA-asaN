@@ -156,27 +156,27 @@ export default function APODStoryteller({
     >
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <div className="relative p-2.5 rounded-2xl bg-cyan-500/20 border border-cyan-500/40 text-cyan-300 shadow-lg shadow-cyan-950/40">
+          <div className="relative p-2.5 rounded-[14px] bg-cyan-500/20 border border-cyan-500/40 text-cyan-300 shadow-lg shadow-cyan-950/40">
             <Volume2 className="w-4 h-4 text-cyan-400" />
             {isPlaying && (
               <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-cyan-400 animate-ping" />
             )}
           </div>
           <div>
-            <h4 className="text-xs sm:text-sm font-bold font-['Orbitron'] text-white flex items-center gap-1.5">
+            <h4 className="text-xs sm:text-sm font-bold font-display text-white flex items-center gap-1.5">
               <span>AI Audio Storyteller</span>
               <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-cyan-500/10 border border-cyan-500/30 text-cyan-300">
                 KEYLESS TTS
               </span>
             </h4>
-            <p className="text-[11px] text-slate-400 font-mono">
+            <p className="text-[11px] text-ink-3 font-mono">
               Narrating official NASA deep-space scientific release
             </p>
           </div>
         </div>
 
         {/* Dynamic Animated Audio Wave */}
-        <div className="flex items-center gap-1 h-6 px-2.5 rounded-xl liquid-glass border border-white/10">
+        <div className="flex items-center gap-1 h-6 px-2.5 rounded-[10px] liquid-glass border border-white/10">
           {[0.3, 0.7, 1.0, 0.6, 0.9, 0.4, 0.8].map((h, i) => (
             <motion.span
               key={i}
@@ -202,7 +202,7 @@ export default function APODStoryteller({
             <button
               type="button"
               onClick={handlePlay}
-              className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white text-xs font-mono font-bold flex items-center gap-1.5 shadow-md shadow-cyan-950/50 cursor-pointer transition active:scale-95"
+              className="px-3.5 py-1.5 rounded-[10px] bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white text-xs font-mono font-bold flex items-center gap-1.5 shadow-md shadow-cyan-950/50 cursor-pointer transition active:scale-95"
             >
               <Play className="w-3.5 h-3.5 fill-current" />
               <span>{isPaused ? 'Resume' : 'Narrate Story'}</span>
@@ -211,7 +211,7 @@ export default function APODStoryteller({
             <button
               type="button"
               onClick={handlePause}
-              className="px-3.5 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white text-xs font-mono font-bold flex items-center gap-1.5 shadow-md shadow-amber-950/50 cursor-pointer transition active:scale-95"
+              className="px-3.5 py-1.5 rounded-[10px] bg-amber-600 hover:bg-amber-500 text-white text-xs font-mono font-bold flex items-center gap-1.5 shadow-md shadow-amber-950/50 cursor-pointer transition active:scale-95"
             >
               <Pause className="w-3.5 h-3.5 fill-current" />
               <span>Pause</span>
@@ -222,7 +222,7 @@ export default function APODStoryteller({
             <button
               type="button"
               onClick={handleStop}
-              className="p-2 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/10 text-slate-300 hover:text-rose-400 transition cursor-pointer"
+              className="p-2 rounded-[10px] bg-white/[0.04] hover:bg-white/[0.08] border border-white/10 text-ink-2 hover:text-critical transition cursor-pointer"
               title="Stop narration"
             >
               <Square className="w-3.5 h-3.5 fill-current" />
@@ -232,16 +232,16 @@ export default function APODStoryteller({
 
         {/* Narration Speed Selector */}
         <div className="flex items-center gap-1 font-mono text-[11px]">
-          <span className="text-slate-400 text-[10px] mr-1 hidden sm:inline">Speed:</span>
+          <span className="text-ink-3 text-[10px] mr-1 hidden sm:inline">Speed:</span>
           {[0.8, 1.0, 1.2].map((s) => (
             <button
               key={s}
               type="button"
               onClick={() => handleRateChange(s)}
-              className={`px-2 py-1 rounded-lg transition cursor-pointer ${
+              className={`px-2 py-1 rounded-[8px] transition cursor-pointer ${
                 speed === s
                   ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 font-bold shadow-sm'
-                  : 'bg-white/[0.04] text-slate-400 hover:text-white border border-white/10'
+                  : 'bg-white/[0.04] text-ink-3 hover:text-ink border border-white/10'
               }`}
             >
               {s.toFixed(1)}x

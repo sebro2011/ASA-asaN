@@ -187,7 +187,7 @@ export default function SlideToAction({
       className={`relative w-full max-w-sm h-14 select-none rounded-full overflow-hidden p-1.5 transition-all duration-300 ${
         isUnlocked
           ? 'bg-emerald-950/70 border border-emerald-400/50 shadow-lg shadow-emerald-500/20'
-          : 'bg-slate-950/80 border border-cyan-500/30 shadow-xl shadow-cyan-950/40 backdrop-blur-xl hover:border-cyan-400/60'
+          : 'bg-abyss/70 border border-cyan-500/30 shadow-xl shadow-cyan-950/40 backdrop-blur-xl hover:border-cyan-400/60'
       } ${className}`}
     >
       {/* Outer ambient glow reacting to drag progress */}
@@ -258,9 +258,9 @@ export default function SlideToAction({
           <motion.div
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="flex items-center gap-2 font-mono text-xs sm:text-sm font-bold tracking-wider uppercase text-emerald-300"
+            className="flex items-center gap-2 font-mono text-xs sm:text-sm font-bold tracking-wider uppercase text-signal"
           >
-            <Check className="w-4 h-4 text-emerald-400 animate-bounce" />
+            <Check className="w-4 h-4 text-signal animate-bounce" />
             <span>{successLabel}</span>
           </motion.div>
         )}

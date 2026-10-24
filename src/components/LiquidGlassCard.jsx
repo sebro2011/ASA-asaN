@@ -29,10 +29,10 @@ export function LiquidGlassCard({
   };
 
   const containerClasses = `
-    bg-slate-950/80
+    bg-abyss/70
     backdrop-blur-xl
-    border border-slate-800/80
-    rounded-2xl
+    border border-line
+    rounded-[14px]
     shadow-2xl
     relative
     overflow-hidden

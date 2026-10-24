@@ -153,7 +153,7 @@ export default function FluidNavbar({
 
             <div>
               <div className="flex items-center gap-2">
-                <span className="font-['Orbitron'] font-bold text-base md:text-lg tracking-tight text-white group-hover:text-cyan-200 transition-colors">
+                <span className="font-display font-bold text-base md:text-lg tracking-tight text-white group-hover:text-cyan-200 transition-colors">
                   {currentLang === 'si' ? 'නාසා විශ්ව ගවේෂකය' : currentLang === 'ta' ? 'நாசா விண்வெளி ஆய்வு' : 'NASA Web App'}
                 </span>
                 <span className="hidden lg:inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-cyan-500/15 text-cyan-300 border border-cyan-500/30">
@@ -161,7 +161,7 @@ export default function FluidNavbar({
                   DSN LIVE
                 </span>
               </div>
-              <p className="text-[11px] text-slate-400 font-medium tracking-wide">
+              <p className="text-[11px] text-ink-3 font-medium tracking-wide">
                 {currentLang === 'si' ? 'තුන්භාෂා අභ්‍යවකාශ ද්වාරය' : currentLang === 'ta' ? 'முமொழி விண்வெளி தளம்' : 'Trilingual Cosmic Portal'}
               </p>
             </div>
@@ -169,7 +169,7 @@ export default function FluidNavbar({
 
           {/* Desktop Fluid Navigation Menu with Framer Motion layoutId */}
           <nav 
-            className="hidden md:flex items-center p-1.5 rounded-2xl apple-liquid-glass shadow-inner relative"
+            className="hidden md:flex items-center p-1.5 rounded-[14px] apple-liquid-glass shadow-inner relative"
             onMouseLeave={() => setHoveredTab(null)}
           >
             {NAV_ITEMS.map((item) => {
@@ -183,17 +183,17 @@ export default function FluidNavbar({
                   key={item.id}
                   onClick={() => onTabChange(item.id)}
                   onMouseEnter={() => setHoveredTab(item.id)}
-                  className={`relative px-4 py-2 rounded-xl text-xs font-semibold transition-colors duration-200 flex items-center gap-2 select-none z-10 ${
+                  className={`relative px-4 py-2 rounded-[10px] text-xs font-semibold transition-colors duration-200 flex items-center gap-2 select-none z-10 ${
                     isActive 
                       ? 'text-cyan-200 font-bold' 
-                      : 'text-slate-400 hover:text-slate-200'
+                      : 'text-ink-3 hover:text-ink-2'
                   }`}
                 >
                   {/* Fluid Spring Background Indicator (Active Tab) */}
                   {isActive && (
                     <motion.div
                       layoutId="fluid-active-pill"
-                      className="absolute inset-0 rounded-xl bg-gradient-to-r from-cyan-600/70 via-sky-600/70 to-blue-600/70 shadow-lg shadow-cyan-500/25 border border-cyan-400/50 backdrop-blur-xl"
+                      className="absolute inset-0 rounded-[10px] bg-gradient-to-r from-cyan-600/70 via-sky-600/70 to-blue-600/70 shadow-lg shadow-cyan-500/25 border border-cyan-400/50 backdrop-blur-xl"
                       transition={{
                         type: 'spring',
                         stiffness: 380,
@@ -206,7 +206,7 @@ export default function FluidNavbar({
                   {isHovered && !isActive && (
                     <motion.div
                       layoutId="fluid-hover-pill"
-                      className="absolute inset-0 rounded-xl bg-white/[0.06] border border-white/10"
+                      className="absolute inset-0 rounded-[10px] bg-white/[0.06] border border-white/10"
                       transition={{
                         type: 'spring',
                         stiffness: 450,
@@ -234,7 +234,7 @@ export default function FluidNavbar({
               <button
                 type="button"
                 onClick={() => setDropdownOpen(!dropdownOpen)}
-                className="flex items-center gap-2 px-3.5 py-2 rounded-xl apple-liquid-glass text-white hover:border-cyan-400/50 text-xs font-semibold shadow-md transition-all duration-200 hover:shadow-cyan-500/20"
+                className="flex items-center gap-2 px-3.5 py-2 rounded-[10px] apple-liquid-glass text-white hover:border-cyan-400/50 text-xs font-semibold shadow-md transition-all duration-200 hover:shadow-cyan-500/20"
                 aria-expanded={dropdownOpen}
                 aria-haspopup="true"
               >
@@ -251,7 +251,7 @@ export default function FluidNavbar({
                     animate={{ opacity: 1, scale: 1, y: 0 }}
                     exit={{ opacity: 0, scale: 0.95, y: -8 }}
                     transition={{ duration: 0.16, ease: 'easeOut' }}
-                    className="absolute right-0 mt-2 w-52 rounded-2xl apple-liquid-glass shadow-2xl p-1.5 z-50 border border-white/20"
+                    className="absolute right-0 mt-2 w-52 rounded-[14px] apple-liquid-glass shadow-2xl p-1.5 z-50 border border-white/20"
                     role="menu"
                   >
                     <div className="px-3 py-2 border-b border-white/10 text-[10px] font-mono text-cyan-400 uppercase tracking-wider">
@@ -265,10 +265,10 @@ export default function FluidNavbar({
                           <button
                             key={lang.code}
                             onClick={() => handleLanguageChange(lang.code)}
-                            className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-all duration-150 ${
+                            className={`w-full flex items-center justify-between px-3 py-2 rounded-[10px] text-xs font-semibold transition-all duration-150 ${
                               isSelected
                                 ? 'bg-gradient-to-r from-blue-600 to-cyan-600 text-white shadow-md'
-                                : 'text-slate-300 hover:text-white hover:bg-white/10'
+                                : 'text-ink-2 hover:text-ink hover:bg-white/10'
                             }`}
                             role="menuitem"
                           >
@@ -292,17 +292,17 @@ export default function FluidNavbar({
             {/* Standalone Single HTML Export Shortcut */}
             <button
               onClick={onOpenExportModal}
-              className="hidden lg:flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 transition shadow-sm"
+              className="hidden lg:flex items-center gap-1.5 px-3 py-2 rounded-[10px] text-xs font-semibold bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 transition shadow-sm"
               title="Single HTML Export"
             >
-              <FileCode className="w-3.5 h-3.5 text-amber-400" />
+              <FileCode className="w-3.5 h-3.5 text-caution" />
               <span>{currentLang === 'si' ? 'තනි HTML ගොනුව' : currentLang === 'ta' ? 'ஒற்றை HTML' : 'Single HTML'}</span>
             </button>
 
             {/* Mobile Hamburger Toggle Button */}
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="md:hidden p-2 rounded-xl text-slate-300 hover:text-white hover:bg-white/10 transition"
+              className="md:hidden p-2 rounded-[10px] text-ink-2 hover:text-ink hover:bg-white/10 transition"
               aria-label="Toggle mobile menu"
             >
               {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
@@ -333,10 +333,10 @@ export default function FluidNavbar({
                         onTabChange(item.id);
                         setMobileMenuOpen(false);
                       }}
-                      className={`p-2.5 rounded-xl font-semibold text-xs flex items-center gap-2 transition ${
+                      className={`p-2.5 rounded-[10px] font-semibold text-xs flex items-center gap-2 transition ${
                         isActive 
                           ? 'bg-cyan-600 text-white shadow-md shadow-cyan-600/30' 
-                          : 'apple-liquid-glass text-slate-300'
+                          : 'apple-liquid-glass text-ink-2'
                       }`}
                     >
                       <Icon className="w-4 h-4" />
@@ -351,15 +351,15 @@ export default function FluidNavbar({
                 })}
               </div>
 
-              <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between">
+              <div className="pt-2 border-t border-line flex items-center justify-between">
                 <button
                   onClick={() => {
                     onOpenExportModal();
                     setMobileMenuOpen(false);
                   }}
-                  className="w-full py-2 rounded-xl text-xs font-semibold bg-amber-500/10 text-amber-300 border border-amber-500/30 flex items-center justify-center gap-2"
+                  className="w-full py-2 rounded-[10px] text-xs font-semibold bg-amber-500/10 text-amber-300 border border-amber-500/30 flex items-center justify-center gap-2"
                 >
-                  <FileCode className="w-4 h-4 text-amber-400" />
+                  <FileCode className="w-4 h-4 text-caution" />
                   <span>{currentLang === 'si' ? 'තනි HTML ගොනුව බාගන්න' : currentLang === 'ta' ? 'ஒற்றை HTML கோப்பு' : 'Export Single HTML'}</span>
                 </button>
               </div>

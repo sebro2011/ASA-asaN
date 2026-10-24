@@ -295,6 +295,7 @@ function ISSTracker({ className = '' }) {
   });
 
   const [lastUpdate, setLastUpdate] = useState(new Date());
+  const [issFix, setIssFix] = useState('propagated');
 
   // Leaflet DOM Ref & Layer References
   const mapContainerRef = useRef(null);
@@ -331,6 +332,7 @@ function ISSTracker({ className = '' }) {
     try {
       const liveIss = await fetchIssLocation();
       if (liveIss && typeof liveIss.latitude === 'number') {
+        setIssFix(liveIss._isSample ? 'propagated' : 'live');
         updatedPositions.iss = {
           latitude: Number(liveIss.latitude),
           longitude: Number(liveIss.longitude),
@@ -461,7 +463,7 @@ function ISSTracker({ className = '' }) {
       const stationHtml = `
         <div class="relative flex items-center justify-center -translate-x-1/2 -translate-y-1/2 cursor-pointer group">
           <div class="w-3 h-3 rounded-full bg-slate-300 border-2 border-slate-900 shadow-md"></div>
-          <div class="absolute top-3.5 px-1.5 py-0.5 rounded bg-slate-950/80 border border-slate-800 text-[8px] font-mono text-slate-300 whitespace-nowrap opacity-75 group-hover:opacity-100">
+          <div class="absolute top-3.5 px-1.5 py-0.5 rounded bg-abyss/70 border border-line text-[8px] font-mono text-ink-2 whitespace-nowrap opacity-75 group-hover:opacity-100">
             ${station.code}
           </div>
         </div>
@@ -488,12 +490,12 @@ function ISSTracker({ className = '' }) {
       const markerHtml = `
         <div class="relative flex items-center justify-center -translate-x-1/2 -translate-y-1/2 cursor-pointer group">
           <div class="absolute w-12 h-12 rounded-full border animate-ping" style="border-color: ${sat.color}; opacity: ${isSelected ? 0.6 : 0.2}"></div>
-          <div class="relative w-8 h-8 rounded-xl flex items-center justify-center shadow-lg transition-transform duration-300 group-hover:scale-125" style="background: radial-gradient(circle, ${sat.color}, #0f172a); border: 2px solid ${isSelected ? '#ffffff' : sat.color}; box-shadow: 0 0 16px ${sat.color};">
+          <div class="relative w-8 h-8 rounded-[10px] flex items-center justify-center shadow-lg transition-transform duration-300 group-hover:scale-125" style="background: radial-gradient(circle, ${sat.color}, #0f172a); border: 2px solid ${isSelected ? '#ffffff' : sat.color}; box-shadow: 0 0 16px ${sat.color};">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M12 2v20M2 12h20M4.93 4.93l14.14 14.14M19.07 4.93L4.93 19.07"/>
             </svg>
           </div>
-          <div class="absolute top-9 px-2 py-0.5 rounded-md bg-slate-950/95 border text-[9px] font-mono font-bold whitespace-nowrap shadow-xl" style="border-color: ${sat.color}; color: ${sat.color}">
+          <div class="absolute top-9 px-2 py-0.5 rounded-md bg-abyss/95 border text-[9px] font-mono font-bold whitespace-nowrap shadow-xl" style="border-color: ${sat.color}; color: ${sat.color}">
             ${sat.shortName}
           </div>
         </div>
@@ -547,12 +549,12 @@ function ISSTracker({ className = '' }) {
         const updatedHtml = `
           <div class="relative flex items-center justify-center -translate-x-1/2 -translate-y-1/2 cursor-pointer group">
             <div class="absolute w-12 h-12 rounded-full border animate-ping" style="border-color: ${satDef.color}; opacity: ${isSelected ? 0.7 : 0.25}"></div>
-            <div class="relative w-8 h-8 rounded-xl flex items-center justify-center shadow-lg transition-transform duration-300 group-hover:scale-125" style="background: radial-gradient(circle, ${satDef.color}, #0f172a); border: 2px solid ${isSelected ? '#ffffff' : satDef.color}; box-shadow: 0 0 16px ${satDef.color};">
+            <div class="relative w-8 h-8 rounded-[10px] flex items-center justify-center shadow-lg transition-transform duration-300 group-hover:scale-125" style="background: radial-gradient(circle, ${satDef.color}, #0f172a); border: 2px solid ${isSelected ? '#ffffff' : satDef.color}; box-shadow: 0 0 16px ${satDef.color};">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M12 2v20M2 12h20M4.93 4.93l14.14 14.14M19.07 4.93L4.93 19.07"/>
               </svg>
             </div>
-            <div class="absolute top-9 px-2 py-0.5 rounded-md bg-slate-950/95 border text-[9px] font-mono font-bold whitespace-nowrap shadow-xl" style="border-color: ${satDef.color}; color: ${satDef.color}">
+            <div class="absolute top-9 px-2 py-0.5 rounded-md bg-abyss/95 border text-[9px] font-mono font-bold whitespace-nowrap shadow-xl" style="border-color: ${satDef.color}; color: ${satDef.color}">
               ${satDef.shortName}
             </div>
           </div>
@@ -702,29 +704,31 @@ function ISSTracker({ className = '' }) {
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 relative z-10">
           <div>
             <div className="flex items-center gap-2.5 flex-wrap">
-              <div className="p-2 rounded-xl bg-indigo-500/20 border border-indigo-400/40 text-indigo-300">
+              <div className="p-2 rounded-[10px] bg-indigo-500/20 border border-indigo-400/40 text-indigo-300">
                 <Radar className="w-5 h-5 animate-spin" style={{ animationDuration: '20s' }} />
               </div>
-              <h2 className="text-xl sm:text-2xl font-black font-['Orbitron'] text-white tracking-wide">
+              <h2 className="text-xl sm:text-2xl font-black font-display text-white tracking-wide">
                 {t.title}
               </h2>
             </div>
-            <p className="text-xs sm:text-sm text-slate-300 mt-1 max-w-2xl font-sans">
+            <p className="text-xs sm:text-sm text-ink-2 mt-1 max-w-2xl font-sans">
               {t.subtitle}
             </p>
           </div>
 
           {/* Real-time sync badge */}
           <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2 px-3.5 py-2 rounded-2xl liquid-glass font-mono text-xs">
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping" />
-              <span className="text-emerald-400 font-bold">SGP4 TLE ACTIVE</span>
-              <span className="text-slate-400">• 5s SYNC</span>
+            <div className="flex items-center gap-2 rounded-[10px] border border-line bg-surface/50 px-3 py-2 font-mono text-[11px]">
+              <span className={`h-2 w-2 rounded-full ${issFix === 'live' ? 'bg-signal' : 'bg-caution'}`} />
+              <span className={issFix === 'live' ? 'font-semibold text-signal' : 'font-semibold text-caution'}>
+                {issFix === 'live' ? 'ISS POSITION FIX' : 'ISS ORBIT PROPAGATED'}
+              </span>
+              <span className="text-ink-4">· 45 s refresh</span>
             </div>
 
             <button
               onClick={updateSatellitePositions}
-              className="p-2.5 rounded-2xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/10 text-slate-300 hover:text-cyan-400 transition-colors cursor-pointer"
+              className="p-2.5 rounded-[14px] bg-white/[0.04] hover:bg-white/[0.08] border border-white/10 text-ink-2 hover:text-cyan-400 transition-colors cursor-pointer"
               title="Refresh Orbital Telemetry"
             >
               <RefreshCw className="w-4 h-4" />
@@ -734,7 +738,7 @@ function ISSTracker({ className = '' }) {
 
         {/* Fleet Selector Filter Chips Strip */}
         <div className="mt-5 pt-4 border-t border-white/10 space-y-2">
-          <div className="text-[11px] font-mono text-slate-400 flex items-center gap-1.5">
+          <div className="text-[11px] font-mono text-ink-3 flex items-center gap-1.5">
             <SatelliteIcon className="w-3.5 h-3.5 text-cyan-400" />
             <span>{t.selectSatHeading}</span>
           </div>
@@ -748,10 +752,10 @@ function ISSTracker({ className = '' }) {
                 <button
                   key={sat.id}
                   onClick={() => handleSelectSatellite(sat)}
-                  className={`p-2.5 rounded-2xl border text-left transition-all cursor-pointer relative overflow-hidden flex flex-col justify-between ${
+                  className={`p-2.5 rounded-[14px] border text-left transition-all cursor-pointer relative overflow-hidden flex flex-col justify-between ${
                     isSelected
                       ? 'liquid-glass border-white shadow-xl shadow-cyan-950/60 font-bold ring-2 ring-cyan-400/40'
-                      : 'bg-white/[0.02] hover:bg-white/[0.06] border-white/10 text-slate-300'
+                      : 'bg-white/[0.02] hover:bg-white/[0.06] border-white/10 text-ink-2'
                   }`}
                   style={{
                     borderColor: isSelected ? sat.color : undefined
@@ -765,16 +769,16 @@ function ISSTracker({ className = '' }) {
                         boxShadow: `0 0 8px ${sat.color}` 
                       }} 
                     />
-                    <span className="text-[9px] font-mono text-slate-400">
+                    <span className="text-[9px] font-mono text-ink-3">
                       NORAD {sat.noradId}
                     </span>
                   </div>
 
                   <div className="mt-2">
-                    <div className="text-xs font-bold text-white font-['Orbitron'] truncate">
+                    <div className="text-xs font-bold text-white font-display truncate">
                       {sat.shortName}
                     </div>
-                    <div className="text-[10px] font-mono text-slate-400 mt-0.5">
+                    <div className="text-[10px] font-mono text-ink-3 mt-0.5">
                       {pos ? `${Math.round(pos.altitude).toLocaleString()} km` : 'LEO'}
                     </div>
                   </div>
@@ -796,14 +800,14 @@ function ISSTracker({ className = '' }) {
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="space-y-1">
             <div className="flex items-center gap-2">
-              <span className="px-2.5 py-0.5 rounded-lg text-[10px] font-mono font-bold uppercase tracking-wider text-slate-950" style={{ backgroundColor: activeSat.color }}>
+              <span className="px-2.5 py-0.5 rounded-[8px] text-[10px] font-mono font-bold uppercase tracking-wider text-slate-950" style={{ backgroundColor: activeSat.color }}>
                 {activeSat.type}
               </span>
-              <span className="text-xs font-mono text-slate-400">• {activeSat.operator}</span>
-              <span className="text-xs font-mono text-slate-500">• Launch: {activeSat.launchDate}</span>
+              <span className="text-xs font-mono text-ink-3">• {activeSat.operator}</span>
+              <span className="text-xs font-mono text-ink-4">• Launch: {activeSat.launchDate}</span>
             </div>
             
-            <h3 className="text-lg sm:text-xl font-bold font-['Orbitron'] text-white">
+            <h3 className="text-lg sm:text-xl font-bold font-display text-white">
               {activeSat.name}
             </h3>
 
@@ -814,7 +818,7 @@ function ISSTracker({ className = '' }) {
 
           <button
             onClick={() => setModalSat(activeSat)}
-            className="self-start md:self-center px-4 py-2 rounded-xl bg-slate-800/80 hover:bg-slate-700 border border-slate-700 text-xs font-mono text-slate-200 hover:text-white transition-colors cursor-pointer flex items-center gap-1.5 whitespace-nowrap"
+            className="self-start md:self-center px-4 py-2 rounded-[10px] bg-surface-2/70 hover:bg-slate-700 border border-line text-xs font-mono text-ink-2 hover:text-ink transition-colors cursor-pointer flex items-center gap-1.5 whitespace-nowrap"
           >
             <Info className="w-3.5 h-3.5 text-cyan-400" />
             <span>Mission Dossier</span>
@@ -827,13 +831,13 @@ function ISSTracker({ className = '' }) {
         {/* Card 1: Latitude */}
         <motion.div
           whileHover={{ y: -3 }}
-          className="p-4 sm:p-5 rounded-2xl liquid-glass liquid-glass-edge liquid-glass-hover relative overflow-hidden group"
+          className="p-4 sm:p-5 rounded-[14px] liquid-glass liquid-glass-edge liquid-glass-hover relative overflow-hidden group"
         >
-          <div className="flex items-center gap-2 text-xs font-mono text-slate-400">
+          <div className="flex items-center gap-2 text-xs font-mono text-ink-3">
             <Compass className="w-4 h-4 text-cyan-400" />
             <span>{t.lat}</span>
           </div>
-          <div className="mt-2 text-2xl sm:text-3xl font-bold font-['Orbitron'] text-white">
+          <div className="mt-2 text-2xl sm:text-3xl font-bold font-display text-white">
             {activePos.latitude?.toFixed(4)}°
           </div>
           <div className="text-[11px] font-mono text-cyan-300/80 mt-1">
@@ -844,13 +848,13 @@ function ISSTracker({ className = '' }) {
         {/* Card 2: Longitude */}
         <motion.div
           whileHover={{ y: -3 }}
-          className="p-4 sm:p-5 rounded-2xl liquid-glass liquid-glass-edge liquid-glass-hover relative overflow-hidden group"
+          className="p-4 sm:p-5 rounded-[14px] liquid-glass liquid-glass-edge liquid-glass-hover relative overflow-hidden group"
         >
-          <div className="flex items-center gap-2 text-xs font-mono text-slate-400">
+          <div className="flex items-center gap-2 text-xs font-mono text-ink-3">
             <MapPin className="w-4 h-4 text-indigo-400" />
             <span>{t.lon}</span>
           </div>
-          <div className="mt-2 text-2xl sm:text-3xl font-bold font-['Orbitron'] text-white">
+          <div className="mt-2 text-2xl sm:text-3xl font-bold font-display text-white">
             {activePos.longitude?.toFixed(4)}°
           </div>
           <div className="text-[11px] font-mono text-indigo-300/80 mt-1">
@@ -861,16 +865,16 @@ function ISSTracker({ className = '' }) {
         {/* Card 3: Altitude */}
         <motion.div
           whileHover={{ y: -3 }}
-          className="p-4 sm:p-5 rounded-2xl liquid-glass liquid-glass-edge liquid-glass-hover relative overflow-hidden group"
+          className="p-4 sm:p-5 rounded-[14px] liquid-glass liquid-glass-edge liquid-glass-hover relative overflow-hidden group"
         >
-          <div className="flex items-center gap-2 text-xs font-mono text-slate-400">
-            <ArrowUpRight className="w-4 h-4 text-purple-400" />
+          <div className="flex items-center gap-2 text-xs font-mono text-ink-3">
+            <ArrowUpRight className="w-4 h-4 text-derived" />
             <span>{t.alt}</span>
           </div>
-          <div className="mt-2 text-2xl sm:text-3xl font-bold font-['Orbitron'] text-purple-200">
-            {Math.round(activePos.altitude || 0).toLocaleString()} <span className="text-base text-purple-400/80 font-normal">km</span>
+          <div className="mt-2 text-2xl sm:text-3xl font-bold font-display text-purple-200">
+            {Math.round(activePos.altitude || 0).toLocaleString()} <span className="text-base text-derived/80 font-normal">km</span>
           </div>
-          <div className="text-[11px] font-mono text-purple-300/80 mt-1">
+          <div className="text-[11px] font-mono text-derived/80 mt-1">
             {activeSat.id === 'jwst' ? 'Sun-Earth L2 Lagrange' : 'Orbital Altitude'}
           </div>
         </motion.div>
@@ -878,16 +882,16 @@ function ISSTracker({ className = '' }) {
         {/* Card 4: Velocity */}
         <motion.div
           whileHover={{ y: -3 }}
-          className="p-4 sm:p-5 rounded-2xl liquid-glass liquid-glass-edge liquid-glass-hover relative overflow-hidden group"
+          className="p-4 sm:p-5 rounded-[14px] liquid-glass liquid-glass-edge liquid-glass-hover relative overflow-hidden group"
         >
-          <div className="flex items-center gap-2 text-xs font-mono text-slate-400">
-            <Gauge className="w-4 h-4 text-emerald-400" />
+          <div className="flex items-center gap-2 text-xs font-mono text-ink-3">
+            <Gauge className="w-4 h-4 text-signal" />
             <span>{t.vel}</span>
           </div>
-          <div className="mt-2 text-2xl sm:text-3xl font-bold font-['Orbitron'] text-emerald-200">
-            {Math.round(activePos.velocity || 0).toLocaleString()} <span className="text-base text-emerald-400/80 font-normal">km/h</span>
+          <div className="mt-2 text-2xl sm:text-3xl font-bold font-display text-emerald-200">
+            {Math.round(activePos.velocity || 0).toLocaleString()} <span className="text-base text-signal/80 font-normal">km/h</span>
           </div>
-          <div className="text-[11px] font-mono text-emerald-300/80 mt-1">
+          <div className="text-[11px] font-mono text-signal/80 mt-1">
             ~{((activePos.velocity || 27600) / 3600).toFixed(2)} km/s
           </div>
         </motion.div>
@@ -904,13 +908,13 @@ function ISSTracker({ className = '' }) {
 
         {/* Top-Left Fleet HUD Badge */}
         <div className="absolute top-4 left-4 z-10 pointer-events-none">
-          <div className="p-3 rounded-2xl bg-slate-900/90 backdrop-blur-xl border border-slate-800/90 shadow-2xl space-y-1.5 pointer-events-auto">
+          <div className="p-3 rounded-[14px] bg-surface/65 backdrop-blur-xl border border-line/90 shadow-2xl space-y-1.5 pointer-events-auto">
             <div className="flex items-center gap-2 text-xs font-mono font-bold text-white tracking-wider">
               <Crosshair className="w-4 h-4 text-cyan-400 animate-spin" style={{ animationDuration: '10s' }} />
               <span>{t.realMap}</span>
             </div>
             
-            <div className="flex items-center gap-3 text-[11px] font-mono text-slate-400 pt-1 border-t border-slate-800/80">
+            <div className="flex items-center gap-3 text-[11px] font-mono text-ink-3 pt-1 border-t border-line">
               <div className="flex items-center gap-1.5">
                 <span className="w-2 h-2 rounded-full" style={{ backgroundColor: activeSat.color }} />
                 <span className="text-white font-bold">{activeSat.shortName}</span>
@@ -926,10 +930,10 @@ function ISSTracker({ className = '' }) {
           <button
             type="button"
             onClick={() => setAutoCenter(!autoCenter)}
-            className={`p-2.5 rounded-xl border backdrop-blur-xl shadow-xl transition-all cursor-pointer flex items-center gap-2 text-xs font-mono ${
+            className={`p-2.5 rounded-[10px] border backdrop-blur-xl shadow-xl transition-all cursor-pointer flex items-center gap-2 text-xs font-mono ${
               autoCenter 
                 ? 'bg-cyan-500/20 border-cyan-400 text-cyan-300 shadow-[0_0_15px_rgba(6,182,212,0.4)] font-bold' 
-                : 'bg-slate-900/90 border-slate-800 text-slate-400 hover:text-slate-200'
+                : 'bg-surface/65 border-line text-ink-3 hover:text-ink-2'
             }`}
             title="Toggle Auto Follow"
           >
@@ -941,18 +945,18 @@ function ISSTracker({ className = '' }) {
           <button
             type="button"
             onClick={handleRecenter}
-            className="p-2.5 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-cyan-400 shadow-xl transition-colors cursor-pointer flex items-center justify-center"
+            className="p-2.5 rounded-[10px] bg-surface/65 hover:bg-surface-2 border border-line text-ink-2 hover:text-cyan-400 shadow-xl transition-colors cursor-pointer flex items-center justify-center"
             title={t.recenter}
           >
             <Maximize2 className="w-4 h-4" />
           </button>
 
           {/* Zoom In & Out */}
-          <div className="flex flex-col rounded-xl overflow-hidden border border-slate-800 bg-slate-900/90 shadow-xl">
+          <div className="flex flex-col rounded-[10px] overflow-hidden border border-line bg-surface/65 shadow-xl">
             <button
               type="button"
               onClick={handleZoomIn}
-              className="p-2 hover:bg-slate-800 text-slate-300 hover:text-white transition-colors cursor-pointer border-b border-slate-800"
+              className="p-2 hover:bg-surface-2 text-ink-2 hover:text-ink transition-colors cursor-pointer border-b border-line"
               title="Zoom In"
             >
               <ZoomIn className="w-4 h-4" />
@@ -960,7 +964,7 @@ function ISSTracker({ className = '' }) {
             <button
               type="button"
               onClick={handleZoomOut}
-              className="p-2 hover:bg-slate-800 text-slate-300 hover:text-white transition-colors cursor-pointer"
+              className="p-2 hover:bg-surface-2 text-ink-2 hover:text-ink transition-colors cursor-pointer"
               title="Zoom Out"
             >
               <ZoomOut className="w-4 h-4" />
@@ -969,7 +973,7 @@ function ISSTracker({ className = '' }) {
         </div>
 
         {/* Bottom Legend Overlay */}
-        <div className="absolute bottom-3 left-3 z-10 hidden sm:flex items-center gap-3 px-3 py-1.5 rounded-xl bg-slate-950/85 backdrop-blur-md border border-slate-800 text-[10px] font-mono text-slate-400">
+        <div className="absolute bottom-3 left-3 z-10 hidden sm:flex items-center gap-3 px-3 py-1.5 rounded-[10px] bg-abyss/85 backdrop-blur-md border border-line text-[10px] font-mono text-ink-3">
           <div className="flex items-center gap-1.5">
             <span className="w-2.5 h-1 rounded-full" style={{ backgroundColor: activeSat.color }} />
             <span>Orbit Trail</span>
@@ -984,7 +988,7 @@ function ISSTracker({ className = '' }) {
           </div>
         </div>
 
-        <div className="absolute bottom-3 right-3 z-10 px-2.5 py-1 rounded-xl liquid-glass text-[9px] font-mono text-slate-400">
+        <div className="absolute bottom-3 right-3 z-10 px-2.5 py-1 rounded-[10px] liquid-glass text-[9px] font-mono text-ink-3">
           © Esri • World Dark Gray Canvas
         </div>
       </LiquidGlassCard>
@@ -994,14 +998,14 @@ function ISSTracker({ className = '' }) {
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-white/10">
           <div>
             <div className="flex items-center gap-2">
-              <div className="p-1.5 rounded-lg bg-indigo-500/20 text-indigo-400">
+              <div className="p-1.5 rounded-[8px] bg-indigo-500/20 text-indigo-400">
                 <Clock className="w-4 h-4" />
               </div>
-              <h3 className="text-base sm:text-lg font-bold font-['Orbitron'] text-white">
+              <h3 className="text-base sm:text-lg font-bold font-display text-white">
                 {t.nextPassHeading}
               </h3>
             </div>
-            <p className="text-xs text-slate-300 mt-0.5 font-sans">
+            <p className="text-xs text-ink-2 mt-0.5 font-sans">
               {t.selectStation}
             </p>
           </div>
@@ -1016,10 +1020,10 @@ function ISSTracker({ className = '' }) {
                 <button
                   key={station.id}
                   onClick={() => handleFocusStation(station)}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-mono whitespace-nowrap transition-all border cursor-pointer ${
+                  className={`px-3 py-1.5 rounded-[10px] text-xs font-mono whitespace-nowrap transition-all border cursor-pointer ${
                     isSelected
                       ? 'bg-gradient-to-r from-indigo-600 to-cyan-600 border-cyan-400 text-white shadow-lg shadow-indigo-950/60 font-bold'
-                      : 'bg-slate-950/80 hover:bg-slate-800 border-slate-800 text-slate-400 hover:text-slate-200'
+                      : 'bg-abyss/70 hover:bg-surface-2 border-line text-ink-3 hover:text-ink-2'
                   }`}
                 >
                   {stationName.split(',')[0]} ({station.code})
@@ -1031,8 +1035,8 @@ function ISSTracker({ className = '' }) {
 
         {/* Calculation Highlights */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-5">
-          <div className="p-4 rounded-2xl bg-slate-950/60 border border-slate-800/80">
-            <div className="text-[11px] font-mono text-slate-400">Target Station</div>
+          <div className="p-4 rounded-[14px] bg-abyss/60 border border-line">
+            <div className="text-[11px] font-mono text-ink-3">Target Station</div>
             <div className="text-sm sm:text-base font-bold text-white mt-1">
               {selectedStation.name[currentLang] || selectedStation.name.en}
             </div>
@@ -1041,14 +1045,14 @@ function ISSTracker({ className = '' }) {
             </div>
           </div>
 
-          <div className="p-4 rounded-2xl bg-slate-950/60 border border-slate-800/80">
-            <div className="text-[11px] font-mono text-slate-400">{t.distance} ({activeSat.shortName})</div>
-            <div className="text-xl sm:text-2xl font-bold font-['Orbitron'] text-cyan-300 mt-1">
-              {passEstimate.distanceKm.toLocaleString()} <span className="text-sm font-normal text-slate-400">km</span>
+          <div className="p-4 rounded-[14px] bg-abyss/60 border border-line">
+            <div className="text-[11px] font-mono text-ink-3">{t.distance} ({activeSat.shortName})</div>
+            <div className="text-xl sm:text-2xl font-bold font-display text-cyan-300 mt-1">
+              {passEstimate.distanceKm.toLocaleString()} <span className="text-sm font-normal text-ink-3">km</span>
             </div>
-            <div className="text-[11px] font-mono text-slate-400 mt-1">
+            <div className="text-[11px] font-mono text-ink-3 mt-1">
               {passEstimate.isClose ? (
-                <span className="text-emerald-400 font-bold flex items-center gap-1">
+                <span className="text-signal font-bold flex items-center gap-1">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
                   Inside Direct Radio Horizon
                 </span>
@@ -1058,12 +1062,12 @@ function ISSTracker({ className = '' }) {
             </div>
           </div>
 
-          <div className="p-4 rounded-2xl bg-slate-950/60 border border-slate-800/80">
-            <div className="text-[11px] font-mono text-slate-400">{t.estPass}</div>
-            <div className="text-xl sm:text-2xl font-bold font-['Orbitron'] text-amber-300 mt-1">
+          <div className="p-4 rounded-[14px] bg-abyss/60 border border-line">
+            <div className="text-[11px] font-mono text-ink-3">{t.estPass}</div>
+            <div className="text-xl sm:text-2xl font-bold font-display text-amber-300 mt-1">
               ~{passEstimate.timeStr}
             </div>
-            <div className="text-[11px] font-mono text-slate-400 mt-1">
+            <div className="text-[11px] font-mono text-ink-3 mt-1">
               Approx. {passEstimate.minutes} minutes away ({Math.round(passEstimate.minutes / 92.6)} orbits)
             </div>
           </div>
@@ -1073,7 +1077,7 @@ function ISSTracker({ className = '' }) {
       {/* Mission Dossier Modal when clicking marker or "Mission Dossier" */}
       <AnimatePresence>
         {modalSat && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-abyss/70 backdrop-blur-md">
             <motion.div
               initial={{ opacity: 0, scale: 0.95, y: 16 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -1083,7 +1087,7 @@ function ISSTracker({ className = '' }) {
               <button
                 type="button"
                 onClick={() => setModalSat(null)}
-                className="absolute top-5 right-5 p-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-white transition-colors cursor-pointer"
+                className="absolute top-5 right-5 p-2 rounded-[10px] bg-surface/60 hover:bg-surface-2 text-ink-3 hover:text-ink transition-colors cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -1093,10 +1097,10 @@ function ISSTracker({ className = '' }) {
                   <span className="px-2.5 py-0.5 rounded-full text-slate-950 font-bold" style={{ backgroundColor: modalSat.color }}>
                     NORAD {modalSat.noradId}
                   </span>
-                  <span className="text-slate-400">• {modalSat.type}</span>
-                  <span className="text-slate-400">• {modalSat.operator}</span>
+                  <span className="text-ink-3">• {modalSat.type}</span>
+                  <span className="text-ink-3">• {modalSat.operator}</span>
                 </div>
-                <h3 className="text-xl sm:text-2xl font-bold font-['Orbitron'] text-white">
+                <h3 className="text-xl sm:text-2xl font-bold font-display text-white">
                   {modalSat.name}
                 </h3>
                 <div className="text-xs font-mono text-cyan-300">
@@ -1106,57 +1110,57 @@ function ISSTracker({ className = '' }) {
 
               {/* Real-Time Coordinates Grid */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                <div className="p-3 rounded-xl bg-slate-900 border border-slate-800">
-                  <div className="text-[10px] font-mono text-slate-400">{t.lat}</div>
-                  <div className="text-base font-bold text-white font-['Orbitron'] mt-0.5">
+                <div className="p-3 rounded-[10px] bg-surface/60 border border-line">
+                  <div className="text-[10px] font-mono text-ink-3">{t.lat}</div>
+                  <div className="text-base font-bold text-white font-display mt-0.5">
                     {satPositions[modalSat.id]?.latitude?.toFixed(2)}°
                   </div>
                 </div>
-                <div className="p-3 rounded-xl bg-slate-900 border border-slate-800">
-                  <div className="text-[10px] font-mono text-slate-400">{t.lon}</div>
-                  <div className="text-base font-bold text-white font-['Orbitron'] mt-0.5">
+                <div className="p-3 rounded-[10px] bg-surface/60 border border-line">
+                  <div className="text-[10px] font-mono text-ink-3">{t.lon}</div>
+                  <div className="text-base font-bold text-white font-display mt-0.5">
                     {satPositions[modalSat.id]?.longitude?.toFixed(2)}°
                   </div>
                 </div>
-                <div className="p-3 rounded-xl bg-slate-900 border border-slate-800">
-                  <div className="text-[10px] font-mono text-slate-400">{t.alt}</div>
-                  <div className="text-base font-bold text-white font-['Orbitron'] mt-0.5">
+                <div className="p-3 rounded-[10px] bg-surface/60 border border-line">
+                  <div className="text-[10px] font-mono text-ink-3">{t.alt}</div>
+                  <div className="text-base font-bold text-white font-display mt-0.5">
                     {Math.round(satPositions[modalSat.id]?.altitude || 0).toLocaleString()} km
                   </div>
                 </div>
-                <div className="p-3 rounded-xl bg-slate-900 border border-slate-800">
-                  <div className="text-[10px] font-mono text-slate-400">{t.vel}</div>
-                  <div className="text-base font-bold text-white font-['Orbitron'] mt-0.5">
+                <div className="p-3 rounded-[10px] bg-surface/60 border border-line">
+                  <div className="text-[10px] font-mono text-ink-3">{t.vel}</div>
+                  <div className="text-base font-bold text-white font-display mt-0.5">
                     {Math.round(satPositions[modalSat.id]?.velocity || 0).toLocaleString()} km/h
                   </div>
                 </div>
               </div>
 
               {/* TLE Two-Line Element Details */}
-              <div className="space-y-1.5 p-3 rounded-2xl bg-slate-900/90 border border-slate-800 font-mono text-[10px] text-slate-400 overflow-x-auto">
-                <div className="text-slate-300 font-bold uppercase tracking-wider">NORAD Two-Line Element (TLE) Payload:</div>
+              <div className="space-y-1.5 p-3 rounded-[14px] bg-surface/65 border border-line font-mono text-[10px] text-ink-3 overflow-x-auto">
+                <div className="text-ink-2 font-bold uppercase tracking-wider">NORAD Two-Line Element (TLE) Payload:</div>
                 <div className="text-cyan-300">{modalSat.tle.line1}</div>
                 <div className="text-indigo-300">{modalSat.tle.line2}</div>
               </div>
 
               {/* Scientific Briefing */}
               <div className="space-y-2">
-                <h4 className="text-xs font-mono font-bold uppercase tracking-wider text-slate-400">
+                <h4 className="text-xs font-mono font-bold uppercase tracking-wider text-ink-3">
                   {t.debrief}
                 </h4>
-                <p className="text-sm text-slate-300 leading-relaxed font-sans">
+                <p className="text-sm text-ink-2 leading-relaxed font-sans">
                   {modalSat.missionSummary[currentLang] || modalSat.missionSummary.en}
                 </p>
               </div>
 
-              <div className="pt-4 border-t border-slate-800 flex items-center justify-between">
+              <div className="pt-4 border-t border-line flex items-center justify-between">
                 <button
                   type="button"
                   onClick={() => {
                     handleSelectSatellite(modalSat);
                     setModalSat(null);
                   }}
-                  className="px-5 py-2.5 rounded-xl font-bold text-xs font-mono text-slate-950 transition-colors cursor-pointer"
+                  className="px-5 py-2.5 rounded-[10px] font-bold text-xs font-mono text-slate-950 transition-colors cursor-pointer"
                   style={{ backgroundColor: modalSat.color }}
                 >
                   Track & Follow on Map
@@ -1165,7 +1169,7 @@ function ISSTracker({ className = '' }) {
                 <button
                   type="button"
                   onClick={() => setModalSat(null)}
-                  className="px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-xs font-mono text-slate-300 transition-colors cursor-pointer"
+                  className="px-4 py-2.5 rounded-[10px] bg-surface/60 hover:bg-surface-2 border border-line text-xs font-mono text-ink-2 transition-colors cursor-pointer"
                 >
                   Close
                 </button>
