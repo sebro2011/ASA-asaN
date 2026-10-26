@@ -23,7 +23,9 @@ process.on('unhandledRejection', (reason, promise) => {
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const app = express();
+// Exported so serverless hosts (Vercel — see api/index.ts) can invoke the same
+// Express application that runs standalone via `npm run dev` / `npm start`.
+export const app = express();
 app.use(express.json());
 
 // Enable CORS for all incoming requests (supports iframe previews and cross-origin calls)
@@ -2131,4 +2133,13 @@ async function startServer() {
   process.on('SIGINT', () => handleShutdown('SIGINT'));
 }
 
-startServer();
+// Boot the standalone HTTP + WebSocket server only when this file is executed
+// directly. When the app is imported as a module (the Vercel serverless entry
+// in api/index.ts), the platform invokes the exported Express app itself, so no
+// listener, Vite middleware or WebSocket proxy is created here.
+const isDirectExecution =
+  !!process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+
+if (isDirectExecution) {
+  startServer();
+}
