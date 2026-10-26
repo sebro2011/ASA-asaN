@@ -118,9 +118,18 @@ export function useDevicePerformance(): UseDevicePerformanceReturn {
 
   useEffect(() => {
     detectHardware();
-    const handleResize = () => detectHardware();
+    // Re-detecting hardware allocates a fresh WebGL context each call, so
+    // debounce resize-driven re-detection instead of running it per event.
+    let resizeTimer: ReturnType<typeof setTimeout> | null = null;
+    const handleResize = () => {
+      if (resizeTimer) clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(() => detectHardware(), 250);
+    };
     window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
+    return () => {
+      if (resizeTimer) clearTimeout(resizeTimer);
+      window.removeEventListener('resize', handleResize);
+    };
   }, [detectHardware]);
 
   const setUserMode = useCallback((mode: PerformanceMode) => {

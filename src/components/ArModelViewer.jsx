@@ -238,9 +238,11 @@ export function ArModelViewer({
   const [customSrc, setCustomSrc] = useState('');
   const [isCustomActive, setIsCustomActive] = useState(false);
   const [isScriptLoaded, setIsScriptLoaded] = useState(false);
+  const [viewerLoadError, setViewerLoadError] = useState(false);
   const [isArSupported, setIsArSupported] = useState(false);
   const [hasModelError, setHasModelError] = useState(false);
   const [showQrModal, setShowQrModal] = useState(false);
+  const [qrImageFailed, setQrImageFailed] = useState(false);
   const [exposure, setExposure] = useState(1.0);
   const [isRotating, setIsRotating] = useState(autoRotate);
 
@@ -311,19 +313,17 @@ export function ArModelViewer({
         return;
       }
 
-      // Dynamic SSR-safe import of npm package @google/model-viewer
+      // The web component is bundled by Vite from the npm dependency, so the app
+      // stays fully self-contained (no third-party CDN, works offline/PWA). If
+      // the chunk genuinely fails to load, surface an honest error state rather
+      // than injecting an external script or rendering an unresolved element.
       import('@google/model-viewer')
         .then(() => {
           if (isMounted) setIsScriptLoaded(true);
         })
         .catch((err) => {
-          console.warn('[ArModelViewer] Dynamic import fallback, trying script tag:', err);
-          const script = document.createElement('script');
-          script.type = 'module';
-          script.src = 'https://ajax.googleapis.com/ajax/libs/model-viewer/4.0.0/model-viewer.min.js';
-          script.onload = () => { if (isMounted) setIsScriptLoaded(true); };
-          script.onerror = () => { if (isMounted) setIsScriptLoaded(true); };
-          document.head.appendChild(script);
+          console.warn('[ArModelViewer] model-viewer chunk failed to load:', err);
+          if (isMounted) setViewerLoadError(true);
         });
     }
 
@@ -382,6 +382,23 @@ export function ArModelViewer({
     setIsCustomActive(false);
     setSelectedModel(DEFAULT_AR_MODELS[0]);
     setHasModelError(false);
+  }, []);
+
+  // Re-attempt loading the bundled web-component chunk after a chunk failure
+  // (e.g. a transient network error or a stale deployment hash).
+  const handleRetryViewer = useCallback(() => {
+    setViewerLoadError(false);
+    setIsScriptLoaded(false);
+    if (typeof window !== 'undefined' && window.customElements && window.customElements.get('model-viewer')) {
+      setIsScriptLoaded(true);
+      return;
+    }
+    import('@google/model-viewer')
+      .then(() => setIsScriptLoaded(true))
+      .catch((err) => {
+        console.warn('[ArModelViewer] model-viewer retry failed:', err);
+        setViewerLoadError(true);
+      });
   }, []);
 
   const handleResetCamera = useCallback(() => {
@@ -517,24 +534,61 @@ export function ArModelViewer({
 
       {/* 3D WebGL / WebXR Viewport */}
       <div className="relative w-full h-[380px] sm:h-[480px] rounded-[14px] overflow-hidden border border-line/90 bg-gradient-to-b from-[#020617] via-[#070e28] to-[#020617] select-none shadow-2xl flex items-center justify-center">
-        {hasModelError ? (
-          /* Error Fallback View */
+        {viewerLoadError ? (
+          /* Web component chunk could not be loaded — honest recovery state. */
           <div className="p-6 text-center space-y-3 max-w-md">
             <div className="w-12 h-12 rounded-[14px] bg-rose-500/10 border border-rose-500/30 text-critical flex items-center justify-center mx-auto">
               <AlertCircle className="w-6 h-6" />
             </div>
             <h4 className="font-display font-bold text-sm text-white">
-              Unable to Load 3D GLB Asset
+              {lang === 'si' ? '3D දර්ශකය පූරණය කළ නොහැක' : lang === 'ta' ? '3D பார்வையாளரை ஏற்ற முடியவில்லை' : 'Unable to load the 3D viewer'}
             </h4>
             <p className="text-xs text-ink-3 font-mono">
-              The external 3D asset URL may be blocked by CORS or unavailable. Please try switching back to the Apollo Astronaut catalog model.
+              {lang === 'si'
+                ? 'දර්ශක කේත ඛණ්ඩය පූරණය වීමට අසමත් විය. ජාල සම්බන්ධතාවය පරීක්ෂා කර නැවත උත්සාහ කරන්න.'
+                : lang === 'ta'
+                  ? 'பார்வையாளர் குறியீட்டுப் பகுதி ஏற்றப்படவில்லை. இணைப்பைச் சரிபார்த்து மீண்டும் முயற்சிக்கவும்.'
+                  : 'The viewer code chunk failed to load. Check your connection and try again.'}
+            </p>
+            <button
+              type="button"
+              onClick={handleRetryViewer}
+              className="px-4 py-2 rounded-[10px] bg-cyan-600 hover:bg-cyan-500 text-white font-mono text-xs font-bold transition shadow-lg cursor-pointer inline-flex items-center gap-1.5"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              {lang === 'si' ? 'නැවත උත්සාහ කරන්න' : lang === 'ta' ? 'மீண்டும் முயற்சிக்கவும்' : 'Retry'}
+            </button>
+          </div>
+        ) : !isScriptLoaded ? (
+          /* Registration in progress — never an unresolved blank element. */
+          <div className="flex flex-col items-center gap-3 text-center p-6" role="status" aria-live="polite">
+            <span className="h-9 w-9 animate-spin rounded-full border-2 border-cyan-500/25 border-t-cyan-400" />
+            <p className="text-xs font-mono text-ink-3">
+              {lang === 'si' ? '3D දර්ශකය පූරණය වෙමින්…' : lang === 'ta' ? '3D பார்வையாளர் ஏற்றப்படுகிறது…' : 'Loading 3D viewer…'}
+            </p>
+          </div>
+        ) : hasModelError ? (
+          /* Model asset error fallback view */
+          <div className="p-6 text-center space-y-3 max-w-md">
+            <div className="w-12 h-12 rounded-[14px] bg-rose-500/10 border border-rose-500/30 text-critical flex items-center justify-center mx-auto">
+              <AlertCircle className="w-6 h-6" />
+            </div>
+            <h4 className="font-display font-bold text-sm text-white">
+              {lang === 'si' ? '3D ආකෘතිය පූරණය කළ නොහැක' : lang === 'ta' ? '3D மாதிரியை ஏற்ற முடியவில்லை' : 'Unable to load 3D model'}
+            </h4>
+            <p className="text-xs text-ink-3 font-mono">
+              {lang === 'si'
+                ? 'තෝරාගත් ආකෘතිය පූරණය වීමට අසමත් විය. ලැයිස්තුවේ පළමු අභ්‍යවකාශ යානා ආකෘතිය වෙත ආපසු යන්න.'
+                : lang === 'ta'
+                  ? 'தேர்ந்தெடுக்கப்பட்ட மாதிரியை ஏற்ற முடியவில்லை. பட்டியலில் முதல் விண்கல மாதிரிக்கு மீட்டமைக்கவும்.'
+                  : 'The selected model could not be loaded. Reset to the first spacecraft in the catalog and try again.'}
             </p>
             <button
               type="button"
               onClick={handleResetToDefault}
               className="px-4 py-2 rounded-[10px] bg-cyan-600 hover:bg-cyan-500 text-white font-mono text-xs font-bold transition shadow-lg cursor-pointer"
             >
-              Reset to Apollo Astronaut
+              {lang === 'si' ? 'පළමු ආකෘතියට මාරුවන්න' : lang === 'ta' ? 'முதல் மாதிரிக்கு மீட்டமை' : 'Reset to first model'}
             </button>
           </div>
         ) : (
@@ -557,9 +611,27 @@ export function ArModelViewer({
 
         {/* Viewport Floating Controls */}
         <div className="absolute top-4 left-4 z-10 flex items-center gap-2 flex-wrap pointer-events-none">
-          <span className="px-2.5 py-1 rounded-[10px] bg-abyss/70 border border-line text-[10px] font-mono text-cyan-300 backdrop-blur-md flex items-center gap-1.5 shadow-md">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-            WEBXR READY
+          <span
+            className={`px-2.5 py-1 rounded-[10px] bg-abyss/70 border border-line text-[10px] font-mono backdrop-blur-md flex items-center gap-1.5 shadow-md ${
+              isArSupported ? 'text-cyan-300' : 'text-ink-3'
+            }`}
+          >
+            <span
+              className={`w-2 h-2 rounded-full ${
+                isArSupported ? 'bg-emerald-400 animate-ping' : 'bg-ink-4'
+              }`}
+            />
+            {isArSupported
+              ? lang === 'si'
+                ? 'WEBXR සූදානම්'
+                : lang === 'ta'
+                  ? 'WEBXR தயார்'
+                  : 'WEBXR READY'
+              : lang === 'si'
+                ? '3D දර්ශකය'
+                : lang === 'ta'
+                  ? '3D பார்வையாளர்'
+                  : '3D VIEWER'}
           </span>
           <span className="px-2.5 py-1 rounded-[10px] bg-abyss/70 border border-line text-[10px] font-mono text-ink-2 backdrop-blur-md">
             DRAG TO ORBIT • PINCH TO ZOOM
@@ -659,14 +731,27 @@ export function ArModelViewer({
               </p>
             </div>
 
-            {/* Generated QR Code Container */}
-            <div className="p-4 bg-white rounded-[14px] inline-block shadow-2xl mx-auto">
-              <img
-                src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(mobileArUrl)}`}
-                alt="Mobile AR Projector QR Code"
-                className="w-48 h-48 block"
-              />
-            </div>
+            {/* Generated QR Code Container, with an offline-safe fallback if
+                the external image host is unreachable. */}
+            {qrImageFailed ? (
+              <div className="p-4 bg-white rounded-[14px] inline-block shadow-2xl mx-auto w-52">
+                <p className="text-[11px] font-mono text-slate-700 break-all leading-relaxed">
+                  {mobileArUrl}
+                </p>
+                <p className="mt-2 text-[10px] font-mono text-slate-500">
+                  Open this address on your phone to launch the AR viewer.
+                </p>
+              </div>
+            ) : (
+              <div className="p-4 bg-white rounded-[14px] inline-block shadow-2xl mx-auto">
+                <img
+                  src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(mobileArUrl)}`}
+                  alt="Mobile AR Projector QR Code"
+                  className="w-48 h-48 block"
+                  onError={() => setQrImageFailed(true)}
+                />
+              </div>
+            )}
 
             <p className="text-[11px] font-mono text-cyan-300">
               No app download required • Uses native browser WebXR
