@@ -1,0 +1,32 @@
+[
+  {
+    "id": "iss",
+    "name": "International Space Station",
+    "glb": "/models/iss.glb",
+    "usdz": "/models/iss.usdz"
+  },
+  {
+    "id": "jwst",
+    "name": "James Webb Space Telescope",
+    "glb": "/models/jwst.glb",
+    "usdz": "/models/jwst.usdz"
+  },
+  {
+    "id": "perseverance",
+    "name": "Perseverance Rover",
+    "glb": "/models/perseverance.glb",
+    "usdz": "/models/perseverance.usdz"
+  },
+  {
+    "id": "orion",
+    "name": "Orion / Artemis Capsule",
+    "glb": "/models/orion.glb",
+    "usdz": "/models/orion.usdz"
+  },
+  {
+    "id": "apollo-csm",
+    "name": "Apollo Command & Service Module",
+    "glb": "/models/apollo-csm.glb",
+    "usdz": "/models/apollo-csm.usdz"
+  }
+]

@@ -4,15 +4,16 @@ import SpaceLab3D from './SpaceLab3D.jsx';
 import CelestialLab3D from './CelestialLab3D.jsx';
 import ARStarMap from './ARStarMap.jsx';
 import LightweightEarthFallback from './LightweightEarthFallback';
+import SpacecraftViewer from './spacecraft/SpacecraftViewer';
 import { useDevicePerformance } from '../hooks/useDevicePerformance';
-import { Orbit, Sparkles, Compass, Zap, Cpu } from 'lucide-react';
+import { Orbit, Sparkles, Compass, Zap, Cpu, Satellite } from 'lucide-react';
 
 interface Space3DViewerProps {
   lang: SupportedLanguage;
 }
 
 export const Space3DViewer: React.FC<Space3DViewerProps> = React.memo(({ lang }) => {
-  const [labMode, setLabMode] = useState<'focused' | 'full' | 'starmap'>('focused');
+  const [labMode, setLabMode] = useState<'focused' | 'full' | 'starmap' | 'spacecraft'>('focused');
   
   const {
     isOptimizedModeActive,
@@ -67,6 +68,18 @@ export const Space3DViewer: React.FC<Space3DViewerProps> = React.memo(({ lang })
             <div className="flex items-center gap-1.5 apple-liquid-glass p-1 rounded-[10px] flex-wrap">
               <button
                 type="button"
+                onClick={() => setLabMode('spacecraft')}
+                className={`px-3 py-1.5 rounded-[8px] text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer ${
+                  labMode === 'spacecraft'
+                    ? 'bg-gradient-to-r from-cyan-600 to-blue-600 text-white shadow-md shadow-cyan-600/30 font-bold'
+                    : 'text-ink-2 hover:text-ink'
+                }`}
+              >
+                <Satellite className="w-3.5 h-3.5 text-cyan-300" />
+                <span>{lang === 'si' ? 'අභ්‍යවකාශ යානා මාදිලි' : lang === 'ta' ? 'விண்கல மாதிரிகள்' : 'Spacecraft Models'}</span>
+              </button>
+              <button
+                type="button"
                 onClick={() => setLabMode('starmap')}
                 className={`px-3 py-1.5 rounded-[8px] text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer ${
                   labMode === 'starmap'
@@ -119,6 +132,8 @@ export const Space3DViewer: React.FC<Space3DViewerProps> = React.memo(({ lang })
         <>
           {labMode === 'starmap' ? (
             <ARStarMap lang={lang} />
+          ) : labMode === 'spacecraft' ? (
+            <SpacecraftViewer lang={lang} />
           ) : labMode === 'focused' ? (
             <SpaceLab3D lang={lang} />
           ) : (
