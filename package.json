@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",
-    "build": "vite build",
+    "build:api": "esbuild server/vercelEntry.ts --bundle --platform=node --format=esm --target=node22 --packages=external --outfile=api/index.js",
+    "build": "npm run build:api && vite build",
     "start": "node server.ts",
     "preview": "vite preview",
     "clean": "rm -rf dist",
