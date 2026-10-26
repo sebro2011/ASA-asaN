@@ -283,13 +283,21 @@ function useSafeTexture(url, fallbackTexture) {
 }
 
 /**
- * Hook-safe multi-texture loader for Earth (surface, normal, specular, clouds)
+ * Hook-safe multi-texture loader for Earth.
+ *
+ * Uses only imagery bundled with the app (/public/textures/earth): a Blue
+ * Marble day map, a Black Marble night-lights map and an alpha cloud layer.
+ * The previous version fetched four maps from a third-party GitHub raw URL,
+ * which could be rate-limited or blocked and left the planet on its
+ * procedural fallback. No separate normal/specular maps ship locally, so the
+ * day map doubles as a subtle bump map and the night map drives emissive
+ * city lights.
  */
 function useSafeEarthTextures(fallbackEarthTex) {
   const [textures, setTextures] = useState({
     map: fallbackEarthTex,
-    normalMap: null,
-    specularMap: null,
+    nightMap: null,
+    bumpMap: null,
     cloudsMap: null
   });
 
@@ -299,23 +307,25 @@ function useSafeEarthTextures(fallbackEarthTex) {
     loader.setCrossOrigin('anonymous');
 
     const urls = {
-      map: 'https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/planets/earth_atmos_2048.jpg',
-      normalMap: 'https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/planets/earth_normal_2048.jpg',
-      specularMap: 'https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/planets/earth_specular_2048.jpg',
-      cloudsMap: 'https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/planets/earth_clouds_1024.png'
+      map: '/textures/earth/earth-day.jpg',
+      nightMap: '/textures/earth/earth-night.jpg',
+      bumpMap: '/textures/earth/earth-day.jpg',
+      cloudsMap: '/textures/earth/earth-clouds.webp'
     };
 
     Object.entries(urls).forEach(([key, url]) => {
       loader.load(
         url,
         (loadedTex) => {
-          if (isMounted) {
-            setTextures((prev) => ({ ...prev, [key]: loadedTex }));
-          }
+          if (!isMounted) return;
+          loadedTex.wrapS = THREE.RepeatWrapping;
+          loadedTex.wrapT = THREE.ClampToEdgeWrapping;
+          loadedTex.colorSpace = THREE.SRGBColorSpace;
+          setTextures((prev) => ({ ...prev, [key]: loadedTex }));
         },
         undefined,
         () => {
-          // Gracefully retain fallback
+          // Gracefully retain the procedural fallback
         }
       );
     });
@@ -349,17 +359,22 @@ function UltraEarth({ autoRotate, atmosphereGlow, wireframe }) {
 
   return (
     <group>
-      {/* Earth Surface PBR Mesh */}
+      {/* Earth Surface PBR Mesh: day albedo, subtle terrain bump and Black
+          Marble night lights as an emissive map (the bright day albedo keeps
+          the glow visually confined to the dark side). */}
       <mesh ref={earthRef} castShadow receiveShadow>
         <sphereGeometry args={[3, 96, 96]} />
         <meshPhysicalMaterial
           map={textures.map || fallbackEarthTex}
-          normalMap={textures.normalMap || null}
-          normalScale={new THREE.Vector2(0.85, 0.85)}
-          roughness={0.4}
-          metalness={0.1}
-          clearcoat={0.3}
-          clearcoatRoughness={0.2}
+          bumpMap={textures.bumpMap || null}
+          bumpScale={0.045}
+          emissiveMap={textures.nightMap || null}
+          emissive={textures.nightMap ? new THREE.Color('#ffffff') : new THREE.Color('#000000')}
+          emissiveIntensity={textures.nightMap ? 0.7 : 0}
+          roughness={0.55}
+          metalness={0.05}
+          clearcoat={0.25}
+          clearcoatRoughness={0.35}
           wireframe={wireframe}
         />
       </mesh>
@@ -371,7 +386,7 @@ function UltraEarth({ autoRotate, atmosphereGlow, wireframe }) {
           map={textures.cloudsMap || null}
           color="#ffffff"
           transparent
-          opacity={textures.cloudsMap ? 0.85 : 0.28}
+          opacity={textures.cloudsMap ? 0.62 : 0.28}
           blending={THREE.AdditiveBlending}
           depthWrite={false}
           wireframe={wireframe}
@@ -459,11 +474,9 @@ function UltraMars({ autoRotate, atmosphereGlow, wireframe }) {
  */
 function UltraMoon({ autoRotate, wireframe }) {
   const moonRef = useRef();
-  const fallbackMoonTex = useMemo(() => createProceduralSpaceTexture('moon'), []);
-  const moonMap = useSafeTexture(
-    'https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/planets/moon_1024.jpg',
-    fallbackMoonTex
-  );
+  // Procedural regolith texture generated locally — no third-party fetch —
+  // reused as its own bump map so the maria read as relief, not flat colour.
+  const moonMap = useMemo(() => createProceduralSpaceTexture('moon'), []);
 
   useFrame((_, delta) => {
     if (autoRotate && moonRef.current) {
@@ -476,7 +489,8 @@ function UltraMoon({ autoRotate, wireframe }) {
       <mesh castShadow receiveShadow>
         <sphereGeometry args={[2.2, 96, 96]} />
         <meshStandardMaterial
-          map={moonMap || fallbackMoonTex}
+          map={moonMap}
+          bumpMap={moonMap}
           color="#94a3b8"
           roughness={0.92}
           metalness={0.08}

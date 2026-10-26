@@ -310,17 +310,15 @@ const MarsModel = memo(function MarsModel({ autoRotate, atmosphereHaze, wirefram
 // ====================================================
 const MoonModel = memo(function MoonModel({ autoRotate, wireframe }) {
   const moonRef = useRef();
-  const fallbackTex = useMemo(() => createOptimizedFallbackTexture('moon'), []);
-  const moonMap = useSafeTexture(
-    'https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/planets/moon_1024.jpg',
-    fallbackTex
-  );
+  // Local procedural regolith texture — no third-party network dependency —
+  // reused as a bump map so the maria carry visible relief.
+  const moonMap = useMemo(() => createOptimizedFallbackTexture('moon'), []);
 
   useEffect(() => {
     return () => {
-      if (fallbackTex) fallbackTex.dispose();
+      if (moonMap) moonMap.dispose();
     };
-  }, [fallbackTex]);
+  }, [moonMap]);
 
   useFrame((_, delta) => {
     if (autoRotate && moonRef.current) {
@@ -333,7 +331,9 @@ const MoonModel = memo(function MoonModel({ autoRotate, wireframe }) {
       <mesh>
         <sphereGeometry args={[2.4, 64, 64]} />
         <meshStandardMaterial
-          map={moonMap || fallbackTex}
+          map={moonMap}
+          bumpMap={moonMap}
+          bumpScale={0.06}
           color="#94a3b8"
           roughness={0.95}
           metalness={0.02}

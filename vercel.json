@@ -2,7 +2,18 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api/index" },
+    { "source": "/assets/(.*)", "destination": "/assets/$1" },
     { "source": "/(.*)", "destination": "/index.html" }
+  ],
+  "headers": [
+    {
+      "source": "/models/(.*).glb",
+      "headers": [{ "key": "Content-Type", "value": "model/gltf-binary" }]
+    },
+    {
+      "source": "/models/(.*).usdz",
+      "headers": [{ "key": "Content-Type", "value": "model/vnd.usdz+pr" }]
+    }
   ],
   "functions": {
     "api/index.js": { "maxDuration": 30 }
