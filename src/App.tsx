@@ -89,6 +89,9 @@ export default function App() {
   const [targetMissionId, setTargetMissionId] = useState<string | undefined>(undefined);
   const [isExportModalOpen, setIsExportModalOpen] = useState<boolean>(false);
   const [isLiveVoiceModalOpen, setIsLiveVoiceModalOpen] = useState<boolean>(false);
+  // Bumped by the error-boundary fallback's Retry action to force a clean
+  // remount of a failed lazy destination (e.g. a chunk that failed to load).
+  const [destinationRetry, setDestinationRetry] = useState<number>(0);
   const { totalCount } = useFavorites();
 
   /* Keep the document language in sync for correct script rendering. */
@@ -386,21 +389,30 @@ export default function App() {
 
               <div className="mt-7 sm:mt-8">
                 <ErrorBoundary
-                  key={activeTab}
+                  key={`${activeTab}-${destinationRetry}`}
+                  resetKey={destinationRetry}
                   fallback={
                     <div className="surface p-6 sm:p-8" role="alert">
                       <p className="text-sm font-medium text-ink">{t('destinationErrorTitle')}</p>
                       <p className="mt-1.5 max-w-2xl text-[12.5px] leading-relaxed text-ink-2">
                         {t('destinationErrorBody')}
                       </p>
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        className="mt-4"
-                        onClick={() => handleTabSwitch('home')}
-                      >
-                        {t('navHome')}
-                      </Button>
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        <Button
+                          variant="primary"
+                          size="sm"
+                          onClick={() => setDestinationRetry((n) => n + 1)}
+                        >
+                          {t('retry')}
+                        </Button>
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => handleTabSwitch('home')}
+                        >
+                          {t('navHome')}
+                        </Button>
+                      </div>
                     </div>
                   }
                 >
