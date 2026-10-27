@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
+import React, { useState, useEffect, useRef, useCallback, lazy, Suspense } from 'react';
 import { useTranslation } from 'react-i18next';
 import { motion, AnimatePresence, MotionConfig } from 'framer-motion';
 import type { SupportedLanguage } from './i18n/translations';
@@ -18,6 +18,8 @@ import FloatingVoiceControl from './components/FloatingVoiceControl.jsx';
 import PWAInstallButton from './components/PWAInstallButton';
 import OfflineIndicator from './components/OfflineIndicator';
 import { ExportHtmlModal } from './components/ExportHtmlModal';
+import WelcomeScreen from './components/WelcomeScreen';
+import { persistWelcomePreference, shouldShowWelcome } from './lib/welcome';
 import { useFavorites } from './utils/favorites';
 import { Radio, ArrowLeft, Download } from 'lucide-react';
 
@@ -98,6 +100,9 @@ export default function App() {
   const [targetMissionId, setTargetMissionId] = useState<string | undefined>(undefined);
   const [isExportModalOpen, setIsExportModalOpen] = useState<boolean>(false);
   const [isLiveVoiceModalOpen, setIsLiveVoiceModalOpen] = useState<boolean>(false);
+  // Welcome overlay: decided after mount so SSR/first paint never includes it
+  // and storage-blocked sessions simply fall through to the dashboard.
+  const [welcomeVisible, setWelcomeVisible] = useState<boolean>(false);
   // Bumped by the error-boundary fallback's Retry action to force a clean
   // remount of a failed lazy destination (e.g. a chunk that failed to load).
   const [destinationRetry, setDestinationRetry] = useState<number>(0);
@@ -122,6 +127,24 @@ export default function App() {
     return () => window.removeEventListener('popstate', onPopState);
   }, []);
 
+  /* First-visit welcome screen: storage rules live in lib/welcome. */
+  useEffect(() => {
+    setWelcomeVisible(shouldShowWelcome());
+  }, []);
+
+  const dismissWelcome = useCallback((showOnStartup: boolean) => {
+    persistWelcomePreference(showOnStartup);
+    setWelcomeVisible(false);
+    // Return keyboard focus to the app shell instead of closing the dialog
+    // into nothing.
+    const main = document.getElementById('main-content');
+    if (main) {
+      main.setAttribute('tabindex', '-1');
+      main.focus({ preventScroll: true });
+    }
+  }, []);
+
+  const replayWelcome = useCallback(() => setWelcomeVisible(true), []);
   const handleTabSwitch = (tab: TabKey) => {
     const inShortsRoute = isSpaceShortsPath(window.location.pathname);
     if (tab === 'space-shorts' && !inShortsRoute) {
@@ -590,7 +613,12 @@ export default function App() {
         </div>
       </div>
 
-      <AppFooter onTabChange={handleTabSwitch} onOpenExport={() => setIsExportModalOpen(true)} lang={lang} />
+      <AppFooter
+        onTabChange={handleTabSwitch}
+        onOpenExport={() => setIsExportModalOpen(true)}
+        onReplayWelcome={replayWelcome}
+        lang={lang}
+      />
 
       <MobileTabBar activeTab={activeTab} onTabChange={handleTabSwitch} lang={lang} />
 
@@ -612,6 +640,9 @@ export default function App() {
         className="bottom-24 left-4 sm:left-6 lg:bottom-8 lg:left-6"
       />
       <ExportHtmlModal isOpen={isExportModalOpen} onClose={() => setIsExportModalOpen(false)} lang={lang} />
+      <AnimatePresence>
+        {welcomeVisible ? <WelcomeScreen key="welcome" lang={lang} onDismiss={dismissWelcome} /> : null}
+      </AnimatePresence>
       </MotionConfig>
     </div>
   );

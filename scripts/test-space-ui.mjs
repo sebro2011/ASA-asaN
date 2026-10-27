@@ -49,8 +49,17 @@ await page.route('**/*', (route) => {
 
 try {
   await page.goto(`${base}/space-shorts`, { waitUntil: 'domcontentloaded' });
+  // The first-visit welcome from the app shell must coexist with direct entry.
+  const welcome = page.getByRole('dialog', { name: 'Welcome to your space observation deck' });
+  await welcome.waitFor();
+  await welcome.getByRole('button', { name: 'Skip', exact: true }).click();
+  await welcome.waitFor({ state: 'hidden' });
   await page.locator('.ss-short-panel').waitFor();
   assert.equal(await page.locator('h1').innerText(), 'Space Shorts');
+  await page.getByRole('button', { name: 'Replay welcome screen' }).click();
+  await welcome.waitFor();
+  await welcome.getByRole('button', { name: 'Skip', exact: true }).click();
+  await welcome.waitFor({ state: 'hidden' });
   assert.equal(await page.locator('iframe').count(), 0, 'no player before explicit interaction');
   assert.match(await page.locator('.ss-source-badge').innerText(), /STARTER COLLECTION/);
 
@@ -174,6 +183,9 @@ try {
   // A blocked script must fail gracefully and allow the user to retry or open
   // YouTube instead of leaving a permanent loading indicator.
   const blocked = await browser.newPage({ serviceWorkers: 'block' });
+  // This independent error-path page represents a returning visitor. Some
+  // Chromium environments share storage between pages; seed it explicitly.
+  await blocked.addInitScript(() => localStorage.setItem('nasa_welcome_preference_v1', JSON.stringify({ showOnStartup: false, dismissedAt: null })));
   let apiLoads = 0;
   await blocked.route('**/*', (route) => {
     const url = route.request().url();
