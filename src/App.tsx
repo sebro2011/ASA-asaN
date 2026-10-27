@@ -87,13 +87,13 @@ export default function App() {
   const { t, i18n } = useTranslation();
   const lang = ((i18n.language || 'en').slice(0, 2) as SupportedLanguage) || 'en';
 
-  const isSpaceShortsPath = (pathname: string) => /^\/space-shorts\/?$/.test(pathname);
+  const isCosmoVisionPath = (pathname: string) => /^\/(?:cosmovision|space-shorts)\/?$/.test(pathname);
   const [activeTab, setActiveTab] = useState<TabKey>(() =>
-    typeof window !== 'undefined' && isSpaceShortsPath(window.location.pathname) ? 'space-shorts' : 'home'
+    typeof window !== 'undefined' && isCosmoVisionPath(window.location.pathname) ? 'space-shorts' : 'home'
   );
   // Keep all legacy tabs state-based; only bridge the new shareable route.
   const previousAppUrl = useRef(
-    typeof window !== 'undefined' && !isSpaceShortsPath(window.location.pathname)
+    typeof window !== 'undefined' && !isCosmoVisionPath(window.location.pathname)
       ? `${window.location.pathname}${window.location.search}${window.location.hash}` : '/'
   );
   const [targetApodDate, setTargetApodDate] = useState<string | undefined>(undefined);
@@ -115,7 +115,7 @@ export default function App() {
 
   useEffect(() => {
     const onPopState = (event: PopStateEvent) => {
-      if (isSpaceShortsPath(window.location.pathname)) {
+      if (isCosmoVisionPath(window.location.pathname)) {
         setActiveTab('space-shorts');
       } else {
         previousAppUrl.current = `${window.location.pathname}${window.location.search}${window.location.hash}`;
@@ -146,11 +146,11 @@ export default function App() {
 
   const replayWelcome = useCallback(() => setWelcomeVisible(true), []);
   const handleTabSwitch = (tab: TabKey) => {
-    const inShortsRoute = isSpaceShortsPath(window.location.pathname);
+    const inShortsRoute = isCosmoVisionPath(window.location.pathname);
     if (tab === 'space-shorts' && !inShortsRoute) {
       previousAppUrl.current = `${window.location.pathname}${window.location.search}${window.location.hash}`;
       window.history.replaceState({ ...window.history.state, asaTab: activeTab }, '');
-      window.history.pushState({ asaTab: tab }, '', '/space-shorts');
+      window.history.pushState({ asaTab: tab }, '', '/cosmovision');
     } else if (tab !== 'space-shorts' && inShortsRoute) {
       window.history.pushState({ asaTab: tab }, '', previousAppUrl.current);
     }

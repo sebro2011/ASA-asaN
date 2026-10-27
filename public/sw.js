@@ -243,7 +243,7 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Space Shorts responses carry live/curated state and are already bounded by
+  // CosmoVision responses carry live/curated state and are already bounded by
   // the server cache. Do not put them in the generic stale shell cache: a
   // cached fallback could otherwise masquerade as current after key/quota changes.
   if (url.origin === self.location.origin && url.pathname === '/api/space-videos') return;

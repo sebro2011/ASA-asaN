@@ -36,20 +36,35 @@ function publishedDate(date: string | undefined, language: string) {
 async function fetchPage(mode: SpaceVideoMode, category: SpaceVideoCategory, query: string, token: string, signal: AbortSignal): Promise<SpaceVideoResponse> {
   const params = new URLSearchParams({ mode, category, q: query });
   if (token) params.set('pageToken', token);
-  const response = await fetch(`/api/space-videos?${params}`, { signal });
-  let data: any;
-  try { data = await response.json(); } catch { throw new Error('upstream'); }
-  if (!response.ok) throw new Error(typeof data?.error === 'string' ? data.error : 'upstream');
-  if (!Array.isArray(data?.items) || !['youtube', 'curated'].includes(data.source)) throw new Error('upstream');
-  // The player only accepts validated YouTube IDs; never accept a caller-supplied URL.
-  const items: SpaceVideo[] = data.items.filter((video: any) => video && typeof video.id === 'string'
-    && ID_PATTERN.test(video.id) && typeof video.title === 'string' && typeof video.channelTitle === 'string')
-    .map((video: SpaceVideo) => ({
-      ...video,
-      description: typeof video.description === 'string' ? video.description : '',
-      thumbnailUrl: `https://i.ytimg.com/vi/${video.id}/hqdefault.jpg`
-    }));
-  return { ...data, items, nextPageToken: typeof data.nextPageToken === 'string' ? data.nextPageToken : null };
+  // Also bound the browser wait if the app server itself never responds. A
+  // filter change or unmount still cancels immediately via the caller signal.
+  const controller = new AbortController();
+  const cancel = () => controller.abort();
+  if (signal.aborted) cancel();
+  else signal.addEventListener('abort', cancel, { once: true });
+  const timeout = window.setTimeout(cancel, 20_000);
+  try {
+    const response = await fetch(`/api/space-videos?${params}`, { signal: controller.signal });
+    let data: any;
+    try { data = await response.json(); } catch { throw new Error('upstream'); }
+    if (!response.ok) throw new Error(typeof data?.error === 'string' ? data.error : 'upstream');
+    if (!Array.isArray(data?.items) || !['youtube', 'curated'].includes(data.source)) throw new Error('upstream');
+    // The player only accepts validated YouTube IDs; never accept a caller-supplied URL.
+    const items: SpaceVideo[] = data.items.filter((video: any) => video && typeof video.id === 'string'
+      && ID_PATTERN.test(video.id) && typeof video.title === 'string' && typeof video.channelTitle === 'string')
+      .map((video: SpaceVideo) => ({
+        ...video,
+        description: typeof video.description === 'string' ? video.description : '',
+        thumbnailUrl: `https://i.ytimg.com/vi/${video.id}/hqdefault.jpg`
+      }));
+    return { ...data, items, nextPageToken: typeof data.nextPageToken === 'string' ? data.nextPageToken : null };
+  } catch (failure) {
+    if (controller.signal.aborted && !signal.aborted) throw new Error('network');
+    throw failure;
+  } finally {
+    window.clearTimeout(timeout);
+    signal.removeEventListener('abort', cancel);
+  }
 }
 
 function Thumbnail({ video, className = '' }: { video: SpaceVideo; className?: string }) {
@@ -86,11 +101,18 @@ function WatchLink({ video }: { video: SpaceVideo }) {
   );
 }
 
+const SOURCE_HOSTS = new Set([
+  'svs.gsfc.nasa.gov', 'sci.esa.int', 'thecrashcourse.com', 'www.pbs.org', 'www.thesciencechannel.org'
+]);
+
 function SourceLink({ video }: { video: SpaceVideo }) {
   const { t } = useTranslation();
-  // Catalog citations are limited to known agency origins, not arbitrary URLs.
-  if (!video.sourceUrl || !/^https:\/\/(svs\.gsfc\.nasa\.gov|sci\.esa\.int)\//.test(video.sourceUrl)) return null;
-  return <a className="ss-source-link" href={video.sourceUrl} target="_blank" rel="noopener noreferrer">{t('ssSource')} <ExternalLink size={12} aria-hidden="true" /></a>;
+  // Only link citations from explicitly allowed HTTPS publishers, not URLs
+  // supplied by a search query or a potentially malformed API response.
+  let source: URL;
+  try { source = new URL(video.sourceUrl || ''); } catch { return null; }
+  if (source.protocol !== 'https:' || source.username || source.password || source.port || !SOURCE_HOSTS.has(source.hostname)) return null;
+  return <a className="ss-source-link" href={source.href} target="_blank" rel="noopener noreferrer">{t('ssSource')} <ExternalLink size={12} aria-hidden="true" /></a>;
 }
 
 function StarterNotice({ reason }: { reason?: string }) {
@@ -337,7 +359,12 @@ export default function SpaceShortsPage() {
         )}
         {moreError && <p className="ss-more-error" role="alert">{moreError === 'rate-limit' ? t('ssRateError') : t('ssMoreError')}</p>}
         {!loading && !error && data && <div className="ss-results-footer"><span>{t('ssShowing', { count: items.length })}</span>{data.nextPageToken && <button type="button" className="ss-secondary-action" disabled={loadingMore} onClick={loadMore}>{loadingMore ? t('ssLoadingMore') : t('ssLoadMore')} <ChevronRight size={15} aria-hidden="true" /></button>}</div>}
-        {data && <div className="ss-disclaimers"><p><Info size={14} aria-hidden="true" /> {mode === 'shorts' ? (data.source === 'youtube' ? t('ssShortsDisclaimer') : t('ssStarterShortsDisclaimer')) : t('ssMetadataOriginal')}</p>{mode === 'shorts' && <p>{t('ssMetadataOriginal')}</p>}<p>{t('ssNoUploads')}</p></div>}
+        {data && <div className="ss-disclaimers">
+          <p><Info size={14} aria-hidden="true" /> {mode === 'shorts' ? (data.source === 'youtube' ? t('ssShortsDisclaimer') : t('ssStarterShortsDisclaimer')) : t('ssMetadataOriginal')}</p>
+          {mode === 'shorts' && <p>{t('ssMetadataOriginal')}</p>}
+          {data.source === 'youtube' && <p>{t('ssRelevanceNote')}</p>}
+          <p>{t('ssNoUploads')}</p>
+        </div>}
       </section>
     </div>
   );

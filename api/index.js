@@ -1643,7 +1643,19 @@ import { Router } from "express";
 
 // server/spaceVideoCatalog.ts
 var GODDARD = "UCAY-SMFNfynqz1bdoaV8BeQ";
+var CRASH_COURSE = "UCX6b17PVsYBQ0ip5gyeme-Q";
 var catalog = [
+  {
+    id: "1ifqd3n6ZFY",
+    title: "What is galactic archaeology?! #shorts",
+    description: "Dr. Becky explains how astronomers reconstruct the history of the Milky Way using its stars.",
+    channelTitle: "Dr. Becky",
+    channelId: "UCYNbYGl89UUowy8oXkipC-Q",
+    officialAgency: false,
+    sourceUrl: "https://www.thesciencechannel.org/what-is-galactic-archaeology-shorts/",
+    modes: ["shorts"],
+    categories: ["universe"]
+  },
   {
     id: "KBPc_zyJICE",
     title: "Artemis Science: Exploring the Moon\u2019s South Pole",
@@ -1657,10 +1669,21 @@ var catalog = [
     categories: ["missions", "solar-system"]
   },
   {
+    id: "Is7z49LToNg",
+    title: "The Andromeda Galaxy Is Under Attack",
+    description: "Astrum explores interactions between the Andromeda galaxy and another galaxy.",
+    channelTitle: "Astrum",
+    channelId: "UC-9b7aDP6ZN0coj9-xFnrtw",
+    officialAgency: false,
+    sourceUrl: "https://www.thesciencechannel.org/the-andromeda-galaxy-is-under-attack/",
+    modes: ["shorts"],
+    categories: ["universe"]
+  },
+  {
     id: "TseGuyuVWKM",
     title: "Visualizing NASA\u2019s Next Lunar Flyby",
     description: "A visualization of the Artemis II lunar flyby, produced before the mission.",
-    // NASA links this Short but does not identify its YouTube channel on the source page.
+    // NASA links this video but does not identify its YouTube channel on the source page.
     channelTitle: "",
     officialAgency: false,
     portraitVerified: true,
@@ -1681,6 +1704,17 @@ var catalog = [
     categories: ["missions", "solar-system"]
   },
   {
+    id: "0rHUDWjR5gg",
+    title: "Introduction to Astronomy: Crash Course Astronomy #1",
+    description: "Phil Plait introduces astronomy and the study of the universe.",
+    channelTitle: "CrashCourse",
+    channelId: CRASH_COURSE,
+    officialAgency: false,
+    sourceUrl: "https://thecrashcourse.com/courses/introduction-to-astronomy-crash-course-astronomy-1/",
+    modes: ["videos"],
+    categories: ["universe"]
+  },
+  {
     id: "chhcwk4-esM",
     title: "NASA Simulation\u2019s Plunge Into a Black Hole: Explained",
     description: "A NASA supercomputer visualization follows a camera toward a supermassive black hole.",
@@ -1690,6 +1724,28 @@ var catalog = [
     sourceUrl: "https://svs.gsfc.nasa.gov/14576/",
     modes: ["videos"],
     categories: ["universe"]
+  },
+  {
+    id: "1Ou1MckZHTA",
+    title: "Neutron Stars: The Most Extreme Objects in the Universe",
+    description: "PBS Space Time explores the extraordinary matter inside a neutron star.",
+    channelTitle: "PBS Space Time",
+    channelId: "UC7_gcs09iThXybpVgjHZ_7g",
+    officialAgency: false,
+    sourceUrl: "https://www.pbs.org/video/neutron-stars-the-most-extreme-objects-in-the-universe-7rxzbs/",
+    modes: ["videos"],
+    categories: ["universe"]
+  },
+  {
+    id: "TKM0P3XlMNA",
+    title: "Introduction to the Solar System: Crash Course Astronomy #9",
+    description: "Phil Plait explores how the Sun, planets and other celestial objects formed.",
+    channelTitle: "CrashCourse",
+    channelId: CRASH_COURSE,
+    officialAgency: false,
+    sourceUrl: "https://thecrashcourse.com/courses/introduction-to-the-solar-system-crash-course-astronomy-9/",
+    modes: ["videos"],
+    categories: ["solar-system"]
   },
   {
     id: "6dcfxVydbQY",
@@ -1703,6 +1759,27 @@ var catalog = [
     categories: ["solar-system"]
   },
   {
+    id: "w-9gDALvMF4",
+    title: "The Earth: Crash Course Astronomy #11",
+    description: "A planet-by-planet tour of the solar system begins with Earth.",
+    channelTitle: "CrashCourse",
+    channelId: CRASH_COURSE,
+    officialAgency: false,
+    sourceUrl: "https://thecrashcourse.com/courses/the-earth-crash-course-astronomy-11/",
+    modes: ["videos"],
+    categories: ["earth", "solar-system"]
+  },
+  {
+    id: "jxU2jFh_6GM",
+    title: "LISA Pathfinder mission",
+    description: "Explore the European Space Agency\u2019s LISA Pathfinder mission for gravitational-wave astronomy.",
+    channelTitle: "European Space Agency, ESA",
+    officialAgency: true,
+    sourceUrl: "https://sci.esa.int/web/lisa-pathfinder/display-page-cl-display-page-content-long/-/asset_publisher/34627/content/56320-lisa-pathfinder-mission-esa-youtube-video",
+    modes: ["videos"],
+    categories: ["missions", "universe"]
+  },
+  {
     id: "VUq3ClMyNUw",
     title: "NASA Will Explore Asteroid Apophis",
     description: "NASA\u2019s OSIRIS-APEX mission will study the asteroid Apophis after its 2029 Earth flyby.",
@@ -1712,6 +1789,17 @@ var catalog = [
     sourceUrl: "https://svs.gsfc.nasa.gov/15101/",
     modes: ["videos"],
     categories: ["missions", "solar-system"]
+  },
+  {
+    id: "qZWPBKULkdQ",
+    title: "Black Holes: Crash Course Astronomy #33",
+    description: "Crash Course Astronomy explains how black holes form and how their gravity behaves.",
+    channelTitle: "CrashCourse",
+    channelId: CRASH_COURSE,
+    officialAgency: false,
+    sourceUrl: "https://thecrashcourse.com/courses/black-holes-crash-course-astronomy-33/",
+    modes: ["videos"],
+    categories: ["universe"]
   },
   {
     id: "AQAaAJW-uC0",
@@ -1748,17 +1836,6 @@ var catalog = [
     categories: ["missions", "solar-system"]
   },
   {
-    id: "f-2F3QD_UyA",
-    title: "Cosmic Cycles: Earth, Our Home",
-    description: "A tour of Earth as NASA sees it, from astronaut photographs to satellite visualizations.",
-    channelTitle: "NASA Goddard",
-    channelId: GODDARD,
-    officialAgency: true,
-    sourceUrl: "https://svs.gsfc.nasa.gov/14318/",
-    modes: ["videos"],
-    categories: ["earth"]
-  },
-  {
     id: "WbmZhMZcrWE",
     title: "Cosmic Cycles: Planetary Fantasia",
     description: "A visual tour of other worlds in our solar system.",
@@ -1779,16 +1856,6 @@ var catalog = [
     sourceUrl: "https://svs.gsfc.nasa.gov/14938/",
     modes: ["videos"],
     categories: ["missions", "solar-system"]
-  },
-  {
-    id: "jxU2jFh_6GM",
-    title: "LISA Pathfinder mission",
-    description: "Explore the European Space Agency\u2019s LISA Pathfinder mission.",
-    channelTitle: "European Space Agency, ESA",
-    officialAgency: true,
-    sourceUrl: "https://sci.esa.int/web/lisa-pathfinder/display-page-cl-display-page-content-long/-/asset_publisher/34627/content/56320-lisa-pathfinder-mission-esa-youtube-video",
-    modes: ["videos"],
-    categories: ["missions", "universe"]
   },
   {
     id: "6J1qTOHBZ4s",
@@ -1816,6 +1883,23 @@ function getCuratedPage(mode, category, query, offset = 0, pageSize = 9) {
   };
 }
 
+// server/astronomyRelevance.ts
+var TITLE_SUBJECT = /\b(?:astronomy|astronomers?|astronomical\s+(?:events?|observations?|research|discoveries|science)|astrophysics?|astrophotography|cosmology|cosmological|galax(?:y|ies)|galactic|universe|universo|cosmos|cosmic|black\s+holes?|neutron\s+stars?|pulsars?|quasars?|nebula(?:e|s)?|exoplanets?|solar\s+system|planet(?:s|ary)?(?!\s+earth\b)|stars|stellar|supernovae?|supernovas|constellations?|meteors?|meteorites?|asteroids?|comets?|milky\s+way|andromeda|dark\s+(?:matter|energy)|big\s+bang|interstellar|celestial|stargazing|night\s+sky|eclipses?|moon|lunar|sun|solar\s+(?:flare|storm|wind|eruption|corona)|mercury|venus|mars|jupiter|saturn|uranus|neptune|pluto|betelgeuse|hubble|webb|jwst|tess|kepler|voyager|perseids)\b/iu;
+var TITLE_CONTEXT = /\b(?:space|sky|astronomical|earth|planet|star|sun|solar|moon|orbit|orbital|telescope|observatory|mission|spacecraft|astronaut|nasa|esa|artemis|apollo|jwst|hubble)\b/iu;
+var DESCRIPTION_SUBJECT = /\b(?:astronomy|astronomers?|astrophysics?|cosmology|galax(?:y|ies)|universe|black\s+holes?|neutron\s+stars?|pulsars?|quasars?|nebula(?:e|s)?|exoplanets?|solar\s+system|stellar|supernovae?|constellations?|meteors?|asteroids?|comets?|milky\s+way|andromeda|night\s+sky|space\s+telescope|lunar|moon|mercury|venus|mars|jupiter|saturn|uranus|neptune|pluto)\b/iu;
+var SOUTH_ASIAN_SUBJECT = /(?:තාරකා|විශ්ව|ග්‍රහලෝක|ග්‍රහ ලෝක|සෞරග්‍රහ|සූර්ය|චන්ද්‍ර|සඳ|ක්ෂීරපථ|ආකාශගංගා|කෘෂ්ණ කුහර|දුරේක්ෂ|උල්කා|වල්ගා තරු|වானியல்|விண்வெளி|பிரபஞ்ச|கோள்கள்|கோள்|நிலா|நிலவு|சூரிய|நட்சத்திர|விண்மீன்|கருந்துளை|அண்டம்|தொலைநோக்கி|விண்கல்)/u;
+var UNRELATED = /\b(?:horoscopes?|astrology|zodiac|tarot|numerology|natal\s+chart|minecraft|roblox|fortnite|gameplay|video\s+game|gaming|star\s+wars|star\s+trek|marvel|hollywood|celebrit(?:y|ies)|pop\s+star|movie\s+star|football|basketball|music\s+video|song\s+lyrics?|samsung\s+galaxy|galaxy\s+(?:phone|smartphone|tablet|s\d+)|skincare|sunburn|solar\s+panels?|solar\s+installation)\b/iu;
+function meaningfulText(value) {
+  return value.normalize("NFKC").replace(/https?:\/\/\S+/giu, " ").replace(/(^|\s)#[\p{L}\p{M}\p{N}_]+/gu, " ").replace(/\s+/gu, " ").trim();
+}
+function isAstronomyRelated(video) {
+  const title = meaningfulText(video.title);
+  const description = meaningfulText(video.description).slice(0, 500);
+  if (!title || UNRELATED.test(title)) return false;
+  if (TITLE_SUBJECT.test(title) || SOUTH_ASIAN_SUBJECT.test(title)) return true;
+  return TITLE_CONTEXT.test(title) && (DESCRIPTION_SUBJECT.test(description) || SOUTH_ASIAN_SUBJECT.test(description));
+}
+
 // server/spaceVideos.ts
 var OFFICIAL_CHANNELS = /* @__PURE__ */ new Set([
   "UCLA_DiR1FfKNvjuUpBHmylQ",
@@ -1828,14 +1912,16 @@ var OFFICIAL_CHANNELS = /* @__PURE__ */ new Set([
   // NASA Johnson / @ReelNASA
 ]);
 var CATEGORIES = {
-  all: "space astronomy",
-  missions: "space missions NASA",
-  "solar-system": "solar system planets",
-  universe: "universe astronomy",
-  earth: "Earth from space"
+  all: "astronomy",
+  missions: "astronomy mission",
+  "solar-system": "solar system",
+  universe: "astronomy universe",
+  earth: "Earth planet astronomy"
 };
 var VIDEO_ID = /^[A-Za-z0-9_-]{11}$/;
-var PAGE_TOKEN = /^[A-Za-z0-9_-]{1,200}$/;
+var LEGACY_PAGE_TOKEN = /^[A-Za-z0-9_-]{1,200}$/;
+var WRAPPED_PAGE_TOKEN = /^y\.[A-Za-z0-9_-]{1,2731}$/;
+var MAX_UPSTREAM_TOKEN_BYTES = 2048;
 var CACHE_MS = 10 * 6e4;
 var MAX_CACHE = 120;
 var RATE_WINDOW_MS = 6e4;
@@ -1847,6 +1933,19 @@ var UpstreamFailure = class extends Error {
     this.code = code;
   }
 };
+function wrapYouTubeToken(value) {
+  if (value === void 0 || value === null || value === "") return null;
+  if (typeof value !== "string" || Buffer.byteLength(value, "utf8") > MAX_UPSTREAM_TOKEN_BYTES) throw new UpstreamFailure("upstream");
+  return `y.${Buffer.from(value, "utf8").toString("base64url")}`;
+}
+function unwrapYouTubeToken(token) {
+  if (!token.startsWith("y.")) return token;
+  const encoded = token.slice(2);
+  const bytes = Buffer.from(encoded, "base64url");
+  if (!bytes.length || bytes.length > MAX_UPSTREAM_TOKEN_BYTES || bytes.toString("base64url") !== encoded) return null;
+  const value = bytes.toString("utf8");
+  return Buffer.from(value, "utf8").equals(bytes) ? value : null;
+}
 function durationSeconds(value) {
   if (typeof value !== "string") return void 0;
   const match = /^P(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?)?$/.exec(value);
@@ -1879,10 +1978,12 @@ async function youtubeJson(endpoint, params, key) {
   try {
     data = await response.json();
   } catch {
+    if (response.status === 429) throw new UpstreamFailure("quota");
     throw new UpstreamFailure("upstream");
   }
   if (!response.ok) {
-    const reasons = (data?.error?.errors || []).map((entry) => entry?.reason);
+    const errors = Array.isArray(data?.error?.errors) ? data.error.errors : [];
+    const reasons = errors.map((entry) => entry?.reason);
     if (response.status === 429 || reasons.some((reason) => /quota|rateLimit|dailyLimit/i.test(reason))) throw new UpstreamFailure("quota");
     if (response.status === 401 || response.status === 403 || reasons.some((reason) => /keyInvalid|accessNotConfigured/i.test(reason))) throw new UpstreamFailure("configuration");
     throw new UpstreamFailure("upstream");
@@ -1893,7 +1994,7 @@ async function searchYouTube(mode, category, query, token, key) {
   const search = new URLSearchParams({
     part: "snippet",
     type: "video",
-    maxResults: "18",
+    maxResults: "30",
     order: "relevance",
     q: `${query} ${CATEGORIES[category]}`.trim(),
     videoEmbeddable: "true",
@@ -1905,7 +2006,7 @@ async function searchYouTube(mode, category, query, token, key) {
   const results = await youtubeJson("search", search, key);
   if (!Array.isArray(results?.items)) throw new UpstreamFailure("upstream");
   const ids = [...new Set(results.items.map((entry) => entry?.id?.videoId).filter((id) => typeof id === "string" && VIDEO_ID.test(id)))];
-  const nextPageToken = typeof results.nextPageToken === "string" && PAGE_TOKEN.test(results.nextPageToken) ? results.nextPageToken : null;
+  const nextPageToken = wrapYouTubeToken(results.nextPageToken);
   if (!ids.length) return { items: [], nextPageToken, source: "youtube" };
   const details = await youtubeJson("videos", new URLSearchParams({ part: "snippet,contentDetails,status", id: ids.join(",") }), key);
   if (!Array.isArray(details?.items)) throw new UpstreamFailure("upstream");
@@ -1929,9 +2030,8 @@ async function searchYouTube(mode, category, query, token, key) {
       durationSeconds: duration,
       officialAgency: OFFICIAL_CHANNELS.has(snippet.channelId)
     };
-    return matchesQuery(video, query) ? [video] : [];
+    return isAstronomyRelated(video) && matchesQuery(video, query) ? [video] : [];
   });
-  items.sort((a, b) => Number(b.officialAgency) - Number(a.officialAgency));
   return { items, nextPageToken, source: "youtube" };
 }
 function createSpaceVideosRouter() {
@@ -1960,7 +2060,7 @@ function createSpaceVideosRouter() {
     const rawCategory = req.query.category ?? "all";
     const rawQuery = req.query.q ?? "";
     const rawToken = req.query.pageToken ?? "";
-    if (typeof rawMode !== "string" || !["shorts", "videos"].includes(rawMode) || typeof rawCategory !== "string" || !Object.hasOwn(CATEGORIES, rawCategory) || typeof rawQuery !== "string" || rawQuery.length > 80 || /[\u0000-\u001f\u007f]/.test(rawQuery) || typeof rawToken !== "string" || rawToken && !PAGE_TOKEN.test(rawToken)) {
+    if (typeof rawMode !== "string" || !["shorts", "videos"].includes(rawMode) || typeof rawCategory !== "string" || !Object.hasOwn(CATEGORIES, rawCategory) || typeof rawQuery !== "string" || rawQuery.length > 80 || /[\u0000-\u001f\u007f]/.test(rawQuery) || typeof rawToken !== "string" || rawToken && !LEGACY_PAGE_TOKEN.test(rawToken) && !WRAPPED_PAGE_TOKEN.test(rawToken)) {
       return res.status(400).json({ error: "invalid-request" });
     }
     const mode = rawMode;
@@ -1968,6 +2068,8 @@ function createSpaceVideosRouter() {
     const query = rawQuery.trim();
     const token = rawToken;
     const curatedToken = /^c_(\d{1,4})$/.exec(token);
+    const upstreamToken = unwrapYouTubeToken(token);
+    if (upstreamToken === null) return res.status(400).json({ error: "invalid-request" });
     const key = process.env.YOUTUBE_API_KEY?.trim();
     if (curatedToken || !key) {
       if (!key && token && !curatedToken) return res.status(503).json({ error: "missing-key" });
@@ -1982,10 +2084,13 @@ function createSpaceVideosRouter() {
     if (!pending) {
       if (now >= misses.reset) misses = { count: 0, reset: now + RATE_WINDOW_MS };
       if (++misses.count > GLOBAL_MISS_LIMIT) {
-        if (token) return res.status(429).json({ error: "rate-limit" });
+        if (token) {
+          res.set("Retry-After", String(Math.max(1, Math.ceil((misses.reset - now) / 1e3))));
+          return res.status(429).json({ error: "rate-limit" });
+        }
         return res.json({ ...getCuratedPage(mode, category, query), source: "curated", reason: "rate-limit" });
       }
-      pending = searchYouTube(mode, category, query, token, key);
+      pending = searchYouTube(mode, category, query, upstreamToken, key);
       inflight.set(cacheKey, pending);
     }
     try {
