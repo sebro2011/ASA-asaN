@@ -159,6 +159,16 @@ const en: Copy = {
   destinationErrorTitle: 'This destination failed to load',
   destinationErrorBody: 'A module inside this view could not start — often a WebGL, map or network limitation on this device. The rest of the explorer is unaffected. Move to another destination or return home.',
   apodReadNasa: 'NASA publishes one image per day with an astronomer-written caption. Translation is machine-generated unless stated.',
+
+  /* welcome screen & version management */
+  welcomeEyebrow: 'NASA Space Explorer',
+  welcomeTitle: 'Welcome to your space observation deck',
+  welcomeBody:
+    'Explore real NASA imagery, Earth climate records, near-Earth objects and landmark missions — every figure traced to its source, in English, සිංහල and தமிழ்.',
+  welcomeBegin: 'Begin Exploration',
+  welcomeSkip: 'Skip',
+  welcomeShowOnStartup: 'Show welcome screen on startup',
+  welcomeReplay: 'Replay welcome screen',
 };
 
 const si: Copy = {
@@ -301,6 +311,16 @@ const si: Copy = {
   destinationErrorTitle: 'මෙම අංශය පූරණය වූයේ නැත',
   destinationErrorBody: 'මෙම දර්ශනයේ මොඩියුලයක් ආරම්භ කළ නොහැකි විය — බොහෝ විට මෙම උපාංගයේ WebGL, සිතියම් හෝ ජාල සීමාවක් විය හැක. අනෙකුත් අංශ සාමාන්‍ය ලෙස ක්‍රියා කරයි.',
   apodReadNasa: 'NASA දිනකට එක් ඡායාරූපයක් ප්‍රකාශයට පත් කරයි. වෙනත් ආකාරයක් සඳහන් නොවේ නම් පරිවර්තනය යන්ත්‍රගතය.',
+
+  /* welcome screen & version management */
+  welcomeEyebrow: 'NASA අභ්‍යවකාශ ගවේෂකය',
+  welcomeTitle: 'ඔබේ අභ්‍යවකාශ නිරීක්ෂණ මධ්‍යස්ථානයට සාදරයෙන් පිළිගනිමු',
+  welcomeBody:
+    'සත්‍ය NASA ඡායාරූප, පෘථිවි දේශගුණ වාර්තා, පෘථිවියට ආසන්න වස්තු සහ ඓතිහාසික මෙහෙයුම් ගවේෂණය කරන්න — සෑම අගයකම මූලාශ්‍රය දක්වා ඇත, English, සිංහල සහ தமிழ் භාෂාවලින්.',
+  welcomeBegin: 'ගවේෂණය අරඹන්න',
+  welcomeSkip: 'මඟ හරින්න',
+  welcomeShowOnStartup: 'ආරම්භයේදී පිළිගැනීමේ තිරය පෙන්වන්න',
+  welcomeReplay: 'පිළිගැනීමේ තිරය නැවත බලන්න',
 };
 
 const ta: Copy = {
@@ -443,6 +463,16 @@ const ta: Copy = {
   destinationErrorTitle: 'இந்தப் பகுதி ஏற்றப்படவில்லை',
   destinationErrorBody: 'இந்தக் காட்சியின் ஒரு தொகுதி தொடங்க முடியவில்லை — பெரும்பாலும் இந்தச் சாதனத்தின் WebGL, வரைபடம் அல்லது வலையமைப்பு வரம்பு. மற்ற பகுதிகள் பாதிக்கப்படவில்லை.',
   apodReadNasa: 'NASA நாளொன்றுக்கு ஒரு படத்தை வெளியிடுகிறது. வேறுவிதமாகக் குறிப்பிடப்படாவிட்டால் மொழிபெயர்ப்பு இயந்திரத்தால் உருவாக்கப்படுகிறது.',
+
+  /* welcome screen & version management */
+  welcomeEyebrow: 'NASA விண்வெளி ஆய்வாளர்',
+  welcomeTitle: 'உங்கள் விண்வெளி கண்காணிப்பு மையத்திற்கு வரவேற்கிறோம்',
+  welcomeBody:
+    'உண்மையான NASA படங்கள், பூமி காலநிலை பதிவுகள், பூமியை அணுகும் பொருள்கள் மற்றும் வரலாற்றுப் பயணங்களை ஆராயுங்கள் — ஒவ்வொரு எண்ணும் அதன் மூலத்துடன் இணைக்கப்பட்டுள்ளது, English, සිංහල மற்றும் தமிழ் மொழிகளில்.',
+  welcomeBegin: 'ஆய்வைத் தொடங்குங்கள்',
+  welcomeSkip: 'தவிர்க்க',
+  welcomeShowOnStartup: 'தொடக்கத்தில் வரவேற்புத் திரையைக் காட்டு',
+  welcomeReplay: 'வரவேற்புத் திரையை மீண்டும் காட்டு',
 };
 
 export const interfaceCopy: Record<CopyLanguage, Copy> = { en, si, ta };

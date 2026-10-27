@@ -1,7 +1,7 @@
 {
   "name": "react-example",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.1.0",
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",
@@ -15,6 +15,7 @@
     "test:nova-chat": "node --test scripts/test-nova-chat.mjs",
     "test:earth": "node --import tsx --test scripts/test-earth-intelligence.mjs",
     "test:ai-viewer": "node --import tsx --test scripts/test-ai-earth-viewer.mjs",
+    "test:welcome": "node --import tsx --test scripts/test-welcome-screen.mjs",
     "verify:earth": "node --import tsx scripts/verify-earth-services.mjs",
     "test:earth-server": "node --import tsx --test scripts/test-earth-server.mjs",
     "test:earth-smoke": "node --import tsx scripts/smoke-render.mjs"
