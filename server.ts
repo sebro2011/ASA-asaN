@@ -7,6 +7,7 @@ import WebSocket, { WebSocketServer } from 'ws';
 import { GoogleGenAI, Type } from '@google/genai';
 import { generateLocalSpaceResponse } from './src/utils/spaceLocalAiEngine.js';
 import { earthRouter } from './server/earthIntelligence.js';
+import { spaceVideosRouter } from './server/spaceVideos.js';
 import { getNovaPublicConfig, handleNovaChatRequest } from './server/novaChat.js';
 
 dotenv.config();
@@ -2011,6 +2012,7 @@ app.get('/api/gemini-live-token', (req, res) => {
 // optional FIRMS hotspot proxy, grounded AI analyst.
 // ====================================================
 app.use('/api/earth', earthRouter);
+app.use('/api/space-videos', spaceVideosRouter);
 
 // Setup Vite middleware in dev or static files in production
 async function startServer() {

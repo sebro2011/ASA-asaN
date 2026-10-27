@@ -21,13 +21,15 @@ import {
   Rocket,
   Satellite,
   Sparkles,
-  Target
+  Target,
+  Clapperboard
 } from 'lucide-react';
 import type { SupportedLanguage } from '../i18n/translations';
 
 export type TabId =
   | 'home'
   | 'apod'
+  | 'space-shorts'
   | '3d'
   | 'asteroids'
   | 'epic'
@@ -51,6 +53,13 @@ export interface NavEntry {
 }
 
 export const NAV_ENTRIES: NavEntry[] = [
+  {
+    id: 'space-shorts',
+    icon: Clapperboard,
+    group: 'explore',
+    labels: { en: 'Space Shorts', si: 'අභ්‍යවකාශ කෙටි වීඩියෝ', ta: 'விண்வெளிக் குறுங்காணொளிகள்' },
+    hint: { en: 'Shorts & space videos', si: 'කෙටි හා දිගු අභ්‍යවකාශ වීඩියෝ', ta: 'குறும் & விண்வெளிக் காணொளிகள்' }
+  },
   {
     id: 'apod',
     icon: Aperture,
@@ -163,4 +172,4 @@ export function labelFor(id: TabId, lang: SupportedLanguage, fallback = ''): str
 }
 
 /** Primary mobile destinations — the rest live behind the "More" sheet. */
-export const MOBILE_PRIMARY: TabId[] = ['home', 'earth', 'assistant', 'saved'];
+export const MOBILE_PRIMARY: TabId[] = ['home', 'earth', 'space-shorts', 'assistant', 'saved'];

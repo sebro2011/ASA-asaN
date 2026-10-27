@@ -17,7 +17,8 @@
     "test:ai-viewer": "node --import tsx --test scripts/test-ai-earth-viewer.mjs",
     "verify:earth": "node --import tsx scripts/verify-earth-services.mjs",
     "test:earth-server": "node --import tsx --test scripts/test-earth-server.mjs",
-    "test:earth-smoke": "node --import tsx scripts/smoke-render.mjs"
+    "test:earth-smoke": "node --import tsx scripts/smoke-render.mjs",
+    "test:space-videos": "node --import tsx --test scripts/test-space-videos.mjs"
   },
   "dependencies": {
     "@fontsource-variable/inter": "^5.3.0",

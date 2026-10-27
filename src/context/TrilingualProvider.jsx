@@ -132,6 +132,7 @@ export const TrilingualProvider = ({ children }) => {
     try {
       // Retained for backwards compatibility with older stored preferences.
       localStorage.setItem('nasa_preferred_lang', newLang);
+      localStorage.setItem('i18nextLng', newLang);
       document.documentElement.lang = newLang;
     } catch {}
   };
