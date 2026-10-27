@@ -112,10 +112,10 @@ export default function AppHeader({ activeTab, onTabChange, onOpenExport, dataSt
         <button
           type="button"
           onClick={() => go('home')}
-          className="group flex shrink-0 items-center gap-2.5 rounded-lg text-left"
+          className="group flex min-w-0 items-center gap-2.5 rounded-lg text-left"
           aria-label="NASA Space Explorer — home"
         >
-          <span className="relative grid h-9 w-9 place-items-center overflow-hidden rounded-full border border-line-strong bg-[radial-gradient(circle_at_30%_25%,#1a3a63,#040911_70%)] lg:h-10 lg:w-10">
+          <span className="relative grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-full border border-line-strong bg-[radial-gradient(circle_at_30%_25%,#1a3a63,#040911_70%)] lg:h-10 lg:w-10">
             <svg viewBox="0 0 32 32" className="h-5 w-5 text-atmo" aria-hidden="true">
               <circle cx="16" cy="16" r="7.5" fill="none" stroke="currentColor" strokeWidth="1.4" />
               <ellipse
@@ -133,10 +133,10 @@ export default function AppHeader({ activeTab, onTabChange, onOpenExport, dataSt
             </svg>
           </span>
           <span className="min-w-0">
-            <span className="block text-[13px] font-semibold leading-none tracking-tight text-ink lg:text-sm">
+            <span className="block truncate text-[13px] font-semibold leading-none tracking-tight text-ink lg:text-sm">
               NASA Space Explorer
             </span>
-            <span className="mt-1 block font-mono text-[9.5px] uppercase tracking-[0.18em] text-ink-4">
+            <span className="mt-1 block truncate font-mono text-[9.5px] uppercase tracking-[0.18em] text-ink-4">
               Earth · Missions · Deep Space
             </span>
           </span>
@@ -226,7 +226,7 @@ export default function AppHeader({ activeTab, onTabChange, onOpenExport, dataSt
           })}
         </nav>
 
-        <div className="ml-auto flex items-center gap-2">
+        <div className="ml-auto flex shrink-0 items-center gap-2">
           {dataStatus ? <div className="hidden xl:block">{dataStatus}</div> : null}
 
           {/* Language ------------------------------------------------------ */}

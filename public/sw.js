@@ -243,6 +243,11 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  // Space Shorts responses carry live/curated state and are already bounded by
+  // the server cache. Do not put them in the generic stale shell cache: a
+  // cached fallback could otherwise masquerade as current after key/quota changes.
+  if (url.origin === self.location.origin && url.pathname === '/api/space-videos') return;
+
   // --- Strategy A: APOD Daily Image & Imagery (Cache-First with Background Revalidation) ---
   const isImageRequest = 
     request.destination === 'image' ||

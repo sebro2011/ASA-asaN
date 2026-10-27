@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, lazy, Suspense } from 'react';
+import React, { useState, useEffect, useRef, useCallback, lazy, Suspense } from 'react';
 import { useTranslation } from 'react-i18next';
 import { motion, AnimatePresence, MotionConfig } from 'framer-motion';
 import type { SupportedLanguage } from './i18n/translations';
@@ -29,6 +29,7 @@ import { Radio, ArrowLeft, Download } from 'lucide-react';
  * Leaflet, the mission chart engine or the assistant client loads on entry.
  * Each destination still renders its real component — this is transport only.
  */
+const SpaceShortsPage = lazy(() => import('./features/space-shorts/SpaceShortsPage'));
 const EarthIntelligenceLab = lazy(() => import('./components/EarthIntelligenceLab.jsx'));
 const Space3DViewer = lazy(() =>
   import('./components/Space3DViewer').then((m) => ({ default: m.Space3DViewer }))
@@ -86,7 +87,15 @@ export default function App() {
   const { t, i18n } = useTranslation();
   const lang = ((i18n.language || 'en').slice(0, 2) as SupportedLanguage) || 'en';
 
-  const [activeTab, setActiveTab] = useState<TabKey>('home');
+  const isSpaceShortsPath = (pathname: string) => /^\/space-shorts\/?$/.test(pathname);
+  const [activeTab, setActiveTab] = useState<TabKey>(() =>
+    typeof window !== 'undefined' && isSpaceShortsPath(window.location.pathname) ? 'space-shorts' : 'home'
+  );
+  // Keep all legacy tabs state-based; only bridge the new shareable route.
+  const previousAppUrl = useRef(
+    typeof window !== 'undefined' && !isSpaceShortsPath(window.location.pathname)
+      ? `${window.location.pathname}${window.location.search}${window.location.hash}` : '/'
+  );
   const [targetApodDate, setTargetApodDate] = useState<string | undefined>(undefined);
   const [targetMissionId, setTargetMissionId] = useState<string | undefined>(undefined);
   const [isExportModalOpen, setIsExportModalOpen] = useState<boolean>(false);
@@ -103,6 +112,20 @@ export default function App() {
   useEffect(() => {
     document.documentElement.lang = lang;
   }, [lang]);
+
+  useEffect(() => {
+    const onPopState = (event: PopStateEvent) => {
+      if (isSpaceShortsPath(window.location.pathname)) {
+        setActiveTab('space-shorts');
+      } else {
+        previousAppUrl.current = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+        const tab = event.state?.asaTab;
+        setActiveTab(tab === 'home' || NAV_ENTRIES.some((entry) => entry.id === tab) ? tab : 'home');
+      }
+    };
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, []);
 
   /* First-visit welcome screen: storage rules live in lib/welcome. */
   useEffect(() => {
@@ -122,8 +145,15 @@ export default function App() {
   }, []);
 
   const replayWelcome = useCallback(() => setWelcomeVisible(true), []);
-
   const handleTabSwitch = (tab: TabKey) => {
+    const inShortsRoute = isSpaceShortsPath(window.location.pathname);
+    if (tab === 'space-shorts' && !inShortsRoute) {
+      previousAppUrl.current = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+      window.history.replaceState({ ...window.history.state, asaTab: activeTab }, '');
+      window.history.pushState({ asaTab: tab }, '', '/space-shorts');
+    } else if (tab !== 'space-shorts' && inShortsRoute) {
+      window.history.pushState({ asaTab: tab }, '', previousAppUrl.current);
+    }
     setActiveTab(tab);
     if (tab === 'home') {
       window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -234,6 +264,11 @@ export default function App() {
 
   const meta: Record<TabKey, TabMeta> = {
     home: { eyebrow: '', title: '', description: '' },
+    'space-shorts': {
+      eyebrow: t('ssEyebrow'),
+      title: t('ssTitle'),
+      description: t('ssDescription')
+    },
     apod: {
       eyebrow: t('pageApodEyebrow'),
       title: t('apodHeading'),
@@ -367,7 +402,7 @@ export default function App() {
         onTabChange={handleTabSwitch}
         onOpenExport={() => setIsExportModalOpen(true)}
         dataStatus={
-          activeTab === 'home' ? null : (
+          activeTab === 'home' || activeTab === 'space-shorts' ? null : (
             <span className="inline-flex items-center gap-2 rounded-full border border-line bg-surface/60 px-2.5 py-1 font-mono text-[9.5px] uppercase tracking-[0.14em] text-ink-3">
               <span className="h-1.5 w-1.5 rounded-full bg-signal" />
               {t('networkStatus')}
@@ -446,6 +481,8 @@ export default function App() {
                   }
                 >
                 <Suspense fallback={<DestinationSkeleton />}>
+                {activeTab === 'space-shorts' && <SpaceShortsPage />}
+
                 {activeTab === 'apod' && (
                   <ApodViewer
                     lang={lang}

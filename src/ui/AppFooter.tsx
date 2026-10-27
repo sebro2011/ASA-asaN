@@ -35,7 +35,7 @@ export default function AppFooter({
 }) {
   const { t } = useTranslation();
   const groups: Array<{ title: string; ids: TabId[] }> = [
-    { title: 'Explore', ids: ['apod', '3d', 'missions', 'news', 'quiz'] },
+    { title: 'Explore', ids: ['space-shorts', 'apod', '3d', 'missions', 'news', 'quiz'] },
     { title: 'Earth', ids: ['earth', 'epic', 'iss'] },
     { title: 'Solar system', ids: ['asteroids', 'exoplanets', 'launch'] },
     { title: 'Assistant', ids: ['assistant', 'saved'] }

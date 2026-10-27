@@ -3,14 +3,14 @@
 /**
  * MobileTabBar — thumb-reachable primary navigation on phones and small tablets.
  *
- * Five destinations only; everything else is one level deeper in the sheet. The
+ * Primary destinations; everything else is one level deeper in the sheet. The
  * bar respects the device safe area and never overlaps page content because the
  * app shell reserves matching bottom padding.
  */
 
 import React, { useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Grid2x2, House, Leaf, MoreHorizontal, Sparkles, X } from 'lucide-react';
+import { Clapperboard, Grid2x2, House, Leaf, MoreHorizontal, Sparkles, X } from 'lucide-react';
 import { NAV_ENTRIES, NAV_GROUPS, type TabId } from './navigation';
 import type { SupportedLanguage } from '../i18n/translations';
 import { cx } from './primitives';
@@ -22,6 +22,7 @@ const ITEMS: Array<{
 }> = [
   { id: 'home', icon: House, labels: { en: 'Home', si: 'මුල් පිටුව', ta: 'முகப்பு' } },
   { id: 'earth', icon: Leaf, labels: { en: 'Earth', si: 'පෘථිවිය', ta: 'பூமி' } },
+  { id: 'space-shorts', icon: Clapperboard, labels: { en: 'Shorts', si: 'කෙටි වීඩියෝ', ta: 'குறுங்காணொளி' } },
   { id: 'assistant', icon: Sparkles, labels: { en: 'NOVA', si: 'NOVA', ta: 'NOVA' } },
   { id: 'saved', icon: Grid2x2, labels: { en: 'Saved', si: 'සුරැකි', ta: 'சேமிப்பு' } },
   { id: 'menu', icon: MoreHorizontal, labels: { en: 'More', si: 'තව', ta: 'மேலும்' } }

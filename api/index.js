@@ -1638,6 +1638,373 @@ ${JSON.stringify(
   }
 });
 
+// server/spaceVideos.ts
+import { Router } from "express";
+
+// server/spaceVideoCatalog.ts
+var GODDARD = "UCAY-SMFNfynqz1bdoaV8BeQ";
+var catalog = [
+  {
+    id: "KBPc_zyJICE",
+    title: "Artemis Science: Exploring the Moon\u2019s South Pole",
+    description: "NASA explores what lunar samples from the Moon\u2019s south pole can reveal about the solar system.",
+    channelTitle: "NASA Goddard",
+    channelId: GODDARD,
+    officialAgency: true,
+    portraitVerified: true,
+    sourceUrl: "https://svs.gsfc.nasa.gov/14886/",
+    modes: ["shorts"],
+    categories: ["missions", "solar-system"]
+  },
+  {
+    id: "TseGuyuVWKM",
+    title: "Visualizing NASA\u2019s Next Lunar Flyby",
+    description: "A visualization of the Artemis II lunar flyby, produced before the mission.",
+    // NASA links this Short but does not identify its YouTube channel on the source page.
+    channelTitle: "",
+    officialAgency: false,
+    portraitVerified: true,
+    sourceUrl: "https://svs.gsfc.nasa.gov/14938/",
+    modes: ["shorts"],
+    categories: ["missions", "solar-system"]
+  },
+  {
+    id: "bX0hv0EFKnI",
+    title: "Artemis II: Into the Path of Solar Eruptions",
+    description: "How solar eruptions can affect a lunar mission and its crew.",
+    channelTitle: "NASA Goddard",
+    channelId: GODDARD,
+    officialAgency: true,
+    portraitVerified: true,
+    sourceUrl: "https://svs.gsfc.nasa.gov/14988/",
+    modes: ["shorts"],
+    categories: ["missions", "solar-system"]
+  },
+  {
+    id: "chhcwk4-esM",
+    title: "NASA Simulation\u2019s Plunge Into a Black Hole: Explained",
+    description: "A NASA supercomputer visualization follows a camera toward a supermassive black hole.",
+    channelTitle: "NASA Goddard",
+    channelId: GODDARD,
+    officialAgency: true,
+    sourceUrl: "https://svs.gsfc.nasa.gov/14576/",
+    modes: ["videos"],
+    categories: ["universe"]
+  },
+  {
+    id: "6dcfxVydbQY",
+    title: "Exploring Planet Uranus",
+    description: "A journey to the ice giant, its rings and moons, with observations from Voyager 2 and Hubble.",
+    channelTitle: "NASA Goddard",
+    channelId: GODDARD,
+    officialAgency: true,
+    sourceUrl: "https://svs.gsfc.nasa.gov/14580/",
+    modes: ["videos"],
+    categories: ["solar-system"]
+  },
+  {
+    id: "VUq3ClMyNUw",
+    title: "NASA Will Explore Asteroid Apophis",
+    description: "NASA\u2019s OSIRIS-APEX mission will study the asteroid Apophis after its 2029 Earth flyby.",
+    channelTitle: "NASA Goddard",
+    channelId: GODDARD,
+    officialAgency: true,
+    sourceUrl: "https://svs.gsfc.nasa.gov/15101/",
+    modes: ["videos"],
+    categories: ["missions", "solar-system"]
+  },
+  {
+    id: "AQAaAJW-uC0",
+    title: "Artemis Science: Exploring the Moon\u2019s South Pole",
+    description: "NASA explores what lunar samples from the Moon\u2019s south pole can reveal about the solar system.",
+    channelTitle: "NASA Goddard",
+    channelId: GODDARD,
+    officialAgency: true,
+    sourceUrl: "https://svs.gsfc.nasa.gov/14886/",
+    modes: ["videos"],
+    categories: ["missions", "solar-system"]
+  },
+  {
+    id: "zJE0DnRWPz0",
+    title: "Going Interstellar with TESS and Kepler",
+    description: "Explore spacecraft beyond the solar system and the search for exoplanets with Kepler and TESS.",
+    channelTitle: "NASA Goddard",
+    channelId: GODDARD,
+    officialAgency: true,
+    durationSeconds: 174,
+    sourceUrl: "https://svs.gsfc.nasa.gov/13155/",
+    modes: ["videos"],
+    categories: ["universe", "missions"]
+  },
+  {
+    id: "vUQAc0RYjzc",
+    title: "How NASA Unlocks the Moon\u2019s Mysteries",
+    description: "Discoveries about the Moon made using data from the Lunar Reconnaissance Orbiter.",
+    channelTitle: "NASA Goddard",
+    channelId: GODDARD,
+    officialAgency: true,
+    sourceUrl: "https://svs.gsfc.nasa.gov/14383/",
+    modes: ["videos"],
+    categories: ["missions", "solar-system"]
+  },
+  {
+    id: "f-2F3QD_UyA",
+    title: "Cosmic Cycles: Earth, Our Home",
+    description: "A tour of Earth as NASA sees it, from astronaut photographs to satellite visualizations.",
+    channelTitle: "NASA Goddard",
+    channelId: GODDARD,
+    officialAgency: true,
+    sourceUrl: "https://svs.gsfc.nasa.gov/14318/",
+    modes: ["videos"],
+    categories: ["earth"]
+  },
+  {
+    id: "WbmZhMZcrWE",
+    title: "Cosmic Cycles: Planetary Fantasia",
+    description: "A visual tour of other worlds in our solar system.",
+    channelTitle: "NASA Goddard",
+    channelId: GODDARD,
+    officialAgency: true,
+    sourceUrl: "https://svs.gsfc.nasa.gov/14321/",
+    modes: ["videos"],
+    categories: ["solar-system"]
+  },
+  {
+    id: "wdF4wyTarrI",
+    title: "Artemis Science: Visualizing NASA\u2019s Next Lunar Flyby",
+    description: "A visualization of the Artemis II lunar flyby, produced before the mission.",
+    channelTitle: "NASA Goddard",
+    channelId: GODDARD,
+    officialAgency: true,
+    sourceUrl: "https://svs.gsfc.nasa.gov/14938/",
+    modes: ["videos"],
+    categories: ["missions", "solar-system"]
+  },
+  {
+    id: "jxU2jFh_6GM",
+    title: "LISA Pathfinder mission",
+    description: "Explore the European Space Agency\u2019s LISA Pathfinder mission.",
+    channelTitle: "European Space Agency, ESA",
+    officialAgency: true,
+    sourceUrl: "https://sci.esa.int/web/lisa-pathfinder/display-page-cl-display-page-content-long/-/asset_publisher/34627/content/56320-lisa-pathfinder-mission-esa-youtube-video",
+    modes: ["videos"],
+    categories: ["missions", "universe"]
+  },
+  {
+    id: "6J1qTOHBZ4s",
+    title: "A New Portrait of the Cosmos is Coming",
+    description: "A NASA trailer introducing the Nancy Grace Roman Space Telescope.",
+    channelTitle: "NASA Goddard",
+    channelId: GODDARD,
+    officialAgency: true,
+    sourceUrl: "https://svs.gsfc.nasa.gov/13606/",
+    modes: ["videos"],
+    categories: ["universe", "missions"]
+  }
+].map((video) => ({ ...video, thumbnailUrl: `https://i.ytimg.com/vi/${video.id}/hqdefault.jpg` }));
+function matchesQuery(video, query) {
+  const terms = query.toLocaleLowerCase().trim().split(/\s+/u).filter(Boolean);
+  const haystack = `${video.title} ${video.description} ${video.channelTitle}`.toLocaleLowerCase();
+  return terms.every((term) => haystack.includes(term));
+}
+function getCuratedPage(mode, category, query, offset = 0, pageSize = 9) {
+  const matching = catalog.filter((video) => video.modes.includes(mode) && (category === "all" || video.categories.includes(category)) && matchesQuery(video, query));
+  const items = matching.slice(offset, offset + pageSize).map(({ modes, categories, ...video }) => video);
+  return {
+    items,
+    nextPageToken: offset + pageSize < matching.length ? `c_${offset + pageSize}` : null
+  };
+}
+
+// server/spaceVideos.ts
+var OFFICIAL_CHANNELS = /* @__PURE__ */ new Set([
+  "UCLA_DiR1FfKNvjuUpBHmylQ",
+  // NASA / @NASA
+  "UCAY-SMFNfynqz1bdoaV8BeQ",
+  // NASA Goddard / @NASAGoddard
+  "UCryGec9PdUCLjpJW2mgCuLw",
+  // NASA JPL / @NASAJPL
+  "UCmheCYT4HlbFi943lpH009Q"
+  // NASA Johnson / @ReelNASA
+]);
+var CATEGORIES = {
+  all: "space astronomy",
+  missions: "space missions NASA",
+  "solar-system": "solar system planets",
+  universe: "universe astronomy",
+  earth: "Earth from space"
+};
+var VIDEO_ID = /^[A-Za-z0-9_-]{11}$/;
+var PAGE_TOKEN = /^[A-Za-z0-9_-]{1,200}$/;
+var CACHE_MS = 10 * 6e4;
+var MAX_CACHE = 120;
+var RATE_WINDOW_MS = 6e4;
+var RATE_LIMIT = 30;
+var GLOBAL_MISS_LIMIT = 30;
+var UpstreamFailure = class extends Error {
+  constructor(code) {
+    super(code);
+    this.code = code;
+  }
+};
+function durationSeconds(value) {
+  if (typeof value !== "string") return void 0;
+  const match = /^P(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?)?$/.exec(value);
+  if (!match || !match.slice(1).some(Boolean)) return void 0;
+  const seconds = Number(match[1] || 0) * 86400 + Number(match[2] || 0) * 3600 + Number(match[3] || 0) * 60 + Number(match[4] || 0);
+  return Number.isSafeInteger(seconds) && seconds >= 0 ? seconds : void 0;
+}
+function decodeEntities(value) {
+  const named = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", "#39": "'" };
+  return value.replace(/&(#x[0-9a-f]+|#\d+|amp|lt|gt|quot|apos);/gi, (entity, code) => {
+    const lower = code.toLowerCase();
+    if (Object.hasOwn(named, lower)) return named[lower];
+    if (lower.startsWith("#")) {
+      const point = lower.startsWith("#x") ? parseInt(lower.slice(2), 16) : parseInt(lower.slice(1), 10);
+      if (Number.isInteger(point) && point >= 32 && point <= 1114111 && !(point >= 55296 && point <= 57343)) return String.fromCodePoint(point);
+    }
+    return entity;
+  });
+}
+async function youtubeJson(endpoint, params, key) {
+  const url = new URL(`https://www.googleapis.com/youtube/v3/${endpoint}`);
+  url.search = params.toString();
+  let response;
+  try {
+    response = await fetch(url, { signal: AbortSignal.timeout(7e3), headers: { "x-goog-api-key": key } });
+  } catch {
+    throw new UpstreamFailure("network");
+  }
+  let data;
+  try {
+    data = await response.json();
+  } catch {
+    throw new UpstreamFailure("upstream");
+  }
+  if (!response.ok) {
+    const reasons = (data?.error?.errors || []).map((entry) => entry?.reason);
+    if (response.status === 429 || reasons.some((reason) => /quota|rateLimit|dailyLimit/i.test(reason))) throw new UpstreamFailure("quota");
+    if (response.status === 401 || response.status === 403 || reasons.some((reason) => /keyInvalid|accessNotConfigured/i.test(reason))) throw new UpstreamFailure("configuration");
+    throw new UpstreamFailure("upstream");
+  }
+  return data;
+}
+async function searchYouTube(mode, category, query, token, key) {
+  const search = new URLSearchParams({
+    part: "snippet",
+    type: "video",
+    maxResults: "18",
+    order: "relevance",
+    q: `${query} ${CATEGORIES[category]}`.trim(),
+    videoEmbeddable: "true",
+    videoSyndicated: "true",
+    safeSearch: "moderate",
+    videoDuration: mode === "shorts" ? "short" : "any"
+  });
+  if (token) search.set("pageToken", token);
+  const results = await youtubeJson("search", search, key);
+  if (!Array.isArray(results?.items)) throw new UpstreamFailure("upstream");
+  const ids = [...new Set(results.items.map((entry) => entry?.id?.videoId).filter((id) => typeof id === "string" && VIDEO_ID.test(id)))];
+  const nextPageToken = typeof results.nextPageToken === "string" && PAGE_TOKEN.test(results.nextPageToken) ? results.nextPageToken : null;
+  if (!ids.length) return { items: [], nextPageToken, source: "youtube" };
+  const details = await youtubeJson("videos", new URLSearchParams({ part: "snippet,contentDetails,status", id: ids.join(",") }), key);
+  if (!Array.isArray(details?.items)) throw new UpstreamFailure("upstream");
+  const byId = new Map(details.items.map((entry) => [entry?.id, entry]));
+  const items = ids.flatMap((id) => {
+    const entry = byId.get(id);
+    const snippet = entry?.snippet;
+    const status = entry?.status;
+    if (!snippet || status?.embeddable !== true || status?.privacyStatus !== "public" || status?.uploadStatus !== "processed" || snippet.liveBroadcastContent === "live" || snippet.liveBroadcastContent === "upcoming") return [];
+    if (typeof snippet.title !== "string" || !snippet.title.trim() || typeof snippet.channelTitle !== "string") return [];
+    const duration = durationSeconds(entry?.contentDetails?.duration);
+    if (mode === "shorts" && duration !== void 0 && duration >= 4 * 60) return [];
+    const video = {
+      id,
+      title: decodeEntities(snippet.title).slice(0, 300),
+      description: typeof snippet.description === "string" ? decodeEntities(snippet.description).slice(0, 1e3) : "",
+      channelTitle: decodeEntities(snippet.channelTitle).slice(0, 150),
+      channelId: typeof snippet.channelId === "string" ? snippet.channelId : void 0,
+      thumbnailUrl: `https://i.ytimg.com/vi/${id}/hqdefault.jpg`,
+      publishedAt: typeof snippet.publishedAt === "string" && !Number.isNaN(Date.parse(snippet.publishedAt)) ? snippet.publishedAt : void 0,
+      durationSeconds: duration,
+      officialAgency: OFFICIAL_CHANNELS.has(snippet.channelId)
+    };
+    return matchesQuery(video, query) ? [video] : [];
+  });
+  items.sort((a, b) => Number(b.officialAgency) - Number(a.officialAgency));
+  return { items, nextPageToken, source: "youtube" };
+}
+function createSpaceVideosRouter() {
+  const router = Router();
+  const cache2 = /* @__PURE__ */ new Map();
+  const inflight = /* @__PURE__ */ new Map();
+  const rates = /* @__PURE__ */ new Map();
+  let misses = { count: 0, reset: Date.now() + RATE_WINDOW_MS };
+  router.get("/", async (req, res) => {
+    res.set("Cache-Control", "no-store");
+    const now = Date.now();
+    const ip = req.ip || req.socket.remoteAddress || "unknown";
+    let rate = rates.get(ip);
+    if (!rate || now >= rate.reset) rate = { count: 0, reset: now + RATE_WINDOW_MS };
+    rate.count += 1;
+    rates.set(ip, rate);
+    if (rates.size > 1e3) {
+      for (const [address, value] of rates) if (value.reset <= now) rates.delete(address);
+      while (rates.size > 1e3) rates.delete(rates.keys().next().value);
+    }
+    if (rate.count > RATE_LIMIT) {
+      res.set("Retry-After", String(Math.max(1, Math.ceil((rate.reset - now) / 1e3))));
+      return res.status(429).json({ error: "rate-limit" });
+    }
+    const rawMode = req.query.mode ?? "shorts";
+    const rawCategory = req.query.category ?? "all";
+    const rawQuery = req.query.q ?? "";
+    const rawToken = req.query.pageToken ?? "";
+    if (typeof rawMode !== "string" || !["shorts", "videos"].includes(rawMode) || typeof rawCategory !== "string" || !Object.hasOwn(CATEGORIES, rawCategory) || typeof rawQuery !== "string" || rawQuery.length > 80 || /[\u0000-\u001f\u007f]/.test(rawQuery) || typeof rawToken !== "string" || rawToken && !PAGE_TOKEN.test(rawToken)) {
+      return res.status(400).json({ error: "invalid-request" });
+    }
+    const mode = rawMode;
+    const category = rawCategory;
+    const query = rawQuery.trim();
+    const token = rawToken;
+    const curatedToken = /^c_(\d{1,4})$/.exec(token);
+    const key = process.env.YOUTUBE_API_KEY?.trim();
+    if (curatedToken || !key) {
+      if (!key && token && !curatedToken) return res.status(503).json({ error: "missing-key" });
+      const offset = curatedToken ? Number(curatedToken[1]) : 0;
+      return res.json({ ...getCuratedPage(mode, category, query, offset), source: "curated", ...!key ? { reason: "missing-key" } : {} });
+    }
+    const cacheKey = JSON.stringify([mode, category, query.toLocaleLowerCase(), token]);
+    const cached = cache2.get(cacheKey);
+    if (cached && cached.expires > now) return res.json({ ...cached.data, cached: true });
+    if (cached) cache2.delete(cacheKey);
+    let pending = inflight.get(cacheKey);
+    if (!pending) {
+      if (now >= misses.reset) misses = { count: 0, reset: now + RATE_WINDOW_MS };
+      if (++misses.count > GLOBAL_MISS_LIMIT) {
+        if (token) return res.status(429).json({ error: "rate-limit" });
+        return res.json({ ...getCuratedPage(mode, category, query), source: "curated", reason: "rate-limit" });
+      }
+      pending = searchYouTube(mode, category, query, token, key);
+      inflight.set(cacheKey, pending);
+    }
+    try {
+      const data = await pending;
+      cache2.set(cacheKey, { expires: Date.now() + CACHE_MS, data });
+      while (cache2.size > MAX_CACHE) cache2.delete(cache2.keys().next().value);
+      return res.json(data);
+    } catch (error) {
+      const reason = error instanceof UpstreamFailure ? error.code : "upstream";
+      if (token) return res.status(503).json({ error: reason });
+      return res.json({ ...getCuratedPage(mode, category, query), source: "curated", reason });
+    } finally {
+      if (inflight.get(cacheKey) === pending) inflight.delete(cacheKey);
+    }
+  });
+  return router;
+}
+var spaceVideosRouter = createSpaceVideosRouter();
+
 // server/novaChat.js
 var OPENROUTER_CHAT_COMPLETIONS_URL = "https://openrouter.ai/api/v1/chat/completions";
 var GEMINI_GENERATE_CONTENT_URL = "https://generativelanguage.googleapis.com/v1beta/models";
@@ -3915,6 +4282,7 @@ app.get("/api/gemini-live-token", (req, res) => {
   });
 });
 app.use("/api/earth", earthRouter);
+app.use("/api/space-videos", spaceVideosRouter);
 async function startServer() {
   const isProduction = process.env.NODE_ENV === "production" || process.env.npm_lifecycle_event === "start" || process.env.PORT !== void 0 && process.env.PORT !== "3000";
   const distPath = path.resolve(__dirname, "dist");
