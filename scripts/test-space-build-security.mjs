@@ -19,17 +19,19 @@ async function filesBelow(directory) {
   return found;
 }
 
-test('production build keeps server-only YouTube credentials out of logs and browser artifacts', { timeout: 120_000 }, async () => {
-  // This randomly generated sentinel is not a real API key and is never printed.
+test('production build keeps server-only YouTube and Supabase credentials out of logs and browser artifacts', { timeout: 120_000 }, async () => {
+  // These randomly generated sentinels are not real keys and are never printed.
   const sentinel = `unit-only-${randomBytes(24).toString('hex')}`;
+  const serviceSentinel = `unit-only-service-${randomBytes(24).toString('hex')}`;
   const build = spawnSync('npm', ['run', 'build'], {
     cwd: root,
-    env: { ...process.env, YOUTUBE_API_KEY: sentinel },
+    env: { ...process.env, YOUTUBE_API_KEY: sentinel, SUPABASE_SERVICE_ROLE_KEY: serviceSentinel },
     encoding: 'utf8',
     timeout: 110_000
   });
   const output = `${build.stdout || ''}${build.stderr || ''}`;
-  assert.equal(output.includes(sentinel), false, 'build logs must not contain the server credential');
+  assert.equal(output.includes(sentinel), false, 'build logs must not contain the YouTube credential');
+  assert.equal(output.includes(serviceSentinel), false, 'build logs must not contain the Supabase service credential');
   assert.equal(build.status, 0, 'production build must succeed');
 
   const clientFiles = await filesBelow(path.join(root, 'dist'));
@@ -37,9 +39,11 @@ test('production build keeps server-only YouTube credentials out of logs and bro
   for (const file of [...clientFiles, path.join(root, 'api/index.js')]) {
     const content = await readFile(file);
     const label = path.relative(root, file);
-    assert.equal(content.includes(sentinel), false, `credential must not be embedded in ${label}`);
+    assert.equal(content.includes(sentinel), false, `YouTube credential must not be embedded in ${label}`);
+    assert.equal(content.includes(serviceSentinel), false, `Supabase service credential must not be embedded in ${label}`);
     if (file.startsWith(path.join(root, 'dist') + path.sep)) {
       assert.equal(content.includes('YOUTUBE_API_KEY'), false, `client artifact must not reference the server variable: ${label}`);
+      assert.equal(content.includes('SUPABASE_SERVICE_ROLE_KEY'), false, `client artifact must not reference the service variable: ${label}`);
     }
   }
 });

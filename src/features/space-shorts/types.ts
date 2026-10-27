@@ -1,7 +1,7 @@
 /** Shared, deliberately small public contract for the CosmoVision API. */
 export type SpaceVideoMode = 'shorts' | 'videos';
 export type SpaceVideoCategory = 'all' | 'missions' | 'solar-system' | 'universe' | 'earth';
-export type SpaceVideoSource = 'youtube' | 'curated';
+export type SpaceVideoSource = 'youtube' | 'curated' | 'community';
 export type SpaceVideoFailure = 'missing-key' | 'quota' | 'configuration' | 'network' | 'upstream' | 'rate-limit';
 
 export interface SpaceVideo {
@@ -19,6 +19,9 @@ export interface SpaceVideo {
   sourceUrl?: string;
   /** Portrait is known only for individually checked starter videos. */
   portraitVerified?: boolean;
+  /** A database identifier, present only on an approved community entry. */
+  communityId?: string;
+  categories?: SpaceVideoCategory[];
 }
 
 export interface SpaceVideoResponse {
