@@ -1,6 +1,9 @@
+import { scienceFeedCopy } from './scienceFeed';
+
 /** Interface copy only; video titles and descriptions remain in their original language. */
 export const spaceShortsCopy = {
   en: {
+    ...scienceFeedCopy.en,
     ssEyebrow: 'THE ASTRONOMY COLLECTION',
     ssTitle: 'CosmoVision',
     ssDescription: 'Astronomy videos and short clips from channels across YouTube.',
@@ -74,6 +77,7 @@ export const spaceShortsCopy = {
     ssNoUploads: 'Videos are hosted on YouTube; uploads are not available here.'
   },
   si: {
+    ...scienceFeedCopy.si,
     ssEyebrow: 'වීඩියෝ එකතුව',
     ssTitle: 'CosmoVision',
     ssDescription: 'YouTube හි විවිධ නාලිකාවලින් තාරකා විද්‍යා වීඩියෝ සහ කෙටි වීඩියෝ.',
@@ -147,6 +151,7 @@ export const spaceShortsCopy = {
     ssNoUploads: 'වීඩියෝ YouTube හි ඇත; මෙහි උඩුගත කිරීම් නොමැත.'
   },
   ta: {
+    ...scienceFeedCopy.ta,
     ssEyebrow: 'காணொளித் தொகுப்பு',
     ssTitle: 'CosmoVision',
     ssDescription: 'YouTube இன் பல்வேறு சேனல்களிலிருந்து வானியல் காணொளிகள் மற்றும் குறுங்காணொளிகள்.',

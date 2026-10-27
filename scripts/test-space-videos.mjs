@@ -486,10 +486,34 @@ test('legacy service worker does not intercept CosmoVision API responses', async
     URL,
     self: { location: { origin: 'https://example.test' }, addEventListener: (type, callback) => { listeners[type] = callback; } }
   });
-  let intercepted = false;
-  listeners.fetch({
-    request: { url: 'https://example.test/api/space-videos?mode=shorts', method: 'GET', destination: '' },
-    respondWith: () => { intercepted = true; }
+  for (const url of ['https://example.test/api/space-videos?mode=shorts', 'https://example.test/api/community/config', 'https://example.test/api/community/videos', 'https://example.test/api/community/me']) {
+    let intercepted = false;
+    listeners.fetch({ request: { url, method: 'GET', destination: '' }, respondWith: () => { intercepted = true; } });
+    assert.equal(intercepted, false, 'video and private community responses must bypass stale shell cache entries');
+  }
+});
+
+test('NASA filter uses verified IDs and never promotes a NASA-named impostor', async () => {
+  await withServer({}, async (get) => {
+    const curated = await (await get('?mode=videos&scope=nasa')).json();
+    assert.ok(curated.items.length > 0);
+    assert.ok(curated.items.every((item) => item.channelId === 'UCAY-SMFNfynqz1bdoaV8BeQ'));
+    assert.ok(curated.items.every((item) => item.officialAgency));
+    assert.equal((await get('?scope=not-a-scope')).status, 400);
   });
-  assert.equal(intercepted, false, 'network responses must not be replaced with stale shell cache entries');
+  const calls = [];
+  await withServer({ key: 'fake-test-key', upstream: async (url, options) => {
+    const parsed = new URL(url); calls.push(parsed);
+    if (parsed.pathname.endsWith('/search')) return json({ items: [{ id: { videoId: 'abcdefghijk' } }, { id: { videoId: 'ABCDEFGHIJK' } }] });
+    return json({ items: [
+      video('abcdefghijk', snippet('Mars science', 'NASA', 'UCLA_DiR1FfKNvjuUpBHmylQ')),
+      video('ABCDEFGHIJK', snippet('Mars science', 'NASA', 'UC-impostor'))
+    ] });
+  } }, async (get) => {
+    const data = await (await get('?mode=videos&scope=nasa&q=mars')).json();
+    assert.deepEqual(data.items.map((item) => item.id), ['abcdefghijk']);
+    assert.equal(calls[0].searchParams.get('channelId'), 'UCLA_DiR1FfKNvjuUpBHmylQ');
+    assert.equal((await (await get('?mode=videos&scope=all&q=mars')).json()).items.length, 2);
+    assert.equal(calls.length, 4, 'NASA and all-channel searches use distinct cache entries');
+  });
 });

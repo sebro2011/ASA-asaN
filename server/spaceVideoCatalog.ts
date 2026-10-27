@@ -1,4 +1,5 @@
 import type { SpaceVideo, SpaceVideoCategory, SpaceVideoMode } from '../src/features/space-shorts/types';
+import { NASA_CHANNELS } from './channelIds';
 
 /**
  * Hand-picked astronomy fallback, NOT a live YouTube response. The cited pages
@@ -149,11 +150,12 @@ export function matchesQuery(video: Pick<SpaceVideo, 'title' | 'description' | '
   return terms.every((term) => haystack.includes(term));
 }
 
-export function getCuratedPage(mode: SpaceVideoMode, category: SpaceVideoCategory, query: string, offset = 0, pageSize = 9) {
+export function getCuratedPage(mode: SpaceVideoMode, category: SpaceVideoCategory, query: string, offset = 0, pageSize = 9, scope: 'all' | 'nasa' = 'all') {
   const matching = catalog.filter((video) => video.modes.includes(mode)
+    && (scope !== 'nasa' || (video.channelId && NASA_CHANNELS.has(video.channelId)))
     && (category === 'all' || video.categories.includes(category))
     && matchesQuery(video, query));
-  const items = matching.slice(offset, offset + pageSize).map(({ modes, categories, ...video }) => video);
+  const items = matching.slice(offset, offset + pageSize).map(({ modes, ...video }) => video);
   return {
     items,
     nextPageToken: offset + pageSize < matching.length ? `c_${offset + pageSize}` : null

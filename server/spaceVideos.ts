@@ -1,17 +1,10 @@
 import { Router } from 'express';
 import { getCuratedPage, matchesQuery } from './spaceVideoCatalog';
 import { isAstronomyRelated } from './astronomyRelevance';
+import { NASA_CHANNELS, NASA_MAIN_CHANNEL } from './channelIds';
 import type { SpaceVideo, SpaceVideoCategory, SpaceVideoFailure, SpaceVideoMode, SpaceVideoResponse } from '../src/features/space-shorts/types';
 
-/** Official channel IDs: NASA https://www.nasa.gov/social-media/ and JPL's
- * official social directory https://www.jpl.nasa.gov/social/. Matching a name
- * alone is never enough to confer an agency badge. */
-const OFFICIAL_CHANNELS = new Set([
-  'UCLA_DiR1FfKNvjuUpBHmylQ', // NASA / @NASA
-  'UCAY-SMFNfynqz1bdoaV8BeQ', // NASA Goddard / @NASAGoddard
-  'UCryGec9PdUCLjpJW2mgCuLw', // NASA JPL / @NASAJPL
-  'UCmheCYT4HlbFi943lpH009Q'  // NASA Johnson / @ReelNASA
-]);
+/** Channel identity is established by exact IDs, never a display name. */
 // Search across YouTube rather than privileging one agency. Category phrases
 // anchor discovery in astronomy while preserving YouTube's relevance order.
 const CATEGORIES: Record<SpaceVideoCategory, string> = {
@@ -103,7 +96,32 @@ async function youtubeJson(endpoint: 'search' | 'videos', params: URLSearchParam
   return data;
 }
 
-async function searchYouTube(mode: SpaceVideoMode, category: SpaceVideoCategory, query: string, token: string, key: string): Promise<SpaceVideoResponse> {
+/** Check a submitted ID against official metadata before accepting it for review. */
+export async function verifyCommunityYouTube(id: string): Promise<Pick<SpaceVideo, 'channelTitle' | 'channelId' | 'officialAgency' | 'publishedAt' | 'durationSeconds'> | null> {
+  if (!VIDEO_ID.test(id)) return null;
+  const key = process.env.YOUTUBE_API_KEY?.trim();
+  if (!key) throw new Error('youtube-unavailable');
+  let data: any;
+  try {
+    data = await youtubeJson('videos', new URLSearchParams({ part: 'snippet,contentDetails,status', id }), key);
+  } catch { throw new Error('youtube-unavailable'); }
+  if (!Array.isArray(data?.items)) throw new Error('youtube-unavailable');
+  const entry = data.items.find((item: any) => item?.id === id);
+  const snippet = entry?.snippet;
+  const status = entry?.status;
+  if (!snippet || status?.embeddable !== true || status?.privacyStatus !== 'public' || status?.uploadStatus !== 'processed'
+      || snippet.liveBroadcastContent === 'live' || snippet.liveBroadcastContent === 'upcoming'
+      || typeof snippet.channelTitle !== 'string' || !snippet.channelTitle.trim()) return null;
+  return {
+    channelTitle: decodeEntities(snippet.channelTitle).slice(0, 150),
+    channelId: typeof snippet.channelId === 'string' ? snippet.channelId.slice(0, 80) : undefined,
+    officialAgency: NASA_CHANNELS.has(snippet.channelId),
+    publishedAt: typeof snippet.publishedAt === 'string' && !Number.isNaN(Date.parse(snippet.publishedAt)) ? snippet.publishedAt : undefined,
+    durationSeconds: durationSeconds(entry?.contentDetails?.duration)
+  };
+}
+
+async function searchYouTube(mode: SpaceVideoMode, category: SpaceVideoCategory, query: string, token: string, key: string, scope: 'all' | 'nasa'): Promise<SpaceVideoResponse> {
   const search = new URLSearchParams({
     part: 'snippet', type: 'video', maxResults: '30', order: 'relevance',
     q: `${query} ${CATEGORIES[category]}`.trim(), videoEmbeddable: 'true',
@@ -111,6 +129,10 @@ async function searchYouTube(mode: SpaceVideoMode, category: SpaceVideoCategory,
     videoDuration: mode === 'shorts' ? 'short' : 'any'
   });
   if (token) search.set('pageToken', token);
+  // YouTube's search API accepts one channel ID. The live NASA tab uses the
+  // main verified @NASA channel; the curated fallback can include other
+  // individually verified NASA channels.
+  if (scope === 'nasa') search.set('channelId', NASA_MAIN_CHANNEL);
   const results = await youtubeJson('search', search, key);
   if (!Array.isArray(results?.items)) throw new UpstreamFailure('upstream');
   const ids: string[] = [...new Set<string>(results.items.map((entry: any) => entry?.id?.videoId).filter((id: unknown): id is string => typeof id === 'string' && VIDEO_ID.test(id)))];
@@ -127,6 +149,7 @@ async function searchYouTube(mode: SpaceVideoMode, category: SpaceVideoCategory,
     if (!snippet || status?.embeddable !== true || status?.privacyStatus !== 'public' || status?.uploadStatus !== 'processed'
       || snippet.liveBroadcastContent === 'live' || snippet.liveBroadcastContent === 'upcoming') return [];
     if (typeof snippet.title !== 'string' || !snippet.title.trim() || typeof snippet.channelTitle !== 'string') return [];
+    if (scope === 'nasa' && snippet.channelId !== NASA_MAIN_CHANNEL) return [];
     const duration = durationSeconds(entry?.contentDetails?.duration);
     // Defend against inconsistent upstream metadata in the short-video feed.
     if (mode === 'shorts' && duration !== undefined && duration >= 4 * 60) return [];
@@ -139,7 +162,8 @@ async function searchYouTube(mode: SpaceVideoMode, category: SpaceVideoCategory,
       thumbnailUrl: `https://i.ytimg.com/vi/${id}/hqdefault.jpg`,
       publishedAt: typeof snippet.publishedAt === 'string' && !Number.isNaN(Date.parse(snippet.publishedAt)) ? snippet.publishedAt : undefined,
       durationSeconds: duration,
-      officialAgency: OFFICIAL_CHANNELS.has(snippet.channelId)
+      officialAgency: NASA_CHANNELS.has(snippet.channelId),
+      categories: category === 'all' ? [] : [category]
     };
     return isAstronomyRelated(video) && matchesQuery(video, query) ? [video] : [];
   });
@@ -175,16 +199,19 @@ export function createSpaceVideosRouter() {
     }
 
     const rawMode = req.query.mode ?? 'shorts';
+    const rawScope = req.query.scope ?? 'all';
     const rawCategory = req.query.category ?? 'all';
     const rawQuery = req.query.q ?? '';
     const rawToken = req.query.pageToken ?? '';
     if (typeof rawMode !== 'string' || !['shorts', 'videos'].includes(rawMode)
+      || typeof rawScope !== 'string' || !['all', 'nasa'].includes(rawScope)
       || typeof rawCategory !== 'string' || !Object.hasOwn(CATEGORIES, rawCategory)
       || typeof rawQuery !== 'string' || rawQuery.length > 80 || /[\u0000-\u001f\u007f]/.test(rawQuery)
       || typeof rawToken !== 'string' || (rawToken && !LEGACY_PAGE_TOKEN.test(rawToken) && !WRAPPED_PAGE_TOKEN.test(rawToken))) {
       return res.status(400).json({ error: 'invalid-request' });
     }
     const mode = rawMode as SpaceVideoMode;
+    const scope = rawScope as 'all' | 'nasa';
     const category = rawCategory as SpaceVideoCategory;
     const query = rawQuery.trim();
     const token = rawToken;
@@ -195,10 +222,10 @@ export function createSpaceVideosRouter() {
     if (curatedToken || !key) {
       if (!key && token && !curatedToken) return res.status(503).json({ error: 'missing-key' });
       const offset = curatedToken ? Number(curatedToken[1]) : 0;
-      return res.json({ ...getCuratedPage(mode, category, query, offset), source: 'curated', ...(!key ? { reason: 'missing-key' } : {}) });
+      return res.json({ ...getCuratedPage(mode, category, query, offset, 9, scope), source: 'curated', ...(!key ? { reason: 'missing-key' } : {}) });
     }
 
-    const cacheKey = JSON.stringify([mode, category, query.toLocaleLowerCase(), token]);
+    const cacheKey = JSON.stringify([mode, scope, category, query.toLocaleLowerCase(), token]);
     const cached = cache.get(cacheKey);
     if (cached && cached.expires > now) return res.json({ ...cached.data, cached: true });
     if (cached) cache.delete(cacheKey);
@@ -211,9 +238,9 @@ export function createSpaceVideosRouter() {
           res.set('Retry-After', String(Math.max(1, Math.ceil((misses.reset - now) / 1000))));
           return res.status(429).json({ error: 'rate-limit' });
         }
-        return res.json({ ...getCuratedPage(mode, category, query), source: 'curated', reason: 'rate-limit' });
+        return res.json({ ...getCuratedPage(mode, category, query, 0, 9, scope), source: 'curated', reason: 'rate-limit' });
       }
-      pending = searchYouTube(mode, category, query, upstreamToken, key);
+      pending = searchYouTube(mode, category, query, upstreamToken, key, scope);
       inflight.set(cacheKey, pending);
     }
     try {
@@ -225,7 +252,7 @@ export function createSpaceVideosRouter() {
       const reason: SpaceVideoFailure = error instanceof UpstreamFailure ? error.code : 'upstream';
       // Never replace a later live page with unrelated curated content.
       if (token) return res.status(503).json({ error: reason });
-      return res.json({ ...getCuratedPage(mode, category, query), source: 'curated', reason });
+      return res.json({ ...getCuratedPage(mode, category, query, 0, 9, scope), source: 'curated', reason });
     } finally {
       if (inflight.get(cacheKey) === pending) inflight.delete(cacheKey);
     }

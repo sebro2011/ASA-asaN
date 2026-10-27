@@ -1202,9 +1202,9 @@ earthRouter.get("/power", rateLimit("power", 60, 6e4), async (req, res) => {
   }
   const parameters = requested.length ? requested.slice(0, 12) : CORE_PARAMETER_CODES;
   const cacheKey = `power:${latitude.toFixed(3)}:${longitude.toFixed(3)}:${start}:${end}:${[...parameters].sort().join(",")}`;
-  const cached = cacheGet2(cacheKey);
-  if (cached) {
-    return res.json({ ...cached, fromCache: true });
+  const cached2 = cacheGet2(cacheKey);
+  if (cached2) {
+    return res.json({ ...cached2, fromCache: true });
   }
   const buildUrl = (codes) => {
     const params = new URLSearchParams({
@@ -1277,8 +1277,8 @@ earthRouter.get("/gibs/domains", rateLimit("gibs-domains", 120, 6e4), async (req
   const tileMatrixSet = String(req.query.tileMatrixSet || known?.tileMatrixSet || "GoogleMapsCompatible_Level9");
   const url = known ? describeDomainsUrl(known) : `${GIBS_WMTS_BASE}/1.0.0/${layerId}/default/${tileMatrixSet}/all/all.xml`;
   const cacheKey = `domains:${layerId}:${tileMatrixSet}`;
-  const cached = cacheGet2(cacheKey);
-  if (cached) return res.json({ ...cached, fromCache: true });
+  const cached2 = cacheGet2(cacheKey);
+  if (cached2) return res.json({ ...cached2, fromCache: true });
   try {
     const response = await fetchWithTimeout(url, { headers: { Accept: "application/xml,text/xml,*/*" } }, 2e4);
     const text = await response.text();
@@ -1338,8 +1338,8 @@ earthRouter.get("/gibs/probe", rateLimit("gibs-probe", 240, 6e4), async (req, re
   const format = String(req.query.format || known?.format || "jpg") === "png" ? "png" : "jpg";
   const url = known ? wmtsTileUrl(known, date, tileMatrixSet, format, 1, 1, 1) : `${GIBS_WMTS_BASE}/${layerId}/default/${date}/${tileMatrixSet}/1/1/1.${format}`;
   const cacheKey = `probe:${layerId}:${tileMatrixSet}:${format}:${date}`;
-  const cached = cacheGet2(cacheKey);
-  if (cached) return res.json({ ...cached, fromCache: true });
+  const cached2 = cacheGet2(cacheKey);
+  if (cached2) return res.json({ ...cached2, fromCache: true });
   try {
     const response = await fetchWithTimeout(url, { method: "GET", headers: { Accept: "image/*" } }, 15e3);
     const contentType = response.headers.get("content-type") || "";
@@ -1406,8 +1406,8 @@ earthRouter.get("/firms/hotspots", rateLimit("firms", 30, 6e4), async (req, res)
   const bbox = `${west},${south},${east},${north}`;
   const url = `https://firms.modaps.eosdis.nasa.gov/api/area/csv/${mapKey}/${source}/${bbox}/${dayRange}${date ? `/${date}` : ""}`;
   const cacheKey = `firms:${source}:${bbox}:${dayRange}:${date || "latest"}`;
-  const cached = cacheGet2(cacheKey);
-  if (cached) return res.json({ ...cached, fromCache: true });
+  const cached2 = cacheGet2(cacheKey);
+  if (cached2) return res.json({ ...cached2, fromCache: true });
   try {
     const response = await fetchWithTimeout(url, { headers: { Accept: "text/csv,text/plain,*/*" } }, 25e3);
     const text = await response.text();
@@ -1640,6 +1640,19 @@ ${JSON.stringify(
 
 // server/spaceVideos.ts
 import { Router } from "express";
+
+// server/channelIds.ts
+var NASA_MAIN_CHANNEL = "UCLA_DiR1FfKNvjuUpBHmylQ";
+var NASA_CHANNELS = /* @__PURE__ */ new Set([
+  NASA_MAIN_CHANNEL,
+  // @NASA
+  "UCAY-SMFNfynqz1bdoaV8BeQ",
+  // @NASAGoddard
+  "UCryGec9PdUCLjpJW2mgCuLw",
+  // @NASAJPL
+  "UCmheCYT4HlbFi943lpH009Q"
+  // @ReelNASA
+]);
 
 // server/spaceVideoCatalog.ts
 var GODDARD = "UCAY-SMFNfynqz1bdoaV8BeQ";
@@ -1874,9 +1887,9 @@ function matchesQuery(video, query) {
   const haystack = `${video.title} ${video.description} ${video.channelTitle}`.toLocaleLowerCase();
   return terms.every((term) => haystack.includes(term));
 }
-function getCuratedPage(mode, category, query, offset = 0, pageSize = 9) {
-  const matching = catalog.filter((video) => video.modes.includes(mode) && (category === "all" || video.categories.includes(category)) && matchesQuery(video, query));
-  const items = matching.slice(offset, offset + pageSize).map(({ modes, categories, ...video }) => video);
+function getCuratedPage(mode, category, query, offset = 0, pageSize = 9, scope = "all") {
+  const matching = catalog.filter((video) => video.modes.includes(mode) && (scope !== "nasa" || video.channelId && NASA_CHANNELS.has(video.channelId)) && (category === "all" || video.categories.includes(category)) && matchesQuery(video, query));
+  const items = matching.slice(offset, offset + pageSize).map(({ modes, ...video }) => video);
   return {
     items,
     nextPageToken: offset + pageSize < matching.length ? `c_${offset + pageSize}` : null
@@ -1901,16 +1914,6 @@ function isAstronomyRelated(video) {
 }
 
 // server/spaceVideos.ts
-var OFFICIAL_CHANNELS = /* @__PURE__ */ new Set([
-  "UCLA_DiR1FfKNvjuUpBHmylQ",
-  // NASA / @NASA
-  "UCAY-SMFNfynqz1bdoaV8BeQ",
-  // NASA Goddard / @NASAGoddard
-  "UCryGec9PdUCLjpJW2mgCuLw",
-  // NASA JPL / @NASAJPL
-  "UCmheCYT4HlbFi943lpH009Q"
-  // NASA Johnson / @ReelNASA
-]);
 var CATEGORIES = {
   all: "astronomy",
   missions: "astronomy mission",
@@ -1990,7 +1993,30 @@ async function youtubeJson(endpoint, params, key) {
   }
   return data;
 }
-async function searchYouTube(mode, category, query, token, key) {
+async function verifyCommunityYouTube(id) {
+  if (!VIDEO_ID.test(id)) return null;
+  const key = process.env.YOUTUBE_API_KEY?.trim();
+  if (!key) throw new Error("youtube-unavailable");
+  let data;
+  try {
+    data = await youtubeJson("videos", new URLSearchParams({ part: "snippet,contentDetails,status", id }), key);
+  } catch {
+    throw new Error("youtube-unavailable");
+  }
+  if (!Array.isArray(data?.items)) throw new Error("youtube-unavailable");
+  const entry = data.items.find((item) => item?.id === id);
+  const snippet = entry?.snippet;
+  const status = entry?.status;
+  if (!snippet || status?.embeddable !== true || status?.privacyStatus !== "public" || status?.uploadStatus !== "processed" || snippet.liveBroadcastContent === "live" || snippet.liveBroadcastContent === "upcoming" || typeof snippet.channelTitle !== "string" || !snippet.channelTitle.trim()) return null;
+  return {
+    channelTitle: decodeEntities(snippet.channelTitle).slice(0, 150),
+    channelId: typeof snippet.channelId === "string" ? snippet.channelId.slice(0, 80) : void 0,
+    officialAgency: NASA_CHANNELS.has(snippet.channelId),
+    publishedAt: typeof snippet.publishedAt === "string" && !Number.isNaN(Date.parse(snippet.publishedAt)) ? snippet.publishedAt : void 0,
+    durationSeconds: durationSeconds(entry?.contentDetails?.duration)
+  };
+}
+async function searchYouTube(mode, category, query, token, key, scope) {
   const search = new URLSearchParams({
     part: "snippet",
     type: "video",
@@ -2003,6 +2029,7 @@ async function searchYouTube(mode, category, query, token, key) {
     videoDuration: mode === "shorts" ? "short" : "any"
   });
   if (token) search.set("pageToken", token);
+  if (scope === "nasa") search.set("channelId", NASA_MAIN_CHANNEL);
   const results = await youtubeJson("search", search, key);
   if (!Array.isArray(results?.items)) throw new UpstreamFailure("upstream");
   const ids = [...new Set(results.items.map((entry) => entry?.id?.videoId).filter((id) => typeof id === "string" && VIDEO_ID.test(id)))];
@@ -2017,6 +2044,7 @@ async function searchYouTube(mode, category, query, token, key) {
     const status = entry?.status;
     if (!snippet || status?.embeddable !== true || status?.privacyStatus !== "public" || status?.uploadStatus !== "processed" || snippet.liveBroadcastContent === "live" || snippet.liveBroadcastContent === "upcoming") return [];
     if (typeof snippet.title !== "string" || !snippet.title.trim() || typeof snippet.channelTitle !== "string") return [];
+    if (scope === "nasa" && snippet.channelId !== NASA_MAIN_CHANNEL) return [];
     const duration = durationSeconds(entry?.contentDetails?.duration);
     if (mode === "shorts" && duration !== void 0 && duration >= 4 * 60) return [];
     const video = {
@@ -2028,7 +2056,8 @@ async function searchYouTube(mode, category, query, token, key) {
       thumbnailUrl: `https://i.ytimg.com/vi/${id}/hqdefault.jpg`,
       publishedAt: typeof snippet.publishedAt === "string" && !Number.isNaN(Date.parse(snippet.publishedAt)) ? snippet.publishedAt : void 0,
       durationSeconds: duration,
-      officialAgency: OFFICIAL_CHANNELS.has(snippet.channelId)
+      officialAgency: NASA_CHANNELS.has(snippet.channelId),
+      categories: category === "all" ? [] : [category]
     };
     return isAstronomyRelated(video) && matchesQuery(video, query) ? [video] : [];
   });
@@ -2057,13 +2086,15 @@ function createSpaceVideosRouter() {
       return res.status(429).json({ error: "rate-limit" });
     }
     const rawMode = req.query.mode ?? "shorts";
+    const rawScope = req.query.scope ?? "all";
     const rawCategory = req.query.category ?? "all";
     const rawQuery = req.query.q ?? "";
     const rawToken = req.query.pageToken ?? "";
-    if (typeof rawMode !== "string" || !["shorts", "videos"].includes(rawMode) || typeof rawCategory !== "string" || !Object.hasOwn(CATEGORIES, rawCategory) || typeof rawQuery !== "string" || rawQuery.length > 80 || /[\u0000-\u001f\u007f]/.test(rawQuery) || typeof rawToken !== "string" || rawToken && !LEGACY_PAGE_TOKEN.test(rawToken) && !WRAPPED_PAGE_TOKEN.test(rawToken)) {
+    if (typeof rawMode !== "string" || !["shorts", "videos"].includes(rawMode) || typeof rawScope !== "string" || !["all", "nasa"].includes(rawScope) || typeof rawCategory !== "string" || !Object.hasOwn(CATEGORIES, rawCategory) || typeof rawQuery !== "string" || rawQuery.length > 80 || /[\u0000-\u001f\u007f]/.test(rawQuery) || typeof rawToken !== "string" || rawToken && !LEGACY_PAGE_TOKEN.test(rawToken) && !WRAPPED_PAGE_TOKEN.test(rawToken)) {
       return res.status(400).json({ error: "invalid-request" });
     }
     const mode = rawMode;
+    const scope = rawScope;
     const category = rawCategory;
     const query = rawQuery.trim();
     const token = rawToken;
@@ -2074,12 +2105,12 @@ function createSpaceVideosRouter() {
     if (curatedToken || !key) {
       if (!key && token && !curatedToken) return res.status(503).json({ error: "missing-key" });
       const offset = curatedToken ? Number(curatedToken[1]) : 0;
-      return res.json({ ...getCuratedPage(mode, category, query, offset), source: "curated", ...!key ? { reason: "missing-key" } : {} });
+      return res.json({ ...getCuratedPage(mode, category, query, offset, 9, scope), source: "curated", ...!key ? { reason: "missing-key" } : {} });
     }
-    const cacheKey = JSON.stringify([mode, category, query.toLocaleLowerCase(), token]);
-    const cached = cache2.get(cacheKey);
-    if (cached && cached.expires > now) return res.json({ ...cached.data, cached: true });
-    if (cached) cache2.delete(cacheKey);
+    const cacheKey = JSON.stringify([mode, scope, category, query.toLocaleLowerCase(), token]);
+    const cached2 = cache2.get(cacheKey);
+    if (cached2 && cached2.expires > now) return res.json({ ...cached2.data, cached: true });
+    if (cached2) cache2.delete(cacheKey);
     let pending = inflight.get(cacheKey);
     if (!pending) {
       if (now >= misses.reset) misses = { count: 0, reset: now + RATE_WINDOW_MS };
@@ -2088,9 +2119,9 @@ function createSpaceVideosRouter() {
           res.set("Retry-After", String(Math.max(1, Math.ceil((misses.reset - now) / 1e3))));
           return res.status(429).json({ error: "rate-limit" });
         }
-        return res.json({ ...getCuratedPage(mode, category, query), source: "curated", reason: "rate-limit" });
+        return res.json({ ...getCuratedPage(mode, category, query, 0, 9, scope), source: "curated", reason: "rate-limit" });
       }
-      pending = searchYouTube(mode, category, query, upstreamToken, key);
+      pending = searchYouTube(mode, category, query, upstreamToken, key, scope);
       inflight.set(cacheKey, pending);
     }
     try {
@@ -2101,7 +2132,7 @@ function createSpaceVideosRouter() {
     } catch (error) {
       const reason = error instanceof UpstreamFailure ? error.code : "upstream";
       if (token) return res.status(503).json({ error: reason });
-      return res.json({ ...getCuratedPage(mode, category, query), source: "curated", reason });
+      return res.json({ ...getCuratedPage(mode, category, query, 0, 9, scope), source: "curated", reason });
     } finally {
       if (inflight.get(cacheKey) === pending) inflight.delete(cacheKey);
     }
@@ -2109,6 +2140,344 @@ function createSpaceVideosRouter() {
   return router;
 }
 var spaceVideosRouter = createSpaceVideosRouter();
+
+// server/communityVideos.ts
+import { Router as Router2 } from "express";
+import { createClient } from "@supabase/supabase-js";
+
+// src/features/space-shorts/youtubeUrl.ts
+function youtubeIdFromUrl(input) {
+  if (typeof input !== "string" || input.length > 2048 || input !== input.trim() || /[\u0000-\u0020\u007f\\]/u.test(input)) return null;
+  let url;
+  try {
+    url = new URL(input);
+  } catch {
+    return null;
+  }
+  if (url.protocol !== "https:" || url.username || url.password || url.port) return null;
+  const idPattern = /^[A-Za-z0-9_-]{11}$/;
+  let id = null;
+  if (url.hostname === "youtu.be") {
+    const match = /^\/([A-Za-z0-9_-]{11})\/?$/.exec(url.pathname);
+    id = match?.[1] ?? null;
+  } else if (["youtube.com", "www.youtube.com", "m.youtube.com"].includes(url.hostname)) {
+    if (url.pathname === "/watch") {
+      const values = url.searchParams.getAll("v");
+      id = values.length === 1 ? values[0] : null;
+    } else {
+      const match = /^\/shorts\/([A-Za-z0-9_-]{11})\/?$/.exec(url.pathname);
+      id = match?.[1] ?? null;
+    }
+  }
+  return id && idPattern.test(id) ? id : null;
+}
+
+// server/communityVideos.ts
+var UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+var CATEGORIES2 = ["missions", "solar-system", "universe", "earth"];
+var PUBLIC_COLUMNS = "id,video_id,title,description,category,channel_title,channel_id,official_agency,published_at,duration_seconds,created_at";
+var PAGE_SIZE = 12;
+function checked(result2) {
+  if (result2.error) throw new Error("community-unavailable");
+  return result2.data;
+}
+function toVideo(row) {
+  return {
+    id: row.video_id,
+    communityId: row.id,
+    title: row.title,
+    description: row.description,
+    channelTitle: row.channel_title,
+    channelId: row.channel_id || void 0,
+    officialAgency: row.official_agency === true,
+    thumbnailUrl: `https://i.ytimg.com/vi/${row.video_id}/hqdefault.jpg`,
+    publishedAt: row.published_at || void 0,
+    durationSeconds: row.duration_seconds ?? void 0,
+    categories: [row.category]
+  };
+}
+function supabaseStore(client) {
+  return {
+    async verifyUser(token) {
+      const result2 = await client.auth.getUser(token);
+      if (result2.error) {
+        const status = result2.error.status;
+        if (!status || status === 429 || status >= 500) throw new Error("community-unavailable");
+        return null;
+      }
+      if (!result2.data.user || !UUID.test(result2.data.user.id)) return null;
+      return result2.data.user.id;
+    },
+    async isModerator(userId) {
+      const row = checked(await client.from("cosmovision_moderators").select("user_id").eq("user_id", userId).maybeSingle());
+      return !!row;
+    },
+    async consume(userId, action) {
+      return checked(await client.rpc("cosmovision_consume_limit", { p_user: userId, p_action: action })) === true;
+    },
+    async listApproved(category, query, offset) {
+      let request = client.from("cosmovision_videos").select(PUBLIC_COLUMNS).eq("status", "approved");
+      if (category !== "all") request = request.eq("category", category);
+      if (query) request = request.ilike("search_text", `%${query.replace(/[\\%_]/g, "\\$&")}%`);
+      const rows = checked(await request.order("created_at", { ascending: false }).order("id", { ascending: false }).range(offset, offset + PAGE_SIZE)) || [];
+      return { items: rows.slice(0, PAGE_SIZE).map(toVideo), hasMore: rows.length > PAGE_SIZE };
+    },
+    async exists(videoId) {
+      return !!checked(await client.from("cosmovision_videos").select("id").eq("video_id", videoId).maybeSingle());
+    },
+    async insert(submission) {
+      const { metadata } = submission;
+      const result2 = await client.from("cosmovision_videos").insert({
+        video_id: submission.videoId,
+        title: submission.title,
+        description: submission.description,
+        category: submission.category,
+        submitter_id: submission.userId,
+        status: "pending",
+        channel_title: metadata.channelTitle,
+        channel_id: metadata.channelId || null,
+        official_agency: metadata.officialAgency,
+        published_at: metadata.publishedAt || null,
+        duration_seconds: metadata.durationSeconds ?? null
+      });
+      if (result2.error?.code === "23505") return "duplicate";
+      checked(result2);
+      return "created";
+    },
+    async listOwn(userId) {
+      const rows = checked(await client.from("cosmovision_videos").select("id,title,status,created_at").eq("submitter_id", userId).order("created_at", { ascending: false }).limit(100)) || [];
+      return rows.map((row) => ({ id: row.id, title: row.title, status: row.status, createdAt: row.created_at }));
+    },
+    async report(videoId, userId, reason) {
+      const video = checked(await client.from("cosmovision_videos").select("id").eq("id", videoId).eq("status", "approved").maybeSingle());
+      if (!video) return "not-found";
+      const result2 = await client.from("cosmovision_reports").insert({ video_id: videoId, reporter_id: userId, reason });
+      if (result2.error?.code === "23505") return "duplicate";
+      checked(result2);
+      return "created";
+    },
+    async listModeration() {
+      const [pendingResult, approvedResult, reportsResult] = await Promise.all([
+        client.from("cosmovision_videos").select(PUBLIC_COLUMNS).eq("status", "pending").order("created_at", { ascending: true }).limit(100),
+        client.from("cosmovision_videos").select("id,video_id,title,channel_title").eq("status", "approved").order("created_at", { ascending: false }).limit(100),
+        client.from("cosmovision_reports").select("id,reason,created_at,video:cosmovision_videos!inner(id,title,status)").eq("status", "open").order("created_at", { ascending: true }).limit(100)
+      ]);
+      const pending = (checked(pendingResult) || []).map((row) => ({ id: row.id, videoId: row.video_id, title: row.title, description: row.description, category: row.category, channelTitle: row.channel_title, createdAt: row.created_at }));
+      const approved = (checked(approvedResult) || []).map((row) => ({ id: row.id, videoId: row.video_id, title: row.title, channelTitle: row.channel_title }));
+      const reports = (checked(reportsResult) || []).flatMap((row) => {
+        const video = Array.isArray(row.video) ? row.video[0] : row.video;
+        return video?.status === "approved" ? [{ id: row.id, videoId: video.id, title: video.title, reason: row.reason, createdAt: row.created_at }] : [];
+      });
+      return { pending, approved, reports };
+    },
+    async moderate(id, userId, action) {
+      return checked(await client.rpc("cosmovision_moderate", { p_video: id, p_actor: userId, p_action: action })) === true;
+    },
+    async dismissReport(id, userId) {
+      return checked(await client.rpc("cosmovision_dismiss_report", { p_report: id, p_actor: userId })) === true;
+    }
+  };
+}
+function isPublishableKey(key) {
+  if (key.startsWith("sb_publishable_")) return true;
+  try {
+    const parts = key.split(".");
+    if (parts.length !== 3) return false;
+    return JSON.parse(Buffer.from(parts[1], "base64url").toString("utf8")).role === "anon";
+  } catch {
+    return false;
+  }
+}
+var cached = null;
+function runtimeFromEnvironment() {
+  const url = process.env.SUPABASE_URL?.trim() || "";
+  const publicKey = (process.env.SUPABASE_PUBLISHABLE_KEY || process.env.SUPABASE_ANON_KEY || "").trim();
+  const secret = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() || "";
+  let parsed;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return null;
+  }
+  if (parsed.protocol !== "https:" || parsed.username || parsed.password || parsed.port || parsed.pathname !== "/" || parsed.search || parsed.hash || !secret || !isPublishableKey(publicKey) || publicKey === secret) return null;
+  const identity = `${url}
+${publicKey}
+${secret}`;
+  if (cached?.identity === identity) return cached.runtime;
+  const client = createClient(url, secret, {
+    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+    global: { fetch: (input, init) => fetch(input, { ...init, signal: init?.signal ? AbortSignal.any([init.signal, AbortSignal.timeout(8e3)]) : AbortSignal.timeout(8e3) }) }
+  });
+  const runtime = { url: parsed.origin, publicKey, store: supabaseStore(client) };
+  cached = { identity, runtime };
+  return runtime;
+}
+function validText(value, min, max, multiline = false) {
+  return typeof value === "string" && value === value.trim() && value.length >= min && value.length <= max && !(multiline ? /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/u : /[\u0000-\u001f\u007f]/u).test(value);
+}
+function createCommunityRouter(options = {}) {
+  const router = Router2();
+  const runtime = options.runtime || runtimeFromEnvironment;
+  const verifyVideo = options.verifyVideo || verifyCommunityYouTube;
+  const rates = /* @__PURE__ */ new Map();
+  router.use((req, res, next) => {
+    res.set("Cache-Control", "no-store");
+    res.set("Vary", "Authorization");
+    const now = Date.now();
+    const ip = req.ip || req.socket.remoteAddress || "unknown";
+    let bucket = rates.get(ip);
+    if (!bucket || bucket.reset <= now) bucket = { count: 0, reset: now + 6e4 };
+    rates.set(ip, bucket);
+    if (++bucket.count > 80) {
+      res.set("Retry-After", String(Math.max(1, Math.ceil((bucket.reset - now) / 1e3))));
+      return res.status(429).json({ error: "rate-limit" });
+    }
+    if (rates.size > 1e3) {
+      for (const [key, value] of rates) if (value.reset <= now) rates.delete(key);
+      while (rates.size > 1e3) rates.delete(rates.keys().next().value);
+    }
+    next();
+  });
+  router.get("/config", (_req, res) => {
+    const config = runtime();
+    return res.json(config ? { enabled: true, url: config.url, publicKey: config.publicKey } : { enabled: false });
+  });
+  async function authenticate(req, res, store) {
+    const match = /^Bearer ([\x21-\x7e]{20,8192})$/.exec(req.get("Authorization") || "");
+    const userId = match ? await store.verifyUser(match[1]) : null;
+    if (!userId) {
+      res.status(401).json({ error: "authentication-required" });
+      return null;
+    }
+    return userId;
+  }
+  function getRuntime(res) {
+    const config = runtime();
+    if (!config) {
+      res.status(503).json({ error: "community-unavailable" });
+      return null;
+    }
+    return config;
+  }
+  function fail(res) {
+    return res.status(503).json({ error: "community-unavailable" });
+  }
+  router.get("/videos", async (req, res) => {
+    const category = req.query.category ?? "all";
+    const query = req.query.q ?? "";
+    const token = req.query.pageToken ?? "";
+    if (typeof category !== "string" || category !== "all" && !CATEGORIES2.includes(category) || typeof query !== "string" || query.length > 80 || /[\u0000-\u001f\u007f]/.test(query) || typeof token !== "string" || token && !/^p\.(?:0|[1-9]\d{0,4})$/.test(token)) return res.status(400).json({ error: "invalid-request" });
+    const offset = token ? Number(token.slice(2)) : 0;
+    if (offset > 1e4) return res.status(400).json({ error: "invalid-request" });
+    const config = getRuntime(res);
+    if (!config) return;
+    try {
+      const page = await config.store.listApproved(category, query.trim(), offset);
+      return res.json({ items: page.items, nextPageToken: page.hasMore && offset + PAGE_SIZE <= 1e4 ? `p.${offset + PAGE_SIZE}` : null, source: "community" });
+    } catch {
+      return fail(res);
+    }
+  });
+  router.get("/me", async (req, res) => {
+    const config = getRuntime(res);
+    if (!config) return;
+    try {
+      const userId = await authenticate(req, res, config.store);
+      if (!userId) return;
+      const [moderator, submissions] = await Promise.all([config.store.isModerator(userId), config.store.listOwn(userId)]);
+      return res.json({ moderator, submissions });
+    } catch {
+      return fail(res);
+    }
+  });
+  router.post("/submissions", async (req, res) => {
+    const config = getRuntime(res);
+    if (!config) return;
+    try {
+      const userId = await authenticate(req, res, config.store);
+      if (!userId) return;
+      if (!await config.store.consume(userId, "submit")) return res.status(429).json({ error: "rate-limit" });
+      const { url, title, description, category } = req.body || {};
+      const videoId = youtubeIdFromUrl(url);
+      if (!videoId || !validText(title, 3, 160) || !validText(description, 10, 2e3, true) || typeof category !== "string" || !CATEGORIES2.includes(category)) return res.status(400).json({ error: "invalid-submission" });
+      if (await config.store.exists(videoId)) return res.status(409).json({ error: "duplicate" });
+      let metadata;
+      try {
+        metadata = await verifyVideo(videoId);
+      } catch {
+        return res.status(503).json({ error: "youtube-unavailable" });
+      }
+      if (!metadata) return res.status(422).json({ error: "video-unavailable" });
+      const result2 = await config.store.insert({ videoId, title, description, category, userId, metadata });
+      if (result2 === "duplicate") return res.status(409).json({ error: "duplicate" });
+      return res.status(201).json({ status: "pending" });
+    } catch {
+      return fail(res);
+    }
+  });
+  router.post("/videos/:id/report", async (req, res) => {
+    const config = getRuntime(res);
+    if (!config) return;
+    try {
+      const userId = await authenticate(req, res, config.store);
+      if (!userId) return;
+      if (!await config.store.consume(userId, "report")) return res.status(429).json({ error: "rate-limit" });
+      const reason = req.body?.reason;
+      if (!UUID.test(req.params.id) || !validText(reason, 3, 500, true)) return res.status(400).json({ error: "invalid-report" });
+      const result2 = await config.store.report(req.params.id, userId, reason);
+      if (result2 === "not-found") return res.status(404).json({ error: "not-found" });
+      if (result2 === "duplicate") return res.status(409).json({ error: "duplicate-report" });
+      return res.status(201).json({ status: "received" });
+    } catch {
+      return fail(res);
+    }
+  });
+  router.get("/moderation", async (req, res) => {
+    const config = getRuntime(res);
+    if (!config) return;
+    try {
+      const userId = await authenticate(req, res, config.store);
+      if (!userId) return;
+      if (!await config.store.isModerator(userId)) return res.status(403).json({ error: "forbidden" });
+      return res.json(await config.store.listModeration());
+    } catch {
+      return fail(res);
+    }
+  });
+  router.post("/moderation/reports/:id/dismiss", async (req, res) => {
+    const config = getRuntime(res);
+    if (!config) return;
+    try {
+      const userId = await authenticate(req, res, config.store);
+      if (!userId) return;
+      if (!await config.store.isModerator(userId)) return res.status(403).json({ error: "forbidden" });
+      if (!await config.store.consume(userId, "moderate")) return res.status(429).json({ error: "rate-limit" });
+      if (!UUID.test(req.params.id)) return res.status(400).json({ error: "invalid-request" });
+      if (!await config.store.dismissReport(req.params.id, userId)) return res.status(409).json({ error: "state-conflict" });
+      return res.json({ status: "resolved" });
+    } catch {
+      return fail(res);
+    }
+  });
+  router.post("/moderation/:id", async (req, res) => {
+    const config = getRuntime(res);
+    if (!config) return;
+    try {
+      const userId = await authenticate(req, res, config.store);
+      if (!userId) return;
+      if (!await config.store.isModerator(userId)) return res.status(403).json({ error: "forbidden" });
+      if (!await config.store.consume(userId, "moderate")) return res.status(429).json({ error: "rate-limit" });
+      const action = req.body?.action;
+      if (!UUID.test(req.params.id) || !["approve", "reject", "takedown"].includes(action)) return res.status(400).json({ error: "invalid-request" });
+      if (!await config.store.moderate(req.params.id, userId, action)) return res.status(409).json({ error: "state-conflict" });
+      return res.json({ status: action === "approve" ? "approved" : "rejected" });
+    } catch {
+      return fail(res);
+    }
+  });
+  return router;
+}
+var communityVideosRouter = createCommunityRouter();
 
 // server/novaChat.js
 var OPENROUTER_CHAT_COMPLETIONS_URL = "https://openrouter.ai/api/v1/chat/completions";
@@ -4118,9 +4487,9 @@ app.post("/api/missions/grounded-search", async (req, res) => {
     return res.status(400).json({ error: "Search query is required" });
   }
   const cacheKey = `${query.toLowerCase().trim()}_${lang}`;
-  const cached = groundedSearchCache.get(cacheKey);
-  if (cached && Date.now() - cached.timestamp < GROUNDED_CACHE_TTL_MS) {
-    return res.json(cached.data);
+  const cached2 = groundedSearchCache.get(cacheKey);
+  if (cached2 && Date.now() - cached2.timestamp < GROUNDED_CACHE_TTL_MS) {
+    return res.json(cached2.data);
   }
   const normalized = query.toLowerCase().trim();
   const matchedArchiveKey = Object.keys(GROUNDED_DISCOVERY_ARCHIVE).find(
@@ -4388,6 +4757,7 @@ app.get("/api/gemini-live-token", (req, res) => {
 });
 app.use("/api/earth", earthRouter);
 app.use("/api/space-videos", spaceVideosRouter);
+app.use("/api/community", communityVideosRouter);
 async function startServer() {
   const isProduction = process.env.NODE_ENV === "production" || process.env.npm_lifecycle_event === "start" || process.env.PORT !== void 0 && process.env.PORT !== "3000";
   const distPath = path.resolve(__dirname, "dist");

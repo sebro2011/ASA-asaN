@@ -40,11 +40,7 @@ export function Panel({
     flush: 'surface surface-highlight overflow-hidden',
     quiet: 'surface-quiet p-4 sm:p-5'
   };
-  return (
-    <Tag className={cx(tones[tone], className)} {...rest}>
-      {children}
-    </Tag>
-  );
+  return React.createElement(Tag, { className: cx(tones[tone], className), ...rest }, children);
 }
 
 export function PanelHeader({
