@@ -1,10 +1,26 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
+import i18n from '../i18n.ts';
+
+const SUPPORTED = ['en', 'si', 'ta'];
+
+function resolveInitialLanguage() {
+  // The header language switcher drives i18next; treat it as the source of
+  // truth. The legacy `nasa_preferred_lang` key is honoured only on first visit
+  // when i18next has not yet resolved a language.
+  const i18nLang = (i18n?.language || '').slice(0, 2);
+  if (SUPPORTED.includes(i18nLang)) return i18nLang;
+  try {
+    const saved = localStorage.getItem('nasa_preferred_lang');
+    if (SUPPORTED.includes(saved)) return saved;
+  } catch {}
+  return 'en';
+}
 
 export const TRILINGUAL_DICTIONARY = {
   en: {
-    appName: 'NASA LEARN WEB',
+    appName: 'NASA Space Explorer',
     tagline: 'Interactive 3D Spaceflight & Keyless AI Exploration',
     mars: 'Mars',
     iss: 'International Space Station',
@@ -29,7 +45,7 @@ export const TRILINGUAL_DICTIONARY = {
     voiceNotSupported: 'Web Speech API not supported in this browser'
   },
   si: {
-    appName: 'නාසා ලර්න් (NASA LEARN)',
+    appName: 'NASA අභ්‍යවකාශ ගවේෂකය (NASA Space Explorer)',
     tagline: 'ත්‍රිමාන අභ්‍යවකාශ සහ කෘත්‍රිම බුද්ධි ගවේෂණ වේදිකාව',
     mars: 'අඟහරු ග්‍රහයා',
     iss: 'ජාත්‍යන්තර අභ්‍යවකාශ මධ්‍යස්ථානය',
@@ -54,7 +70,7 @@ export const TRILINGUAL_DICTIONARY = {
     voiceNotSupported: 'මෙම බ්‍රවුසරයේ Web Speech API සහාය නොදක්වයි'
   },
   ta: {
-    appName: 'நாசா லேர்ன் (NASA LEARN)',
+    appName: 'NASA விண்வெளி ஆய்வி (NASA Space Explorer)',
     tagline: 'முப்பரிமாண விண்வெளி மற்றும் AI ஆய்வு தளம்',
     mars: 'செவ்வாய் கிரகம்',
     iss: 'சர்வதேச விண்வெளி நிலையம்',
@@ -88,32 +104,53 @@ const TrilingualContext = createContext({
 });
 
 export const TrilingualProvider = ({ children }) => {
-  const [lang, setLangState] = useState('en');
+  const [lang, setLangState] = useState(resolveInitialLanguage);
 
+  // Stay in lock-step with i18next: the header language menu, the floating
+  // switcher and any code path calling i18n.changeLanguage must also update
+  // components that consume useTrilingual() (quiz content, asteroid gauge).
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem('nasa_preferred_lang');
-      if (saved && (saved === 'en' || saved === 'si' || saved === 'ta')) {
-        setLangState(saved);
-      }
-    } catch {}
+    const syncFromI18n = (code) => {
+      const next = (code || '').slice(0, 2);
+      if (SUPPORTED.includes(next)) setLangState(next);
+    };
+    syncFromI18n(i18n.language);
+    i18n.on('languageChanged', syncFromI18n);
+    return () => {
+      i18n.off('languageChanged', syncFromI18n);
+    };
   }, []);
 
   const setLang = (newLang) => {
+    if (!SUPPORTED.includes(newLang)) return;
     setLangState(newLang);
+    // Route the change through i18next so every translation system switches
+    // together; i18n's languageChanged listener then reconfirms this state.
+    if (i18n.language?.slice(0, 2) !== newLang) {
+      i18n.changeLanguage(newLang);
+    }
     try {
+      // Retained for backwards compatibility with older stored preferences.
       localStorage.setItem('nasa_preferred_lang', newLang);
       document.documentElement.lang = newLang;
     } catch {}
   };
 
-  const t = (key) => {
-    const activeDict = TRILINGUAL_DICTIONARY[lang] || TRILINGUAL_DICTIONARY.en;
-    return activeDict[key] || TRILINGUAL_DICTIONARY.en[key] || key;
-  };
+  const value = useMemo(() => {
+    const t = (key) => {
+      const activeDict = TRILINGUAL_DICTIONARY[lang] || TRILINGUAL_DICTIONARY.en;
+      return activeDict[key] || TRILINGUAL_DICTIONARY.en[key] || key;
+    };
+    return {
+      lang,
+      setLang,
+      t,
+      dictionary: TRILINGUAL_DICTIONARY[lang] || TRILINGUAL_DICTIONARY.en
+    };
+  }, [lang]);
 
   return (
-    <TrilingualContext.Provider value={{ lang, setLang, t, dictionary: TRILINGUAL_DICTIONARY[lang] || TRILINGUAL_DICTIONARY.en }}>
+    <TrilingualContext.Provider value={value}>
       {children}
     </TrilingualContext.Provider>
   );

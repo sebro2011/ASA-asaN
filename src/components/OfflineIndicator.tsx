@@ -34,7 +34,7 @@ export const OfflineIndicator: React.FC<OfflineIndicatorProps> = ({ lang = 'en' 
           initial={{ opacity: 0, y: 25, scale: 0.95 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
           exit={{ opacity: 0, y: 20, scale: 0.95 }}
-          className="fixed bottom-20 sm:bottom-6 left-4 sm:left-6 z-50 font-sans select-none"
+          className="fixed bottom-44 lg:bottom-28 left-4 sm:left-6 z-50 max-w-[calc(100vw-2rem)] font-sans select-none"
         >
           {/* Offline Mode Active with Queued Request Counter */}
           <div className="flex items-center gap-3 px-4 py-3 rounded-[14px] bg-amber-500/95 border border-amber-300 text-slate-950 shadow-2xl backdrop-blur-xl">
