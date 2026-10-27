@@ -206,7 +206,51 @@ export const earthIntelligenceEn: EarthIntelligenceStrings = {
   earthFirmsLimitations: 'Detection limitations',
 
   earthOffline: 'You are offline. Cached datasets remain readable; live imagery and requests are paused.',
-  earthReducedMotion: 'Animations reduced to respect your system motion preference.'
+  earthReducedMotion: 'Animations reduced to respect your system motion preference.',
+
+  // AI-Enhanced Earth Viewer (GIBS imagery + local canvas enhancement)
+  earthModeAiViewer: 'AI Earth Viewer',
+  earthAiEyebrow: 'NASA GIBS · local image processing',
+  earthAiHeading: 'AI-Enhanced Earth Viewer',
+  earthAiIntro:
+    'Pull a single verified NASA GIBS satellite frame for a place and date, then apply conservative local image adjustments. Enhancement is a visual rendering aid only — it never produces measurements, and the original pixels are always retained internally.',
+  earthAiPillBrowser: 'Browser enhancement',
+  earthAiPillAiReady: 'AI model ready',
+  earthAiLayerLabel: 'Imagery layer',
+  earthAiAreaLabel: 'Region of interest',
+  earthAiDateLabel: 'Observation date',
+  earthAiViewportLabel: 'Satellite viewport',
+  earthAiLabelOriginal: 'Original image',
+  earthAiLabelBrowser: 'Browser-enhanced visualization',
+  earthAiStatusLoading: 'Loading GIBS imagery…',
+  earthAiStatusEnhancing: 'Enhancing on this device',
+  earthAiStatusOffline: 'You are offline. Satellite imagery cannot be loaded until the connection returns.',
+  earthAiStatusUnavailable: 'No imagery is reported for this layer on the selected date. Try the nearest available date.',
+  earthAiJumpToNearest: 'Jump to nearest date · {{date}}',
+  earthAiAdjustTitle: 'Image adjustments',
+  earthAiSliderBrightness: 'Brightness',
+  earthAiSliderContrast: 'Contrast',
+  earthAiSliderSaturation: 'Saturation',
+  earthAiSliderSharpen: 'Sharpen',
+  earthAiEnhanceAction: 'Enhance image',
+  earthAiResetAction: 'Reset to original',
+  earthAiRetry: 'Retry',
+  earthAiErrorCanvas: 'This browser cannot create the image canvas needed for enhancement.',
+  earthAiErrorCors: 'The imagery host blocked pixel readback (CORS), so enhancement could not run on this frame.',
+  earthAiErrorGeneric: 'The satellite frame could not be processed. Check the connection and retry.',
+  earthAiDetailsTitle: 'Source & processing details',
+  earthAiMetaLayer: 'Layer',
+  earthAiMetaPlatform: 'Platform / instrument',
+  earthAiMetaDate: 'Observation date',
+  earthAiMetaResolution: 'Native resolution',
+  earthAiMetaDimensions: 'Frame dimensions',
+  earthAiMetaMethod: 'Processing method',
+  earthAiMetaAdjustments: 'Adjustments',
+  earthAiMetaSourceUrl: 'Service URL',
+  earthAiIntegrityTitle: 'Scientific integrity:',
+  earthAiIntegrityBody:
+    'Adjustments only change how the verified GIBS frame is rendered. They do not measure temperature, rainfall, land cover or any other quantity, and AI-enhanced details must never be read as verified observations.',
+  earthAiAiNoteTitle: 'AI super-resolution:'
 };
 
 export const earthIntelligenceSi: EarthIntelligenceStrings = {
@@ -404,7 +448,51 @@ export const earthIntelligenceSi: EarthIntelligenceStrings = {
   earthFirmsLimitations: 'හඳුනාගැනීම් සීමාවන්',
 
   earthOffline: 'ඔබ නොබැඳි ය. හැඹිලිගත දත්ත කියවිය හැක; සජීවී රූප සහ ඉල්ලීම් නතර වේ.',
-  earthReducedMotion: 'ඔබගේ චලන මනාපයට ගරු කරමින් සජීවිකරණ අඩු කර ඇත.'
+  earthReducedMotion: 'ඔබගේ චලන මනාපයට ගරු කරමින් සජීවිකරණ අඩු කර ඇත.',
+
+  // AI-Enhanced Earth Viewer
+  earthModeAiViewer: 'AI පෘථිවි දර්ශකය',
+  earthAiEyebrow: 'NASA GIBS · උපාංගය තුළම රූප සැකසුම',
+  earthAiHeading: 'AI-වැඩිදියුණු කළ පෘථිවි දර්ශකය',
+  earthAiIntro:
+    'ස්ථානයක් සහ දිනයක් සඳහා සත්‍යාපිත NASA GIBS චන්ද්‍රිකා රූප රාමුවක් ලබාගෙන, සුරැකිත සීමාවලට යටත් දේශීය රූප ගැලපීම් යොදන්න. වැඩිදියුණු කිරීම දෘශ්‍ය ආධාරකයක් පමණි — එය මිනුම් නිපදවන්නේ නැත; මුල් පික්සල සැමවිටම අභ්‍යන්තරයේ රැඳේ.',
+  earthAiPillBrowser: 'බ්‍රවුසරය මඟින් වැඩිදියුණු කිරීම',
+  earthAiPillAiReady: 'AI ආකෘතිය සූදානම්',
+  earthAiLayerLabel: 'රූප ස්තරය',
+  earthAiAreaLabel: 'අවධානය යොමු කරන කලාපය',
+  earthAiDateLabel: 'නිරීක්ෂණ දිනය',
+  earthAiViewportLabel: 'චන්ද්‍රිකා දර්ශන තලය',
+  earthAiLabelOriginal: 'මුල් රූපය',
+  earthAiLabelBrowser: 'බ්‍රවුසරය මඟින් වැඩිදියුණු කළ දර්ශනය',
+  earthAiStatusLoading: 'GIBS රූප පූරණය වෙමින්…',
+  earthAiStatusEnhancing: 'මෙම උපාංගය මත වැඩිදියුණු වෙමින් පවතී',
+  earthAiStatusOffline: 'ඔබ නොබැඳි ය. සම්බන්ධතාවය නැවත ලැබෙන තෙක් චන්ද්‍රිකා රූප පූරණය කළ නොහැක.',
+  earthAiStatusUnavailable: 'තෝරාගත් දිනයේ මෙම ස්තරයට රූප වාර්තා වී නැත. ළඟම ඇති දිනය උත්සාහ කරන්න.',
+  earthAiJumpToNearest: 'ළඟම දිනයට යන්න · {{date}}',
+  earthAiAdjustTitle: 'රූප ගැලපීම්',
+  earthAiSliderBrightness: 'දීප්තිය',
+  earthAiSliderContrast: 'පරස්පරතාව',
+  earthAiSliderSaturation: 'වර්ණ සන්තෘප්තිය',
+  earthAiSliderSharpen: 'තීව්‍රතාව',
+  earthAiEnhanceAction: 'රූපය වැඩිදියුණු කරන්න',
+  earthAiResetAction: 'මුල් තත්ත්වයට ගෙන එන්න',
+  earthAiRetry: 'නැවත උත්සාහ කරන්න',
+  earthAiErrorCanvas: 'වැඩිදියුණු කිරීමට අවශ්‍ය රූප කැන්වසය මෙම බ්‍රවුසරය තුළ සෑදිය නොහැක.',
+  earthAiErrorCors: 'රූප සත්කාරකය පික්සල කියවීම අවහිර කළේය (CORS); එබැවින් මෙම රාමුව වැඩිදියුණු කළ නොහැකි විය.',
+  earthAiErrorGeneric: 'චන්ද්‍රිකා රාමුව සැකසිය නොහැකි විය. සම්බන්ධතාවය පරීක්ෂා කර නැවත උත්සාහ කරන්න.',
+  earthAiDetailsTitle: 'මූලාශ්‍ර සහ සැකසුම් විස්තර',
+  earthAiMetaLayer: 'ස්තරය',
+  earthAiMetaPlatform: 'වේදිකාව / උපකරණය',
+  earthAiMetaDate: 'නිරීක්ෂණ දිනය',
+  earthAiMetaResolution: 'ස්වභාවික විභේදනය',
+  earthAiMetaDimensions: 'රාමු මාන',
+  earthAiMetaMethod: 'සැකසුම් ක්‍රමය',
+  earthAiMetaAdjustments: 'ගැලපීම්',
+  earthAiMetaSourceUrl: 'සේවා URL ය',
+  earthAiIntegrityTitle: 'විද්‍යාත්මක අඛණ්ඩතාව:',
+  earthAiIntegrityBody:
+    'ගැලපීම් මඟින් වෙනස් වන්නේ සත්‍යාපිත GIBS රාමුව දර්ශනය වන ආකාරය පමණි. එය උෂ්ණත්වය, වර්ෂාපතනය, භූ-ආවරණය හෝ වෙනත් කිසිදු මාත්‍රාවක් මනින්නේ නැත; AI-වැඩිදියුණු කළ විස්තර සත්‍යාපිත නිරීක්ෂණ ලෙස නොසැලකිය යුතුය.',
+  earthAiAiNoteTitle: 'AI සුපිරි-විභේදනය:'
 };
 
 export const earthIntelligenceTa: EarthIntelligenceStrings = {
@@ -602,7 +690,51 @@ export const earthIntelligenceTa: EarthIntelligenceStrings = {
   earthFirmsLimitations: 'கண்டறிதல் வரம்புகள்',
 
   earthOffline: 'நீங்கள் இணையமில்லாமல் உள்ளீர்கள். சேமிக்கப்பட்ட தரவு வாசிக்கப்படலாம்; நேரடி படங்களும் கோரிக்கைகளும் நிறுத்தப்படும்.',
-  earthReducedMotion: 'உங்கள் இயக்க விருப்பத்தை மதித்து அசைவுகள் குறைக்கப்பட்டன.'
+  earthReducedMotion: 'உங்கள் இயக்க விருப்பத்தை மதித்து அசைவுகள் குறைக்கப்பட்டன.',
+
+  // AI-Enhanced Earth Viewer
+  earthModeAiViewer: 'AI புவி பார்வையாளர்',
+  earthAiEyebrow: 'NASA GIBS · உள்ளூர் படச் செயலாக்கம்',
+  earthAiHeading: 'AI-மேம்படுத்தப்பட்ட புவி பார்வையாளர்',
+  earthAiIntro:
+    'ஒரு இடம் மற்றும் தேதிக்கான சரிபார்க்கப்பட்ட NASA GIBS செயற்கைக்கோள் படச்சட்டத்தைப் பெற்று, பாதுகாப்பான வரம்புகளுக்குள் உள்ளூர் பட மேம்பாடுகளைப் பயன்படுத்துங்கள். மேம்பாடு ஒரு காட்சி உதவி மட்டுமே — இது அளவீடுகளை உருவாக்காது; அசல் பிக்சல்கள் எப்போதும் உள்ளகப் பாதுகாப்பில் வைக்கப்படும்.',
+  earthAiPillBrowser: 'உலாவி மேம்பாடு',
+  earthAiPillAiReady: 'AI மாதிரி தயார்',
+  earthAiLayerLabel: 'பட அடுக்கு',
+  earthAiAreaLabel: 'ஆர்வமுள்ள பகுதி',
+  earthAiDateLabel: 'நோக்கீட்டுத் தேதி',
+  earthAiViewportLabel: 'செயற்கைக்கோள் காட்சிப் பகுதி',
+  earthAiLabelOriginal: 'அசல் படம்',
+  earthAiLabelBrowser: 'உலாவி-மேம்படுத்தப்பட்ட காட்சி',
+  earthAiStatusLoading: 'GIBS படம் ஏற்றப்படுகிறது…',
+  earthAiStatusEnhancing: 'இந்தச் சாதனத்தில் மேம்படுத்தப்படுகிறது',
+  earthAiStatusOffline: 'நீங்கள் இணையமில்லாமல் உள்ளீர்கள். இணைப்பு திரும்பும் வரை செயற்கைக்கோள் படங்களை ஏற்ற முடியாது.',
+  earthAiStatusUnavailable: 'தேர்ந்த தேதியில் இந்த அடுக்குக்கு படம் எதுவும் அறிவிக்கப்படவில்லை. மிக அண்மைய தேதியை முயற்சிக்கவும்.',
+  earthAiJumpToNearest: 'அண்மைய தேதிக்குச் செல்க · {{date}}',
+  earthAiAdjustTitle: 'பட மேம்பாடுகள்',
+  earthAiSliderBrightness: 'ஒளிர்வு',
+  earthAiSliderContrast: 'செறிவு (contrast)',
+  earthAiSliderSaturation: 'வண்ணச் செறிவு',
+  earthAiSliderSharpen: 'கூர்மை',
+  earthAiEnhanceAction: 'படத்தை மேம்படுத்து',
+  earthAiResetAction: 'அசலுக்கு மீட்டமை',
+  earthAiRetry: 'மீண்டும் முயற்சிக்கவும்',
+  earthAiErrorCanvas: 'மேம்பாட்டுக்குத் தேவையான பட கேன்வாஸை இந்த உலாவியால் உருவாக்க முடியவில்லை.',
+  earthAiErrorCors: 'பட வழங்கி பிக்சல் வாசிப்பைத் தடுத்தது (CORS), இதனால் இந்தச் சட்டத்தை மேம்படுத்த முடியவில்லை.',
+  earthAiErrorGeneric: 'செயற்கைக்கோள் சட்டத்தைச் செயலாக்க முடியவில்லை. இணைப்பைச் சரிபார்த்து மீண்டும் முயற்சிக்கவும்.',
+  earthAiDetailsTitle: 'மூல & செயலாக்க விவரங்கள்',
+  earthAiMetaLayer: 'அடுக்கு',
+  earthAiMetaPlatform: 'தளம் / கருவி',
+  earthAiMetaDate: 'நோக்கீட்டுத் தேதி',
+  earthAiMetaResolution: 'இயல்பான தெளிவுத்திறன்',
+  earthAiMetaDimensions: 'சட்ட பரிமாணங்கள்',
+  earthAiMetaMethod: 'செயலாக்க முறை',
+  earthAiMetaAdjustments: 'மேம்பாடுகள்',
+  earthAiMetaSourceUrl: 'சேவை URL',
+  earthAiIntegrityTitle: 'அறிவியல் ஒருமைப்பாடு:',
+  earthAiIntegrityBody:
+    'மேம்பாடுகள் சரிபார்க்கப்பட்ட GIBS சட்டம் காட்டப்படும் விதத்தை மட்டுமே மாற்றும். அவை வெப்பநிலை, மழைப்பொழிவு, நிலப் பரப்பு அல்லது பிற எந்த அளவீட்டையும் அளவிடாது; AI-மேம்படுத்தப்பட்ட விவரங்களைச் சரிபார்க்கப்பட்ட நோக்கீடுகளாகப் படிக்கக் கூடாது.',
+  earthAiAiNoteTitle: 'AI சூப்பர்-ரெசல்யூஷன்:'
 };
 
 export const earthIntelligenceTranslations = {

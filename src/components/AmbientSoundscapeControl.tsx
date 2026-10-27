@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
-import { motion } from 'framer-motion';
+import { motion, useReducedMotion } from 'framer-motion';
 import { Volume2, VolumeX, Volume1, Sparkles } from 'lucide-react';
 import { spaceSoundscape } from '../utils/spaceSoundscape';
 import { SupportedLanguage } from '../i18n/translations';
@@ -26,6 +26,9 @@ export const AmbientSoundscapeControl: React.FC<AmbientSoundscapeControlProps> =
   const [isDragging, setIsDragging] = useState<boolean>(false);
   const [showVolTooltip, setShowVolTooltip] = useState<boolean>(false);
   const svgRef = useRef<SVGSVGElement>(null);
+  // Height keyframes are not transforms, so MotionConfig cannot neutralise
+  // them; render static bars when the user requests reduced motion.
+  const reduceMotion = useReducedMotion();
 
   const text = LABELS[lang] || LABELS.en;
 
@@ -218,19 +221,27 @@ export const AmbientSoundscapeControl: React.FC<AmbientSoundscapeControlProps> =
       {/* Animated Sound Wave Equalizer Bars when playing */}
       {isPlaying && (
         <div className="flex items-end gap-0.5 h-4 ml-1 pr-1 cursor-pointer" onClick={handleTogglePlay}>
-          {[0.4, 0.9, 0.5, 1, 0.6].map((scale, i) => (
-            <motion.div
-              key={i}
-              className="w-1 bg-gradient-to-t from-cyan-500 to-indigo-400 rounded-full"
-              animate={{ height: ['20%', '100%', '35%'] }}
-              transition={{
-                repeat: Infinity,
-                repeatType: 'mirror',
-                duration: 0.6 + i * 0.15,
-                ease: 'easeInOut'
-              }}
-            />
-          ))}
+          {[0.4, 0.9, 0.5, 1, 0.6].map((scale, i) =>
+            reduceMotion ? (
+              <div
+                key={i}
+                className="w-1 bg-gradient-to-t from-cyan-500 to-indigo-400 rounded-full"
+                style={{ height: `${Math.round(scale * 100)}%` }}
+              />
+            ) : (
+              <motion.div
+                key={i}
+                className="w-1 bg-gradient-to-t from-cyan-500 to-indigo-400 rounded-full"
+                animate={{ height: ['20%', '100%', '35%'] }}
+                transition={{
+                  repeat: Infinity,
+                  repeatType: 'mirror',
+                  duration: 0.6 + i * 0.15,
+                  ease: 'easeInOut'
+                }}
+              />
+            )
+          )}
         </div>
       )}
     </div>
