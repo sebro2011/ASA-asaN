@@ -8,9 +8,11 @@
  */
 
 import React from 'react';
-import { ArrowUpRight, Download } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
+import { ArrowUpRight, Download, RotateCcw } from 'lucide-react';
 import type { SupportedLanguage } from '../i18n/translations';
 import { NAV_ENTRIES, type TabId } from './navigation';
+import { APP_VERSION_LABEL } from '../lib/version';
 
 const SOURCES = [
   { name: 'NASA Open APIs', detail: 'APOD · NeoWs · EPIC · Exoplanet Archive', href: 'https://api.nasa.gov' },
@@ -22,12 +24,16 @@ const SOURCES = [
 export default function AppFooter({
   onTabChange,
   onOpenExport,
+  onReplayWelcome,
   lang
 }: {
   onTabChange: (tab: TabId) => void;
   onOpenExport: () => void;
+  /** Optional: reopens the welcome screen; also the opt-out recovery path. */
+  onReplayWelcome?: () => void;
   lang: SupportedLanguage;
 }) {
+  const { t } = useTranslation();
   const groups: Array<{ title: string; ids: TabId[] }> = [
     { title: 'Explore', ids: ['apod', '3d', 'missions', 'news', 'quiz'] },
     { title: 'Earth', ids: ['earth', 'epic', 'iss'] },
@@ -106,12 +112,27 @@ export default function AppFooter({
           </ul>
         </div>
 
-        <div className="mt-8 flex flex-col gap-2 border-t border-line/60 pt-5 text-[11px] text-ink-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="mt-8 flex flex-col gap-3 border-t border-line/60 pt-5 text-[11px] text-ink-4 sm:flex-row sm:items-center sm:justify-between">
           <p>
             Earth imagery: NASA Blue Marble / Visible Earth. Values shown in the Earth Lab are NASA POWER grid
             estimates, not station measurements.
           </p>
-          <p className="font-mono uppercase tracking-[0.14em]">Built for scientific literacy</p>
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+            {onReplayWelcome ? (
+              <button
+                type="button"
+                onClick={onReplayWelcome}
+                className="inline-flex items-center gap-1.5 rounded-md transition-colors hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[var(--focus)]"
+              >
+                <RotateCcw className="h-3 w-3" strokeWidth={1.8} aria-hidden="true" />
+                {t('welcomeReplay')}
+              </button>
+            ) : null}
+            <span className="font-mono uppercase tracking-[0.14em]" data-testid="app-version">
+              {APP_VERSION_LABEL}
+            </span>
+            <span className="font-mono uppercase tracking-[0.14em]">Built for scientific literacy</span>
+          </div>
         </div>
       </div>
     </footer>
