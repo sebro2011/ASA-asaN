@@ -1,6 +1,6 @@
 import React, { useState, useEffect, lazy, Suspense } from 'react';
 import { useTranslation } from 'react-i18next';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, MotionConfig } from 'framer-motion';
 import type { SupportedLanguage } from './i18n/translations';
 import AppHeader from './ui/AppHeader';
 import AppFooter from './ui/AppFooter';
@@ -326,6 +326,11 @@ export default function App() {
 
   return (
     <div className="flex min-h-screen flex-col bg-void text-ink">
+      {/* Honour prefers-reduced-motion across every framer-motion surface
+          (page transitions, floating widgets, modals): transform/layout
+          animations become instant while opacity cross-fades remain. The
+          CSS media query in styles/tokens.css covers non-motion CSS. */}
+      <MotionConfig reducedMotion="user">
       <a href="#main-content" className="skip-link">
         {t('skipToContent')}
       </a>
@@ -569,6 +574,7 @@ export default function App() {
         className="bottom-24 left-4 sm:left-6 lg:bottom-8 lg:left-6"
       />
       <ExportHtmlModal isOpen={isExportModalOpen} onClose={() => setIsExportModalOpen(false)} lang={lang} />
+      </MotionConfig>
     </div>
   );
 }
