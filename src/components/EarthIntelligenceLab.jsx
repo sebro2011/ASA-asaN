@@ -37,7 +37,8 @@ import {
   Search,
   Satellite,
   Sparkles,
-  WifiOff
+  WifiOff,
+  Wand2
 } from 'lucide-react';
 
 import {
@@ -68,6 +69,9 @@ import ProvenancePanel from './earth/ProvenancePanel';
 /* Heavy map + 3D modules: separate chunks, loaded on demand. */
 const ImageryMap = React.lazy(() => import('./earth/ImageryMap'));
 const Globe3D = React.lazy(() => import('./earth/Globe3D'));
+// Standalone GIBS frame viewer with local canvas enhancement; isolated from
+// the NASA POWER pipeline and code-split into its own chunk.
+const AiEarthViewer = React.lazy(() => import('./earth/AiEarthViewer'));
 
 /* ------------------------------------------------------------------ */
 /* Backwards-compatible pure exports (preserved from the previous Lab) */
@@ -115,7 +119,8 @@ const MODES = [
   { key: 'overview', labelKey: 'earthModeOverview', icon: Satellite },
   { key: 'trends', labelKey: 'earthModeTrends', icon: Activity },
   { key: 'srilanka', labelKey: 'earthModeSriLanka', icon: Leaf },
-  { key: 'analyst', labelKey: 'earthModeAnalyst', icon: Sparkles }
+  { key: 'analyst', labelKey: 'earthModeAnalyst', icon: Sparkles },
+  { key: 'ai-viewer', labelKey: 'earthModeAiViewer', icon: Wand2 }
 ];
 
 const CATEGORY_LABELS = {
@@ -1015,6 +1020,13 @@ export default function EarthIntelligenceLab({ lang = 'en' }) {
 
       {/* ============================ AI Analyst ============================ */}
       {mode === 'analyst' ? <AnalystPanel context={context} lang={lang} aiCapable={Boolean(capabilities?.aiAnalyst)} /> : null}
+
+      {/* ==================== AI-Enhanced Earth Viewer ===================== */}
+      {mode === 'ai-viewer' ? (
+        <Suspense fallback={<LoadingBlock label={t('earthAiStatusLoading')} detail="GIBS · WMS GetMap · canvas" />}>
+          <AiEarthViewer lang={lang} />
+        </Suspense>
+      ) : null}
 
       {/* ============================ Provenance ============================ */}
       <ProvenancePanel entries={provenanceEntries} report={report} />
