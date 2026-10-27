@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { getCuratedPage, matchesQuery } from './spaceVideoCatalog';
+import { isAstronomyRelated } from './astronomyRelevance';
 import type { SpaceVideo, SpaceVideoCategory, SpaceVideoFailure, SpaceVideoMode, SpaceVideoResponse } from '../src/features/space-shorts/types';
 
 /** Official channel IDs: NASA https://www.nasa.gov/social-media/ and JPL's
@@ -11,15 +12,22 @@ const OFFICIAL_CHANNELS = new Set([
   'UCryGec9PdUCLjpJW2mgCuLw', // NASA JPL / @NASAJPL
   'UCmheCYT4HlbFi943lpH009Q'  // NASA Johnson / @ReelNASA
 ]);
+// Search across YouTube rather than privileging one agency. Category phrases
+// anchor discovery in astronomy while preserving YouTube's relevance order.
 const CATEGORIES: Record<SpaceVideoCategory, string> = {
-  all: 'space astronomy',
-  missions: 'space missions NASA',
-  'solar-system': 'solar system planets',
-  universe: 'universe astronomy',
-  earth: 'Earth from space'
+  all: 'astronomy',
+  missions: 'astronomy mission',
+  'solar-system': 'solar system',
+  universe: 'astronomy universe',
+  earth: 'Earth planet astronomy'
 };
 const VIDEO_ID = /^[A-Za-z0-9_-]{11}$/;
-const PAGE_TOKEN = /^[A-Za-z0-9_-]{1,200}$/;
+// Curated offsets and opaque YouTube tokens must occupy distinct namespaces.
+// The dot was not accepted by the original raw-token format, so legacy tokens
+// can still be read without being mistaken for the new wrapped tokens.
+const LEGACY_PAGE_TOKEN = /^[A-Za-z0-9_-]{1,200}$/;
+const WRAPPED_PAGE_TOKEN = /^y\.[A-Za-z0-9_-]{1,2731}$/;
+const MAX_UPSTREAM_TOKEN_BYTES = 2048;
 const CACHE_MS = 10 * 60_000;
 const MAX_CACHE = 120;
 const RATE_WINDOW_MS = 60_000;
@@ -29,6 +37,21 @@ const GLOBAL_MISS_LIMIT = 30;
 interface CacheEntry { expires: number; data: SpaceVideoResponse }
 class UpstreamFailure extends Error {
   constructor(public code: SpaceVideoFailure) { super(code); }
+}
+
+function wrapYouTubeToken(value: unknown): string | null {
+  if (value === undefined || value === null || value === '') return null;
+  if (typeof value !== 'string' || Buffer.byteLength(value, 'utf8') > MAX_UPSTREAM_TOKEN_BYTES) throw new UpstreamFailure('upstream');
+  return `y.${Buffer.from(value, 'utf8').toString('base64url')}`;
+}
+
+function unwrapYouTubeToken(token: string): string | null {
+  if (!token.startsWith('y.')) return token; // compatible with previously issued raw tokens
+  const encoded = token.slice(2);
+  const bytes = Buffer.from(encoded, 'base64url');
+  if (!bytes.length || bytes.length > MAX_UPSTREAM_TOKEN_BYTES || bytes.toString('base64url') !== encoded) return null;
+  const value = bytes.toString('utf8');
+  return Buffer.from(value, 'utf8').equals(bytes) ? value : null;
 }
 
 function durationSeconds(value: unknown): number | undefined {
@@ -64,9 +87,15 @@ async function youtubeJson(endpoint: 'search' | 'videos', params: URLSearchParam
     throw new UpstreamFailure('network');
   }
   let data: any;
-  try { data = await response.json(); } catch { throw new UpstreamFailure('upstream'); }
+  try { data = await response.json(); } catch {
+    // Some proxies return an empty or non-JSON 429 body. Preserve the quota
+    // classification without forwarding the upstream text (which may be unsafe).
+    if (response.status === 429) throw new UpstreamFailure('quota');
+    throw new UpstreamFailure('upstream');
+  }
   if (!response.ok) {
-    const reasons = (data?.error?.errors || []).map((entry: any) => entry?.reason);
+    const errors = Array.isArray(data?.error?.errors) ? data.error.errors : [];
+    const reasons = errors.map((entry: any) => entry?.reason);
     if (response.status === 429 || reasons.some((reason: string) => /quota|rateLimit|dailyLimit/i.test(reason))) throw new UpstreamFailure('quota');
     if (response.status === 401 || response.status === 403 || reasons.some((reason: string) => /keyInvalid|accessNotConfigured/i.test(reason))) throw new UpstreamFailure('configuration');
     throw new UpstreamFailure('upstream');
@@ -76,7 +105,7 @@ async function youtubeJson(endpoint: 'search' | 'videos', params: URLSearchParam
 
 async function searchYouTube(mode: SpaceVideoMode, category: SpaceVideoCategory, query: string, token: string, key: string): Promise<SpaceVideoResponse> {
   const search = new URLSearchParams({
-    part: 'snippet', type: 'video', maxResults: '18', order: 'relevance',
+    part: 'snippet', type: 'video', maxResults: '30', order: 'relevance',
     q: `${query} ${CATEGORIES[category]}`.trim(), videoEmbeddable: 'true',
     videoSyndicated: 'true', safeSearch: 'moderate',
     videoDuration: mode === 'shorts' ? 'short' : 'any'
@@ -85,7 +114,7 @@ async function searchYouTube(mode: SpaceVideoMode, category: SpaceVideoCategory,
   const results = await youtubeJson('search', search, key);
   if (!Array.isArray(results?.items)) throw new UpstreamFailure('upstream');
   const ids: string[] = [...new Set<string>(results.items.map((entry: any) => entry?.id?.videoId).filter((id: unknown): id is string => typeof id === 'string' && VIDEO_ID.test(id)))];
-  const nextPageToken = typeof results.nextPageToken === 'string' && PAGE_TOKEN.test(results.nextPageToken) ? results.nextPageToken : null;
+  const nextPageToken = wrapYouTubeToken(results.nextPageToken);
   if (!ids.length) return { items: [], nextPageToken, source: 'youtube' };
 
   const details = await youtubeJson('videos', new URLSearchParams({ part: 'snippet,contentDetails,status', id: ids.join(',') }), key);
@@ -112,10 +141,9 @@ async function searchYouTube(mode: SpaceVideoMode, category: SpaceVideoCategory,
       durationSeconds: duration,
       officialAgency: OFFICIAL_CHANNELS.has(snippet.channelId)
     };
-    return matchesQuery(video, query) ? [video] : [];
+    return isAstronomyRelated(video) && matchesQuery(video, query) ? [video] : [];
   });
-  // Relevance order is preserved within each group; verified NASA channels first.
-  items.sort((a, b) => Number(b.officialAgency) - Number(a.officialAgency));
+  // Keep YouTube's relevance order: an agency badge is not a ranking signal.
   return { items, nextPageToken, source: 'youtube' };
 }
 
@@ -153,7 +181,7 @@ export function createSpaceVideosRouter() {
     if (typeof rawMode !== 'string' || !['shorts', 'videos'].includes(rawMode)
       || typeof rawCategory !== 'string' || !Object.hasOwn(CATEGORIES, rawCategory)
       || typeof rawQuery !== 'string' || rawQuery.length > 80 || /[\u0000-\u001f\u007f]/.test(rawQuery)
-      || typeof rawToken !== 'string' || (rawToken && !PAGE_TOKEN.test(rawToken))) {
+      || typeof rawToken !== 'string' || (rawToken && !LEGACY_PAGE_TOKEN.test(rawToken) && !WRAPPED_PAGE_TOKEN.test(rawToken))) {
       return res.status(400).json({ error: 'invalid-request' });
     }
     const mode = rawMode as SpaceVideoMode;
@@ -161,6 +189,8 @@ export function createSpaceVideosRouter() {
     const query = rawQuery.trim();
     const token = rawToken;
     const curatedToken = /^c_(\d{1,4})$/.exec(token);
+    const upstreamToken = unwrapYouTubeToken(token);
+    if (upstreamToken === null) return res.status(400).json({ error: 'invalid-request' });
     const key = process.env.YOUTUBE_API_KEY?.trim();
     if (curatedToken || !key) {
       if (!key && token && !curatedToken) return res.status(503).json({ error: 'missing-key' });
@@ -177,10 +207,13 @@ export function createSpaceVideosRouter() {
     if (!pending) {
       if (now >= misses.reset) misses = { count: 0, reset: now + RATE_WINDOW_MS };
       if (++misses.count > GLOBAL_MISS_LIMIT) {
-        if (token) return res.status(429).json({ error: 'rate-limit' });
+        if (token) {
+          res.set('Retry-After', String(Math.max(1, Math.ceil((misses.reset - now) / 1000))));
+          return res.status(429).json({ error: 'rate-limit' });
+        }
         return res.json({ ...getCuratedPage(mode, category, query), source: 'curated', reason: 'rate-limit' });
       }
-      pending = searchYouTube(mode, category, query, token, key);
+      pending = searchYouTube(mode, category, query, upstreamToken, key);
       inflight.set(cacheKey, pending);
     }
     try {

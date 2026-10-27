@@ -22,7 +22,7 @@ const ITEMS: Array<{
 }> = [
   { id: 'home', icon: House, labels: { en: 'Home', si: 'මුල් පිටුව', ta: 'முகப்பு' } },
   { id: 'earth', icon: Leaf, labels: { en: 'Earth', si: 'පෘථිවිය', ta: 'பூமி' } },
-  { id: 'space-shorts', icon: Clapperboard, labels: { en: 'Shorts', si: 'කෙටි වීඩියෝ', ta: 'குறுங்காணொளி' } },
+  { id: 'space-shorts', icon: Clapperboard, labels: { en: 'CosmoVision', si: 'CosmoVision', ta: 'CosmoVision' } },
   { id: 'assistant', icon: Sparkles, labels: { en: 'NOVA', si: 'NOVA', ta: 'NOVA' } },
   { id: 'saved', icon: Grid2x2, labels: { en: 'Saved', si: 'සුරැකි', ta: 'சேமிப்பு' } },
   { id: 'menu', icon: MoreHorizontal, labels: { en: 'More', si: 'තව', ta: 'மேலும்' } }
@@ -73,7 +73,8 @@ export default function MobileTabBar({
                 </span>
                 <span
                   className={cx(
-                    'truncate text-[10px] font-medium',
+                    'truncate font-medium',
+                    item.id === 'space-shorts' ? 'text-[8px] sm:text-[10px]' : 'text-[10px]',
                     active ? 'text-ink' : 'text-ink-4'
                   )}
                 >

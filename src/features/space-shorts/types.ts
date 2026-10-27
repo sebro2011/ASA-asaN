@@ -1,4 +1,4 @@
-/** Shared, deliberately small public contract for the Space Shorts API. */
+/** Shared, deliberately small public contract for the CosmoVision API. */
 export type SpaceVideoMode = 'shorts' | 'videos';
 export type SpaceVideoCategory = 'all' | 'missions' | 'solar-system' | 'universe' | 'earth';
 export type SpaceVideoSource = 'youtube' | 'curated';

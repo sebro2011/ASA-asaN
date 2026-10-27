@@ -64,7 +64,13 @@ export default function YouTubePlayer({ video }: { video: SpaceVideo }) {
 
   useEffect(() => {
     let cancelled = false;
+    let terminal = false;
     let player: PlayerInstance | undefined;
+    let readyTimeout: number | undefined;
+    const clearReadyTimeout = () => {
+      if (readyTimeout !== undefined) window.clearTimeout(readyTimeout);
+      readyTimeout = undefined;
+    };
     const mount = mountRef.current;
     setStatus('loading');
     if (!mount || !/^[A-Za-z0-9_-]{11}$/.test(video.id)) {
@@ -75,6 +81,16 @@ export default function YouTubePlayer({ video }: { video: SpaceVideo }) {
       if (cancelled) return;
       const element = document.createElement('div');
       mount.replaceChildren(element);
+      // The API script can load while the actual iframe never becomes ready.
+      // Fail with a retry link instead of leaving an indefinite loading state.
+      readyTimeout = window.setTimeout(() => {
+        terminal = true;
+        if (cancelled) return;
+        try { player?.destroy(); } catch { /* player may not be initialized */ }
+        player = undefined;
+        mount.replaceChildren();
+        setStatus('error');
+      }, 15_000);
       player = new api.Player(element, {
         host: 'https://www.youtube-nocookie.com',
         width: '100%',
@@ -86,19 +102,33 @@ export default function YouTubePlayer({ video }: { video: SpaceVideo }) {
         },
         events: {
           onReady: (event: { target: PlayerInstance }) => {
-            if (cancelled) return;
-            event.target.getIframe().title = video.title;
-            event.target.mute();
-            event.target.playVideo();
-            setStatus('ready');
+            if (cancelled || terminal) return;
+            clearReadyTimeout();
+            try {
+              event.target.getIframe().title = video.title;
+              event.target.mute();
+              event.target.playVideo();
+              setStatus('ready');
+            } catch {
+              terminal = true;
+              setStatus('error');
+            }
           },
-          onError: () => { if (!cancelled) setStatus('error'); }
+          onError: () => {
+            terminal = true;
+            clearReadyTimeout();
+            if (!cancelled) setStatus('error');
+          }
         }
       });
-    }).catch(() => { if (!cancelled) setStatus('error'); });
+    }).catch(() => {
+      clearReadyTimeout();
+      if (!cancelled) setStatus('error');
+    });
     return () => {
       cancelled = true;
-      player?.destroy();
+      clearReadyTimeout();
+      try { player?.destroy(); } catch { /* player may already be unavailable */ }
       mount.replaceChildren();
     };
   }, [video.id, video.title, attempt]);

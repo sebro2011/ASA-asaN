@@ -57,8 +57,8 @@ export const NAV_ENTRIES: NavEntry[] = [
     id: 'space-shorts',
     icon: Clapperboard,
     group: 'explore',
-    labels: { en: 'Space Shorts', si: 'අභ්‍යවකාශ කෙටි වීඩියෝ', ta: 'விண்வெளிக் குறுங்காணொளிகள்' },
-    hint: { en: 'Shorts & space videos', si: 'කෙටි හා දිගු අභ්‍යවකාශ වීඩියෝ', ta: 'குறும் & விண்வெளிக் காணொளிகள்' }
+    labels: { en: 'CosmoVision', si: 'CosmoVision', ta: 'CosmoVision' },
+    hint: { en: 'Astronomy videos & short clips', si: 'තාරකා විද්‍යා වීඩියෝ සහ කෙටි වීඩියෝ', ta: 'வானியல் காணொளிகள் & குறுங்காணொளிகள்' }
   },
   {
     id: 'apod',
