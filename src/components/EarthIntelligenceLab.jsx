@@ -834,6 +834,7 @@ export default function EarthIntelligenceLab({ lang = 'en' }) {
                   verifiedService={probeState.ok ? probeState.service : null}
                   verifiedFormat={probeState.ok ? probeState.format : null}
                   blocked={blocked ? { reason: blockedReason } : null}
+                  onDateChange={(next) => setDate(next)}
                   onViewChange={setViewInfo}
                   labels={{
                     zoomIn: 'Zoom in',

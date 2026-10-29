@@ -26,7 +26,8 @@ import {
   Info
 } from 'lucide-react';
 
-const GEMINI_LIVE_BIDI_WS_URL = 'wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent';
+// Gemini Live upstream is reached only through the server-side /ws/live proxy.
+// The API key never leaves the server (Rule 9: no key exposure to the browser).
 
 const VOICE_OPTIONS = [
   { id: 'Puck', name: 'Puck (Nominal Flight Director)', gender: 'Balanced' },
@@ -356,34 +357,13 @@ export function GeminiLiveVoice({
     setStatusText(ui.connecting);
 
     try {
-      // 1. Fetch server live config & API key
-      let apiKey = '';
-      let useProxy = false;
+      // Connect via server-side WebSocket proxy (/ws/live). The API key stays
+      // on the server; the browser never sees it. This is the only connection
+      // path — direct Bidi API access with an exposed key is intentionally removed.
+      const isSecure = window.location.protocol === 'https:';
+      const targetWsUrl = `${isSecure ? 'wss:' : 'ws:'}//${window.location.host}/ws/live`;
 
-      try {
-        const tokenRes = await fetch('/api/gemini-live-token');
-        if (tokenRes.ok) {
-          const tokenData = await tokenRes.json();
-          if (tokenData.apiKey) {
-            apiKey = tokenData.apiKey;
-          }
-        }
-      } catch (e) {
-        console.warn('[Gemini Live] Failed to fetch token endpoint, will use proxy fallback:', e);
-      }
-
-      // Determine WebSocket connection URL
-      let targetWsUrl = '';
-      if (apiKey) {
-        targetWsUrl = `${GEMINI_LIVE_BIDI_WS_URL}?key=${apiKey}`;
-      } else {
-        // Fallback to local server WebSocket bridge
-        const isSecure = window.location.protocol === 'https:';
-        targetWsUrl = `${isSecure ? 'wss:' : 'ws:'}//${window.location.host}/ws/live`;
-        useProxy = true;
-      }
-
-      console.log(`[Gemini Live] Connecting via ${useProxy ? 'Server Proxy /ws/live' : 'Direct Bidi API'}...`);
+      console.log('[Gemini Live] Connecting via Server Proxy /ws/live...');
       const ws = new WebSocket(targetWsUrl);
       wsRef.current = ws;
 

@@ -10,6 +10,16 @@ const categories: Array<{ id: Exclude<SpaceVideoCategory, 'all'>; key: string }>
   { id: 'universe', key: 'ssUniverse' }, { id: 'earth', key: 'ssEarth' }
 ];
 
+// CosmoVision accepts short-form science clips; longer videos are rejected at submission time.
+const MAX_VIDEO_SECONDS = 60 * 60;
+
+const formatDuration = (seconds: number): string => {
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const secs = Math.floor(seconds % 60);
+  return hours ? `${hours}:${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}` : `${minutes}:${String(secs).padStart(2, '0')}`;
+};
+
 type OwnSubmission = { id: string; title: string; status: 'pending' | 'approved' | 'rejected'; createdAt: string };
 type PendingVideo = { id: string; videoId: string; title: string; description: string; category: string; channelTitle: string; createdAt: string };
 type Report = { id: string; videoId: string; title: string; reason: string; createdAt: string };
@@ -161,11 +171,31 @@ function UploadDialog({ community, onClose, onSubmitted }: { community: Communit
   const [description, setDescription] = useState(''); const [category, setCategory] = useState('');
   const [rights, setRights] = useState(false); const [busy, setBusy] = useState(false);
   const [error, setError] = useState(''); const [success, setSuccess] = useState(false);
+  const [durationSeconds, setDurationSeconds] = useState<number | null>(null);
+  const [durationError, setDurationError] = useState<string | null>(null);
   const id = youtubeIdFromUrl(url.trim());
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!id) { setDurationSeconds(null); setDurationError(null); return; }
+    const timer = setTimeout(async () => {
+      if (cancelled) return;
+      try {
+        const response = await fetch(`/api/youtube/meta?url=${encodeURIComponent(url.trim())}`, { signal: AbortSignal.timeout(15_000) });
+        if (cancelled) return;
+        const data = await response.json().catch(() => ({}));
+        if (response.ok && typeof data.durationSeconds === 'number' && data.durationSeconds > 0) setDurationSeconds(data.durationSeconds);
+        else setDurationError((data as { error?: string })?.error || 'youtube-unavailable');
+      } catch { if (!cancelled) setDurationError('youtube-unavailable'); }
+    }, 400);
+    return () => { cancelled = true; };
+  }, [url, id]);
+
   const submit = async (event: React.FormEvent) => {
     event.preventDefault(); setError(''); setSuccess(false);
     const cleanTitle = title.trim(); const cleanDescription = description.trim();
     if (!id || cleanTitle.length < 3 || cleanDescription.length < 10 || !category || !rights) { setError('sfValidation'); return; }
+    if (durationSeconds != null && durationSeconds > MAX_VIDEO_SECONDS) { setError('sfVideoTooLong'); return; }
     if (!community.token || community.configuration !== 'enabled') { setError('sfSignInNeeded'); return; }
     setBusy(true);
     try {
@@ -188,7 +218,8 @@ function UploadDialog({ community, onClose, onSubmitted }: { community: Communit
         <form onSubmit={submit} className="ss-form-grid">
           <label>{t('sfUrl')}<input type="url" required maxLength={2048} value={url} onChange={(event) => setUrl(event.target.value)} aria-describedby="ss-url-help" placeholder="https://www.youtube.com/watch?v=…" /><small id="ss-url-help">{t('sfUrlHelp')}</small></label>
           {url && !id && <p className="ss-form-message is-error">{t('sfInvalidUrl')}</p>}
-          <div className="ss-link-preview"><div className="ss-preview-image">{id ? <img src={`https://i.ytimg.com/vi/${id}/hqdefault.jpg`} alt="" /> : <Link2 size={24} aria-hidden="true" />}</div><div><strong>{t('sfPreview')}</strong><p>{id ? (title || id) : t('sfNoPreview')}</p></div></div>
+          {id && durationSeconds != null && durationSeconds > MAX_VIDEO_SECONDS && <p className="ss-form-message is-error" role="alert">{t('sfVideoTooLong')}</p>}
+          <div className="ss-link-preview"><div className="ss-preview-image">{id ? <img src={`https://i.ytimg.com/vi/${id}/hqdefault.jpg`} alt="" /> : <Link2 size={24} aria-hidden="true" />}</div><div><strong>{t('sfPreview')}</strong><p>{id ? (title || id) : t('sfNoPreview')}</p>{durationSeconds != null && <span className="ss-duration">{t('sfDuration', { duration: formatDuration(durationSeconds) })}</span>}{durationError && !durationSeconds && <span className="ss-duration is-warning">{t('sfDurationUnknown')}</span>}</div></div>
           <label>{t('sfVideoTitle')}<input required minLength={3} maxLength={160} value={title} onChange={(event) => setTitle(event.target.value)} /></label>
           <label>{t('sfDescription')}<textarea required minLength={10} maxLength={2000} rows={4} value={description} onChange={(event) => setDescription(event.target.value)} /></label>
           <label>{t('sfCategory')}<select required value={category} onChange={(event) => setCategory(event.target.value)}><option value="">{t('sfChooseCategory')}</option>{categories.map((item) => <option key={item.id} value={item.id}>{t(item.key)}</option>)}</select></label>

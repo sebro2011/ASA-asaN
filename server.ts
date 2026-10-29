@@ -1997,14 +1997,91 @@ app.post('/api/nasa-ai', handleNasaAiEndpoint);
 app.post('/api/openrouter/chat', handleNasaAiEndpoint);
 app.post('/api/chat', handleNasaAiEndpoint);
 
-// Endpoint for Gemini Live Voice configuration & API access
-app.get('/api/gemini-live-token', (req, res) => {
+// Endpoint for Gemini Live Voice configuration.
+// Never returns the API key value to the browser. The key stays server-side;
+// the /ws/live WebSocket proxy performs the upstream connection with the key.
+app.get('/api/gemini-live-token', (_req, res) => {
   const apiKey = process.env.GEMINI_API_KEY || '';
   res.json({
-    apiKey,
+    hasKey: !!apiKey,
     endpoint: 'wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent',
-    hasKey: !!apiKey
+    proxyPath: '/ws/live'
   });
+});
+
+// ====================================================
+// YouTube video meta proxy (CosmoVision submissions).
+// Returns durationSeconds for a public YouTube video so the submission form
+// can validate length before upload. The key (if any) stays server-side;
+// no credentials are ever returned to the browser.
+// ====================================================
+const YOUTUBE_ID_RE = /(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|shorts\/|watch\?(?:.*&)?v=|.*v=))([A-Za-z0-9_-]{11})/;
+
+export function extractYouTubeId(url: string): string | null {
+  const match = YOUTUBE_ID_RE.exec(url.trim());
+  return match ? match[1] : null;
+}
+
+async function fetchYoutubeDuration(videoId: string): Promise<number> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15_000);
+  try {
+    const response = await fetch(`https://www.youtube.com/watch?v=${videoId}`, {
+      signal: controller.signal,
+      headers: { 'Accept-Language': 'en-US,en;q=0.9', 'Accept': 'text/html' }
+    });
+    if (!response.ok) throw new Error(`youtube-unavailable`);
+    const html = await response.text();
+    const lengthSeconds = parseYoutubeDuration(html);
+    if (!lengthSeconds || lengthSeconds <= 0) throw new Error('video-unavailable');
+    return lengthSeconds;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+// ytInitialPlayerResponse is embedded in the watch page HTML; lengthSeconds lives
+// under videoDetails or microformat.playerMetadata depending on the page variant.
+export function parseYoutubeDuration(html: string): number | null {
+  const candidates: string[] = [];
+  const marker = 'ytInitialPlayerResponse';
+  const start = html.indexOf(marker);
+  if (start !== -1) {
+    const after = html.slice(start + marker.length);
+    const brace = after.indexOf('{');
+    if (brace !== -1) {
+      let depth = 0; let end = -1;
+      for (let i = brace; i < after.length; i++) {
+        if (after[i] === '{') depth++;
+        else if (after[i] === '}') { depth--; if (depth === 0) { end = i; break; } }
+      }
+      if (end !== -1) candidates.push(after.slice(brace, brace + end + 1));
+    }
+  }
+  // Fallback microformat duration (ISO 8601 PT#M#S)
+  const iso = html.match(/"lengthSeconds"\s*:\s*"?(\d+)"?/);
+  if (iso) return Number(iso[1]);
+  for (const blob of candidates) {
+    const direct = blob.match(/"lengthSeconds"\s*:\s*(\d+)/);
+    if (direct) return Number(direct[1]);
+    const micro = blob.match(/"lengthSeconds"\s*:\s*"?(\d+)"?/);
+    if (micro) return Number(micro[1]);
+  }
+  return null;
+}
+
+app.get('/api/youtube/meta', async (req, res) => {
+  const { url } = req.query;
+  if (typeof url !== 'string') { res.status(400).json({ error: 'missing url', code: 'missing-url' }); return; }
+  const videoId = extractYouTubeId(url);
+  if (!videoId) { res.status(400).json({ error: 'invalid youtube url', code: 'invalid-url' }); return; }
+  try {
+    const durationSeconds = await fetchYoutubeDuration(videoId);
+    res.json({ videoId, durationSeconds });
+  } catch (failure) {
+    const code = failure instanceof Error ? failure.message : 'youtube-unavailable';
+    res.status(404).json({ videoId, error: code, code });
+  }
 });
 
 // ====================================================

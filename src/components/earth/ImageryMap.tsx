@@ -15,7 +15,7 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import L from 'leaflet';
-import { Minus, Move, Plus, RotateCcw } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Minus, Move, Plus, RotateCcw } from 'lucide-react';
 import { imagerySource } from '../../lib/earth/gibsClient';
 import type { GibsLayerMeta } from '../../lib/earth/types';
 
@@ -42,6 +42,8 @@ export interface ImageryMapProps {
   verifiedFormat?: 'jpg' | 'png' | null;
   tileTemplateOverride?: string | null;
   onViewChange?: (info: { bounds: [number, number, number, number]; center: [number, number]; zoom: number }) => void;
+  /** Optional callback when the user navigates to a different date. */
+  onDateChange?: (date: string) => void;
   labels: {
     zoomIn: string;
     zoomOut: string;
@@ -112,6 +114,7 @@ export default function ImageryMap({
   verifiedService,
   verifiedFormat,
   tileTemplateOverride,
+  onDateChange,
   onViewChange,
   labels
 }: ImageryMapProps) {
@@ -124,6 +127,26 @@ export default function ImageryMap({
   const [tileErrors, setTileErrors] = useState(0);
   const containerRef = useRef<HTMLDivElement | null>(null);
 
+  /** Date the user has navigated to via prev/next controls. Starts in sync with `date`. */
+  const [navDate, setNavDate] = useState(date || '');
+  const mapCenter = useRef<{ lat: number; lng: number }>({ lat: area.latitude, lng: area.longitude });
+
+  // Keep navDate in sync when the parent changes the date externally.
+  useEffect(() => {
+    if (date && date !== navDate) setNavDate(date);
+  }, [date, navDate]);
+
+  const goToDay = useCallback(
+    (offset: number) => {
+      if (!navDate) return;
+      const ms = Date.parse(`${navDate}T00:00:00Z`) + offset * 86_400_000;
+      const next = new Date(ms).toISOString().slice(0, 10);
+      setNavDate(next);
+      onDateChange?.(next);
+    },
+    [navDate, onDateChange]
+  );
+
   const service: 'wmts' | 'wms' = verifiedService || layer.service;
   const format: 'jpg' | 'png' = verifiedFormat || layer.format;
 
@@ -134,6 +157,7 @@ export default function ImageryMap({
       if (!onViewChange) return;
       const bounds = map.getBounds();
       const center = map.getCenter();
+      mapCenter.current = { lat: center.lat, lng: center.lng };
       onViewChange({
         bounds: [bounds.getSouth(), bounds.getWest(), bounds.getNorth(), bounds.getEast()],
         center: [center.lat, center.lng],
@@ -224,13 +248,13 @@ export default function ImageryMap({
       tileLayer.addTo(map);
     };
 
-    apply(mapPrimary.current, date);
-    apply(mapSecondary.current, mode === 'single' ? null : compareDate || date);
+    apply(mapPrimary.current, navDate || undefined);
+    apply(mapSecondary.current, mode === 'single' ? null : compareDate || navDate || undefined);
     setTileErrors(0);
     return () => {
       /* layers are removed on the next run / unmount */
     };
-  }, [layer, date, compareDate, mode, opacity, service, format, attribution, reducedMotion, tileTemplateOverride, blocked]);
+  }, [layer, navDate, compareDate, mode, opacity, service, format, attribution, reducedMotion, tileTemplateOverride, blocked]);
 
   /* --------------------------- area / bounds changes ----------------------- */
   useEffect(() => {
@@ -356,14 +380,59 @@ export default function ImageryMap({
           style={mode === 'swipe' ? { clipPath: `inset(0 ${100 - divider}% 0 0)` } : undefined}
         />
 
-        {mode === 'side' ? (
-          <div className="pointer-events-none absolute top-2 left-2 z-20 rounded-full border border-atmo/35 bg-abyss/70 px-2 py-0.5 font-mono text-[10px] text-atmo-soft">
-            {labels.primary} · {date}
+        {mode === 'single' || mode === 'side' ? (
+          <div className="absolute top-2 left-1/2 -translate-x-1/2 z-20 flex flex-wrap items-center gap-1">
+            <button
+              type="button"
+              onClick={() => goToDay(-1)}
+              disabled={!navDate}
+              aria-label="Previous day"
+              className="rounded-md border border-line bg-abyss/70/85 p-1 text-ink-2 hover:border-cyan-500/60 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-atmo disabled:opacity-40"
+            >
+              <ChevronLeft className="h-3 w-3" />
+            </button>
+            <span className="rounded-full border border-line bg-abyss/70 px-2 py-0.5 font-mono text-[10px] text-ink-2">
+              {navDate || date}
+            </span>
+            <button
+              type="button"
+              onClick={() => goToDay(1)}
+              disabled={!navDate}
+              aria-label="Next day"
+              className="rounded-md border border-line bg-abyss/70/85 p-1 text-ink-2 hover:border-cyan-500/60 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-atmo disabled:opacity-40"
+            >
+              <ChevronRight className="h-3 w-3" />
+            </button>
+            {mode === 'side' && compareDate ? (
+              <span className="ml-2 rounded-full border border-caution/35 bg-abyss/70 px-2 py-0.5 font-mono text-[10px] text-caution">
+                {labels.comparison} · {compareDate}
+              </span>
+            ) : null}
           </div>
         ) : null}
-        {mode === 'side' && compareDate ? (
-          <div className="pointer-events-none absolute top-2 right-2 z-20 rounded-full border border-caution/35 bg-abyss/70 px-2 py-0.5 font-mono text-[10px] text-caution">
-            {labels.comparison} · {compareDate}
+        {mode === 'swipe' ? (
+          <div className="absolute top-2 left-1/2 -translate-x-1/2 z-20 flex flex-wrap items-center gap-1">
+            <button
+              type="button"
+              onClick={() => goToDay(-1)}
+              disabled={!navDate}
+              aria-label="Previous day"
+              className="rounded-md border border-line bg-abyss/70/85 p-1 text-ink-2 hover:border-cyan-500/60 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-atmo disabled:opacity-40"
+            >
+              <ChevronLeft className="h-3 w-3" />
+            </button>
+            <span className="rounded-full border border-line bg-abyss/70 px-2 py-0.5 font-mono text-[10px] text-ink-2">
+              {navDate || date} ↔ {compareDate || date}
+            </span>
+            <button
+              type="button"
+              onClick={() => goToDay(1)}
+              disabled={!navDate}
+              aria-label="Next day"
+              className="rounded-md border border-line bg-abyss/70/85 p-1 text-ink-2 hover:border-cyan-500/60 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-atmo disabled:opacity-40"
+            >
+              <ChevronRight className="h-3 w-3" />
+            </button>
           </div>
         ) : null}
 
@@ -406,6 +475,11 @@ export default function ImageryMap({
           {blocked.reason}
         </div>
       ) : null}
+
+        {/* Coordinate readout — current map center. */}
+        <div className="absolute left-2 bottom-8 z-20 rounded-full border border-line bg-abyss/70/85 px-2 py-0.5 font-mono text-[10px] text-ink-2">
+          {mapCenter.current.lat.toFixed(3)}°, {mapCenter.current.lng.toFixed(3)}°
+        </div>
 
         {/* Accessible map controls (Leaflet's default controls stay disabled). */}
         <div className="absolute right-2 bottom-8 z-20 flex flex-col gap-1">

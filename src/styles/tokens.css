@@ -87,7 +87,11 @@
   /* ---- elevation ---- */
   --shadow-panel: 0 1px 0 0 rgba(255, 255, 255, 0.04) inset, 0 24px 60px -32px rgba(0, 0, 0, 0.9);
   --shadow-raised: 0 1px 0 0 rgba(255, 255, 255, 0.06) inset, 0 32px 80px -40px rgba(0, 0, 0, 0.95);
+  --shadow-raised-hover: 0 1px 0 0 rgba(255, 255, 255, 0.08) inset, 0 36px 90px -40px rgba(0, 0, 0, 0.96);
   --shadow-glow: 0 0 0 1px rgba(94, 211, 242, 0.18), 0 18px 50px -28px rgba(94, 211, 242, 0.45);
+
+  /* ---- live-data pulse ---- */
+  --pulse-duration: 3s;
 
   /* ---- motion ---- */
   --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
@@ -174,6 +178,18 @@
   ::selection {
     background: rgba(94, 211, 242, 0.28);
     color: #f4fbff;
+  }
+
+  @keyframes pulse-live {
+    0%,
+    100% {
+      opacity: 1;
+      box-shadow: 0 0 0 0 rgba(94, 211, 242, 0.6);
+    }
+    50% {
+      opacity: 0.6;
+      box-shadow: 0 0 0 6px rgba(94, 211, 242, 0);
+    }
   }
 
   img,
