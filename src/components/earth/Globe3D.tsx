@@ -306,6 +306,24 @@ export default function Globe3D({ layer, date, reducedMotion, onFallback, center
     spin.add(globe);
     disposables.push(globeGeometry, material);
 
+    /* sub-solar point marker — a small ring on the globe surface where the sun
+       is directly overhead. It stays locked to the sun direction as the globe
+       spins, so it shows the geometric sub-solar point for the observation date. */
+    const subsolarMarkerGeometry = new THREE.RingGeometry(0.965, 1.035, 32);
+    const subsolarMarkerMaterial = new THREE.MeshBasicMaterial({
+      color: 0xffaa00,
+      transparent: true,
+      opacity: 0.85,
+      side: THREE.DoubleSide,
+      depthWrite: false
+    });
+    const subsolarMarker = new THREE.Mesh(subsolarMarkerGeometry, subsolarMarkerMaterial);
+    subsolarMarker.renderOrder = 2;
+    spin.add(subsolarMarker);
+    disposables.push(subsolarMarkerGeometry, subsolarMarkerMaterial);
+    const subsolarMarkerTemp = new THREE.Vector3();
+    const subsolarInvQuat = new THREE.Quaternion();
+
     /* graticule — a cartographic overlay, clearly a rendering aid */
     const graticulePositions: number[] = [];
     const cursor = new THREE.Vector3();
@@ -607,6 +625,18 @@ export default function Globe3D({ layer, date, reducedMotion, onFallback, center
         (shell.uniforms.uSunDirection.value as THREE.Vector3).copy(sunWorld);
       }
       sunLight.position.copy(state.sunDirection).multiplyScalar(12);
+
+      /* keep the sub-solar marker locked to the sun direction on the spinning globe */
+      subsolarInvQuat.copy(spin.quaternion).invert();
+      subsolarMarker.position
+        .copy(state.sunDirection)
+        .applyQuaternion(subsolarInvQuat)
+        .normalize()
+        .multiplyScalar(1.002);
+      subsolarMarker.quaternion.setFromUnitVectors(
+        new THREE.Vector3(0, 0, 1),
+        subsolarMarker.position.clone().normalize()
+      );
 
       renderer.render(scene, camera);
     };

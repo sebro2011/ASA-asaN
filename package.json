@@ -12,6 +12,7 @@
     "preview": "vite preview",
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit",
+    "test": "npm run lint && npm run test:earth && npm run test:nova-chat && npm run test:space-build-security",
     "test:nova-chat": "node --test scripts/test-nova-chat.mjs",
     "test:earth": "node --import tsx --test scripts/test-earth-intelligence.mjs",
     "test:ai-viewer": "node --import tsx --test scripts/test-ai-earth-viewer.mjs",

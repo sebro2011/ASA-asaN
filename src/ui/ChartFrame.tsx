@@ -57,6 +57,8 @@ export function ChartFrame({
   series,
   xLabel,
   yLabel,
+  eyebrow,
+  title,
   children,
   table,
   footnote,
@@ -66,6 +68,8 @@ export function ChartFrame({
   series: ChartSeries[];
   xLabel: string;
   yLabel: string;
+  eyebrow?: string;
+  title?: string;
   children: React.ReactNode;
   table?: React.ReactNode;
   footnote?: React.ReactNode;
@@ -77,13 +81,23 @@ export function ChartFrame({
         className="flex flex-col items-center justify-center rounded-[12px] border border-dashed border-line text-center"
         style={{ height }}
       >
-        {empty}
+        <p className="text-sm text-ink-2">{empty}</p>
       </div>
     );
   }
 
   return (
     <figure className="m-0 min-w-0">
+      {eyebrow || title ? (
+        <div className="mb-3 space-y-1">
+          {eyebrow ? (
+            <p className="eyebrow">{eyebrow}</p>
+          ) : null}
+          {title ? (
+            <h4 className="text-[13px] font-semibold tracking-tight text-ink">{title}</h4>
+          ) : null}
+        </div>
+      ) : null}
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
         <ChartLegend series={series} />
         <span className="font-mono text-[10px] text-ink-4">{yLabel}</span>

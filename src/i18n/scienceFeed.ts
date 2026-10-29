@@ -25,7 +25,8 @@ export const scienceFeedCopy = {
     sfOpenSource: 'Open on YouTube', sfModerationIntro: 'Only authorised moderators can review or take down community videos.', sfModUpdated: 'Review updated.', sfModError: 'The review could not be updated. Refresh and try again.',
     sfReport: 'Report video', sfReportTitle: 'Report a community video', sfReason: 'Why should this be reviewed?', sfSendReport: 'Send report', sfReportReceived: 'Report received for moderator review.', sfReportDuplicate: 'You have already reported this video.',
     sfAuthExpired: 'Your session has expired. Please sign in again.', sfGenericError: 'The service is unavailable. Nothing was saved; please try again.', sfRateError: 'Too many requests. Please wait before trying again.',
-    sfYouTubeOnly: 'Community entries are YouTube links, not uploaded files.', sfRelated: 'More from these results', sfSkipToGallery: 'Browse videos', sfSkeleton: 'Loading video cards', sfReviewNote: 'Approved by community moderators; YouTube hosts the video.'
+    sfYouTubeOnly: 'Community entries are YouTube links, not uploaded files.', sfRelated: 'More from these results', sfSkipToGallery: 'Browse videos', sfSkeleton: 'Loading video cards', sfReviewNote: 'Approved by community moderators; YouTube hosts the video.',
+    sfDuration: 'Duration: {{duration}}', sfVideoTooLong: 'This video is too long for CosmoVision. Maximum length is 60 minutes. Please submit a shorter video.', sfDurationUnknown: 'Could not verify the video duration; the submission will proceed without a duration check.'
   },
   si: {
     sfAllVideos: 'සියලු වීඩියෝ', sfSpaceShorts: 'අභ්‍යවකාශ කෙටි වීඩියෝ', sfNasaVideos: 'NASA වීඩියෝ', sfCommunityVideos: 'ප්‍රජා වීඩියෝ',
@@ -52,7 +53,8 @@ export const scienceFeedCopy = {
     sfOpenSource: 'YouTube හි විවෘත කරන්න', sfModerationIntro: 'ප්‍රජා වීඩියෝ සමාලෝචනයට හෝ ඉවත් කිරීමට හැක්කේ බලයලත් සමාලෝචකයන්ට පමණි.', sfModUpdated: 'සමාලෝචනය යාවත්කාලීන කරන ලදී.', sfModError: 'සමාලෝචනය යාවත්කාලීන කළ නොහැක. නැවත උත්සාහ කරන්න.',
     sfReport: 'වීඩියෝව වාර්තා කරන්න', sfReportTitle: 'ප්‍රජා වීඩියෝවක් වාර්තා කරන්න', sfReason: 'මෙය සමාලෝචනය කළ යුත්තේ ඇයි?', sfSendReport: 'වාර්තාව යවන්න', sfReportReceived: 'සමාලෝචනය සඳහා වාර්තාව ලැබිණි.', sfReportDuplicate: 'ඔබ මෙම වීඩියෝව දැනටමත් වාර්තා කර ඇත.',
     sfAuthExpired: 'ඔබේ සැසිය අවසන් වී ඇත. නැවත පුරනය වන්න.', sfGenericError: 'සේවාව නොමැත. කිසිවක් සුරැකී නැත; නැවත උත්සාහ කරන්න.', sfRateError: 'ඉල්ලීම් වැඩියි. නැවත උත්සාහ කිරීමට පෙර රැඳී සිටින්න.',
-    sfYouTubeOnly: 'ප්‍රජා වීඩියෝ YouTube සබැඳි වේ; ගොනු උඩුගත නොකෙරේ.', sfRelated: 'මෙම ප්‍රතිඵලවලින් තවත්', sfSkipToGallery: 'වීඩියෝ බලන්න', sfSkeleton: 'වීඩියෝ පූරණය වෙමින්', sfReviewNote: 'ප්‍රජා සමාලෝචකයන් අනුමත කර ඇත; වීඩියෝව YouTube හි ඇත.'
+    sfYouTubeOnly: 'ප්‍රජා වීඩියෝ YouTube සබැඳි වේ; ගොනු උඩුගත නොකෙරේ.', sfRelated: 'මෙම ප්‍රතිඵලවලින් තවත්', sfSkipToGallery: 'වීඩියෝ බලන්න', sfSkeleton: 'වීඩියෝ පූරණය වෙමින්', sfReviewNote: 'ප්‍රජා සමාලෝචකයන් අනුමත කර ඇත; වීඩියෝව YouTube හි ඇත.',
+    sfDuration: 'වීඩියෝ දිරටුම: {{duration}}', sfVideoTooLong: 'මෙම වීඩියෝව CosmoVision-ට දිරටුමක් පුළුල්. උසස් සීමාව 60 මිනිට්. හෘළු අඩංගුවක් ඉදිරිපත් කරන්න.', sfDurationUnknown: 'වීඩියෝ දිරටුම තහවුරු කළ නොහැක; දිරටුම පරීක්ෂාවක් නොකර ඉදිරිපත් කර ගැනීමට අවස්ථාවක් නැත.'
   },
   ta: {
     sfAllVideos: 'அனைத்துக் காணொளிகள்', sfSpaceShorts: 'விண்வெளிக் குறுங்காணொளிகள்', sfNasaVideos: 'NASA காணொளிகள்', sfCommunityVideos: 'சமூகக் காணொளிகள்',
@@ -79,6 +81,7 @@ export const scienceFeedCopy = {
     sfOpenSource: 'YouTube இல் திறக்கவும்', sfModerationIntro: 'அங்கீகரிக்கப்பட்ட மதிப்பாய்வாளர்கள் மட்டுமே சமூகக் காணொளிகளை மதிப்பாய்வு செய்யவோ அகற்றவோ முடியும்.', sfModUpdated: 'மதிப்பாய்வு புதுப்பிக்கப்பட்டது.', sfModError: 'மதிப்பாய்வைப் புதுப்பிக்க முடியவில்லை. மீண்டும் முயற்சிக்கவும்.',
     sfReport: 'காணொளியைப் புகாரளி', sfReportTitle: 'சமூகக் காணொளியைப் புகாரளி', sfReason: 'இது ஏன் மதிப்பாய்வு செய்யப்பட வேண்டும்?', sfSendReport: 'புகாரை அனுப்பு', sfReportReceived: 'மதிப்பாய்வுக்குப் புகார் பெறப்பட்டது.', sfReportDuplicate: 'இந்தக் காணொளியை நீங்கள் ஏற்கனவே புகாரளித்துள்ளீர்கள்.',
     sfAuthExpired: 'உங்கள் அமர்வு முடிந்துவிட்டது. மீண்டும் உள்நுழையவும்.', sfGenericError: 'சேவை கிடைக்கவில்லை. எதுவும் சேமிக்கப்படவில்லை; மீண்டும் முயற்சிக்கவும்.', sfRateError: 'அதிகமான கோரிக்கைகள். மீண்டும் முயற்சிக்கும் முன் காத்திருக்கவும்.',
-    sfYouTubeOnly: 'சமூகப் பதிவுகள் YouTube இணைப்புகள்; கோப்புகள் பதிவேற்றப்படுவதில்லை.', sfRelated: 'இந்த முடிவுகளிலிருந்து மேலும்', sfSkipToGallery: 'காணொளிகளைக் காண்க', sfSkeleton: 'காணொளிகள் ஏற்றப்படுகின்றன', sfReviewNote: 'சமூக மதிப்பாய்வாளர்களால் அனுமதிக்கப்பட்டது; காணொளி YouTube இல் உள்ளது.'
-  }
+    sfYouTubeOnly: 'சமூகப் பதிவுகள் YouTube இணைப்புகள்; கோப்புகள் பதிவேற்றப்படுவதில்லை.', sfRelated: 'இந்த முடிவுகளிலிருந்து மேலும்', sfSkipToGallery: 'காணொளிகளைக் காண்க', sfSkeleton: 'காணொளிகள் ஏற்றப்படுகின்றன', sfReviewNote: 'சமூக மதிப்பாய்வாளர்களால் அனுமதிக்கப்பட்டது; காணொளி YouTube இல் உள்ளது.',
+    sfDuration: 'நீளம்: {{duration}}', sfVideoTooLong: 'இந்தக் காணொளி CosmoVision-க்கு மிக நீளமானது. அதிகபட்சம் 60 நிமிடங்களுக்கு கீழான குறுகிய காணொளியைச் சமர்ப்பிக்கவும்.', sfDurationUnknown: 'காணொளி நீளத்தை சரிபார்க்க முடியவில்லை; நீள சரிபார்ப்பு இல்லாமல் சமர்ப்பிப்பு நடக்கும்.'
+  },
 } satisfies Record<'en' | 'si' | 'ta', Record<string, string>>;

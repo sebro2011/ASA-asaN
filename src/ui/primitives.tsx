@@ -28,19 +28,33 @@ export function Panel({
   className,
   as: Tag = 'section',
   tone = 'default',
+  hoverable = false,
+  pulse = false,
   ...rest
 }: {
   children: React.ReactNode;
   className?: string;
   as?: React.ElementType;
-  tone?: 'default' | 'flush' | 'quiet';
+  tone?: 'default' | 'flush' | 'quiet' | 'elevated';
+  hoverable?: boolean;
+  pulse?: boolean;
 } & React.HTMLAttributes<HTMLElement>) {
   const tones = {
     default: 'surface surface-highlight p-5 sm:p-6',
     flush: 'surface surface-highlight overflow-hidden',
-    quiet: 'surface-quiet p-4 sm:p-5'
+    quiet: 'surface-quiet p-4 sm:p-5',
+    elevated: 'surface surface-highlight p-5 sm:p-6 shadow-raised'
   };
-  return React.createElement(Tag, { className: cx(tones[tone], className), ...rest }, children);
+  const base = cx(tones[tone], className);
+  const hover = hoverable
+    ? 'transition-all duration-300 hover:border-atmo/50 hover:shadow-raised-hover hover:bg-surface-2/90'
+    : '';
+  const pulseClass = pulse ? 'animate-[pulse-live_3s_infinite]' : '';
+  return React.createElement(
+    Tag,
+    { className: cx(base, hover, pulseClass), ...rest },
+    children
+  );
 }
 
 export function PanelHeader({
@@ -233,7 +247,13 @@ export function DataStateBadge({
       )}
       title={detail}
     >
-      <span className={cx('h-1.5 w-1.5 rounded-full', style.dot, state === 'loading' && 'animate-pulse')} />
+      <span
+        className={cx(
+          'h-1.5 w-1.5 rounded-full',
+          style.dot,
+          state === 'loading' ? 'animate-pulse' : state === 'live' ? 'animate-[pulse-live_3s_infinite]' : ''
+        )}
+      />
       {label || style.label}
     </span>
   );

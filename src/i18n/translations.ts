@@ -93,6 +93,11 @@ export interface TranslationDictionary {
   downloadHtmlFile: string;
   openStandaloneTab: string;
   close: string;
+
+  // NOVA AI conversation export/import
+  novaExportDone: string;
+  novaImportDone: string;
+  novaImportError: string;
 }
 
 export const translations: Record<SupportedLanguage, TranslationDictionary> = {
@@ -182,7 +187,10 @@ export const translations: Record<SupportedLanguage, TranslationDictionary> = {
     copyHtmlCode: "Copy Raw HTML",
     downloadHtmlFile: "Download .html File",
     openStandaloneTab: "Open Standalone Preview",
-    close: "Close"
+    close: "Close",
+    novaExportDone: "Conversation exported to JSON",
+    novaImportDone: "Conversation imported",
+    novaImportError: "Failed to import conversation"
   },
 
   si: {
@@ -271,7 +279,10 @@ export const translations: Record<SupportedLanguage, TranslationDictionary> = {
     copyHtmlCode: "HTML කේතය පිටපත් කරන්න",
     downloadHtmlFile: ".html ගොනුව බාගන්න",
     openStandaloneTab: "තනි ගොනුව පෙරදසුන් කරන්න",
-    close: "වසන්න"
+    close: "වසන්න",
+    novaExportDone: "සංවාදය ගොනුවක් ලෙස එකතු කර ගැනීම සාර්ථක",
+    novaImportDone: "සංවාදය බලන ලද",
+    novaImportError: "සංවාදය බලන නොමැත"
   },
 
   ta: {
@@ -360,6 +371,9 @@ export const translations: Record<SupportedLanguage, TranslationDictionary> = {
     copyHtmlCode: "HTML குறியீட்டை நகலெடு",
     downloadHtmlFile: ".html கோப்பைப் பதிவிறக்கு",
     openStandaloneTab: "முன்னோட்டத்தைத் திற",
-    close: "மூடு"
+    close: "மூடு",
+    novaExportDone: "அரட்டை JSON கோப்பாக ஏற்றுமதி செய்யப்பட்டது",
+    novaImportDone: "அரட்டை கொண்டுவரப்பட்டது",
+    novaImportError: "அரட்டையை கொண்டுவர முடியவில்லை"
   }
 };

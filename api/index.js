@@ -4747,13 +4747,87 @@ app.post("/api/nova/chat", async (req, res) => {
 app.post("/api/nasa-ai", handleNasaAiEndpoint);
 app.post("/api/openrouter/chat", handleNasaAiEndpoint);
 app.post("/api/chat", handleNasaAiEndpoint);
-app.get("/api/gemini-live-token", (req, res) => {
+app.get("/api/gemini-live-token", (_req, res) => {
   const apiKey = process.env.GEMINI_API_KEY || "";
   res.json({
-    apiKey,
+    hasKey: !!apiKey,
     endpoint: "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent",
-    hasKey: !!apiKey
+    proxyPath: "/ws/live"
   });
+});
+var YOUTUBE_ID_RE = /(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|shorts\/|watch\?(?:.*&)?v=|.*v=))([A-Za-z0-9_-]{11})/;
+function extractYouTubeId(url) {
+  const match = YOUTUBE_ID_RE.exec(url.trim());
+  return match ? match[1] : null;
+}
+async function fetchYoutubeDuration(videoId) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15e3);
+  try {
+    const response = await fetch(`https://www.youtube.com/watch?v=${videoId}`, {
+      signal: controller.signal,
+      headers: { "Accept-Language": "en-US,en;q=0.9", "Accept": "text/html" }
+    });
+    if (!response.ok) throw new Error(`youtube-unavailable`);
+    const html = await response.text();
+    const lengthSeconds = parseYoutubeDuration(html);
+    if (!lengthSeconds || lengthSeconds <= 0) throw new Error("video-unavailable");
+    return lengthSeconds;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+function parseYoutubeDuration(html) {
+  const candidates = [];
+  const marker = "ytInitialPlayerResponse";
+  const start = html.indexOf(marker);
+  if (start !== -1) {
+    const after = html.slice(start + marker.length);
+    const brace = after.indexOf("{");
+    if (brace !== -1) {
+      let depth = 0;
+      let end = -1;
+      for (let i = brace; i < after.length; i++) {
+        if (after[i] === "{") depth++;
+        else if (after[i] === "}") {
+          depth--;
+          if (depth === 0) {
+            end = i;
+            break;
+          }
+        }
+      }
+      if (end !== -1) candidates.push(after.slice(brace, brace + end + 1));
+    }
+  }
+  const iso = html.match(/"lengthSeconds"\s*:\s*"?(\d+)"?/);
+  if (iso) return Number(iso[1]);
+  for (const blob of candidates) {
+    const direct = blob.match(/"lengthSeconds"\s*:\s*(\d+)/);
+    if (direct) return Number(direct[1]);
+    const micro = blob.match(/"lengthSeconds"\s*:\s*"?(\d+)"?/);
+    if (micro) return Number(micro[1]);
+  }
+  return null;
+}
+app.get("/api/youtube/meta", async (req, res) => {
+  const { url } = req.query;
+  if (typeof url !== "string") {
+    res.status(400).json({ error: "missing url", code: "missing-url" });
+    return;
+  }
+  const videoId = extractYouTubeId(url);
+  if (!videoId) {
+    res.status(400).json({ error: "invalid youtube url", code: "invalid-url" });
+    return;
+  }
+  try {
+    const durationSeconds2 = await fetchYoutubeDuration(videoId);
+    res.json({ videoId, durationSeconds: durationSeconds2 });
+  } catch (failure) {
+    const code = failure instanceof Error ? failure.message : "youtube-unavailable";
+    res.status(404).json({ videoId, error: code, code });
+  }
 });
 app.use("/api/earth", earthRouter);
 app.use("/api/space-videos", spaceVideosRouter);

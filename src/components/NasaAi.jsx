@@ -39,9 +39,12 @@ import {
   Atom,
   Clock,
   ExternalLink,
-  CornerDownLeft
+  CornerDownLeft,
+  Download,
+  Upload
 } from 'lucide-react';
 import { askNovaAi } from '@/lib/nasaApi';
+import { buildNovaExportPayload, parseNovaImportFile } from '@/lib/novaExport';
 import { generateLocalSpaceResponse } from '../utils/spaceLocalAiEngine.js';
 import GeminiLiveVoice from './GeminiLiveVoice.jsx';
 
@@ -654,6 +657,7 @@ export function NasaAi({ className = '', lang: propLang }) {
   const chatScrollRef = useRef(null);
   const textareaRef = useRef(null);
   const recognitionRef = useRef(null);
+  const importFileRef = useRef(null);
   const streamTimerRef = useRef(null);
   const requestAbortControllerRef = useRef(null);
 
@@ -848,6 +852,48 @@ export function NasaAi({ className = '', lang: propLang }) {
       textareaRef.current.style.height = 'auto';
       textareaRef.current.focus();
     }
+  };
+
+  const handleExportConversation = () => {
+    if (!messages.length) return;
+    try {
+      const payload = buildNovaExportPayload({ messages, language: activeLang, model: activeModel });
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = `nova-conversation-${new Date().toISOString().slice(0, 10)}.json`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      document.body.removeChild(anchor);
+      URL.revokeObjectURL(url);
+      alert(i18n.t('novaExportDone', { defaultValue: 'Conversation exported to JSON' }));
+    } catch (err) {
+      alert(i18n.t('novaImportError', { defaultValue: 'Failed to export conversation' }));
+    }
+  };
+
+  const handleImportConversation = (event) => {
+    const file = event.target?.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const { messages: nextMessages } = parseNovaImportFile(reader.result || '');
+        setMessages(nextMessages);
+        setInputQuery('');
+        alert(i18n.t('novaImportDone', { defaultValue: 'Conversation imported' }));
+      } catch (err) {
+        alert(i18n.t('novaImportError', { defaultValue: 'Failed to import conversation' }));
+      } finally {
+        if (importFileRef.current) importFileRef.current.value = '';
+      }
+    };
+    reader.onerror = () => {
+      alert(i18n.t('novaImportError', { defaultValue: 'Failed to read file' }));
+      if (importFileRef.current) importFileRef.current.value = '';
+    };
+    reader.readAsText(file);
   };
 
   // Streaming animation helper
@@ -1320,6 +1366,32 @@ export function NasaAi({ className = '', lang: propLang }) {
               {activeLang === 'si' ? 'නව සංවාදය' : activeLang === 'ta' ? 'புதிய அரட்டை' : 'New Chat'}
             </span>
           </button>
+
+          {/* Export conversation */}
+          {hasConversation && (
+            <button
+              type="button"
+              onClick={handleExportConversation}
+              className="px-2.5 py-1.5 rounded-[10px] bg-surface/60 border border-line hover:border-line text-ink-3 hover:text-ink transition cursor-pointer flex items-center gap-1.5 shadow-sm active:scale-95"
+              title="Export conversation to JSON"
+            >
+              <Download className="w-3 h-3 text-ink-2" />
+              <span className="text-[11px] font-semibold hidden sm:inline">Export</span>
+            </button>
+          )}
+
+          {/* Import conversation */}
+          <label className="flex items-center gap-1.5 rounded-[10px] border border-line bg-surface/60 px-2 py-1 text-ink-2 transition hover:border-cyan-500/50 cursor-pointer">
+            <input
+              type="file"
+              accept=".json"
+              ref={importFileRef}
+              onChange={handleImportConversation}
+              className="sr-only"
+            />
+            <Upload className="w-3 h-3 text-ink-2" />
+            <span className="text-[11px] font-semibold hidden sm:inline">Import</span>
+          </label>
 
           {/* Instant APOD Quiz Button */}
           <button
