@@ -6,9 +6,9 @@ import { fileURLToPath } from 'url';
 import WebSocket, { WebSocketServer } from 'ws';
 import { GoogleGenAI, Type } from '@google/genai';
 import { generateLocalSpaceResponse } from './src/utils/spaceLocalAiEngine.js';
-import { earthRouter } from './server/earthIntelligence.js';
-import { spaceVideosRouter } from './server/spaceVideos.js';
-import { communityVideosRouter } from './server/communityVideos.js';
+import { earthRouter } from './server/earthIntelligence.ts';
+import { spaceVideosRouter } from './server/spaceVideos.ts';
+import { communityVideosRouter } from './server/communityVideos.ts';
 import { getNovaPublicConfig, handleNovaChatRequest } from './server/novaChat.js';
 
 dotenv.config();

@@ -18,9 +18,9 @@
 
 import express, { type Request, type Response, type NextFunction } from 'express';
 import { GoogleGenAI, Type } from '@google/genai';
-import { buildDomain, describeCoverage, type DescribeDomainsError } from '../src/lib/earth/domains.js';
-import { describeDomainsUrl, getGibsLayer, GIBS_WMTS_BASE, wmtsTileUrl } from '../src/lib/earth/gibsCatalog.js';
-import { CORE_PARAMETER_CODES, POWER_MONTHLY_POINT_URL } from '../src/lib/earth/power.js';
+import { buildDomain, describeCoverage, type DescribeDomainsError } from '../src/lib/earth/domains.ts';
+import { describeDomainsUrl, getGibsLayer, GIBS_WMTS_BASE, wmtsTileUrl } from '../src/lib/earth/gibsCatalog.ts';
+import { CORE_PARAMETER_CODES, POWER_MONTHLY_POINT_URL } from '../src/lib/earth/power.ts';
 
 export const earthRouter = express.Router();
 

@@ -82,43 +82,33 @@ test('/api/youtube/meta rejects bad input and reports fetch failures', async () 
   // eslint-disable-next-line no-unused-vars
   const { app } = await import('../server.ts');
 
-  function makeRes() {
-    const headers = {};
-    return {
-      statusCode: 200,
-      headers,
-      status(code) { this.statusCode = code; return this; },
-      set(key, value) { this.headers[key] = value; return this; },
-      setHeader(key, value) { this.headers[key] = value; return this; },
-      getHeader() { return undefined; },
-      getHeaderNames() { return Object.keys(headers); },
-      body: null,
-      json(data) { this.setHeader('Content-Type', 'application/json'); this.body = data; return this; },
-      send() { return this; },
-      end() { return this; }
-    };
+  let server;
+  try {
+    server = app.listen(0, '127.0.0.1');
+    await new Promise((resolve) => server.once('listening', resolve));
+    const port = server.address().port;
+    const base = `http://127.0.0.1:${port}`;
+
+    async function request(path) {
+      const response = await fetch(base + path);
+      return { statusCode: response.status, body: await response.json() };
+    }
+
+    const missing = await request('/api/youtube/meta');
+    assert.equal(missing.statusCode, 400);
+    assert.equal(missing.body.code, 'missing-url');
+
+    const invalid = await request('/api/youtube/meta?url=not-a-youtube-url');
+    assert.equal(invalid.statusCode, 400);
+    assert.equal(invalid.body.code, 'invalid-url');
+
+    // No outbound network to YouTube in this sandbox: a valid URL must surface a
+    // verification failure rather than fabricate a duration.
+    const valid = await request('/api/youtube/meta?url=https%3A%2F%2Fwww.youtube.com%2Fwatch%3Fv%3DdQw4w9WgXcQ');
+    assert.equal(valid.statusCode, 404);
+    assert.equal(valid.body.videoId, 'dQw4w9WgXcQ');
+    assert.ok(valid.body.code);
+  } finally {
+    if (server) await new Promise((resolve) => server.close(resolve));
   }
-
-  async function request(path) {
-    const req = { method: 'GET', url: path, headers: {} };
-    const res = makeRes();
-    app(req, res);
-    for (let i = 0; i < 100 && res.body === null; i++) await new Promise((r) => setTimeout(r, 10));
-    return { statusCode: res.statusCode, body: res.body };
-  }
-
-  const missing = await request('/api/youtube/meta');
-  assert.equal(missing.statusCode, 400);
-  assert.equal(missing.body.code, 'missing-url');
-
-  const invalid = await request('/api/youtube/meta?url=not-a-youtube-url');
-  assert.equal(invalid.statusCode, 400);
-  assert.equal(invalid.body.code, 'invalid-url');
-
-  // No outbound network to YouTube in this sandbox: a valid URL must surface a
-  // verification failure rather than fabricate a duration.
-  const valid = await request('/api/youtube/meta?url=https%3A%2F%2Fwww.youtube.com%2Fwatch%3Fv%3DdQw4w9WgXcQ');
-  assert.equal(valid.statusCode, 404);
-  assert.equal(valid.body.videoId, 'dQw4w9WgXcQ');
-  assert.ok(valid.body.code);
 });
