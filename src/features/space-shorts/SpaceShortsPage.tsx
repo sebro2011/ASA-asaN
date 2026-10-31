@@ -366,9 +366,9 @@ export default function SpaceShortsPage() {
         </div>
         {tab === 'nasa' && <p className="ss-section-note">{t('sfNasaHint')}</p>}
         {data?.source === 'curated' && <StarterNotice reason={data.reason} />}
-        {data?.communityUnavailable && <div className="ss-notice" role="status"><Info size={16} aria-hidden="true" /> {t('sfCommunityFeedUnavailable')}</div>}
+        {data?.communityUnavailable && <div className="ss-notice" role="status"><Info size={16} aria-hidden="true" /> {community.configuration === 'disabled' ? t('sfCommunityUnavailable') : t('sfCommunityFeedUnavailable')}</div>}
         {loading && <div className="ss-skeleton-grid" role="status" aria-label={t('sfSkeleton')}><span className="sr-only">{t('ssLoading')}</span>{Array.from({ length: 6 }, (_, item) => <div className="ss-skeleton-card" key={item}><span /><i /><i /></div>)}</div>}
-        {!loading && error && <div className="ss-empty" role="alert"><Info size={24} aria-hidden="true" /><p>{error === 'rate-limit' ? t('ssRateError') : tab === 'community' ? t('sfCommunityFeedUnavailable') : t('ssError')}</p><button className="ss-secondary-action" type="button" onClick={() => setRetry((value) => value + 1)}>{t('ssRetry')}</button></div>}
+        {!loading && error && <div className="ss-empty" role="alert"><Info size={24} aria-hidden="true" /><p>{error === 'rate-limit' ? t('ssRateError') : tab === 'community' ? (community.configuration === 'disabled' ? t('sfCommunityUnavailable') : t('sfCommunityFeedUnavailable')) : t('ssError')}</p><button className="ss-secondary-action" type="button" onClick={() => setRetry((value) => value + 1)}>{t('ssRetry')}</button></div>}
         {!loading && !error && data && !items.length && <div className="ss-empty" role="status"><Search size={24} aria-hidden="true" /><h3>{t(tab === 'community' ? 'sfCommunityEmpty' : 'ssEmpty')}</h3><p>{t(tab === 'community' ? 'sfCommunityEmptyBody' : 'ssEmptyBody')}</p></div>}
         {!loading && !error && tab === 'shorts' && items.length > 0 && <div ref={shortPanel}><ShortsFeed items={items} index={index} setIndex={setIndex} playerOpen={shortPlayerOpen} setPlayerOpen={setShortPlayerOpen} /></div>}
         {!loading && !error && tab !== 'shorts' && selected && <div className="ss-gallery-player" ref={galleryPlayer}>
