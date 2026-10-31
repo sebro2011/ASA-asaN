@@ -2978,6 +2978,88 @@ app.use((req, res, next) => {
   }
   next();
 });
+var isSecure = process.env.NODE_ENV === "production";
+var csp = [
+  "default-src 'self'",
+  "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+  // Vite HMR + React inline handlers
+  "style-src 'self' 'unsafe-inline'",
+  // Tailwind + styled components
+  "img-src 'self' data: https: blob:",
+  // Unsplash/YouTube/NASA imagery
+  "connect-src 'self' https: wss: ws:",
+  // APIs + Gemini + /ws/live proxy
+  "font-src 'self' data:",
+  "media-src 'self' blob: https:",
+  "frame-src 'self' https://www.youtube.com",
+  // YouTube embeds
+  "object-src 'none'",
+  "base-uri 'self'",
+  "form-action 'self'"
+].join("; ");
+app.use((req, res, next) => {
+  res.header("X-Content-Type-Options", "nosniff");
+  res.header("X-Frame-Options", "SAMEORIGIN");
+  res.header("Referrer-Policy", "strict-origin-when-cross-origin");
+  res.header(
+    "Permissions-Policy",
+    "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
+  );
+  res.header("Content-Security-Policy", csp);
+  if (isSecure) {
+    res.header("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
+  }
+  res.header("X-Content-Type-Options", "nosniff");
+  next();
+});
+var rateStore = /* @__PURE__ */ new Map();
+function rateLimit2(options) {
+  return (req, res, next) => {
+    if (options.skip?.(req)) {
+      return next();
+    }
+    const ip = req.ip || req.socket.remoteAddress || "unknown";
+    const key = `${options.keyPrefix}:${ip}`;
+    const now = Date.now();
+    const entry = rateStore.get(key) || { count: 0, windowStart: now };
+    if (now - entry.windowStart >= options.windowMs) {
+      entry.count = 0;
+      entry.windowStart = now;
+    }
+    entry.count += 1;
+    rateStore.set(key, entry);
+    res.setHeader("X-RateLimit-Limit", String(options.max));
+    res.setHeader("X-RateLimit-Remaining", String(Math.max(0, options.max - entry.count)));
+    res.setHeader("X-RateLimit-Reset", String(Math.ceil((entry.windowStart + options.windowMs - now) / 1e3)));
+    if (entry.count > options.max) {
+      return res.status(429).json({ error: "Too many requests. Please wait before trying again.", code: "rate-limit" });
+    }
+    next();
+  };
+}
+app.use("/api/youtube/meta", rateLimit2({ windowMs: 6e4, max: 30, keyPrefix: "youtube-meta" }));
+app.use("/api/community", rateLimit2({ windowMs: 6e4, max: 20, keyPrefix: "community" }));
+app.use("/api/nova/chat", rateLimit2({ windowMs: 6e4, max: 15, keyPrefix: "nova-chat" }));
+app.use("/api/chat", rateLimit2({ windowMs: 6e4, max: 15, keyPrefix: "nova-chat" }));
+app.use("/api/openrouter/chat", rateLimit2({ windowMs: 6e4, max: 15, keyPrefix: "nova-chat" }));
+app.use("/api/nasa-ai", rateLimit2({ windowMs: 6e4, max: 15, keyPrefix: "nova-chat" }));
+var CACHEABLE_GET = /* @__PURE__ */ new Set([
+  "/api/health",
+  "/api/nova/config",
+  "/api/gemini-live-token"
+]);
+app.use((req, res, next) => {
+  const originalSend = res.send;
+  res.send = function(body) {
+    if (req.method === "GET" && CACHEABLE_GET.has(req.path)) {
+      res.setHeader("Cache-Control", "public, max-age=60, stale-while-revalidate=120");
+    } else if (req.method === "GET" && req.path.startsWith("/api/")) {
+      res.setHeader("Cache-Control", "no-store");
+    }
+    return originalSend.call(this, body);
+  };
+  next();
+});
 var PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3e3;
 app.get("/api/health", (req, res) => {
   res.json({ status: "ok", timestamp: (/* @__PURE__ */ new Date()).toISOString() });

@@ -41,6 +41,112 @@ app.use((req, res, next) => {
   next();
 });
 
+// ====================================================
+// Security headers (defense in depth).
+// Applied to every response. CSP is permissive enough to keep Vite dev,
+// YouTube embeds, NASA/Gemini imagery and the /ws/live proxy working,
+// while blocking inline execution surprises and clickjacking.
+// ====================================================
+const isSecure = process.env.NODE_ENV === 'production';
+
+const csp = [
+  "default-src 'self'",
+  "script-src 'self' 'unsafe-inline' 'unsafe-eval'", // Vite HMR + React inline handlers
+  "style-src 'self' 'unsafe-inline'",                  // Tailwind + styled components
+  "img-src 'self' data: https: blob:",                 // Unsplash/YouTube/NASA imagery
+  "connect-src 'self' https: wss: ws:",               // APIs + Gemini + /ws/live proxy
+  "font-src 'self' data:",
+  "media-src 'self' blob: https:",
+  "frame-src 'self' https://www.youtube.com",          // YouTube embeds
+  "object-src 'none'",
+  "base-uri 'self'",
+  "form-action 'self'",
+].join('; ');
+
+app.use((req, res, next) => {
+  res.header('X-Content-Type-Options', 'nosniff');
+  res.header('X-Frame-Options', 'SAMEORIGIN');
+  res.header('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.header(
+    'Permissions-Policy',
+    'camera=(), microphone=(), geolocation=(), payment=(), usb=()'
+  );
+  res.header('Content-Security-Policy', csp);
+  if (isSecure) {
+    res.header('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  }
+  res.header('X-Content-Type-Options', 'nosniff');
+  next();
+});
+
+// ====================================================
+// In-memory rate limiter (defense against abuse).
+// Tracks request counts per IP+endpoint with a sliding window.
+// No client identifiers are stored — only IP + count + window start.
+// ====================================================
+type RateEntry = { count: number; windowStart: number };
+const rateStore = new Map<string, RateEntry>();
+
+function rateLimit(options: {
+  windowMs: number;
+  max: number;
+  keyPrefix: string;
+  skip?: (req: import('express').Request) => boolean;
+}) {
+  return (req: import('express').Request, res: import('express').Response, next: import('express').NextFunction) => {
+    if (options.skip?.(req)) { return next(); }
+    const ip = req.ip || req.socket.remoteAddress || 'unknown';
+    const key = `${options.keyPrefix}:${ip}`;
+    const now = Date.now();
+    const entry = rateStore.get(key) || { count: 0, windowStart: now };
+    if (now - entry.windowStart >= options.windowMs) {
+      entry.count = 0;
+      entry.windowStart = now;
+    }
+    entry.count += 1;
+    rateStore.set(key, entry);
+    res.setHeader('X-RateLimit-Limit', String(options.max));
+    res.setHeader('X-RateLimit-Remaining', String(Math.max(0, options.max - entry.count)));
+    res.setHeader('X-RateLimit-Reset', String(Math.ceil((entry.windowStart + options.windowMs - now) / 1000)));
+    if (entry.count > options.max) {
+      return res.status(429).json({ error: 'Too many requests. Please wait before trying again.', code: 'rate-limit' });
+    }
+    next();
+  };
+}
+
+// YouTube meta proxy: modest limit — it fetches an external page per call.
+app.use('/api/youtube/meta', rateLimit({ windowMs: 60_000, max: 30, keyPrefix: 'youtube-meta' }));
+
+// Community submissions/reports: stricter — write operations.
+app.use('/api/community', rateLimit({ windowMs: 60_000, max: 20, keyPrefix: 'community' }));
+
+// NOVA chat: expensive AI calls — strict limit per IP.
+app.use('/api/nova/chat', rateLimit({ windowMs: 60_000, max: 15, keyPrefix: 'nova-chat' }));
+app.use('/api/chat', rateLimit({ windowMs: 60_000, max: 15, keyPrefix: 'nova-chat' }));
+app.use('/api/openrouter/chat', rateLimit({ windowMs: 60_000, max: 15, keyPrefix: 'nova-chat' }));
+app.use('/api/nasa-ai', rateLimit({ windowMs: 60_000, max: 15, keyPrefix: 'nova-chat' }));
+
+// ====================================================
+// Cache headers for API responses (performance).
+// ====================================================
+const CACHEABLE_GET = new Set([
+  '/api/health', '/api/nova/config', '/api/gemini-live-token',
+]);
+
+app.use((req, res, next) => {
+  const originalSend = res.send;
+  res.send = function (body) {
+    if (req.method === 'GET' && CACHEABLE_GET.has(req.path)) {
+      res.setHeader('Cache-Control', 'public, max-age=60, stale-while-revalidate=120');
+    } else if (req.method === 'GET' && req.path.startsWith('/api/')) {
+      res.setHeader('Cache-Control', 'no-store');
+    }
+    return originalSend.call(this, body);
+  };
+  next();
+});
+
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 
 // Health check endpoint for Cloud Run container lifecycle probes
