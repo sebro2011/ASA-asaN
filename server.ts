@@ -30,11 +30,27 @@ const __dirname = path.dirname(__filename);
 export const app = express();
 app.use(express.json());
 
-// Enable CORS for all incoming requests (supports iframe previews and cross-origin calls)
+// Enable CORS for trusted origins only.
+// In development / preview environments allow all origins so iframe previews
+// and cross-origin calls work. In production, restrict to known origins.
+// CORS_ORIGINS is a comma-separated list of allowed origins (no trailing slashes).
+const corsOriginEnv = process.env.CORS_ORIGINS || '';
+const corsOrigins = corsOriginEnv.split(',').map((o) => o.trim()).filter(Boolean);
+const isDev = process.env.NODE_ENV !== 'production';
+
 app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*');
+  const origin = req.headers.origin;
+  let allowOrigin = '*';
+  if (!isDev && corsOrigins.length > 0 && origin && corsOrigins.includes(origin)) {
+    allowOrigin = origin;
+  } else if (!isDev && corsOrigins.length > 0) {
+    // Production with configured origins but request from unknown origin: deny
+    return res.status(403).json({ error: 'CORS origin not allowed', code: 'cors-origin' });
+  }
+  res.header('Access-Control-Allow-Origin', allowOrigin);
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  res.header('Access-Control-Allow-Credentials', 'true');
   if (req.method === 'OPTIONS') {
     return res.sendStatus(200);
   }
@@ -51,7 +67,9 @@ const isSecure = process.env.NODE_ENV === 'production';
 
 const csp = [
   "default-src 'self'",
-  "script-src 'self' 'unsafe-inline' 'unsafe-eval'", // Vite HMR + React inline handlers
+  isSecure
+    ? "script-src 'self' 'unsafe-inline'"              // React inline handlers only (prod)
+    : "script-src 'self' 'unsafe-inline' 'unsafe-eval'", // Vite HMR + React inline handlers (dev only)
   "style-src 'self' 'unsafe-inline'",                  // Tailwind + styled components
   "img-src 'self' data: https: blob:",                 // Unsplash/YouTube/NASA imagery
   "connect-src 'self' https:",               // APIs only
@@ -121,11 +139,15 @@ app.use('/api/youtube/meta', rateLimit({ windowMs: 60_000, max: 30, keyPrefix: '
 // Community submissions/reports: stricter — write operations.
 app.use('/api/community', rateLimit({ windowMs: 60_000, max: 20, keyPrefix: 'community' }));
 
-// NOVA chat: expensive AI calls — strict limit per IP.
-app.use('/api/nova/chat', rateLimit({ windowMs: 60_000, max: 15, keyPrefix: 'nova-chat' }));
-app.use('/api/chat', rateLimit({ windowMs: 60_000, max: 15, keyPrefix: 'nova-chat' }));
-app.use('/api/openrouter/chat', rateLimit({ windowMs: 60_000, max: 15, keyPrefix: 'nova-chat' }));
-app.use('/api/nasa-ai', rateLimit({ windowMs: 60_000, max: 15, keyPrefix: 'nova-chat' }));
+// NOVA chat family: expensive AI calls — strict limit per IP, consolidated
+// across all four chat entry points so a single IP cannot burst across paths.
+const NOVA_CHAT_PATHS = ['/api/nova/chat', '/api/chat', '/api/openrouter/chat', '/api/nasa-ai'];
+app.use((req, res, next) => {
+  if (NOVA_CHAT_PATHS.includes(req.path)) {
+    return rateLimit({ windowMs: 60_000, max: 15, keyPrefix: 'nova-chat' })(req, res, next);
+  }
+  next();
+});
 
 // ====================================================
 // Cache headers for API responses (performance).
