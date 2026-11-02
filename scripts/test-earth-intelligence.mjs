@@ -734,3 +734,138 @@ test('precipMonthlyTotals converts all rows for PRECTOTCORR', () => {
   assert.equal(totals[1].totalMm, null); // missing
   assert.equal(totals[2].totalMm, 1.5 * 31); // 46.5
 });
+
+/* ---------------------------- precip regression ---------------------------- */
+
+test('precipMonthlyTotal handles all month lengths', () => {
+  // 31-day months
+  assert.equal(precipMonthlyTotal(1, 2024, 1), 31);  // January
+  assert.equal(precipMonthlyTotal(1, 2024, 3), 31);  // March
+  assert.equal(precipMonthlyTotal(1, 2024, 5), 31);  // May
+  assert.equal(precipMonthlyTotal(1, 2024, 7), 31);  // July
+  assert.equal(precipMonthlyTotal(1, 2024, 8), 31);  // August
+  assert.equal(precipMonthlyTotal(1, 2024, 10), 31); // October
+  assert.equal(precipMonthlyTotal(1, 2024, 12), 31); // December
+  // 30-day months
+  assert.equal(precipMonthlyTotal(1, 2024, 4), 30);  // April
+  assert.equal(precipMonthlyTotal(1, 2024, 6), 30);  // June
+  assert.equal(precipMonthlyTotal(1, 2024, 9), 30);  // September
+  assert.equal(precipMonthlyTotal(1, 2024, 11), 30); // November
+  // 28-day February (non-leap)
+  assert.equal(precipMonthlyTotal(1, 2023, 2), 28);
+  // 29-day February (leap)
+  assert.equal(precipMonthlyTotal(1, 2024, 2), 29);
+  assert.equal(precipMonthlyTotal(1, 2020, 2), 29);
+  assert.equal(precipMonthlyTotal(1, 2000, 2), 29);
+  // 28-day February (century non-leap)
+  assert.equal(precipMonthlyTotal(1, 1900, 2), 28);
+});
+
+test('precipMonthlyTotal handles zero precipitation', () => {
+  assert.equal(precipMonthlyTotal(0, 2024, 1), 0);   // zero rate → zero total
+  assert.equal(precipMonthlyTotal(0, 2024, 2), 0);   // leap February zero
+  assert.equal(precipMonthlyTotal(0.001, 2024, 1), 0.031); // trace amount
+});
+
+test('precipMonthlyTotals preserves every month including nulls', () => {
+  // Month 2 (Feb) is missing; the result must still have 3 entries
+  // with month 2 showing totalMm = null — no gaps in the series.
+  const rows = [
+    { date: '2024-01', year: 2024, month: 1, values: { PRECTOTCORR: 2 } },
+    { date: '2024-02', year: 2024, month: 2, values: { PRECTOTCORR: null } },
+    { date: '2024-03', year: 2024, month: 3, values: { PRECTOTCORR: 1.5 } }
+  ];
+  const totals = precipMonthlyTotals(rows, 'PRECTOTCORR');
+  assert.equal(totals.length, 3, 'all months must appear, even missing ones');
+  assert.equal(totals[0].date, '2024-01');
+  assert.equal(totals[0].totalMm, 62);  // 2 × 31
+  assert.equal(totals[1].date, '2024-02');
+  assert.equal(totals[1].totalMm, null); // missing month → null, not skipped
+  assert.equal(totals[2].date, '2024-03');
+  assert.equal(totals[2].totalMm, 46.5); // 1.5 × 31
+});
+
+test('buildSeriesStats annual precip total sums monthly totals (mm), not rates', () => {
+  const rows = [];
+  // Full year 2024 with constant 1 mm/day rate → annual = sum of days-in-month
+  const daysByMonth = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+  let expectedMm = 0;
+  for (let month = 1; month <= 12; month += 1) {
+    const days = daysByMonth[month - 1];
+    expectedMm += days; // 1 mm/day × days = days mm
+    rows.push({
+      date: `2024-${String(month).padStart(2, '0')}`,
+      year: 2024,
+      month,
+      values: { PRECTOTCORR: 1 }
+    });
+  }
+
+  const stats = buildSeriesStats(rows, 'PRECTOTCORR', 'mm/day');
+  const annual2024 = stats.annual.find((entry) => entry.year === 2024);
+  assert.ok(annual2024, '2024 annual entry exists');
+  assert.equal(annual2024.complete, true);
+  // Sum of monthly totals: 31+29+31+30+31+30+31+31+30+31+30+31 = 366 mm (leap year)
+  assert.equal(annual2024.total, expectedMm, `annual precip total = ${expectedMm} mm (not sum of rates)`);
+  // Sanity check: sum of rates would be 12 (mm/day), which is dimensionally wrong
+  assert.notEqual(annual2024.total, 12, 'annual total must not equal the sum of monthly rates');
+});
+
+test('buildSeriesStats annual precip total is null when any month is missing', () => {
+  const rows = [];
+  for (let month = 1; month <= 12; month += 1) {
+    rows.push({
+      date: `2024-${String(month).padStart(2, '0')}`,
+      year: 2024,
+      month,
+      values: { PRECTOTCORR: month === 6 ? null : 1 } // June missing
+    });
+  }
+
+  const stats = buildSeriesStats(rows, 'PRECTOTCORR', 'mm/day');
+  const annual2024 = stats.annual.find((entry) => entry.year === 2024);
+  assert.ok(annual2024, '2024 annual entry exists');
+  assert.equal(annual2024.complete, false, 'not complete when a month is missing');
+  assert.equal(annual2024.total, null, 'annual total must be null when any month is missing');
+});
+
+test('buildSeriesStats annual temperature mean is the mean of monthly means', () => {
+  const rows = [];
+  for (let month = 1; month <= 12; month += 1) {
+    rows.push({
+      date: `2024-${String(month).padStart(2, '0')}`,
+      year: 2024,
+      month,
+      values: { T2M: 20 + month } // 21, 22, ..., 32
+    });
+  }
+
+  const stats = buildSeriesStats(rows, 'T2M', '°C');
+  const annual2024 = stats.annual.find((entry) => entry.year === 2024);
+  assert.ok(annual2024, '2024 annual entry exists');
+  assert.equal(annual2024.complete, true);
+  // Mean of 21..32 = 26.5
+  assert.equal(annual2024.mean, 26.5);
+  // total exists as a number (sum of monthly values) for non-precip parameters
+  assert.equal(annual2024.total, 318); // 21+22+...+32
+});
+
+test('parsePowerResponse handles malformed payload gracefully', () => {
+  // Null payload → no rows, no available parameters
+  const empty = parsePowerResponse(null, ['T2M', 'PRECTOTCORR']);
+  assert.equal(empty.rows.length, 0);
+  assert.deepEqual(empty.available, []);
+  assert.deepEqual(empty.unavailable, ['T2M', 'PRECTOTCORR']);
+
+  // Missing properties.parameter → same as empty
+  const noParams = parsePowerResponse({ header: {} }, ['T2M']);
+  assert.equal(noParams.rows.length, 0);
+  assert.deepEqual(noParams.available, []);
+
+  // Non-object parameter values are skipped
+  const weird = parsePowerResponse({
+    properties: { parameter: { T2M: 'not-an-object', PRECTOTCORR: { '202401': 5 } } }
+  }, ['T2M', 'PRECTOTCORR']);
+  assert.deepEqual(weird.available, ['PRECTOTCORR']);
+  assert.deepEqual(weird.unavailable, ['T2M']);
+});

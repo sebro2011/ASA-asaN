@@ -299,10 +299,28 @@ export function buildSeriesStats(rows: PowerMonthlyRow[], code: string, unit: st
 
   // PRECTOTCORR is a rate (mm/day); monthly total = rate × days-in-month.
   // Never a sum of monthly rates — that is dimensionally wrong.
+  // Pass ALL rows (including nulls) so precipTotals has an entry for every
+  // month, with totalMm = null when the rate is missing.
   const precipTotals =
     code === 'PRECTOTCORR' && missing.valid > 0
-      ? precipMonthlyTotals(rows.filter((row) => typeof row.values[code] === 'number'), code)
+      ? precipMonthlyTotals(rows, code)
       : null;
+
+  // Annual total for PRECTOTCORR = sum of monthly totals (mm), not a sum of
+  // monthly rates (mm/day). Only valid when all 12 months are present.
+  const annualWithPrecipTotals = precipTotals
+    ? annual.map((entry) => {
+        const yearTotals = precipTotals.filter(
+          (p) => p.year === entry.year && p.totalMm !== null
+        );
+        return {
+          ...entry,
+          total: yearTotals.length === 12
+            ? Number(yearTotals.reduce((sum, p) => sum + (p.totalMm ?? 0), 0).toFixed(1))
+            : null
+        };
+      })
+    : annual;
 
   return {
     code,
@@ -311,8 +329,8 @@ export function buildSeriesStats(rows: PowerMonthlyRow[], code: string, unit: st
     mean: mean === null ? null : Number(mean.toFixed(3)),
     min,
     max,
-    trend: leastSquaresTrend(annual),
-    annual,
+    trend: leastSquaresTrend(annualWithPrecipTotals),
+    annual: annualWithPrecipTotals,
     mkTrend: mkResult
       ? {
           n: mkResult.n,
