@@ -9,7 +9,7 @@
 
 import { parameterMeta } from './power';
 import { describeCoverage } from './domains';
-import type { AvailabilityVerdict, GibsDomain, GibsLayerMeta, PowerDataset, PowerSeriesStats } from './types';
+import type { AvailabilityVerdict, GibsDomain, GibsLayerMeta, MannKendallSeriesResult, MissingDataReport, PowerDataset, PowerSeriesStats, QualityFlags } from './types';
 
 export type AnalystSectionKind = 'verified' | 'derived' | 'interpretation' | 'limitations' | 'gaps';
 
@@ -109,6 +109,94 @@ export function seriesLimitations(stats: PowerSeriesStats): string[] {
   ];
 }
 
+/**
+ * Human-readable description of a Mann-Kendall / Sen's slope result.
+ * Always states the method, direction, significance, and limitations.
+ */
+export function describeMannKendall(mk: MannKendallSeriesResult): string[] {
+  const lines: string[] = [];
+  const direction = mk.trend === 'increasing'
+    ? 'increasing'
+    : mk.trend === 'decreasing'
+      ? 'decreasing'
+      : 'no detectable monotonic trend';
+
+  lines.push(
+    `Mann-Kendall test on ${mk.n} monthly value(s): S = ${mk.s}, Kendall's tau = ${mk.tau.toFixed(3)}, ` +
+      `two-tailed p = ${mk.pValue.toFixed(4)} at α = ${mk.alpha}. ${direction}.`
+  );
+
+  if (mk.significant) {
+    lines.push(
+      `The trend is statistically significant at the ${mk.alpha} level (uncorrected for autocorrelation).`
+    );
+  } else {
+    lines.push(
+      `The trend is not statistically significant at the ${mk.alpha} level.`
+    );
+  }
+
+  if (mk.senSlope !== null) {
+    const perYear = (mk.senSlope * 12).toFixed(4);
+    lines.push(
+      `Sen's slope (median of pairwise slopes): ${mk.senSlope.toFixed(4)} ${mk.unit ? mk.unit + ' ' : ''}` +
+        `per month, i.e. ≈${perYear} per year over ${mk.trend === 'no-trend' ? 'the record' : direction} direction.`
+    );
+    if (mk.senSlopeCi) {
+      const lo = (mk.senSlopeCi.lower * 12).toFixed(4);
+      const hi = (mk.senSlopeCi.upper * 12).toFixed(4);
+      lines.push(
+        `Sen's slope 95% confidence interval: [${lo}, ${hi}] per year ` +
+          '(Hirsch et al. 1982 rank-based interval).'
+      );
+    }
+  }
+
+  if (Math.abs(mk.lag1Autocorrelation) > 0.05) {
+    lines.push(
+      `Lag-1 autocorrelation r1 = ${mk.lag1Autocorrelation.toFixed(3)}. ` +
+        `Hamed-Rao (1998) corrected p = ${mk.hamedRaoPValue.toFixed(4)}; ` +
+        `significant after correction: ${mk.hamedRaoSignificant ? 'yes' : 'no'}.`
+    );
+  }
+
+  if (mk.missing.missing > 0) {
+    lines.push(
+      `${mk.missing.missing} of ${mk.missing.total} monthly value(s) were missing or fill-values ` +
+        `and were excluded from the trend test.`
+    );
+  }
+
+  return lines;
+}
+
+/** Constant caveats for Mann-Kendall / Sen's slope results (never specific to a measurement). */
+export function mkTrendLimitations(mk: MannKendallSeriesResult): string[] {
+  const lines: string[] = [
+    'The Mann-Kendall test detects a monotonic trend; it does not prove causation, nor does it quantify the magnitude of change by itself.',
+    "Sen's slope is the median of all pairwise slopes and is robust to outliers, but it assumes the series is roughly linear over the window.",
+    'POWER values are satellite/re-analysis grid estimates (≈0.5° × 0.625°), not station measurements.',
+    'A short record (a few years) cannot separate a long-term climate signal from interannual variability such as ENSO or monsoon variation.',
+    'Missing months are excluded from the trend test; a record with many gaps has reduced power and wider confidence intervals.',
+    'Autocorrelation inflates the Mann-Kendall false-positive rate; the Hamed-Rao correction is applied but is only approximate for non-AR(1) processes.'
+  ];
+  if (!mk.hamedRaoSignificant && mk.significant) {
+    lines.push(
+      'The uncorrected Mann-Kendall test is significant but the Hamed-Rao autocorrelation-corrected test is not; ' +
+        'treat the uncorrected result as not robust to serial correlation.'
+    );
+  }
+  if (mk.missing.missing > mk.missing.total / 4) {
+    lines.push(
+      'More than a quarter of the monthly values are missing; the trend result should be treated as indicative only.'
+    );
+  }
+  if (mk.quality && mk.quality.implausible.length > 0) {
+    lines.push(mk.quality.note);
+  }
+  return lines;
+}
+
 export function layerCoverageLine(layer: GibsLayerMeta, domain: GibsDomain | null): string {
   return describeCoverage(domain) || 'observation-date coverage not retrieved';
 }
@@ -161,6 +249,12 @@ export function buildLocalAnalystAnswer(question: string, context: AnalystContex
       verified.push(lines[0]);
       if (lines[1]) derived.push(lines[1]);
       limitations.push(...seriesLimitations(stats));
+      if (stats.mkTrend) {
+        const mkLines = describeMannKendall(stats.mkTrend);
+        verified.push(...mkLines.slice(0, 3));
+        derived.push(...mkLines.slice(3, 6));
+        limitations.push(...mkTrendLimitations(stats.mkTrend));
+      }
     }
     if (context.power.unavailable.length) {
       gaps.push(

@@ -169,6 +169,48 @@ export interface PowerSeriesStats {
   trend: { slopePerYear: number; fromYear: number; toYear: number; years: number } | null;
   /** Annual aggregates built from complete calendar years only. */
   annual: { year: number; mean: number | null; total?: number | null; complete: boolean }[];
+  /** Mann-Kendall / Sen's slope trend inference on the monthly series (optional). */
+  mkTrend?: MannKendallSeriesResult | null;
+  /** PRECTOTCORR monthly totals (mm) = rate (mm/day) × days-in-month; undefined for other codes. */
+  precipTotals?: Array<{ date: string; year: number; month: number; rateMmPerDay: number | null; totalMm: number | null }> | null;
+}
+
+
+/** Mann-Kendall + Sen's slope result for one parameter series. */
+export interface MannKendallSeriesResult {
+  n: number;
+  s: number;
+  variance: number;
+  z: number | null;
+  pValue: number;
+  tau: number;
+  trend: 'increasing' | 'decreasing' | 'no-trend';
+  significant: boolean;
+  alpha: number;
+  unit: string;
+  lag1Autocorrelation: number;
+  senSlope: number | null;
+  senSlopePerYear: number | null;
+  senSlopeCi: { lower: number; upper: number } | null;
+  senSlopeCiPerYear: { lower: number; upper: number } | null;
+  hamedRaoPValue: number;
+  hamedRaoSignificant: boolean;
+  missing: MissingDataReport;
+  quality: QualityFlags | null;
+}
+
+export interface MissingDataReport {
+  total: number;
+  valid: number;
+  missing: number;
+  missingIndices: number[];
+}
+
+export interface QualityFlags {
+  plausible: number[];
+  implausible: number[];
+  implausibleValues: number[];
+  note: string;
 }
 
 export interface PowerDataset {

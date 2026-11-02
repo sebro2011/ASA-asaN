@@ -25,13 +25,32 @@ import {
   parseTimeValues
 } from '../src/lib/earth/domains.ts';
 import {
+  analyzeTrend,
+  benjaminiHochbergCorrection,
+  bonferroniCorrection,
   buildPowerUrl,
   buildSeriesStats,
+  completenessFraction,
+  hamedRaoCorrection,
+  lag1Autocorrelation,
   leastSquaresTrend,
+  mannKendallS,
+  mannKendallTest,
+  mannKendallVariance,
+  mannKendallZ,
   meanOf,
+  missingDataReport,
+  normalCdf,
+  normalQuantile,
+  normalTwoTailedP,
   parseParameter,
   parsePowerResponse,
-  POWER_PARAMETERS
+  POWER_PARAMETERS,
+  precipMonthlyTotal,
+  precipMonthlyTotals,
+  sensSlope,
+  sensSlopeConfidenceInterval,
+  validateParameterQuality
 } from '../src/lib/earth/power.ts';
 import { buildLocalAnalystAnswer, classifyQuestion, describeSeries } from '../src/lib/earth/analysis.ts';
 import { buildAnalystContext, buildMarkdownReport, contextForRequest, powerSeriesCsv } from '../src/lib/earth/context.ts';
@@ -465,4 +484,253 @@ test('catalog groups every layer by category and sorts by priority', () => {
   }
   assert.ok(grouped['true-color'].length >= 3);
   assert.ok(grouped.fire.length >= 2);
+});
+
+/* ------------------------------ statistics ------------------------------ */
+
+test('normalCdf is symmetric and monotone', () => {
+  assert.ok(Math.abs(normalCdf(0) - 0.5) < 1e-9, 'normalCdf(0) ≈ 0.5');
+  assert.ok(normalCdf(1) > normalCdf(0));
+  assert.ok(normalCdf(-1) < normalCdf(0));
+  assert.ok(Math.abs(normalCdf(-1) - (1 - normalCdf(1))) < 1e-9, 'symmetry');
+  assert.ok(normalCdf(3) > 0.99);
+});
+
+test('normalQuantile inverts normalCdf', () => {
+  for (const p of [0.01, 0.05, 0.5, 0.95, 0.99]) {
+    assert.ok(Math.abs(normalCdf(normalQuantile(p)) - p) < 1e-6, `p=${p}`);
+  }
+});
+
+test('normalTwoTailedP returns valid p-values', () => {
+  assert.ok(Math.abs(normalTwoTailedP(0) - 1) < 1e-8, 'p(0) ≈ 1');
+  assert.ok(normalTwoTailedP(1.96) < 0.051, 'z=1.96 gives p≈0.05');
+  assert.ok(normalTwoTailedP(1.96) > 0.049);
+  assert.ok(normalTwoTailedP(2.58) < 0.011, 'z=2.58 gives p≈0.01');
+});
+
+test('mannKendallS computes the S statistic', () => {
+  // Strictly increasing series: every pair contributes +1
+  assert.equal(mannKendallS([1, 2, 3, 4, 5]), 10); // 5*4/2 = 10
+  // Strictly decreasing series: every pair contributes -1
+  assert.equal(mannKendallS([5, 4, 3, 2, 1]), -10);
+  // Constant series: S = 0
+  assert.equal(mannKendallS([3, 3, 3, 3]), 0);
+});
+
+test('mannKendallVariance applies tie correction', () => {
+  const noTies = mannKendallVariance([1, 2, 3, 4, 5]);
+  assert.equal(noTies, (5 * 4 * 15) / 18); // n(n-1)(2n+5)/18 = 500/18 ≈ 27.78
+
+  const withTies = mannKendallVariance([1, 1, 2, 2, 3]);
+  assert.ok(withTies < noTies, 'ties reduce the variance');
+});
+
+test('mannKendallZ applies continuity correction', () => {
+  assert.equal(mannKendallZ(0, 10), 0);
+  assert.equal(mannKendallZ(5, 10), (5 - 1) / Math.sqrt(10));
+  assert.equal(mannKendallZ(-5, 10), (-5 + 1) / Math.sqrt(10));
+  assert.equal(mannKendallZ(1, 0), null); // zero variance
+});
+
+test('mannKendallTest detects increasing and decreasing trends', () => {
+  const increasing = mannKendallTest([1, 2, 3, 4, 5, 6, 7, 8, 9, 10], {
+    total: 10, valid: 10, missing: 0, missingIndices: [],
+    validValues: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+    validIndices: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+  });
+  assert.equal(increasing.trend, 'increasing');
+  assert.ok(increasing.significant, 'perfectly increasing series is significant');
+  assert.ok(increasing.s > 0);
+
+  const decreasing = mannKendallTest([10, 9, 8, 7, 6, 5, 4, 3, 2, 1], {
+    total: 10, valid: 10, missing: 0, missingIndices: [],
+    validValues: [10, 9, 8, 7, 6, 5, 4, 3, 2, 1],
+    validIndices: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+  });
+  assert.equal(decreasing.trend, 'decreasing');
+  assert.ok(decreasing.significant);
+  assert.ok(decreasing.s < 0);
+
+  const noTrend = mannKendallTest([5, 5, 5, 5, 5], {
+    total: 5, valid: 5, missing: 0, missingIndices: [],
+    validValues: [5, 5, 5, 5, 5],
+    validIndices: [0, 1, 2, 3, 4]
+  });
+  assert.equal(noTrend.trend, 'no-trend');
+  assert.ok(!noTrend.significant);
+});
+
+test('mannKendallTest handles ties correctly', () => {
+  const withTies = mannKendallTest([1, 2, 2, 3, 4, 5, 6, 7, 8, 9], {
+    total: 10, valid: 10, missing: 0, missingIndices: [],
+    validValues: [1, 2, 2, 3, 4, 5, 6, 7, 8, 9],
+    validIndices: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+  });
+  assert.ok(withTies.variance < (10 * 9 * 25) / 18, 'tie correction reduces variance');
+});
+
+test('sensSlope computes the median of pairwise slopes', () => {
+  // Linear series y = x: slope = 1
+  const linear = sensSlope([0, 1, 2, 3, 4]);
+  assert.equal(linear.slope, 1);
+  assert.equal(linear.nPairs, 10); // 5*4/2
+
+  // Constant series: slope = 0
+  const constant = sensSlope([3, 3, 3]);
+  assert.equal(constant.slope, 0);
+
+  // Fewer than 2 observations: null
+  const tooFew = sensSlope([42]);
+  assert.equal(tooFew.slope, null);
+  assert.equal(tooFew.nPairs, 0);
+});
+
+test('sensSlopeConfidenceInterval produces a valid interval', () => {
+  const values = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+  const sen = sensSlope(values);
+  const ci = sensSlopeConfidenceInterval(sen.slopes, values.length, { alpha: 0.05 });
+  assert.ok(ci !== null);
+  assert.ok(ci.lower <= sen.slope, 'lower bound <= slope');
+  assert.ok(ci.upper >= sen.slope, 'upper bound >= slope');
+  assert.equal(ci.alpha, 0.05);
+  assert.ok(ci.nPairs > 0);
+});
+
+test('analyzeTrend combines MK test, Sen slope, CI and Hamed-Rao', () => {
+  const values = [10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20];
+  const missing = {
+    total: 12, valid: 11, missing: 1, missingIndices: [5],
+    validValues: values,
+    validIndices: [0, 1, 2, 3, 4, 6, 7, 8, 9, 10, 11]
+  };
+  const result = analyzeTrend(values, missing, {
+    parameterCode: 'T2M',
+    observationsPerYear: 12
+  });
+
+  assert.equal(result.trend, 'increasing');
+  assert.ok(result.significant);
+  assert.ok(result.senSlope !== null);
+  assert.ok(result.senSlope.slope !== null);
+  assert.ok(result.senSlope.slope > 0);
+  assert.ok(result.senSlopeCi !== null);
+  assert.ok(result.senSlopeCi.lower <= result.senSlope.slope);
+  assert.ok(result.senSlopeCi.upper >= result.senSlope.slope);
+  assert.equal(result.observationsPerYear, 12);
+  assert.ok(result.senSlopePerYear !== null);
+  assert.ok(Math.abs(result.senSlopePerYear - result.senSlope.slope * 12) < 1e-9);
+  assert.ok(result.hamedRao.note.length > 0);
+  assert.ok(result.missing.missing === 1);
+});
+
+test('analyzeTrend with insufficient data returns null trend', () => {
+  const result = analyzeTrend([42], {
+    total: 1, valid: 1, missing: 0, missingIndices: [],
+    validValues: [42], validIndices: [0]
+  });
+  assert.equal(result.trend, 'no-trend');
+  assert.equal(result.senSlope.slope, null);
+  assert.equal(result.senSlopeCi, null);
+});
+
+test('lag1Autocorrelation detects serial correlation', () => {
+  // Positively autocorrelated: each value close to the previous
+  const pos = lag1Autocorrelation([1, 1.1, 1.2, 1.3, 1.4]);
+  assert.ok(pos > 0.5, `strong positive autocorrelation: ${pos}`);
+
+  // Alternating: negative autocorrelation
+  const neg = lag1Autocorrelation([1, 0, 1, 0, 1, 0]);
+  assert.ok(neg < -0.5, `strong negative autocorrelation: ${neg}`);
+
+  // Constant: zero
+  const zero = lag1Autocorrelation([5, 5, 5]);
+  assert.equal(zero, 0);
+});
+
+test('hamedRaoCorrection inflates variance for positive autocorrelation', () => {
+  const values = [1, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 2];
+  const s = mannKendallS(values);
+  const variance = mannKendallVariance(values);
+  const z = mannKendallZ(s, variance);
+  const hr = hamedRaoCorrection(values, s, variance, z, 0.05);
+
+  assert.ok(hr.correctionFactor >= 1, 'positive autocorrelation inflates variance');
+  assert.ok(hr.adjustedVariance >= variance);
+  assert.ok(hr.adjustedPValue >= hr.uncorrectedPValue, 'corrected p-value is more conservative');
+  assert.ok(hr.note.length > 0);
+});
+
+test('missingDataReport identifies fill values and nulls', () => {
+  const report = missingDataReport([1, null, -999, 4, undefined, 6], {
+    fillThreshold: -900
+  });
+  assert.equal(report.total, 6);
+  assert.equal(report.valid, 3);
+  assert.equal(report.missing, 3);
+  assert.deepEqual(report.missingIndices, [1, 2, 4]);
+  assert.deepEqual(report.validValues, [1, 4, 6]);
+});
+
+test('completenessFraction reports valid share', () => {
+  assert.equal(completenessFraction({ total: 10, valid: 8, missing: 2, missingIndices: [], validValues: [], validIndices: [] }), 0.8);
+  assert.equal(completenessFraction({ total: 0, valid: 0, missing: 0, missingIndices: [], validValues: [], validIndices: [] }), 0);
+});
+
+test('validateParameterQuality flags out-of-range values', () => {
+  const good = validateParameterQuality('T2M', [15, 20, 25, 30]);
+  assert.equal(good.implausible.length, 0);
+  assert.ok(good.note.includes('All 4 values fall within the plausible range'));
+
+  const bad = validateParameterQuality('T2M', [15, 20, 100, 30]);
+  assert.equal(bad.implausible.length, 1);
+  assert.equal(bad.implausibleValues[0], 100);
+  assert.ok(bad.note.includes('outside the plausible range'));
+
+  const unknown = validateParameterQuality('UNKNOWN_CODE', [1, 2, 3]);
+  assert.equal(unknown.implausible.length, 0);
+});
+
+test('bonferroniCorrection adjusts alpha', () => {
+  const result = bonferroniCorrection([0.01, 0.04, 0.001], { alpha: 0.05 });
+  assert.equal(result.m, 3);
+  assert.equal(result.adjustedAlpha, 0.05 / 3);
+  assert.equal(result.significant[0], true);   // 0.01 < 0.0167
+  assert.equal(result.significant[1], false);  // 0.04 > 0.0167
+  assert.equal(result.significant[2], true);   // 0.001 < 0.0167
+  assert.equal(result.adjustedPValues[0], 0.03); // 0.01 * 3
+  assert.equal(result.adjustedPValues[2], 0.003); // 0.001 * 3
+});
+
+test('benjaminiHochbergCorrection controls FDR', () => {
+  const result = benjaminiHochbergCorrection([0.001, 0.01, 0.04, 0.5], { alpha: 0.05 });
+  assert.equal(result.m, 4);
+  assert.equal(result.alpha, 0.05);
+  assert.ok(result.significant[0], 'smallest p-value is significant');
+  assert.ok(result.thresholdRank >= 1);
+});
+
+test('precipMonthlyTotal converts mm/day to mm/month', () => {
+  // January has 31 days: 2 mm/day × 31 = 62 mm
+  assert.equal(precipMonthlyTotal(2, 2024, 1), 62);
+  // February 2024 (leap year) has 29 days: 1 mm/day × 29 = 29 mm
+  assert.equal(precipMonthlyTotal(1, 2024, 2), 29);
+  // February 2023 (non-leap) has 28 days
+  assert.equal(precipMonthlyTotal(1, 2023, 2), 28);
+  // Missing rate → null
+  assert.equal(precipMonthlyTotal(null, 2024, 1), null);
+  assert.equal(precipMonthlyTotal(undefined, 2024, 1), null);
+});
+
+test('precipMonthlyTotals converts all rows for PRECTOTCORR', () => {
+  const rows = [
+    { date: '2024-01', year: 2024, month: 1, values: { PRECTOTCORR: 2 } },
+    { date: '2024-02', year: 2024, month: 2, values: { PRECTOTCORR: null } },
+    { date: '2024-03', year: 2024, month: 3, values: { PRECTOTCORR: 1.5 } }
+  ];
+  const totals = precipMonthlyTotals(rows, 'PRECTOTCORR');
+  assert.equal(totals.length, 3);
+  assert.equal(totals[0].totalMm, 62);  // 2 × 31
+  assert.equal(totals[1].totalMm, null); // missing
+  assert.equal(totals[2].totalMm, 1.5 * 31); // 46.5
 });

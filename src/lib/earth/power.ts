@@ -13,7 +13,21 @@
  */
 
 import { cacheGet, cacheSet, TTL } from './cache';
-import type { PowerDataset, PowerMonthlyRow, PowerParameterMeta, PowerSeriesStats, Provenance, Sourced } from './types';
+import {
+  analyzeTrend,
+  missingDataReport,
+  precipMonthlyTotal,
+  precipMonthlyTotals
+} from './stats';
+import type {
+  MissingDataReport,
+  PowerDataset,
+  PowerMonthlyRow,
+  PowerParameterMeta,
+  PowerSeriesStats,
+  Provenance,
+  Sourced
+} from './types';
 
 export const POWER_MONTHLY_POINT_URL = 'https://power.larc.nasa.gov/api/temporal/monthly/point';
 
@@ -271,6 +285,25 @@ export function buildSeriesStats(rows: PowerMonthlyRow[], code: string, unit: st
       complete: bucket.values.length === 12
     }));
 
+  // Mann-Kendall / Sen's slope inference on the monthly series.
+  // Missing months are excluded from the trend; the missing-data report
+  // records how many were dropped.
+  const monthlyValues = values.map((value) => (typeof value === 'number' ? value : null));
+  const missing = missingDataReport(monthlyValues);
+  const mkResult = missing.valid >= 2
+    ? analyzeTrend(missing.validValues, missing, {
+        parameterCode: code,
+        observationsPerYear: 12
+      })
+    : null;
+
+  // PRECTOTCORR is a rate (mm/day); monthly total = rate × days-in-month.
+  // Never a sum of monthly rates — that is dimensionally wrong.
+  const precipTotals =
+    code === 'PRECTOTCORR' && missing.valid > 0
+      ? precipMonthlyTotals(rows.filter((row) => typeof row.values[code] === 'number'), code)
+      : null;
+
   return {
     code,
     unit,
@@ -279,7 +312,48 @@ export function buildSeriesStats(rows: PowerMonthlyRow[], code: string, unit: st
     min,
     max,
     trend: leastSquaresTrend(annual),
-    annual
+    annual,
+    mkTrend: mkResult
+      ? {
+          n: mkResult.n,
+          s: mkResult.s,
+          variance: mkResult.variance,
+          z: mkResult.z,
+          pValue: mkResult.pValue,
+          tau: mkResult.tau,
+          trend: mkResult.trend,
+          significant: mkResult.significant,
+          alpha: mkResult.alpha,
+          unit,
+          lag1Autocorrelation: mkResult.lag1Autocorrelation,
+          senSlope: mkResult.senSlope.slope,
+          senSlopePerYear: mkResult.senSlopePerYear,
+          senSlopeCi: mkResult.senSlopeCi
+            ? { lower: mkResult.senSlopeCi.lower, upper: mkResult.senSlopeCi.upper }
+            : null,
+          senSlopeCiPerYear: mkResult.senSlopeCiPerYear
+            ? { lower: mkResult.senSlopeCiPerYear.lower, upper: mkResult.senSlopeCiPerYear.upper }
+            : null,
+          hamedRaoPValue: mkResult.hamedRao.adjustedPValue,
+          hamedRaoSignificant: mkResult.hamedRao.adjustedSignificant,
+          missing: {
+            total: mkResult.missing.total,
+            valid: mkResult.missing.valid,
+            missing: mkResult.missing.missing,
+            missingIndices: mkResult.missing.missingIndices
+          },
+          quality: mkResult.quality
+            ? {
+                plausible: mkResult.quality.plausible,
+                implausible: mkResult.quality.implausible,
+                implausibleValues: mkResult.quality.implausibleValues,
+                note: mkResult.quality.note
+              }
+            : null
+        }
+      : null,
+    /** Precipitation monthly totals (mm) when the parameter is PRECTOTCORR. */
+    precipTotals: precipTotals ?? undefined
   };
 }
 
@@ -522,7 +596,7 @@ export async function fetchPowerMonthly(args: FetchPowerArgs): Promise<Sourced<P
     });
     cacheSet(cacheKey, result, TTL.power);
     return result;
-  } catch (error) {
+    } catch (error) {
     if ((error as Error)?.name === 'AbortError') throw error;
     return {
       data: null,
@@ -536,3 +610,29 @@ export async function fetchPowerMonthly(args: FetchPowerArgs): Promise<Sourced<P
     };
   }
 }
+
+/** Re-exported statistical helpers so consumers can import from one module. */
+export {
+  analyzeTrend,
+  mannKendallTest,
+  sensSlope,
+  sensSlopeConfidenceInterval,
+  mannKendallS,
+  mannKendallVariance,
+  mannKendallZ,
+  lag1Autocorrelation,
+  hamedRaoCorrection,
+  missingDataReport,
+  completenessFraction,
+  validateParameterQuality,
+  precipMonthlyTotal,
+  precipMonthlyTotals,
+  normalCdf,
+  normalTwoTailedP,
+  normalQuantile,
+  bonferroniCorrection,
+  benjaminiHochbergCorrection,
+  DEFAULT_ALPHA,
+  FILL_VALUE_THRESHOLD,
+  PLAUSIBLE_RANGE
+} from './stats';
