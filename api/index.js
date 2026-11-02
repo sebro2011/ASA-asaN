@@ -4085,10 +4085,21 @@ var __filename = fileURLToPath(import.meta.url);
 var __dirname = path.dirname(__filename);
 var app = express2();
 app.use(express2.json());
+var corsOriginEnv = process.env.CORS_ORIGINS || "";
+var corsOrigins = corsOriginEnv.split(",").map((o) => o.trim()).filter(Boolean);
+var isDev = process.env.NODE_ENV !== "production";
 app.use((req, res, next) => {
-  res.header("Access-Control-Allow-Origin", "*");
+  const origin = req.headers.origin;
+  let allowOrigin = "*";
+  if (!isDev && corsOrigins.length > 0 && origin && corsOrigins.includes(origin)) {
+    allowOrigin = origin;
+  } else if (!isDev && corsOrigins.length > 0) {
+    return res.status(403).json({ error: "CORS origin not allowed", code: "cors-origin" });
+  }
+  res.header("Access-Control-Allow-Origin", allowOrigin);
   res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
   res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Authorization");
+  res.header("Access-Control-Allow-Credentials", "true");
   if (req.method === "OPTIONS") {
     return res.sendStatus(200);
   }
@@ -4097,8 +4108,8 @@ app.use((req, res, next) => {
 var isSecure = process.env.NODE_ENV === "production";
 var csp = [
   "default-src 'self'",
-  "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
-  // Vite HMR + React inline handlers
+  isSecure ? "script-src 'self' 'unsafe-inline'" : "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+  // Vite HMR + React inline handlers (dev only)
   "style-src 'self' 'unsafe-inline'",
   // Tailwind + styled components
   "img-src 'self' data: https: blob:",
@@ -4155,10 +4166,13 @@ function rateLimit2(options) {
 }
 app.use("/api/youtube/meta", rateLimit2({ windowMs: 6e4, max: 30, keyPrefix: "youtube-meta" }));
 app.use("/api/community", rateLimit2({ windowMs: 6e4, max: 20, keyPrefix: "community" }));
-app.use("/api/nova/chat", rateLimit2({ windowMs: 6e4, max: 15, keyPrefix: "nova-chat" }));
-app.use("/api/chat", rateLimit2({ windowMs: 6e4, max: 15, keyPrefix: "nova-chat" }));
-app.use("/api/openrouter/chat", rateLimit2({ windowMs: 6e4, max: 15, keyPrefix: "nova-chat" }));
-app.use("/api/nasa-ai", rateLimit2({ windowMs: 6e4, max: 15, keyPrefix: "nova-chat" }));
+var NOVA_CHAT_PATHS = ["/api/nova/chat", "/api/chat", "/api/openrouter/chat", "/api/nasa-ai"];
+app.use((req, res, next) => {
+  if (NOVA_CHAT_PATHS.includes(req.path)) {
+    return rateLimit2({ windowMs: 6e4, max: 15, keyPrefix: "nova-chat" })(req, res, next);
+  }
+  next();
+});
 var CACHEABLE_GET = /* @__PURE__ */ new Set([
   "/api/health",
   "/api/nova/config",
