@@ -4,7 +4,6 @@ import dotenv from "dotenv";
 import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
-import WebSocket, { WebSocketServer } from "ws";
 import { GoogleGenAI as GoogleGenAI2, Type as Type2 } from "@google/genai";
 
 // src/utils/spaceLocalAiEngine.js
@@ -2987,8 +2986,8 @@ var csp = [
   // Tailwind + styled components
   "img-src 'self' data: https: blob:",
   // Unsplash/YouTube/NASA imagery
-  "connect-src 'self' https: wss: ws:",
-  // APIs + Gemini + /ws/live proxy
+  "connect-src 'self' https:",
+  // APIs only
   "font-src 'self' data:",
   "media-src 'self' blob: https:",
   "frame-src 'self' https://www.youtube.com",
@@ -4827,15 +4826,41 @@ app.post("/api/nova/chat", async (req, res) => {
   }
 });
 app.post("/api/nasa-ai", handleNasaAiEndpoint);
-app.post("/api/openrouter/chat", handleNasaAiEndpoint);
-app.post("/api/chat", handleNasaAiEndpoint);
-app.get("/api/gemini-live-token", (_req, res) => {
-  const apiKey = process.env.GEMINI_API_KEY || "";
-  res.json({
-    hasKey: !!apiKey,
-    endpoint: "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent",
-    proxyPath: "/ws/live"
-  });
+app.post("/api/openrouter/chat", async (req, res) => {
+  try {
+    const response = await handleNovaChatRequest({
+      body: req.body,
+      ip: req.ip || req.socket.remoteAddress || "unknown",
+      contentLength: req.headers["content-length"]
+    });
+    for (const [name, value] of Object.entries(response.headers)) {
+      res.setHeader(name, String(value));
+    }
+    return res.status(response.status).json(response.body);
+  } catch {
+    return res.status(500).json({
+      error: "NOVA could not process this request. Please retry.",
+      code: "INTERNAL_ERROR"
+    });
+  }
+});
+app.post("/api/chat", async (req, res) => {
+  try {
+    const response = await handleNovaChatRequest({
+      body: req.body,
+      ip: req.ip || req.socket.remoteAddress || "unknown",
+      contentLength: req.headers["content-length"]
+    });
+    for (const [name, value] of Object.entries(response.headers)) {
+      res.setHeader(name, String(value));
+    }
+    return res.status(response.status).json(response.body);
+  } catch {
+    return res.status(500).json({
+      error: "NOVA could not process this request. Please retry.",
+      code: "INTERNAL_ERROR"
+    });
+  }
 });
 var YOUTUBE_ID_RE = /(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|shorts\/|watch\?(?:.*&)?v=|.*v=))([A-Za-z0-9_-]{11})/;
 function extractYouTubeId(url) {
@@ -4938,69 +4963,6 @@ async function startServer() {
   }
   const server = app.listen(PORT, "0.0.0.0", () => {
     console.log(`NASA Space Exploration Server running at http://0.0.0.0:${PORT}`);
-  });
-  const wss = new WebSocketServer({ server, path: "/ws/live" });
-  wss.on("connection", (clientWs) => {
-    console.log("[Gemini Live Proxy] Client connected to /ws/live");
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) {
-      console.warn("[Gemini Live Proxy] GEMINI_API_KEY not configured on server.");
-      clientWs.send(JSON.stringify({
-        error: "GEMINI_API_KEY is not configured on server. Please check Secrets panel."
-      }));
-      clientWs.close(1008, "API key missing");
-      return;
-    }
-    const geminiWsUrl = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent?key=${apiKey}`;
-    const geminiWs = new WebSocket(geminiWsUrl);
-    const pendingQueue = [];
-    let isGeminiOpen = false;
-    geminiWs.on("open", () => {
-      console.log("[Gemini Live Proxy] Connected to Google GenerativeService.BidiGenerateContent");
-      isGeminiOpen = true;
-      while (pendingQueue.length > 0) {
-        const msg = pendingQueue.shift();
-        try {
-          geminiWs.send(msg);
-        } catch (e) {
-          console.error("[Gemini Live Proxy] Error flushing queued message:", e);
-        }
-      }
-    });
-    geminiWs.on("message", (data) => {
-      if (clientWs.readyState === WebSocket.OPEN) {
-        clientWs.send(data.toString());
-      }
-    });
-    geminiWs.on("error", (err) => {
-      console.error("[Gemini Live Proxy] Upstream Gemini WebSocket error:", err);
-      if (clientWs.readyState === WebSocket.OPEN) {
-        clientWs.send(JSON.stringify({ error: err.message || "Gemini Live upstream connection error" }));
-      }
-    });
-    geminiWs.on("close", (code, reason) => {
-      console.log(`[Gemini Live Proxy] Upstream Gemini closed with code ${code}: ${reason.toString()}`);
-      if (clientWs.readyState === WebSocket.OPEN) {
-        clientWs.close(code, reason.toString());
-      }
-    });
-    clientWs.on("message", (message) => {
-      if (isGeminiOpen && geminiWs.readyState === WebSocket.OPEN) {
-        try {
-          geminiWs.send(message.toString());
-        } catch (e) {
-          console.error("[Gemini Live Proxy] Error forwarding to Gemini:", e);
-        }
-      } else {
-        pendingQueue.push(message.toString());
-      }
-    });
-    clientWs.on("close", () => {
-      console.log("[Gemini Live Proxy] Client disconnected");
-      if (geminiWs.readyState === WebSocket.OPEN || geminiWs.readyState === WebSocket.CONNECTING) {
-        geminiWs.close();
-      }
-    });
   });
   const handleShutdown = (signal) => {
     console.log(`[Lifecycle] Received ${signal}. Gracefully closing HTTP server...`);

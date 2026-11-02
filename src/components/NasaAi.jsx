@@ -46,7 +46,6 @@ import {
 import { askNovaAi } from '@/lib/nasaApi';
 import { buildNovaExportPayload, parseNovaImportFile } from '@/lib/novaExport';
 import { generateLocalSpaceResponse } from '../utils/spaceLocalAiEngine.js';
-import GeminiLiveVoice from './GeminiLiveVoice.jsx';
 
 const STORAGE_KEY = 'nasa_ai_chat_thread_v3';
 const NOVA_PROVIDER_STORAGE_KEY = 'nova_ai_provider_v1';
@@ -633,7 +632,6 @@ export function NasaAi({ className = '', lang: propLang }) {
   const [lastSubmittedQuery, setLastSubmittedQuery] = useState('');
 
   // Audio & Voice States
-  const [isLiveVoiceOpen, setIsLiveVoiceOpen] = useState(false);
   const [speakingMessageId, setSpeakingMessageId] = useState(null);
   const [isListening, setIsListening] = useState(false);
   const [soundEffectsEnabled, setSoundEffectsEnabled] = useState(true);
@@ -1969,12 +1967,6 @@ export function NasaAi({ className = '', lang: propLang }) {
 
       </div>
 
-      {/* Gemini Live Real-Time Bidi Voice Comms Modal */}
-      <GeminiLiveVoice
-        lang={activeLang}
-        isOpen={isLiveVoiceOpen}
-        onClose={() => setIsLiveVoiceOpen(false)}
-      />
     </div>
   );
 }

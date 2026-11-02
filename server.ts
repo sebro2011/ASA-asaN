@@ -3,7 +3,7 @@ import dotenv from 'dotenv';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
-import WebSocket, { WebSocketServer } from 'ws';
+
 import { GoogleGenAI, Type } from '@google/genai';
 import { generateLocalSpaceResponse } from './src/utils/spaceLocalAiEngine.js';
 import { earthRouter } from './server/earthIntelligence.ts';
@@ -54,7 +54,7 @@ const csp = [
   "script-src 'self' 'unsafe-inline' 'unsafe-eval'", // Vite HMR + React inline handlers
   "style-src 'self' 'unsafe-inline'",                  // Tailwind + styled components
   "img-src 'self' data: https: blob:",                 // Unsplash/YouTube/NASA imagery
-  "connect-src 'self' https: wss: ws:",               // APIs + Gemini + /ws/live proxy
+  "connect-src 'self' https:",               // APIs only
   "font-src 'self' data:",
   "media-src 'self' blob: https:",
   "frame-src 'self' https://www.youtube.com",          // YouTube embeds
@@ -1894,31 +1894,6 @@ Use clear, scientifically precise vocabulary in ${targetLang} with Sinhala/Tamil
   }
 });
 
-// Standalone Keyless NASA Local AI Chat Endpoint (Zero External Dependencies)
-const handleLocalSpaceChat = (req: express.Request, res: express.Response) => {
-  const { messages, message, prompt } = req.body;
-  const userQuery = message || prompt || (Array.isArray(messages) ? messages[messages.length - 1]?.content : '') || '';
-  
-  const result = generateLocalSpaceResponse(userQuery);
-
-  return res.json({
-    id: `local-ai-${Date.now()}`,
-    model: 'NASA-Local-Space-Engine (Standalone)',
-    provider: 'local-standalone',
-    choices: [
-      {
-        message: {
-          role: 'assistant',
-          content: result.text
-        }
-      }
-    ],
-    intent: result.intent,
-    lang: result.lang,
-    suggestions: result.suggestions
-  });
-};
-
 // In-memory response cache for high-demand resilience (TTL: 20 minutes)
 const chatResponseCache = new Map<string, { data: any; timestamp: number }>();
 const CHAT_CACHE_TTL_MS = 20 * 60 * 1000;
@@ -2100,20 +2075,43 @@ app.post('/api/nova/chat', async (req, res) => {
 });
 
 app.post('/api/nasa-ai', handleNasaAiEndpoint);
-app.post('/api/openrouter/chat', handleNasaAiEndpoint);
-app.post('/api/chat', handleNasaAiEndpoint);
-
-// Endpoint for Gemini Live Voice configuration.
-// Never returns the API key value to the browser. The key stays server-side;
-// the /ws/live WebSocket proxy performs the upstream connection with the key.
-app.get('/api/gemini-live-token', (_req, res) => {
-  const apiKey = process.env.GEMINI_API_KEY || '';
-  res.json({
-    hasKey: !!apiKey,
-    endpoint: 'wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent',
-    proxyPath: '/ws/live'
-  });
+app.post('/api/openrouter/chat', async (req, res) => {
+  try {
+    const response = await handleNovaChatRequest({
+      body: req.body,
+      ip: req.ip || req.socket.remoteAddress || 'unknown',
+      contentLength: req.headers['content-length'],
+    });
+    for (const [name, value] of Object.entries(response.headers)) {
+      res.setHeader(name, String(value));
+    }
+    return res.status(response.status).json(response.body);
+  } catch {
+    return res.status(500).json({
+      error: 'NOVA could not process this request. Please retry.',
+      code: 'INTERNAL_ERROR',
+    });
+  }
 });
+app.post('/api/chat', async (req, res) => {
+  try {
+    const response = await handleNovaChatRequest({
+      body: req.body,
+      ip: req.ip || req.socket.remoteAddress || 'unknown',
+      contentLength: req.headers['content-length'],
+    });
+    for (const [name, value] of Object.entries(response.headers)) {
+      res.setHeader(name, String(value));
+    }
+    return res.status(response.status).json(response.body);
+  } catch {
+    return res.status(500).json({
+      error: 'NOVA could not process this request. Please retry.',
+      code: 'INTERNAL_ERROR',
+    });
+  }
+});
+
 
 // ====================================================
 // YouTube video meta proxy (CosmoVision submissions).
@@ -2230,81 +2228,6 @@ async function startServer() {
 
   const server = app.listen(PORT, '0.0.0.0', () => {
     console.log(`NASA Space Exploration Server running at http://0.0.0.0:${PORT}`);
-  });
-
-  // Attach Gemini Live Bidirectional Streaming WebSocket Server Proxy
-  const wss = new WebSocketServer({ server, path: '/ws/live' });
-
-  wss.on('connection', (clientWs) => {
-    console.log('[Gemini Live Proxy] Client connected to /ws/live');
-    const apiKey = process.env.GEMINI_API_KEY;
-
-    if (!apiKey) {
-      console.warn('[Gemini Live Proxy] GEMINI_API_KEY not configured on server.');
-      clientWs.send(JSON.stringify({ 
-        error: 'GEMINI_API_KEY is not configured on server. Please check Secrets panel.' 
-      }));
-      clientWs.close(1008, 'API key missing');
-      return;
-    }
-
-    const geminiWsUrl = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent?key=${apiKey}`;
-    const geminiWs = new WebSocket(geminiWsUrl);
-
-    const pendingQueue: any[] = [];
-    let isGeminiOpen = false;
-
-    geminiWs.on('open', () => {
-      console.log('[Gemini Live Proxy] Connected to Google GenerativeService.BidiGenerateContent');
-      isGeminiOpen = true;
-      while (pendingQueue.length > 0) {
-        const msg = pendingQueue.shift();
-        try {
-          geminiWs.send(msg);
-        } catch (e) {
-          console.error('[Gemini Live Proxy] Error flushing queued message:', e);
-        }
-      }
-    });
-
-    geminiWs.on('message', (data) => {
-      if (clientWs.readyState === WebSocket.OPEN) {
-        clientWs.send(data.toString());
-      }
-    });
-
-    geminiWs.on('error', (err) => {
-      console.error('[Gemini Live Proxy] Upstream Gemini WebSocket error:', err);
-      if (clientWs.readyState === WebSocket.OPEN) {
-        clientWs.send(JSON.stringify({ error: err.message || 'Gemini Live upstream connection error' }));
-      }
-    });
-
-    geminiWs.on('close', (code, reason) => {
-      console.log(`[Gemini Live Proxy] Upstream Gemini closed with code ${code}: ${reason.toString()}`);
-      if (clientWs.readyState === WebSocket.OPEN) {
-        clientWs.close(code, reason.toString());
-      }
-    });
-
-    clientWs.on('message', (message) => {
-      if (isGeminiOpen && geminiWs.readyState === WebSocket.OPEN) {
-        try {
-          geminiWs.send(message.toString());
-        } catch (e) {
-          console.error('[Gemini Live Proxy] Error forwarding to Gemini:', e);
-        }
-      } else {
-        pendingQueue.push(message.toString());
-      }
-    });
-
-    clientWs.on('close', () => {
-      console.log('[Gemini Live Proxy] Client disconnected');
-      if (geminiWs.readyState === WebSocket.OPEN || geminiWs.readyState === WebSocket.CONNECTING) {
-        geminiWs.close();
-      }
-    });
   });
 
   // Graceful shutdown handler for Cloud Run container lifecycle

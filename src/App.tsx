@@ -52,8 +52,6 @@ const SolarWeather = lazy(() => import('./components/SolarWeather.jsx'));
 const CosmicCalendar = lazy(() => import('./components/CosmicCalendar.jsx'));
 const SmartSpaceQuiz = lazy(() => import('./components/SmartSpaceQuiz.jsx'));
 const SpaceQuizModule = lazy(() => import('./components/SpaceQuizModule.jsx'));
-const GeminiChatWidget = lazy(() => import('./components/GeminiChatWidget.jsx'));
-const GeminiLiveVoice = lazy(() => import('./components/GeminiLiveVoice.jsx'));
 const AmbientSoundscapeControl = lazy(() => import('./components/AmbientSoundscapeControl'));
 
 /** Shown while a destination chunk streams in — never a blank frame. */
@@ -622,16 +620,6 @@ export default function App() {
 
       <MobileTabBar activeTab={activeTab} onTabChange={handleTabSwitch} lang={lang} />
 
-      {/* Global overlays (all pre-existing features, preserved) */}
-      {/* The conversational widget stays available on desktop; on phones the
-          Assistant destination is one tap away in the bottom bar, which avoids
-          stacking three floating controls over the content. */}
-      <Suspense fallback={null}>
-        <div className="hidden lg:block">
-          <GeminiChatWidget lang={lang} onNavigateToTab={(tabId: string) => handleTabSwitch(tabId as TabKey)} />
-        </div>
-        <GeminiLiveVoice lang={lang} isOpen={isLiveVoiceModalOpen} onClose={() => setIsLiveVoiceModalOpen(false)} />
-      </Suspense>
       <OfflineIndicator lang={lang} />
       <FloatingVoiceControl
         onNavigate={handleVoiceNavigate}
