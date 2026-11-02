@@ -648,7 +648,7 @@ export function NasaAi({ className = '', lang: propLang }) {
   // Conversation Thread
   const [messages, setMessages] = useState([]);
   const [selectedProvider, setSelectedProvider] = useState(getSavedNovaProvider);
-  const [providerAvailability, setProviderAvailability] = useState({ local: true, gemini: null, openrouter: null });
+  const [providerAvailability, setProviderAvailability] = useState({ local: true, gemini: null, openrouter: null, arena: null });
   const [activeModel, setActiveModel] = useState('Auto routing');
   const [connectionState, setConnectionState] = useState('ready'); // 'ready' | 'online' | 'connecting' | 'offline' | 'error'
 
@@ -699,6 +699,7 @@ export function NasaAi({ className = '', lang: propLang }) {
           local: true,
           gemini: config.providers.gemini === true,
           openrouter: config.providers.openrouter === true,
+          arena: config.providers.arena === true,
         });
       })
       .catch(() => {});
@@ -706,7 +707,7 @@ export function NasaAi({ className = '', lang: propLang }) {
   }, []);
 
   useEffect(() => {
-    if ((selectedProvider === 'gemini' || selectedProvider === 'openrouter') && providerAvailability[selectedProvider] === false) {
+    if ((selectedProvider === 'gemini' || selectedProvider === 'openrouter' || selectedProvider === 'arena') && providerAvailability[selectedProvider] === false) {
       setSelectedProvider('auto');
       try { localStorage.setItem(NOVA_PROVIDER_STORAGE_KEY, 'auto'); } catch {}
     }
@@ -1337,7 +1338,7 @@ export function NasaAi({ className = '', lang: propLang }) {
               }}
               className="max-w-[170px] bg-transparent text-[11px] font-semibold text-cyan-100 outline-none cursor-pointer disabled:cursor-not-allowed"
             >
-              <option value="auto">{activeLang === 'si' ? 'ස්වයංක්‍රීය' : activeLang === 'ta' ? 'தானியங்கி' : 'Auto (OpenRouter → Gemini → Local)'}</option>
+              <option value="auto">{activeLang === 'si' ? 'ස්වයංක්‍රීය' : activeLang === 'ta' ? 'தானியங்கி' : 'Auto (Arena → OpenRouter → Gemini → Local)'}</option>
               <option value="local">{activeLang === 'si' ? 'දේශීය අභ්‍යවකාශ එන්ජිම' : activeLang === 'ta' ? 'உள்ளூர் விண்வெளி இயந்திரம்' : 'Local Space Engine'}</option>
               <option value="gemini" disabled={providerAvailability.gemini === false}>
                 Gemini{providerAvailability.gemini === false
@@ -1349,6 +1350,10 @@ export function NasaAi({ className = '', lang: propLang }) {
                   ? (activeLang === 'si' ? ' · යතුර සකසා නැත' : activeLang === 'ta' ? ' · சாவி அமைக்கப்படவில்லை' : ' · key not configured')
                   : ' API'}
               </option>
+              <option value="arena" disabled={providerAvailability.arena === false}>
+                Arena AI{providerAvailability.arena === false
+                  ? (activeLang === 'si' ? ' · යතුර සකසා නැත' : activeLang === 'ta' ? ' · சாவி அமைக்கப்படவில்லை' : ' · key not configured')
+                  : ' API'}</option>
             </select>
           </label>
 

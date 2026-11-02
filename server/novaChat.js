@@ -5,6 +5,19 @@ const GEMINI_GENERATE_CONTENT_URL = 'https://generativelanguage.googleapis.com/v
 export const OPENROUTER_FREE_MODEL = 'openrouter/free';
 export const DEFAULT_GEMINI_MODEL = 'gemini-2.5-flash';
 
+// Arena AI uses an OpenAI-compatible chat completions endpoint. The exact base
+// URL is instance-specific and shown on the Arena key creation screen.
+// Defaults to https://api.arena.ai/v1 per the official Arena documentation.
+export const ARENA_BASE_URL = (() => {
+  try {
+    const configured = process.env.ARENA_BASE_URL;
+    if (typeof configured === 'string' && configured.trim()) {
+      return configured.replace(/\/$/, '') + '/v1/chat/completions';
+    }
+  } catch {}
+  return 'https://api.arena.ai/v1/chat/completions';
+})();
+
 const MAX_REQUEST_BYTES = 24 * 1024;
 const MAX_TOTAL_MESSAGE_BYTES = 20 * 1024;
 const MAX_MESSAGE_CHARS = 4_000;
@@ -13,11 +26,12 @@ const UPSTREAM_TIMEOUT_MS = 8_000;
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const RATE_LIMIT_REQUESTS = 8;
 const SUPPORTED_LANGUAGES = new Set(['en', 'si', 'ta']);
-const SUPPORTED_PROVIDERS = new Set(['auto', 'local', 'gemini', 'openrouter']);
+const SUPPORTED_PROVIDERS = new Set(['auto', 'local', 'gemini', 'openrouter', 'arena']);
 const PROVIDER_NAMES = {
   local: 'NOVA Local Space Engine',
   gemini: 'Google Gemini',
   openrouter: 'OpenRouter',
+  arena: 'Arena AI',
 };
 
 const FALLBACK_SUGGESTIONS = {
@@ -443,6 +457,56 @@ async function callGemini({ fetchImpl, apiKey, model, messages, language, timeou
   });
 }
 
+async function callArena({ fetchImpl, apiKey, model, messages, language, timeoutMs }) {
+  const headers = {
+    Authorization: `Bearer ${apiKey}`,
+    'Content-Type': 'application/json',
+  };
+
+  const upstreamResult = await fetchProviderJson({
+    fetchImpl,
+    url: ARENA_BASE_URL,
+    init: {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        model,
+        messages: [
+          { role: 'system', content: makeSystemPrompt(language) },
+          ...messages,
+        ],
+        temperature: 0.7,
+        max_tokens: 1_200,
+        stream: false,
+      }),
+    },
+    timeoutMs,
+    provider: 'arena',
+    model,
+  });
+  if (upstreamResult.error) return upstreamResult.error;
+
+  const rawText = extractText(upstreamResult.data?.choices?.[0]?.message?.content);
+  if (!rawText) {
+    return withProvider(
+      errorResult(502, 'EMPTY_PROVIDER_RESPONSE', 'The AI provider returned an empty response. Please retry.'),
+      'arena',
+    );
+  }
+
+  const parsed = extractSuggestions(rawText, language);
+  return result(200, {
+    text: parsed.text || rawText,
+    suggestions: parsed.suggestions,
+    model: typeof upstreamResult.data?.model === 'string' && upstreamResult.data.model.length <= 160
+      ? upstreamResult.data.model
+      : model,
+    provider: PROVIDER_NAMES.arena,
+    lang: language,
+    fallback: false,
+  });
+}
+
 function readKey(getter) {
   try {
     const value = getter();
@@ -460,6 +524,7 @@ export function getNovaPublicConfig({ env = getProcessEnv() } = {}) {
       local: true,
       gemini: typeof env.GEMINI_API_KEY === 'string' && Boolean(env.GEMINI_API_KEY.trim()),
       openrouter: typeof env.OPENROUTER_API_KEY === 'string' && Boolean(env.OPENROUTER_API_KEY.trim()),
+      arena: typeof env.ARENA_API_KEY === 'string' && Boolean(env.ARENA_API_KEY.trim()),
     },
   };
 }
@@ -468,10 +533,12 @@ export function createNovaChatHandler({
   fetchImpl = (...args) => globalThis.fetch(...args),
   getOpenRouterApiKey,
   getGeminiApiKey = () => getProcessEnv().GEMINI_API_KEY,
+  getArenaApiKey = () => getProcessEnv().ARENA_API_KEY,
   // Backwards-compatible alias for callers/tests written for the original OpenRouter-only handler.
   getApiKey,
   getOpenRouterModel = () => getProcessEnv().NOVA_OPENROUTER_MODEL,
   getGeminiModel = () => getProcessEnv().NOVA_GEMINI_MODEL,
+  getArenaModel = () => getProcessEnv().NOVA_ARENA_MODEL,
   rateLimiter = createNovaRateLimiter(),
   timeoutMs = UPSTREAM_TIMEOUT_MS,
 } = {}) {
@@ -502,14 +569,17 @@ export function createNovaChatHandler({
     const keys = {
       openrouter: readKey(readOpenRouterKey),
       gemini: readKey(getGeminiApiKey),
+      arena: readKey(getArenaApiKey),
     };
     const models = {
       openrouter: cleanModelName(readKey(getOpenRouterModel), OPENROUTER_FREE_MODEL),
       gemini: cleanModelName(readKey(getGeminiModel), DEFAULT_GEMINI_MODEL),
+      arena: cleanModelName(readKey(getArenaModel), 'arena_smart.aria'),
     };
 
+    // Auto routing prefers Arena when configured, then falls through to other online providers.
     const providerOrder = validated.provider === 'auto'
-      ? ['openrouter', 'gemini'].filter((provider) => Boolean(keys[provider]))
+      ? ['arena', 'openrouter', 'gemini'].filter((provider) => Boolean(keys[provider]))
       : [validated.provider];
 
     if (validated.provider !== 'auto' && !keys[validated.provider]) {
@@ -528,16 +598,27 @@ export function createNovaChatHandler({
 
     let lastError = null;
     for (const provider of providerOrder) {
-      const response = provider === 'openrouter'
-        ? await callOpenRouter({
+      let response;
+      if (provider === 'arena') {
+        response = await callArena({
+          fetchImpl,
+          apiKey: keys.arena,
+          model: models.arena,
+          messages: validated.messages,
+          language: validated.language,
+          timeoutMs,
+        });
+      } else if (provider === 'openrouter') {
+        response = await callOpenRouter({
           fetchImpl,
           apiKey: keys.openrouter,
           model: models.openrouter,
           messages: validated.messages,
           language: validated.language,
           timeoutMs,
-        })
-        : await callGemini({
+        });
+      } else {
+        response = await callGemini({
           fetchImpl,
           apiKey: keys.gemini,
           model: models.gemini,
@@ -545,6 +626,7 @@ export function createNovaChatHandler({
           language: validated.language,
           timeoutMs,
         });
+      }
 
       if (response.status === 200) return response;
       lastError = response;

@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  ARENA_BASE_URL,
   createNovaChatHandler,
   createNovaRateLimiter,
   DEFAULT_GEMINI_MODEL,
@@ -487,7 +488,7 @@ test('public provider config reports availability without exposing API keys', ()
     },
   });
 
-  assert.deepEqual(config.providers, { auto: true, local: true, gemini: true, openrouter: true });
+  assert.deepEqual(config.providers, { auto: true, local: true, gemini: true, openrouter: true, arena: false });
   assert.equal(JSON.stringify(config).includes('private-gemini-key'), false);
   assert.equal(JSON.stringify(config).includes('private-openrouter-key'), false);
 });
@@ -513,7 +514,7 @@ test('Vercel provider-config endpoint only supports GET and returns safe availab
     const getResponse = makeResponse();
     vercelNovaConfigHandler({ method: 'GET' }, getResponse);
     assert.equal(getResponse.statusCode, 200);
-    assert.deepEqual(getResponse.body.providers, { auto: true, local: true, gemini: true, openrouter: false });
+    assert.deepEqual(getResponse.body.providers, { auto: true, local: true, gemini: true, openrouter: false, arena: false });
     assert.equal(JSON.stringify(getResponse.body).includes('private-gemini-key'), false);
     assert.equal(getResponse.headers['Cache-Control'], 'no-store');
   } finally {
@@ -555,4 +556,294 @@ test('aborts a provider request after the configured timeout', async () => {
   assert.equal(response.status, 504);
   assert.equal(response.body.code, 'AI_TIMEOUT');
   assert.equal(JSON.stringify(response).includes(TEST_API_KEY), false);
+});
+
+const ARENA_TEST_KEY = 'arena-sk-test-only-never-a-real-key';
+
+function arenaSuccessFetch(responseData = {
+  model: 'arena_smart.aria',
+  choices: [{
+    message: {
+      role: 'assistant',
+      content: 'JWST observes the universe in infrared.\nSUGGESTIONS: [What is infrared?] | [What has JWST found?]',
+    },
+  }],
+}) {
+  return async (url, options) => {
+    assert.equal(url, ARENA_BASE_URL || 'https://api.arena.ai/v1/chat/completions');
+    assert.equal(options.method, 'POST');
+    assert.equal(options.headers.Authorization, `Bearer ${ARENA_TEST_KEY}`);
+    const payload = JSON.parse(options.body);
+    assert.equal(payload.stream, false);
+    assert.ok(Array.isArray(payload.messages));
+    assert.ok(payload.messages.some(m => m.role === 'system'));
+    return {
+      ok: true,
+      status: 200,
+      json: async () => responseData,
+    };
+  };
+}
+
+function arenaKeyHandler(options = {}) {
+  return createNovaChatHandler({
+    getArenaApiKey: () => ARENA_TEST_KEY,
+    getOpenRouterApiKey: () => '',
+    getGeminiApiKey: () => '',
+    fetchImpl: options.fetchImpl || arenaSuccessFetch(options.responseData),
+  });
+}
+
+test('Arena successful response returns normalized NOVA format', async () => {
+  let capturedPayload;
+  const handler = arenaKeyHandler({
+    fetchImpl: async (url, options) => {
+      capturedPayload = JSON.parse(options.body);
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          model: 'arena_smart.aria',
+          choices: [{
+            message: {
+              role: 'assistant',
+              content: 'JWST observes the universe in infrared.\nSUGGESTIONS: [What is infrared?] | [What has JWST found?]',
+            },
+          }],
+        }),
+      };
+    },
+  });
+
+  const response = await handler({ body: { ...sampleBody, provider: 'arena' }, ip: '198.51.100.40' });
+
+  assert.equal(response.status, 200);
+  assert.equal(response.body.text, 'JWST observes the universe in infrared.');
+  assert.deepEqual(response.body.suggestions, ['What is infrared?', 'What has JWST found?']);
+  assert.equal(response.body.model, 'arena_smart.aria');
+  assert.equal(response.body.provider, 'Arena AI');
+  assert.equal(response.body.lang, 'en');
+  assert.equal(response.body.fallback, false);
+  assert.equal(JSON.stringify(response).includes(ARENA_TEST_KEY), false);
+  assert.equal(response.headers['Cache-Control'], 'no-store');
+  assert.ok(capturedPayload.messages.some(m => m.role === 'system'));
+});
+
+test('Arena missing API key returns safe error when explicitly selected', async () => {
+  const handler = createNovaChatHandler({
+    getArenaApiKey: () => '',
+    getOpenRouterApiKey: () => '',
+    getGeminiApiKey: () => '',
+    fetchImpl: async () => { throw new Error('must not call upstream'); },
+  });
+
+  const response = await handler({
+    body: { ...sampleBody, provider: 'arena' },
+    ip: '198.51.100.41',
+  });
+
+  assert.equal(response.status, 503);
+  assert.equal(response.body.code, 'PROVIDER_NOT_CONFIGURED');
+  assert.equal(response.body.provider, 'Arena AI');
+  assert.equal(JSON.stringify(response).includes(ARENA_TEST_KEY), false);
+});
+
+test('Arena invalid API key (401) maps to PROVIDER_AUTH_ERROR', async () => {
+  const handler = arenaKeyHandler({
+    fetchImpl: async () => ({ ok: false, status: 401, json: async () => ({ error: 'invalid key' }) }),
+  });
+
+  const response = await handler({ body: { ...sampleBody, provider: 'arena' }, ip: '198.51.100.42' });
+
+  assert.equal(response.status, 503);
+  assert.equal(response.body.code, 'PROVIDER_AUTH_ERROR');
+  assert.equal(response.body.provider, 'Arena AI');
+  assert.equal(JSON.stringify(response).includes(ARENA_TEST_KEY), false);
+});
+
+test('Arena forbidden request (403) maps to PROVIDER_AUTH_ERROR', async () => {
+  const handler = arenaKeyHandler({
+    fetchImpl: async () => ({ ok: false, status: 403, json: async () => ({ error: 'forbidden' }) }),
+  });
+
+  const response = await handler({ body: { ...sampleBody, provider: 'arena' }, ip: '198.51.100.43' });
+
+  assert.equal(response.status, 503);
+  assert.equal(response.body.code, 'PROVIDER_AUTH_ERROR');
+  assert.equal(response.body.provider, 'Arena AI');
+});
+
+test('Arena rate limit (429) maps to UPSTREAM_RATE_LIMITED', async () => {
+  const handler = arenaKeyHandler({
+    fetchImpl: async () => ({ ok: false, status: 429, json: async () => ({ error: 'rate limited' }) }),
+  });
+
+  const response = await handler({ body: { ...sampleBody, provider: 'arena' }, ip: '198.51.100.44' });
+
+  assert.equal(response.status, 429);
+  assert.equal(response.body.code, 'UPSTREAM_RATE_LIMITED');
+  assert.equal(response.body.provider, 'Arena AI');
+  assert.equal(response.headers['Retry-After'], '30');
+});
+
+test('Arena server error (500) maps to PROVIDER_UNAVAILABLE', async () => {
+  const handler = arenaKeyHandler({
+    fetchImpl: async () => ({ ok: false, status: 500, json: async () => ({ error: 'internal' }) }),
+  });
+
+  const response = await handler({ body: { ...sampleBody, provider: 'arena' }, ip: '198.51.100.45' });
+
+  assert.equal(response.status, 503);
+  assert.equal(response.body.code, 'PROVIDER_UNAVAILABLE');
+  assert.equal(response.body.provider, 'Arena AI');
+});
+
+test('Arena timeout maps to AI_TIMEOUT', async () => {
+  const handler = arenaKeyHandler({
+    timeoutMs: 5,
+    fetchImpl: (_url, { signal }) => new Promise((resolve, reject) => {
+      signal.addEventListener('abort', () => {
+        const error = new Error('aborted');
+        error.name = 'AbortError';
+        reject(error);
+      }, { once: true });
+    }),
+  });
+
+  const response = await handler({ body: { ...sampleBody, provider: 'arena' }, ip: '198.51.100.46' });
+
+  assert.equal(response.status, 504);
+  assert.equal(response.body.code, 'AI_TIMEOUT');
+  assert.equal(response.body.provider, 'Arena AI');
+});
+
+test('Arena invalid JSON response maps to INVALID_PROVIDER_RESPONSE', async () => {
+  const handler = arenaKeyHandler({
+    fetchImpl: async () => ({
+      ok: true,
+      status: 200,
+      json: async () => { throw new Error('not json'); },
+    }),
+  });
+
+  const response = await handler({ body: { ...sampleBody, provider: 'arena' }, ip: '198.51.100.47' });
+
+  assert.equal(response.status, 502);
+  assert.equal(response.body.code, 'INVALID_PROVIDER_RESPONSE');
+  assert.equal(response.body.provider, 'Arena AI');
+});
+
+test('Arena empty response maps to EMPTY_PROVIDER_RESPONSE', async () => {
+  const handler = arenaKeyHandler({
+    fetchImpl: async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({ model: 'arena_smart.aria', choices: [] }),
+    }),
+  });
+
+  const response = await handler({ body: { ...sampleBody, provider: 'arena' }, ip: '198.51.100.48' });
+
+  assert.equal(response.status, 502);
+  assert.equal(response.body.code, 'EMPTY_PROVIDER_RESPONSE');
+  assert.equal(response.body.provider, 'Arena AI');
+});
+
+test('Auto routing prefers Arena when configured, falls back to Gemini', async () => {
+  const attemptedProviders = [];
+  const handler = createNovaChatHandler({
+    getArenaApiKey: () => ARENA_TEST_KEY,
+    getOpenRouterApiKey: () => '',
+    getGeminiApiKey: () => 'gemini-test-key',
+    fetchImpl: async (url) => {
+      attemptedProviders.push(url.includes('api.arena.ai') ? 'arena' : 'gemini');
+      if (url.includes('api.arena.ai')) return { ok: false, status: 503 };
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ candidates: [{ content: { parts: [{ text: 'Gemini fallback succeeded.' }] } }] }),
+      };
+    },
+  });
+  const response = await handler({ body: sampleBody, ip: '198.51.100.49' });
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(attemptedProviders, ['arena', 'gemini']);
+  assert.equal(response.body.provider, 'Google Gemini');
+  assert.equal(response.body.fallback, false);
+  assert.equal(JSON.stringify(response).includes(ARENA_TEST_KEY), false);
+  assert.equal(JSON.stringify(response).includes('gemini-test-key'), false);
+});
+
+test('Auto routing falls back from Arena to OpenRouter', async () => {
+  const attemptedProviders = [];
+  const handler = createNovaChatHandler({
+    getArenaApiKey: () => ARENA_TEST_KEY,
+    getOpenRouterApiKey: () => TEST_API_KEY,
+    getGeminiApiKey: () => '',
+    fetchImpl: async (url) => {
+      attemptedProviders.push(url.includes('api.arena.ai') ? 'arena' : 'openrouter');
+      if (url.includes('api.arena.ai')) return { ok: false, status: 429 };
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          model: 'example/test-model:free',
+          choices: [{ message: { role: 'assistant', content: 'OpenRouter fallback succeeded.' } }],
+        }),
+      };
+    },
+  });
+  const response = await handler({ body: sampleBody, ip: '198.51.100.50' });
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(attemptedProviders, ['arena', 'openrouter']);
+  assert.equal(response.body.provider, 'OpenRouter');
+  assert.equal(response.body.fallback, false);
+});
+
+test('Auto routing falls back to local engine when Arena and all online providers fail', async () => {
+  const handler = createNovaChatHandler({
+    getArenaApiKey: () => ARENA_TEST_KEY,
+    getOpenRouterApiKey: () => TEST_API_KEY,
+    getGeminiApiKey: () => 'gemini-test-key',
+    fetchImpl: async () => ({ ok: false, status: 503 }),
+  });
+  const response = await handler({ body: sampleBody, ip: '198.51.100.51' });
+
+  assert.equal(response.status, 200);
+  assert.equal(response.body.provider, 'NOVA Local Space Engine');
+  assert.equal(response.body.model, 'nasa-local-engine');
+  assert.equal(response.body.fallback, true);
+  assert.equal(JSON.stringify(response).includes(ARENA_TEST_KEY), false);
+  assert.equal(JSON.stringify(response).includes(TEST_API_KEY), false);
+  assert.equal(JSON.stringify(response).includes('gemini-test-key'), false);
+});
+
+test('Arena provider config reports availability without exposing key', () => {
+  const config = getNovaPublicConfig({
+    env: {
+      ARENA_API_KEY: 'private-arena-key',
+      GEMINI_API_KEY: 'private-gemini-key',
+      OPENROUTER_API_KEY: 'private-openrouter-key',
+    },
+  });
+
+  assert.equal(config.providers.arena, true);
+  assert.equal(config.providers.gemini, true);
+  assert.equal(config.providers.openrouter, true);
+  assert.equal(JSON.stringify(config).includes('private-arena-key'), false);
+  assert.equal(JSON.stringify(config).includes('private-gemini-key'), false);
+  assert.equal(JSON.stringify(config).includes('private-openrouter-key'), false);
+});
+
+test('Arena provider config reports unavailable when key not set', () => {
+  const config = getNovaPublicConfig({
+    env: {
+      GEMINI_API_KEY: 'private-gemini-key',
+    },
+  });
+
+  assert.equal(config.providers.arena, false);
+  assert.equal(JSON.stringify(config).includes('ARENA_API_KEY'), false);
 });
