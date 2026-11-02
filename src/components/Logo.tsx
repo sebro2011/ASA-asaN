@@ -7,7 +7,6 @@ export type LogoSize = 'xs' | 'sm' | 'md' | 'lg' | 'xl' | '2xl' | number;
 export interface LogoProps {
   size?: LogoSize;
   className?: string;
-  pulse?: boolean;
   withGlow?: boolean;
   alt?: string;
   priority?: boolean;
@@ -27,7 +26,6 @@ const SIZES: Record<string, { width: number; height: number; className: string }
 export const Logo: React.FC<LogoProps> = ({
   size = 'md',
   className = '',
-  pulse = false,
   withGlow = true,
   alt = 'NASA Web App Logo',
   priority = false,
@@ -39,83 +37,37 @@ export const Logo: React.FC<LogoProps> = ({
   const customDimension = typeof size === 'number' ? size : sizeConfig.width;
 
   const glowClass = withGlow ? 'drop-shadow-[0_0_12px_rgba(34,211,238,0.3)]' : '';
-  const pulseClass = pulse ? 'animate-pulse duration-1000' : '';
 
   return (
-    <div 
-      className={`inline-flex items-center gap-3 select-none ${onClick ? 'cursor-pointer' : ''} ${className}`}
-      onClick={onClick}
-      role={onClick ? 'button' : undefined}
-      tabIndex={onClick ? 0 : undefined}
-    >
-      <div 
-        className={`relative flex items-center justify-center shrink-0 transition-transform duration-300 group-hover:scale-105 hover:scale-105 ${glowClass} ${pulseClass}`}
-        style={{ width: customDimension, height: customDimension }}
-      >
+    <div className={`inline-flex items-center gap-3 select-none ${onClick ? 'cursor-pointer' : ''} ${className}`} onClick={onClick} role={onClick ? 'button' : undefined} tabIndex={onClick ? 0 : undefined}>
+      <div className={`relative flex items-center justify-center shrink-0 ${glowClass}`} style={{ width: customDimension, height: customDimension }}>
         {!hasError ? (
-          <img
-            src="/logo.png"
-            alt={alt}
-            width={customDimension}
-            height={customDimension}
-            loading={priority ? 'eager' : 'lazy'}
-            decoding="async"
-            onError={() => setHasError(true)}
-            className="w-full h-full object-contain filter drop-shadow-[0_0_12px_rgba(34,211,238,0.3)] rounded-[10px] transition-all duration-300 ease-out transform group-hover:scale-110 group-hover:drop-shadow-[0_0_22px_rgba(56,189,248,0.85)] group-hover:brightness-110 hover:scale-110 hover:drop-shadow-[0_0_22px_rgba(56,189,248,0.85)] hover:brightness-110"
-          />
+          <img src="/logo.png" alt={alt} width={customDimension} height={customDimension} loading={priority ? 'eager' : 'lazy'} decoding="async" onError={() => setHasError(true)} className={`w-full h-full object-contain filter ${glowClass} rounded-[10px]`} />
         ) : (
           /* High-Fidelity SVG Fallback matching NASA Web App Rocket Badge */
-          <svg
-            viewBox="0 0 100 100"
-            className="w-full h-full drop-shadow-[0_0_12px_rgba(34,211,238,0.4)] transition-all duration-300 ease-out transform group-hover:scale-110 group-hover:drop-shadow-[0_0_22px_rgba(56,189,248,0.85)] hover:scale-110"
-            fill="none"
-            xmlns="http://www.w3.org/2000/svg"
-          >
+          <svg viewBox="0 0 100 100" className={`w-full h-full drop-shadow-[0_0_12px_rgba(34,211,238,0.4)] ${glowClass}`} fill="none" xmlns="http://www.w3.org/2000/svg">
             {/* Dark Blue Outer Circle */}
             <circle cx="50" cy="50" r="46" fill="#0B1E48" />
-            
+
             {/* Central Planet Sphere */}
             <circle cx="50" cy="46" r="22" fill="#2F80ED" />
-            
+
             {/* White Planetary Orbit Ring */}
-            <ellipse 
-              cx="50" 
-              cy="48" 
-              rx="36" 
-              ry="14" 
-              stroke="#FFFFFF" 
-              strokeWidth="4" 
-              transform="rotate(-18 50 48)" 
-            />
-            
+            <ellipse cx="50" cy="48" rx="36" ry="14" stroke="#FFFFFF" strokeWidth="4" transform="rotate(-18 50 48)" />
+
             {/* White Rocket Plume */}
-            <path 
-              d="M47 52 Q50 68 45 84 L55 84 Q50 68 53 52 Z" 
-              fill="#FFFFFF" 
-            />
-            
+            <path d="M47 52 Q50 68 45 84 L55 84 Q50 68 53 52 Z" fill="#FFFFFF" />
+
             {/* Red Rocket Wings */}
-            <path 
-              d="M38 52 L45 36 L47 48 Z" 
-              fill="#EB5757" 
-            />
-            <path 
-              d="M62 52 L55 36 L53 48 Z" 
-              fill="#EB5757" 
-            />
-            
+            <path d="M38 52 L45 36 L47 48 Z" fill="#EB5757" />
+            <path d="M62 52 L55 36 L53 48 Z" fill="#EB5757" />
+
             {/* White Rocket Fuselage */}
-            <path 
-              d="M45 48 C45 30 50 20 50 20 C50 20 55 30 55 48 Z" 
-              fill="#FFFFFF" 
-            />
-            
+            <path d="M45 48 C45 30 50 20 50 20 C50 20 55 30 55 48 Z" fill="#FFFFFF" />
+
             {/* Red Rocket Nose Cone */}
-            <path 
-              d="M47 30 C47 24 50 20 50 20 C50 20 53 24 53 30 Z" 
-              fill="#EB5757" 
-            />
-            
+            <path d="M47 30 C47 24 50 20 50 20 C50 20 53 24 53 30 Z" fill="#EB5757" />
+
             {/* Rocket Center Porthole */}
             <circle cx="50" cy="35" r="3.5" fill="#0B1E48" />
           </svg>

@@ -1409,7 +1409,7 @@ export function NasaAi({ className = '', lang: propLang }) {
             className="px-2.5 py-1.5 rounded-[10px] bg-gradient-to-r from-cyan-600/30 to-blue-600/30 border border-cyan-500/50 hover:border-cyan-400 text-cyan-200 text-xs flex items-center gap-1.5 transition cursor-pointer shadow-[0_0_15px_rgba(6,182,212,0.25)] hover:scale-[1.02] active:scale-95"
             title="Connect to Gemini Live Bidi-Streaming Voice Channel (16kHz In / 24kHz Out)"
           >
-            <Radio className="w-3.5 h-3.5 text-cyan-400 animate-pulse" />
+                <Radio className="w-3.5 h-3.5 text-cyan-400" />
             <span className="text-[11px] font-semibold hidden sm:inline">
               {activeLang === 'si' ? 'සජීවී හඬ' : activeLang === 'ta' ? 'நேரலை குரல்' : 'Live Voice'}
             </span>
@@ -1480,7 +1480,7 @@ export function NasaAi({ className = '', lang: propLang }) {
             {/* Mission Control Welcome Hero */}
             <div className="text-center space-y-3">
               <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-cyan-950/60 border border-cyan-500/40 text-cyan-300 text-xs font-mono font-semibold shadow-inner">
-                <Sparkles className="w-3.5 h-3.5 text-cyan-400 animate-pulse" />
+                <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
                 <span>NASA MISSION INTELLIGENCE CORE</span>
               </div>
 

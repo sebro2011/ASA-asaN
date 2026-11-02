@@ -59,9 +59,9 @@ function DestinationSkeleton() {
   const { t } = useTranslation();
   return (
     <div className="surface flex flex-col gap-4 p-6 sm:p-8" role="status" aria-live="polite">
-      <span className="h-6 w-40 animate-pulse rounded-full bg-surface-2" />
-      <span className="h-3 w-full max-w-xl animate-pulse rounded-full bg-surface-2/70" />
-      <span className="h-3 w-3/4 max-w-md animate-pulse rounded-full bg-surface-2/50" />
+      <span className="h-6 w-40 rounded-full bg-surface-2" />
+      <span className="h-3 w-full max-w-xl rounded-full bg-surface-2/70" />
+      <span className="h-3 w-3/4 max-w-md rounded-full bg-surface-2/50" />
       <span className="sr-only">{t('stateLoading')}</span>
     </div>
   );
