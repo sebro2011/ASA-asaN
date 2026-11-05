@@ -10,6 +10,7 @@ import { spaceVideosRouter } from './server/spaceVideos.ts';
 import { communityVideosRouter } from './server/communityVideos.ts';
 import { getNovaPublicConfig, handleNovaChatRequest } from './server/novaChat.js';
 import { setupNasaRoutes } from './server/nasaRoutes.ts';
+import { workspaceConfigRouter } from './server/workspaceConfig.ts';
 
 dotenv.config();
 
@@ -138,6 +139,10 @@ app.use('/api/youtube/meta', rateLimit({ windowMs: 60_000, max: 30, keyPrefix: '
 
 // Community submissions/reports: stricter — write operations.
 app.use('/api/community', rateLimit({ windowMs: 60_000, max: 20, keyPrefix: 'community' }));
+
+// Workspace cloud configuration: cheap, read-only, but still rate-limited so it
+// cannot be used to fingerprint the deployment.
+app.use('/api/workspace/config', rateLimit({ windowMs: 60_000, max: 60, keyPrefix: 'workspace-config' }));
 
 // NOVA chat family: expensive AI calls — strict limit per IP, consolidated
 // across all four chat entry points so a single IP cannot burst across paths.
@@ -336,6 +341,8 @@ app.get('/api/youtube/meta', async (req, res) => {
 app.use('/api/earth', earthRouter);
 app.use('/api/space-videos', spaceVideosRouter);
 app.use('/api/community', communityVideosRouter);
+// Workspace cloud config (Phase 3B) — publishable key only, never the service role.
+app.use('/api/workspace', workspaceConfigRouter);
 
 // Setup Vite middleware in dev or static files in production
 async function startServer() {

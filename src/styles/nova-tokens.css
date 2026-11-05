@@ -1,0 +1,102 @@
+/* =============================================================================
+   NOVA AI — WORKSPACE DESIGN TOKENS (Phase 3A)
+   -----------------------------------------------------------------------------
+   Two palettes share one token contract so every workspace surface can be
+   re-themed at runtime by flipping `data-nova-theme` on <html>:
+
+     dark  — Deep Space (default)
+     light — Daylight
+
+   The *science* palette (void / surface / ink / atmo …) is intentionally NOT
+   touched here: Explore keeps its NASA visual identity. Workspace utilities are
+   namespaced `ws-*` so a NOVA colour can never leak into a science component.
+
+   Contrast (WCAG 2.1, computed not estimated):
+     dark  text   #F5F7FF on #08090D / #10121A / #171A24 → 18.60 / 17.47 / 16.23
+     dark  text-2 #9299AA                                →  6.97 /  6.55 /  6.08
+     dark  text-3 #868FA2                                →  6.13 /  5.75 /  5.34  (AA everywhere)
+     light text   #0C1020 on #F7F8FB / #FFFFFF           → 17.81 / 18.91
+     light text-2 #5A6376                                →  5.68 /  6.03
+     light text-3 #656D7E                                →  4.89 /  5.20
+     accent-ink (accent as text) ≥4.5:1 everywhere, including the 16% active
+     tint; white on `accent-solid` (primary buttons) 4.88:1 dark / 5.41:1 light.
+   ========================================================================== */
+
+@theme {
+  /* ---- NOVA workspace palette: DARK (default) ---- */
+  --color-ws-bg: #08090d;
+  --color-ws-surface: #10121a;
+  --color-ws-elev: #171a24;
+  --color-ws-elev-2: #1d2130;
+  --color-ws-line: rgba(255, 255, 255, 0.075);
+  --color-ws-line-strong: rgba(255, 255, 255, 0.14);
+  --color-ws-text: #f5f7ff;
+  --color-ws-text-2: #9299aa;
+  --color-ws-text-3: #868fa2;
+  --color-ws-accent: #5b84ff;
+  /* Solid fill for primary actions: white label on this is ≥4.5:1. */
+  --color-ws-accent-solid: #3b63f6;
+  /* Accent used as *text*: AA on every surface and on the active-nav tint. */
+  --color-ws-accent-ink: #7aa0ff;
+  --color-ws-accent-2: #8b6bff;
+  --color-ws-danger: #ff6b7a;
+  --color-ws-success: #4ade9b;
+  --color-ws-warn: #f0c274;
+
+  /* ---- workspace geometry ---- */
+  --spacing-ws-sidebar: 16.5rem; /* 264px expanded */
+  --spacing-ws-rail: 4.5rem; /*    72px collapsed  */
+  --spacing-ws-topbar: 3.5rem; /*  56px            */
+}
+
+:root {
+  --ws-shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4), 0 12px 32px -18px rgba(0, 0, 0, 0.75);
+  --ws-shadow-2: 0 1px 2px rgba(0, 0, 0, 0.45), 0 28px 64px -28px rgba(0, 0, 0, 0.85);
+  --ws-glass: rgba(16, 18, 26, 0.72);
+  --ws-glass-strong: rgba(23, 26, 36, 0.9);
+  --ws-ring: rgba(91, 132, 255, 0.45);
+  --ws-wash: radial-gradient(60rem 34rem at 88% -12%, rgba(91, 132, 255, 0.14), transparent 64%),
+    radial-gradient(44rem 26rem at 2% 0%, rgba(139, 107, 255, 0.1), transparent 60%);
+}
+
+/* ---- NOVA workspace palette: LIGHT ---- */
+:root[data-nova-theme='light'] {
+  --color-ws-bg: #f7f8fb;
+  --color-ws-surface: #ffffff;
+  --color-ws-elev: #ffffff;
+  --color-ws-elev-2: #f1f3f9;
+  --color-ws-line: rgba(12, 16, 32, 0.09);
+  --color-ws-line-strong: rgba(12, 16, 32, 0.16);
+  --color-ws-text: #0c1020;
+  --color-ws-text-2: #5a6376;
+  --color-ws-text-3: #656d7e;
+  --color-ws-accent: #375cea;
+  --color-ws-accent-solid: #375cea;
+  --color-ws-accent-ink: #2445c4;
+  --color-ws-accent-2: #6d4bd8;
+  --color-ws-danger: #c0293a;
+  --color-ws-success: #0f7a4d;
+  --color-ws-warn: #8a5a00;
+
+  --ws-shadow-1: 0 1px 2px rgba(16, 24, 40, 0.06), 0 10px 28px -18px rgba(16, 24, 40, 0.22);
+  --ws-shadow-2: 0 1px 2px rgba(16, 24, 40, 0.08), 0 24px 56px -26px rgba(16, 24, 40, 0.28);
+  --ws-glass: rgba(255, 255, 255, 0.75);
+  --ws-glass-strong: rgba(255, 255, 255, 0.94);
+  --ws-ring: rgba(59, 99, 246, 0.4);
+  --ws-wash: radial-gradient(60rem 34rem at 88% -12%, rgba(59, 99, 246, 0.1), transparent 64%),
+    radial-gradient(44rem 26rem at 2% 0%, rgba(109, 75, 216, 0.08), transparent 60%);
+
+  color-scheme: light;
+  --app-bg: #f7f8fb;
+}
+
+:root[data-nova-theme='light'] body {
+  background-image: radial-gradient(64rem 36rem at 82% -14%, rgba(59, 99, 246, 0.08), transparent 62%),
+    radial-gradient(48rem 30rem at 0% 0%, rgba(109, 75, 216, 0.06), transparent 58%);
+}
+
+/* Dark is the default; `<html data-nova-theme="dark">` is set explicitly by the
+   boot script so the first paint never flashes the wrong palette. */
+:root[data-nova-theme='dark'] {
+  color-scheme: dark;
+}

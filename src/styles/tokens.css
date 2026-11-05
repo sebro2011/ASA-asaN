@@ -25,7 +25,12 @@
   --color-ink: #eef3fb;
   --color-ink-2: #b9c6da;
   --color-ink-3: #8294ad;
-  --color-ink-4: #5f7290;
+  /* Accessibility fix (Phase 3A): the previous #5f7290 measured 3.20–4.15:1 on
+     the science surfaces — below WCAG AA for the 9.5–11 px metadata it is used
+     for. #8494ab measures 5.07:1 on the darkest surface (#14243a) and 6.03:1 on
+     surface-2, so every metadata label now passes AA without changing the
+     palette's character. */
+  --color-ink-4: #8494ab;
 
   /* ---- accents (atmosphere) ---- */
   --color-atmo: #5ed3f2;

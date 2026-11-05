@@ -23,7 +23,8 @@ import {
   Sparkles,
   X,
   Command,
-  Download
+  Download,
+  ArrowLeft
 } from 'lucide-react';
 import type { SupportedLanguage } from '../i18n/translations';
 import { NAV_ENTRIES, NAV_GROUPS, type TabId } from './navigation';
@@ -62,9 +63,23 @@ export interface AppHeaderProps {
   onOpenExport?: () => void;
   dataStatus?: React.ReactNode;
   lang: SupportedLanguage;
+  /**
+   * Returns to the NOVA workspace shell. Explore is a secondary surface inside
+   * NOVA, so its header always offers the way back (Phase 3A).
+   */
+  onExitToWorkspace?: () => void;
+  workspaceLabel?: string;
 }
 
-export default function AppHeader({ activeTab, onTabChange, onOpenExport, dataStatus, lang }: AppHeaderProps) {
+export default function AppHeader({
+  activeTab,
+  onTabChange,
+  onOpenExport,
+  dataStatus,
+  lang,
+  onExitToWorkspace,
+  workspaceLabel = 'NOVA Workspace'
+}: AppHeaderProps) {
   const { i18n } = useTranslation();
   const [openGroup, setOpenGroup] = useState<string | null>(null);
   const [langOpen, setLangOpen] = useState(false);
@@ -141,6 +156,17 @@ export default function AppHeader({ activeTab, onTabChange, onOpenExport, dataSt
             </span>
           </span>
         </button>
+
+        {onExitToWorkspace ? (
+          <button
+            type="button"
+            onClick={onExitToWorkspace}
+            className="ml-1 hidden shrink-0 items-center gap-1.5 rounded-lg border border-line bg-surface/60 px-2.5 py-1.5 text-[11.5px] font-medium text-ink-2 transition-colors hover:border-line-strong hover:text-ink sm:inline-flex"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" strokeWidth={1.8} />
+            {workspaceLabel}
+          </button>
+        ) : null}
 
         {/* Desktop navigation ---------------------------------------------- */}
         <nav className="ml-2 hidden items-center gap-1 lg:flex" aria-label="Primary">
@@ -330,10 +356,24 @@ export default function AppHeader({ activeTab, onTabChange, onOpenExport, dataSt
                 </button>
               </div>
 
+              {onExitToWorkspace ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMobileOpen(false);
+                    onExitToWorkspace();
+                  }}
+                  className="mt-4 flex w-full items-center gap-2 rounded-xl border border-atmo/30 bg-atmo/10 px-3.5 py-3 text-left"
+                >
+                  <ArrowLeft className="h-4 w-4 text-atmo" strokeWidth={1.8} />
+                  <span className="text-sm font-medium text-ink">{workspaceLabel}</span>
+                </button>
+              ) : null}
+
               <button
                 type="button"
                 onClick={() => go('home')}
-                className="mt-4 flex w-full items-center justify-between rounded-xl border border-line bg-surface/70 px-3.5 py-3 text-left"
+                className="mt-2 flex w-full items-center justify-between rounded-xl border border-line bg-surface/70 px-3.5 py-3 text-left"
               >
                 <span className="text-sm font-medium text-ink">Mission overview</span>
                 <Search className="h-4 w-4 text-ink-3" strokeWidth={1.7} />

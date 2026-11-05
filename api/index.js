@@ -4147,6 +4147,44 @@ Explanation to translate: "${explanation}"`;
   });
 }
 
+// server/workspaceConfig.ts
+import { Router as Router3 } from "express";
+function isPublishableKey2(key) {
+  if (!key) return false;
+  if (key.startsWith("sb_publishable_")) return key.length >= 24;
+  try {
+    const parts = key.split(".");
+    if (parts.length !== 3) return false;
+    const payload = JSON.parse(Buffer.from(parts[1], "base64url").toString("utf8"));
+    return payload?.role === "anon";
+  } catch {
+    return false;
+  }
+}
+function readWorkspaceCloudConfig(env = process.env) {
+  const rawUrl = (env.SUPABASE_URL || "").trim();
+  const publishableKey = (env.SUPABASE_PUBLISHABLE_KEY || env.SUPABASE_ANON_KEY || "").trim();
+  const secret = (env.SUPABASE_SERVICE_ROLE_KEY || "").trim();
+  if (!rawUrl || !publishableKey) return { enabled: false, reason: "not-configured" };
+  let parsed;
+  try {
+    parsed = new URL(rawUrl);
+  } catch {
+    return { enabled: false, reason: "invalid-url" };
+  }
+  if (parsed.protocol !== "https:" || parsed.username || parsed.password || parsed.port || parsed.pathname !== "/" || parsed.search || parsed.hash) {
+    return { enabled: false, reason: "invalid-url" };
+  }
+  if (!isPublishableKey2(publishableKey)) return { enabled: false, reason: "invalid-key" };
+  if (secret && publishableKey === secret) return { enabled: false, reason: "key-conflict" };
+  return { enabled: true, url: parsed.origin, publishableKey };
+}
+var workspaceConfigRouter = Router3();
+workspaceConfigRouter.get("/config", (_req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  res.json(readWorkspaceCloudConfig());
+});
+
 // server.ts
 dotenv.config();
 process.on("uncaughtException", (err) => {
@@ -4240,6 +4278,7 @@ function rateLimit2(options) {
 }
 app.use("/api/youtube/meta", rateLimit2({ windowMs: 6e4, max: 30, keyPrefix: "youtube-meta" }));
 app.use("/api/community", rateLimit2({ windowMs: 6e4, max: 20, keyPrefix: "community" }));
+app.use("/api/workspace/config", rateLimit2({ windowMs: 6e4, max: 60, keyPrefix: "workspace-config" }));
 var NOVA_CHAT_PATHS = ["/api/nova/chat", "/api/chat", "/api/openrouter/chat", "/api/nasa-ai"];
 app.use((req, res, next) => {
   if (NOVA_CHAT_PATHS.includes(req.path)) {
@@ -4413,6 +4452,7 @@ app.get("/api/youtube/meta", async (req, res) => {
 app.use("/api/earth", earthRouter);
 app.use("/api/space-videos", spaceVideosRouter);
 app.use("/api/community", communityVideosRouter);
+app.use("/api/workspace", workspaceConfigRouter);
 async function startServer() {
   const isProduction = process.env.NODE_ENV === "production" || process.env.npm_lifecycle_event === "start" || process.env.PORT !== void 0 && process.env.PORT !== "3000";
   const distPath = path.resolve(__dirname, "dist");

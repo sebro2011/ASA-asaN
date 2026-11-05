@@ -4,6 +4,7 @@ import { earthIntelligenceTranslations } from './i18n/earthIntelligence';
 import { interfaceCopy } from './i18n/interfaceCopy';
 import { pageCopy } from './i18n/pageCopy';
 import { spaceShortsCopy } from './i18n/spaceShorts';
+import { workspaceCopy } from './i18n/workspaceCopy';
 
 export const resources = {
   en: {
@@ -423,6 +424,8 @@ export const resources = {
     Object.assign(bucket, interfaceCopy[lang]);
     Object.assign(bucket, pageCopy[lang]);
     Object.assign(bucket, spaceShortsCopy[lang]);
+    // NOVA workspace shell / home / planned-module copy (Phase 3A).
+    Object.assign(bucket, workspaceCopy[lang]);
   }
 });
 
@@ -451,5 +454,17 @@ i18n
       caches: ['localStorage'],
     },
   });
+
+// Keep <html lang> in sync with the active language. This is a WCAG 3.1.1
+// requirement (screen readers pick pronunciation from it) and it applies to both
+// the workspace and the Explore suite, which share this instance.
+export function syncDocumentLanguage(language?: string) {
+  if (typeof document === 'undefined') return;
+  const code = (language || i18n.language || 'en').slice(0, 2);
+  document.documentElement.lang = code;
+}
+
+syncDocumentLanguage();
+i18n.on('languageChanged', syncDocumentLanguage);
 
 export default i18n;

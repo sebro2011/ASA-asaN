@@ -1,0 +1,503 @@
+/* =============================================================================
+   NOVA AI — WORKSPACE SHELL STYLES (Phase 3A)
+   -----------------------------------------------------------------------------
+   The shell is deliberately expressed as a small setof semantic classes rather
+   than long utility strings: the sidebar, top bar, cards and controls appear on
+   every workspace screen, so their states (hover, active, focus, collapsed,
+   light theme) must stay in one place and cannot drift screen to screen.
+
+   Everything here is scoped to `.nova-app` (or a nova-* class) and consumes
+   only `--color-ws-*` tokens, so nothing in this file can restyle Explore.
+   ========================================================================== */
+
+.nova-app {
+  min-height: 100dvh;
+  display: flex;
+  width: 100%;
+  background-color: var(--color-ws-bg);
+  background-image: var(--ws-wash);
+  background-attachment: fixed;
+  color: var(--color-ws-text);
+  font-family: var(--font-sans);
+  /* Keep the workspace visually separable from the science suite even when a
+     light theme is active and a science page inherits body styles. */
+  isolation: isolate;
+}
+
+/* ------------------------------------------------------------------ surfaces */
+
+.nova-glass {
+  background: var(--ws-glass);
+  border: 1px solid var(--color-ws-line);
+  backdrop-filter: blur(20px) saturate(120%);
+  -webkit-backdrop-filter: blur(20px) saturate(120%);
+}
+
+.nova-panel {
+  background: var(--color-ws-surface);
+  border: 1px solid var(--color-ws-line);
+  border-radius: 14px;
+}
+
+.nova-card {
+  position: relative;
+  background: var(--color-ws-surface);
+  border: 1px solid var(--color-ws-line);
+  border-radius: 14px;
+  box-shadow: var(--ws-shadow-1);
+  transition: border-color 160ms var(--ease-out-expo), transform 160ms var(--ease-out-expo),
+    box-shadow 160ms var(--ease-out-expo);
+}
+
+.nova-card--interactive {
+  cursor: pointer;
+  text-align: left;
+}
+.nova-card--interactive:hover {
+  border-color: var(--color-ws-line-strong);
+  box-shadow: var(--ws-shadow-2);
+}
+.nova-card--interactive:active {
+  transform: translateY(1px);
+}
+
+.nova-hairline {
+  height: 1px;
+  background: var(--color-ws-line);
+}
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .nova-glass {
+    background: var(--color-ws-surface);
+  }
+}
+
+/* ------------------------------------------------------------------- sidebar */
+
+.nova-sidebar {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  display: none;
+  height: 100dvh;
+  flex-shrink: 0;
+  flex-direction: column;
+  background: var(--ws-glass);
+  border-right: 1px solid var(--color-ws-line);
+  backdrop-filter: blur(24px) saturate(120%);
+  -webkit-backdrop-filter: blur(24px) saturate(120%);
+  transition: width 200ms var(--ease-out-expo);
+}
+
+@media (min-width: 768px) {
+  .nova-sidebar {
+    display: flex;
+    width: var(--spacing-ws-rail);
+  }
+}
+
+@media (min-width: 1024px) {
+  .nova-sidebar {
+    width: var(--spacing-ws-sidebar);
+  }
+  .nova-sidebar[data-collapsed='true'] {
+    width: var(--spacing-ws-rail);
+  }
+}
+
+.nova-sidebar__brand {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  height: var(--spacing-ws-topbar);
+  padding-inline: 0.875rem;
+  flex-shrink: 0;
+}
+
+.nova-sidebar__scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0.25rem 0.625rem 0.75rem;
+}
+
+.nova-sidebar__footer {
+  flex-shrink: 0;
+  border-top: 1px solid var(--color-ws-line);
+  padding: 0.625rem;
+}
+
+/* --------------------------------------------------------------- navigation */
+
+.nova-nav-section {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 1rem 0 0.375rem;
+  padding-inline: 0.5rem;
+  font-family: var(--font-mono);
+  font-size: 0.625rem;
+  line-height: 1;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--color-ws-text-3);
+}
+.nova-nav-section:first-child {
+  margin-top: 0.5rem;
+}
+
+.nova-nav-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  width: 100%;
+  min-height: 2.25rem;
+  padding: 0.4375rem 0.625rem;
+  border-radius: 10px;
+  color: var(--color-ws-text-2);
+  font-size: 0.84375rem;
+  line-height: 1.25rem;
+  font-weight: 500;
+  text-align: left;
+  transition: background-color 140ms var(--ease-out-expo), color 140ms var(--ease-out-expo);
+}
+.nova-nav-item:hover {
+  background: color-mix(in srgb, var(--color-ws-text) 5%, transparent);
+  color: var(--color-ws-text);
+}
+.nova-nav-item[aria-current='page'] {
+  background: color-mix(in srgb, var(--color-ws-accent) 14%, transparent);
+  color: var(--color-ws-text);
+}
+.nova-nav-item[aria-current='page']::before {
+  content: '';
+  position: absolute;
+  left: -0.625rem;
+  top: 0.5rem;
+  bottom: 0.5rem;
+  width: 3px;
+  border-radius: 999px;
+  background: var(--color-ws-accent);
+}
+.nova-nav-item:focus-visible {
+  outline: 2px solid var(--color-ws-accent);
+  outline-offset: 2px;
+}
+
+.nova-nav-item__icon {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  color: currentColor;
+}
+
+.nova-nav-item__label {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Planned modules are navigable but must never look operational. */
+.nova-nav-item__flag {
+  flex-shrink: 0;
+  border: 1px solid var(--color-ws-line-strong);
+  border-radius: 999px;
+  padding: 0.0625rem 0.3125rem;
+  font-family: var(--font-mono);
+  font-size: 0.5rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-ws-text-3);
+}
+
+.nova-nav-item__kbd {
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+  font-size: 0.625rem;
+  color: var(--color-ws-text-3);
+}
+
+/* Collapsed rail: icons only, label becomes a hover/focus tooltip. */
+.nova-sidebar[data-collapsed='true'] .nova-nav-section {
+  justify-content: center;
+  padding-inline: 0;
+  font-size: 0;
+  letter-spacing: 0;
+}
+.nova-sidebar[data-collapsed='true'] .nova-nav-section::after {
+  content: '';
+  width: 1rem;
+  height: 1px;
+  background: var(--color-ws-line-strong);
+}
+.nova-sidebar[data-collapsed='true'] .nova-nav-item {
+  justify-content: center;
+  padding-inline: 0;
+}
+.nova-sidebar[data-collapsed='true'] .nova-nav-item__label,
+.nova-sidebar[data-collapsed='true'] .nova-nav-item__flag,
+.nova-sidebar[data-collapsed='true'] .nova-nav-item__kbd,
+.nova-sidebar[data-collapsed='true'] .nova-sidebar__brand-text,
+.nova-sidebar[data-collapsed='true'] .nova-sidebar__collapsible {
+  display: none;
+}
+
+/* ------------------------------------------------------------------- top bar */
+
+.nova-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  height: var(--spacing-ws-topbar);
+  padding-inline: 0.75rem;
+  border-bottom: 1px solid var(--color-ws-line);
+  background: var(--ws-glass);
+  backdrop-filter: blur(18px) saturate(120%);
+  -webkit-backdrop-filter: blur(18px) saturate(120%);
+}
+@media (min-width: 1024px) {
+  .nova-topbar {
+    padding-inline: 1.5rem;
+  }
+}
+
+/* ------------------------------------------------------------------ controls */
+
+.nova-icon-btn {
+  display: inline-grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 8px;
+  color: var(--color-ws-text-2);
+  transition: background-color 140ms var(--ease-out-expo), color 140ms var(--ease-out-expo);
+}
+.nova-icon-btn:hover {
+  background: color-mix(in srgb, var(--color-ws-text) 7%, transparent);
+  color: var(--color-ws-text);
+}
+
+.nova-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  height: 2.25rem;
+  padding-inline: 0.875rem;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  font-size: 0.8125rem;
+  font-weight: 550;
+  white-space: nowrap;
+  transition: background-color 140ms var(--ease-out-expo), border-color 140ms var(--ease-out-expo),
+    color 140ms var(--ease-out-expo), transform 140ms var(--ease-out-expo);
+}
+.nova-btn:active {
+  transform: translateY(1px);
+}
+.nova-btn[disabled] {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.nova-btn--primary {
+  background: var(--color-ws-accent-solid);
+  color: #ffffff;
+}
+.nova-btn--primary:hover {
+  background: color-mix(in srgb, var(--color-ws-accent-solid) 86%, var(--color-ws-text));
+}
+
+.nova-btn--secondary {
+  background: color-mix(in srgb, var(--color-ws-text) 6%, transparent);
+  border-color: var(--color-ws-line);
+  color: var(--color-ws-text);
+}
+.nova-btn--secondary:hover {
+  background: color-mix(in srgb, var(--color-ws-text) 10%, transparent);
+  border-color: var(--color-ws-line-strong);
+}
+
+.nova-btn--ghost {
+  color: var(--color-ws-text-2);
+}
+.nova-btn--ghost:hover {
+  background: color-mix(in srgb, var(--color-ws-text) 6%, transparent);
+  color: var(--color-ws-text);
+}
+
+.nova-input {
+  width: 100%;
+  height: 2.25rem;
+  border-radius: 10px;
+  border: 1px solid var(--color-ws-line);
+  background: color-mix(in srgb, var(--color-ws-bg) 60%, transparent);
+  padding-inline: 0.6875rem;
+  font-size: 0.8125rem;
+  color: var(--color-ws-text);
+}
+.nova-input::placeholder {
+  color: var(--color-ws-text-3);
+}
+.nova-input:hover {
+  border-color: var(--color-ws-line-strong);
+}
+
+/* ------------------------------------------------------------------- forms */
+
+.nova-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+.nova-label {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--color-ws-text-2);
+}
+.nova-hint {
+  font-size: 0.6875rem;
+  line-height: 1.4;
+  color: var(--color-ws-text-3);
+}
+.nova-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.375rem;
+  font-size: 0.75rem;
+  line-height: 1.45;
+  color: var(--color-ws-danger);
+}
+.nova-divider {
+  height: 1px;
+  border: 0;
+  margin: 0.25rem 0;
+  background: var(--color-ws-line);
+}
+.nova-link {
+  color: var(--color-ws-accent-ink);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.nova-input:focus-visible {
+  outline: 2px solid var(--color-ws-accent);
+  outline-offset: 1px;
+}
+.nova-input[aria-invalid='true'] {
+  border-color: var(--color-ws-danger);
+}
+
+.nova-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3125rem;
+  border-radius: 999px;
+  border: 1px solid var(--color-ws-line);
+  padding: 0.125rem 0.5rem;
+  font-family: var(--font-mono);
+  font-size: 0.625rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-ws-text-2);
+}
+
+.nova-kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.375rem;
+  height: 1.25rem;
+  padding-inline: 0.25rem;
+  border-radius: 5px;
+  border: 1px solid var(--color-ws-line-strong);
+  background: color-mix(in srgb, var(--color-ws-text) 5%, transparent);
+  font-family: var(--font-mono);
+  font-size: 0.625rem;
+  color: var(--color-ws-text-3);
+}
+
+/* Status dot — meaning only, never decoration. */
+.nova-dot {
+  width: 0.375rem;
+  height: 0.375rem;
+  border-radius: 999px;
+  flex-shrink: 0;
+  background: currentColor;
+}
+
+/* ------------------------------------------------------------------ overlays */
+
+@keyframes nova-drawer-in {
+  from {
+    transform: translateX(-12px);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.nova-scroll {
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+
+/* -------------------------------------------------------------------- motion */
+
+@media (prefers-reduced-motion: reduce) {
+  .nova-card,
+  .nova-btn,
+  .nova-nav-item,
+  .nova-sidebar {
+    transition-duration: 0.001ms;
+  }
+}
+
+/* `<html data-nova-motion="reduced">` mirrors the in-app Reduce-motion setting
+   (Settings lands in Phase 3C; the attribute is honoured from day one). */
+:root[data-nova-motion='reduced'] .nova-card,
+:root[data-nova-motion='reduced'] .nova-btn,
+:root[data-nova-motion='reduced'] .nova-nav-item,
+:root[data-nova-motion='reduced'] .nova-sidebar {
+  transition-duration: 0.001ms;
+}
+
+/* `<html data-nova-contrast="high">` raises hairlines so structure survives
+   on low-quality panels (in-app toggle arrives with Settings). */
+:root[data-nova-contrast='high'] {
+  --color-ws-line: rgba(255, 255, 255, 0.2);
+  --color-ws-line-strong: rgba(255, 255, 255, 0.32);
+}
+:root[data-nova-theme='light'][data-nova-contrast='high'] {
+  --color-ws-line: rgba(12, 16, 32, 0.2);
+  --color-ws-line-strong: rgba(12, 16, 32, 0.34);
+}
+
+/* --------------------------------------------------------------- scrollbars */
+
+.nova-app {
+  scrollbar-color: color-mix(in srgb, var(--color-ws-text) 24%, transparent) transparent;
+}
+
+/* --------------------------------------------------- explore isolation layer */
+
+/* The science suite keeps its own dark astronomy identity (D1: preserved). This
+   wrapper re-establishes the science palette inside a light workspace theme. */
+.explore-space {
+  --app-bg: #03060e;
+  min-height: 100dvh;
+  background-color: var(--color-void);
+  color: var(--color-ink);
+  color-scheme: dark;
+}

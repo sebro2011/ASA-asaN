@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="NOVA">
+  <defs>
+    <linearGradient id="nova-burst" x1="4" y1="2" x2="30" y2="30" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#C3D2FF" />
+      <stop offset="0.52" stop-color="#5B84FF" />
+      <stop offset="1" stop-color="#7A58FF" />
+    </linearGradient>
+  </defs>
+
+  <!-- Primary nova burst: four points with concave shoulders. -->
+  <path
+    d="M13 2.4c.92 5.6 4.08 8.76 9.68 9.68-5.6.92-8.76 4.08-9.68 9.68-.92-5.6-4.08-8.76-9.68-9.68C8.92 11.16 12.08 8 13 2.4Z"
+    fill="url(#nova-burst)"
+  />
+
+  <!-- Secondary spark: reads as the assistant's "generate" point. -->
+  <path
+    d="M23.6 17.8c.42 2.56 1.86 4 4.42 4.42-2.56.42-4 1.86-4.42 4.42-.42-2.56-1.86-4-4.42-4.42 2.56-.42 4-1.86 4.42-4.42Z"
+    fill="#FFFFFF"
+    fill-opacity="0.92"
+  />
+</svg>
