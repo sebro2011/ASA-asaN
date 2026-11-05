@@ -17,6 +17,8 @@ import AppShell from './app/AppShell';
 import { navItemForRoute } from './app/navConfig';
 import HomeSurface from './workspace/home/HomeSurface';
 import PlannedSurface from './workspace/PlannedSurface';
+import ProfileSurface from './workspace/profile/ProfileSurface';
+import RequireAuth from './auth/RequireAuth';
 import NotFound from './workspace/NotFound';
 import type { TabId } from './ui/navigation';
 import { NovaMark } from './app/Brand';
@@ -62,6 +64,14 @@ function ExploreSurface({ route }: { route: AppRoute }) {
 function WorkspaceSurface({ route }: { route: AppRoute }) {
   if (route.name === 'home') return <HomeSurface />;
   if (route.name === 'notFound') return <NotFound />;
+
+  if (route.name === 'profile') {
+    return (
+      <RequireAuth>
+        <ProfileSurface />
+      </RequireAuth>
+    );
+  }
 
   const item = navItemForRoute(route.name);
   if (item && item.status === 'planned') return <PlannedSurface item={item} />;

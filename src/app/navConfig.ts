@@ -165,10 +165,7 @@ export const ACCOUNT_NAV: WorkspaceNavItem[] = [
     href: '/profile',
     labelKey: 'wsProfile',
     icon: UserRound,
-    status: 'planned',
-    phase: '3B',
-    descriptionKey: 'wsAreaProfileDesc',
-    bulletKeys: ['wsAreaProfileB1', 'wsAreaProfileB2'],
+    status: 'live',
   },
 ];
 

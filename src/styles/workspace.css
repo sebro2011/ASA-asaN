@@ -353,6 +353,50 @@
   border-color: var(--color-ws-line-strong);
 }
 
+/* ------------------------------------------------------------------- forms */
+
+.nova-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+.nova-label {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--color-ws-text-2);
+}
+.nova-hint {
+  font-size: 0.6875rem;
+  line-height: 1.4;
+  color: var(--color-ws-text-3);
+}
+.nova-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.375rem;
+  font-size: 0.75rem;
+  line-height: 1.45;
+  color: var(--color-ws-danger);
+}
+.nova-divider {
+  height: 1px;
+  border: 0;
+  margin: 0.25rem 0;
+  background: var(--color-ws-line);
+}
+.nova-link {
+  color: var(--color-ws-accent-ink);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.nova-input:focus-visible {
+  outline: 2px solid var(--color-ws-accent);
+  outline-offset: 1px;
+}
+.nova-input[aria-invalid='true'] {
+  border-color: var(--color-ws-danger);
+}
+
 .nova-chip {
   display: inline-flex;
   align-items: center;

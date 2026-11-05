@@ -67,6 +67,7 @@ test('workspace shell renders, searches, switches theme and explains planned mod
   const { ThemeProvider } = await import('../src/app/theme.tsx');
   const { RouterProvider, navigate } = await import('../src/app/router.tsx');
   const App = (await import('../src/App.tsx')).default;
+  const { AuthProvider } = await import('../src/auth/AuthProvider.tsx');
 
   const container = document.getElementById('root');
   const root = createRoot(container);
@@ -79,7 +80,17 @@ test('workspace shell renders, searches, switches theme and explains planned mod
         React.createElement(
           ThemeProvider,
           null,
-          React.createElement(RouterProvider, null, React.createElement(App)),
+          React.createElement(
+            RouterProvider,
+            null,
+            // No cloud in the shell tests: the workspace must render its
+            // "unconfigured" state, which is exactly what a bare deployment is.
+            React.createElement(
+              AuthProvider,
+              { createClient: async () => null },
+              React.createElement(App),
+            ),
+          ),
         ),
       ),
     );
@@ -274,6 +285,7 @@ async function renderShell(acceptQuery) {
   const { ThemeProvider } = await import('../src/app/theme.tsx');
   const { RouterProvider } = await import('../src/app/router.tsx');
   const App = (await import('../src/App.tsx')).default;
+  const { AuthProvider } = await import('../src/auth/AuthProvider.tsx');
 
   const root = createRoot(document.getElementById('root'));
   await act(async () => {
@@ -284,7 +296,17 @@ async function renderShell(acceptQuery) {
         React.createElement(
           ThemeProvider,
           null,
-          React.createElement(RouterProvider, null, React.createElement(App)),
+          React.createElement(
+            RouterProvider,
+            null,
+            // No cloud in the shell tests: the workspace must render its
+            // "unconfigured" state, which is exactly what a bare deployment is.
+            React.createElement(
+              AuthProvider,
+              { createClient: async () => null },
+              React.createElement(App),
+            ),
+          ),
         ),
       ),
     );

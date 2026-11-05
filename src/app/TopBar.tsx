@@ -10,6 +10,8 @@ import { useTranslation } from 'react-i18next';
 import { Menu, Monitor, Moon, Search, Sun } from 'lucide-react';
 import { useTheme, type ThemePreference } from './theme';
 import LanguageMenu from './LanguageMenu';
+import AccountMenu from '../auth/AccountMenu';
+import SyncBadge from '../auth/SyncBadge';
 
 interface TopBarProps {
   title: string;
@@ -97,6 +99,8 @@ export default function TopBar({
         )}
       </button>
 
+      {isMobile ? null : <SyncBadge />}
+      <AccountMenu compact={isMobile} />
       <ThemeButton />
       <LanguageMenu compact={isMobile} />
     </header>

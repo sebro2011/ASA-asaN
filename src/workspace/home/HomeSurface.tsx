@@ -14,11 +14,49 @@ import ThemeOptions from '../../app/ThemeOptions';
 import { NovaMark } from '../../app/Brand';
 import { WORKSPACE_NAV } from '../../app/navConfig';
 import { onlineProviderNames, useProviderConfig } from '../useProviderConfig';
+import { useOptionalAuth } from '../../auth/AuthProvider';
+import SyncBadge from '../../auth/SyncBadge';
 
 function greetingKey(hour: number): string {
   if (hour < 12) return 'wsGoodMorning';
   if (hour < 18) return 'wsGoodAfternoon';
   return 'wsGoodEvening';
+}
+
+/** Cloud status: unconfigured, signed out, or signed in with live sync state. */
+function CloudCard() {
+  const { t } = useTranslation();
+  const auth = useOptionalAuth();
+  const unconfigured = !auth || auth.status === 'unconfigured';
+  const signedIn = auth?.status === 'signed-in';
+
+  return (
+    <div className="nova-card p-4" aria-labelledby="nova-cloud-heading">
+      <div className="flex items-center justify-between gap-3">
+        <p id="nova-cloud-heading" className="text-[12.5px] font-medium text-ws-text">
+          {t('wsHomeCloudTitle')}
+        </p>
+        {signedIn ? <SyncBadge compact /> : null}
+      </div>
+      <p className="mt-1.5 text-[11.5px] leading-relaxed text-ws-text-3">
+        {unconfigured
+          ? t('wsHomeCloudUnconfigured')
+          : signedIn
+            ? t('wsHomeCloudSignedIn')
+            : t('wsHomeCloudSignedOut')}
+      </p>
+      {!signedIn && !unconfigured ? (
+        <Link
+          to="/profile"
+          className="nova-btn nova-btn--secondary mt-3 w-full justify-center"
+          style={{ height: '2rem' }}
+        >
+          {t('wsAuthSignIn')}
+          <ArrowRight size={13} strokeWidth={2} aria-hidden="true" />
+        </Link>
+      ) : null}
+    </div>
+  );
 }
 
 function ProviderStatus() {
@@ -176,6 +214,8 @@ export default function HomeSurface() {
           </section>
 
           <ProviderStatus />
+
+          <CloudCard />
 
           <Link
             to="/explore"
