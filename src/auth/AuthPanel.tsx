@@ -128,7 +128,12 @@ export default function AuthPanel({ initialMode = 'sign-in', onAuthenticated, no
   if (auth.status === 'unconfigured') {
     // A probe that never reached the server is retryable; missing credentials are
     // not — those need an operator, and the panel says so instead of guessing.
-    const retryable = auth.reason === 'unreachable' || auth.reason === 'invalid-response';
+    const retryable =
+      auth.reason === 'unreachable' ||
+      auth.reason === 'timeout' ||
+      auth.reason === 'route-missing' ||
+      auth.reason === 'server-error' ||
+      auth.reason === 'invalid-response';
     return (
       <section
         className="nova-glass-strong rounded-[22px] p-5 shadow-[var(--ws-shadow-2)] sm:p-6"
