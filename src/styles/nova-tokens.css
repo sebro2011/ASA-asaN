@@ -100,3 +100,27 @@
 :root[data-nova-theme='dark'] {
   color-scheme: dark;
 }
+
+/* ==========================================================================
+   Liquid-glass orb palette (Home hero). Both themes are first-class: the light
+   set is pastel on white glass, the dark set is saturated behind smoked glass.
+   ========================================================================== */
+:root {
+  --nova-orb-a: #5b84ff;
+  --nova-orb-b: #a06bff;
+  --nova-orb-c: #2fd0e6;
+  --nova-orb-d: #ff7ab8;
+  --nova-orb-glass: rgba(255, 255, 255, 0.18);
+  --nova-orb-edge: rgba(255, 255, 255, 0.28);
+  --nova-orb-shadow: 0 30px 60px -30px rgba(0, 0, 0, 0.8);
+}
+
+:root[data-nova-theme='light'] {
+  --nova-orb-a: #8fb0ff;
+  --nova-orb-b: #c6a9ff;
+  --nova-orb-c: #8fe3f2;
+  --nova-orb-d: #ffb0d0;
+  --nova-orb-glass: rgba(255, 255, 255, 0.55);
+  --nova-orb-edge: rgba(255, 255, 255, 0.85);
+  --nova-orb-shadow: 0 26px 60px -28px rgba(16, 24, 40, 0.35);
+}

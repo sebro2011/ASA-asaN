@@ -110,6 +110,14 @@ function createFakeClient(seed = {}) {
             Promise.resolve({ data: { ...stored }, error: null }).then(onFulfilled, onRejected),
         };
       },
+      delete: () => ({
+        eq: (column, value) => {
+          const before = rows[name].length;
+          rows[name] = rows[name].filter((row) => row[column] !== value);
+          calls.delete.push({ table: name, column, value, removed: before - rows[name].length });
+          return Promise.resolve({ error: null });
+        },
+      }),
       update: (patch) => {
         const apply = (filters) => {
           let updated = null;
@@ -298,6 +306,46 @@ async function submit(act, form) {
     form.dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
   });
   await settle(act, 120);
+}
+
+function message(id, conversationId, role, content, extra = {}) {
+  return {
+    id,
+    conversation_id: conversationId,
+    user_id: 'user-1',
+    role,
+    content,
+    provider: role === 'assistant' ? 'Local engine' : null,
+    model: role === 'assistant' ? 'nasa-local-engine' : null,
+    is_error: false,
+    seq: 1,
+    created_at: '2026-03-01T10:00:00.000Z',
+    updated_at: '2026-03-01T10:00:00.000Z',
+    ...extra,
+  };
+}
+
+/** The chat request never answers — only the abort signal ends it. */
+function stubAbortableChat() {
+  globalThis.fetch = async (url, init) => {
+    const target = String(url);
+    if (target.includes('/api/workspace/config')) {
+      return json({ enabled: true, url: 'https://project.supabase.co', publishableKey: 'sb_publishable_test_key_123456' });
+    }
+    if (target.includes('/api/nova/config')) {
+      return json({ providers: { auto: true, local: true, gemini: false, openrouter: false, arena: false } });
+    }
+    if (target.includes('/api/nova/chat')) {
+      return new Promise((_resolve, reject) => {
+        init?.signal?.addEventListener('abort', () => {
+          const error = new Error('aborted');
+          error.name = 'AbortError';
+          reject(error);
+        });
+      });
+    }
+    return json({}, 404);
+  };
 }
 
 function conversation(id, title, extra = {}) {
@@ -621,6 +669,132 @@ test('both chat scroll regions are keyboard reachable and labelled', async () =>
       assert.ok((node.getAttribute('aria-label') || '').trim().length > 0, 'scroll container is named');
     }
     await app.unmount();
+  } finally {
+    dom.window.close();
+  }
+});
+
+/* ---------------------------------------------- copy / regenerate / stop */
+
+test('copying a reply writes the exact text and confirms it once', async () => {
+  const dom = installDom();
+  try {
+    stubFetch();
+    const copied = [];
+    Object.defineProperty(window.navigator, 'clipboard', {
+      value: { writeText: async (value) => void copied.push(value) },
+      configurable: true,
+    });
+    const { client } = createFakeClient({
+      conversations: [conversation('c1', 'Existing thread')],
+      messages: [
+        { ...message('m1', 'c1', 'user', 'Hello') },
+        { ...message('m2', 'c1', 'assistant', 'A calm answer.') },
+      ],
+    });
+
+    const app = await mountChat({ client, path: '/chat/c1' });
+    const copy = document.querySelector('button[aria-label="Copy"]');
+    assert.ok(copy, 'the assistant bubble offers a copy control');
+    await app.act(async () => {
+      copy.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+    });
+    await settle(app.act, 30);
+
+    assert.deepEqual(copied, ['A calm answer.']);
+    assert.match(app.text(), /Copied/);
+    await app.unmount();
+  } finally {
+    dom.window.close();
+  }
+});
+
+test('regenerate replaces the last answer instead of stacking a second one', async () => {
+  const dom = installDom();
+  try {
+    const fetches = stubFetch({
+      chatResponse: { body: { text: 'Second answer.', provider: 'Arena', model: 'arena_smart.aria' } },
+    });
+    const { client, rows, calls } = createFakeClient({
+      conversations: [conversation('c1', 'Existing thread')],
+      messages: [
+        { ...message('m1', 'c1', 'user', 'Hello') },
+        { ...message('m2', 'c1', 'assistant', 'First answer.') },
+      ],
+    });
+
+    const app = await mountChat({ client, path: '/chat/c1' });
+    const regenerate = document.querySelector('button[aria-label="Regenerate"]');
+    assert.ok(regenerate, 'the last reply can be regenerated');
+    await app.act(async () => {
+      regenerate.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+    });
+    await settle(app.act, 150);
+
+    // The superseded answer row was deleted on the server, not duplicated.
+    assert.deepEqual(calls.delete.map((call) => call.value), ['m2']);
+    assert.equal(rows.messages.filter((row) => row.role === 'assistant').length, 1);
+    assert.match(rows.messages.find((row) => row.role === 'assistant').content, /Second answer/);
+
+    // The request replayed the transcript, so the model saw the same question.
+    const chat = fetches.filter((call) => call.url.includes('/api/nova/chat')).at(-1);
+    assert.equal(chat.body.messages.at(-1).content, 'Hello');
+    await app.unmount();
+  } finally {
+    dom.window.close();
+  }
+});
+
+test('stop aborts the request and records it without an error bubble', async () => {
+  const dom = installDom();
+  try {
+    stubAbortableChat();
+    const { client, rows } = createFakeClient({ conversations: [conversation('c1', 'Existing thread')] });
+
+    const app = await mountChat({ client, path: '/chat/c1' });
+    await typeInto(app.act, document.querySelector('#nova-chat-composer'), 'A long question');
+    await submit(app.act, document.querySelector('form'));
+
+    const stop = document.querySelector('button[aria-label="Stop"]');
+    assert.ok(stop, 'a stop control replaces send while generating');
+    await app.act(async () => {
+      stop.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+    });
+    await settle(app.act, 80);
+
+    assert.match(app.text(), /Stopped/);
+    assert.doesNotMatch(app.text(), /unavailable|Network|error/i);
+    const assistant = rows.messages.find((row) => row.role === 'assistant');
+    assert.equal(assistant.is_error, false);
+    assert.equal(assistant.content, 'Stopped');
+    await app.unmount();
+  } finally {
+    dom.window.close();
+  }
+});
+
+test('a prompt queued on Home is sent exactly once by the chat surface', async () => {
+  const dom = installDom();
+  try {
+    const fetches = stubFetch({ chatResponse: { body: { text: 'Handled.', provider: 'Arena' } } });
+    const { client, rows } = createFakeClient();
+    window.sessionStorage.setItem('nova_pending_prompt', 'Plan my week');
+
+    const app = await mountChat({ client });
+    await settle(app.act, 200);
+
+    assert.equal(rows.conversations.length, 1);
+    assert.equal(rows.conversations[0].title, 'Plan my week');
+    assert.equal(window.sessionStorage.getItem('nova_pending_prompt'), null, 'the queue is cleared on read');
+    const chat = fetches.filter((call) => call.url.includes('/api/nova/chat')).at(-1);
+    assert.equal(chat.body.messages.at(-1).content, 'Plan my week');
+
+    // Remounting must not resend it.
+    await app.unmount();
+    const again = await mountChat({ client });
+    await settle(again.act, 180);
+    assert.equal(fetches.filter((call) => call.url.includes('/api/nova/chat')).length, 1);
+    await again.unmount();
   } finally {
     dom.window.close();
   }

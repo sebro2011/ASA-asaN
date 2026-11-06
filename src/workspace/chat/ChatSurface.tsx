@@ -18,11 +18,14 @@ import {
   Archive,
   ArchiveRestore,
   Check,
+  Copy,
   Pencil,
   Pin,
   PinOff,
   Plus,
+  RefreshCw,
   Send,
+  Square,
   Trash2,
   TriangleAlert,
   X,
@@ -40,6 +43,7 @@ import {
   type ChatTurn,
 } from './chatClient';
 import { useConversations, useThread } from './useChatData';
+import { takePrompt } from './pendingPrompt';
 import MessageBody from './MessageBody';
 
 /** Literal keys, so the shell test can verify all three languages. */
@@ -129,6 +133,10 @@ export default function ChatSurface() {
     (profile?.preferred_provider as ChatProvider | undefined) ?? 'auto',
   );
   const [revealingId, setRevealingId] = useState<string | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
+  const pendingRef = useRef(false);
+  const copyTimer = useRef<number | null>(null);
 
   const locale = i18n.language || 'en';
   const active = conversations.items.find((row) => row.id === conversationId) ?? null;
@@ -155,66 +163,167 @@ export default function ChatSurface() {
 
   const lastAssistant = [...thread.messages].reverse().find((row) => row.role === 'assistant');
 
-  const send = useCallback(async () => {
-    const text = draft.trim();
-    if (!text || sending) return;
-    setSending(true);
-    setDraft('');
-    setShowList(false);
+  useEffect(
+    () => () => {
+      if (copyTimer.current) window.clearTimeout(copyTimer.current);
+    },
+    [],
+  );
 
-    let targetId = conversationId;
+  /** Copy a bubble. Falls back to a hidden textarea when the API is blocked. */
+  const copyMessage = useCallback(async (row: { id: string; content: string }) => {
     try {
-      if (!targetId) {
-        const title = text.replace(/\s+/g, ' ').slice(0, 60);
-        const created = await conversations.create(title);
-        targetId = created.id;
-        navigate(`/chat/${created.id}`);
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(row.content);
+      } else {
+        const area = document.createElement('textarea');
+        area.value = row.content;
+        area.setAttribute('readonly', '');
+        area.style.position = 'fixed';
+        area.style.opacity = '0';
+        document.body.appendChild(area);
+        area.select();
+        document.execCommand('copy');
+        area.remove();
       }
+      setCopiedId(row.id);
+      if (copyTimer.current) window.clearTimeout(copyTimer.current);
+      copyTimer.current = window.setTimeout(() => setCopiedId(null), 2_000);
     } catch {
+      /* clipboard blocked — better silence than a false "copied" */
+    }
+  }, []);
+
+  /**
+   * Ask the unchanged `/api/nova/chat` handler for a reply and record it.
+   * The request carries an AbortSignal so Stop can end it immediately.
+   */
+  const requestReply = useCallback(
+    async (history: ChatTurn[], targetId: string | null) => {
+      const controller = new AbortController();
+      abortRef.current = controller;
+
+      const result = await sendChat({
+        messages: history,
+        lang: locale.slice(0, 2),
+        provider,
+        signal: controller.signal,
+      });
+      abortRef.current = null;
+
+      if (!result.ok && result.code === 'ABORTED') {
+        // Nothing failed, so nothing is reported as an error: the transcript just
+        // records that the answer was stopped.
+        await thread.append({
+          role: 'assistant',
+          content: t('wsChatStopped'),
+          conversationId: targetId ?? undefined,
+        });
+        setSending(false);
+        return;
+      }
+
+      if (result.ok) {
+        // An offline answer must say so in the transcript, and the server says why
+        // every online provider was skipped. Both survive a reload.
+        const chain = describeFallbackChain(result.reply.fallbackChain);
+        const offlineNote = result.reply.fallback
+          ? [t('wsChatOfflineNote'), chain].filter(Boolean).join(' — ')
+          : '';
+        const saved = await thread.append({
+          role: 'assistant',
+          content: offlineNote ? `${result.reply.text}\n\n${offlineNote}` : result.reply.text,
+          provider: result.reply.provider,
+          model: result.reply.model,
+          conversationId: targetId ?? undefined,
+        });
+        setRevealingId(saved.row.id);
+      } else {
+        // Keep the cause on the bubble: provider, code and HTTP status, no secrets.
+        const detail = describeChatFailure(result);
+        const saved = await thread.append({
+          role: 'assistant',
+          content: detail ? `${t(chatErrorKey(result.code))}\n${detail}` : t(chatErrorKey(result.code)),
+          isError: true,
+          conversationId: targetId ?? undefined,
+        });
+        thread.markUnsaved(saved.row.id);
+      }
+      void conversations.reload();
       setSending(false);
-      return;
-    }
+    },
+    [locale, provider, t, thread, conversations],
+  );
 
-    const userRow = await thread.append({ role: 'user', content: text, conversationId: targetId });
-    void userRow;
+  const send = useCallback(
+    async (override?: string) => {
+      const text = (override ?? draft).trim();
+      if (!text || sending) return;
+      setSending(true);
+      setDraft('');
+      setShowList(false);
 
-    const history: ChatTurn[] = historyWindow([
-      ...thread.messages.map((row) => ({ role: row.role, content: row.content })),
-      { role: 'user' as const, content: text },
-    ]);
+      let targetId = conversationId;
+      try {
+        if (!targetId) {
+          const title = text.replace(/\s+/g, ' ').slice(0, 60);
+          const created = await conversations.create(title);
+          targetId = created.id;
+          navigate(`/chat/${created.id}`);
+        }
+      } catch {
+        setSending(false);
+        return;
+      }
 
-    const result = await sendChat({ messages: history, lang: locale.slice(0, 2), provider });
+      await thread.append({ role: 'user', content: text, conversationId: targetId });
 
-    if (result.ok) {
-      // An offline answer must say so in the transcript, and the server says why
-      // every online provider was skipped. Both survive a reload.
-      const chain = describeFallbackChain(result.reply.fallbackChain);
-      const offlineNote = result.reply.fallback
-        ? [t('wsChatOfflineNote'), chain].filter(Boolean).join(' — ')
-        : '';
-      const saved = await thread.append({
-        role: 'assistant',
-        content: offlineNote ? `${result.reply.text}\n\n${offlineNote}` : result.reply.text,
-        provider: result.reply.provider,
-        model: result.reply.model,
-        conversationId: targetId,
-      });
-      setRevealingId(saved.row.id);
-      void conversations.reload();
-    } else {
-      // Keep the cause on the bubble: provider, code and HTTP status, no secrets.
-      const detail = describeChatFailure(result);
-      const saved = await thread.append({
-        role: 'assistant',
-        content: detail ? `${t(chatErrorKey(result.code))}\n${detail}` : t(chatErrorKey(result.code)),
-        isError: true,
-        conversationId: targetId,
-      });
-      thread.markUnsaved(saved.row.id);
-      void conversations.reload();
-    }
-    setSending(false);
-  }, [draft, sending, conversationId, conversations, thread, locale, provider, t]);
+      const history: ChatTurn[] = historyWindow([
+        ...thread.messages.map((row) => ({ role: row.role, content: row.content })),
+        { role: 'user' as const, content: text },
+      ]);
+
+      await requestReply(history, targetId);
+    },
+    [draft, sending, conversationId, conversations, thread, requestReply],
+  );
+
+  /**
+   * Regenerate: the superseded answer is deleted and asked again from the same
+   * transcript, so history stays linear instead of stacking two replies.
+   */
+  const regenerate = useCallback(async () => {
+    if (sending || !conversationId) return;
+    const rows = thread.messages;
+    const lastUser = [...rows].reverse().find((row) => row.role === 'user');
+    if (!lastUser) return;
+    const lastReply = [...rows].reverse().find((row) => row.role === 'assistant');
+    if (lastReply) await thread.remove(lastReply.id);
+    setSending(true);
+    const history: ChatTurn[] = historyWindow(
+      rows
+        .filter((row) => row.id !== lastReply?.id)
+        .map((row) => ({ role: row.role, content: row.content })),
+    );
+    await requestReply(history, conversationId);
+  }, [sending, conversationId, thread, requestReply]);
+
+  const stop = useCallback(() => {
+    abortRef.current?.abort();
+  }, []);
+
+  /**
+   * A prompt typed on Home is handed over through sessionStorage. It is consumed
+   * exactly once, and only after the conversation list has loaded, so "New chat"
+   * is created by the same code path as a typed message.
+   */
+  useEffect(() => {
+    if (pendingRef.current || conversationId) return;
+    if (conversations.state !== 'ready') return;
+    pendingRef.current = true;
+    const pending = takePrompt();
+    if (pending) void send(pending);
+  }, [conversationId, conversations.state, send]);
 
   const reveal = useTypewriter(
     revealingId && lastAssistant?.id === revealingId ? lastAssistant.content : '',
@@ -465,12 +574,47 @@ export default function ChatSurface() {
                         {thread.unsaved.includes(row.id) ? (
                           <span className="text-[color:var(--color-ws-danger)]">· {t('wsChatNotSaved')}</span>
                         ) : null}
+                        {!isUser && !row.is_error ? (
+                          <span className="ml-auto flex items-center gap-0.5">
+                            <button
+                              type="button"
+                              className="nova-icon-btn h-6 w-6"
+                              aria-label={t('wsChatCopy')}
+                              title={t('wsChatCopy')}
+                              onClick={() => void copyMessage(row)}
+                            >
+                              {copiedId === row.id ? (
+                                <Check size={12} aria-hidden="true" />
+                              ) : (
+                                <Copy size={12} aria-hidden="true" />
+                              )}
+                            </button>
+                            {row.id === lastAssistant?.id && !sending ? (
+                              <button
+                                type="button"
+                                className="nova-icon-btn h-6 w-6"
+                                aria-label={t('wsChatRegenerate')}
+                                title={t('wsChatRegenerate')}
+                                onClick={() => void regenerate()}
+                              >
+                                <RefreshCw size={12} aria-hidden="true" />
+                              </button>
+                            ) : null}
+                            <span className="sr-only" aria-live="polite">
+                              {copiedId === row.id ? t('wsChatCopied') : ''}
+                            </span>
+                          </span>
+                        ) : null}
                       </div>
                     </div>
                   </li>
                 );
               })}
-              {sending ? <li className="text-[11.5px] text-ws-text-3">{t('wsChatSending')}</li> : null}
+              {sending ? (
+                <li className="text-[11.5px] text-ws-text-3" role="status">
+                  {t('wsChatSending')}
+                </li>
+              ) : null}
             </ul>
           )}
         </div>
@@ -515,14 +659,26 @@ export default function ChatSurface() {
               </select>
             </label>
 
-            <button
-              type="submit"
-              disabled={sending || !draft.trim()}
-              className="nova-btn nova-btn--primary justify-center disabled:opacity-50"
-            >
-              <Send size={13} strokeWidth={2.2} aria-hidden="true" />
-              {sending ? t('wsChatSending') : t('wsChatSend')}
-            </button>
+            {sending ? (
+              <button
+                type="button"
+                onClick={stop}
+                className="nova-btn nova-btn--secondary justify-center"
+                aria-label={t('wsChatStop')}
+              >
+                <Square size={11} strokeWidth={2.6} aria-hidden="true" />
+                {t('wsChatStop')}
+              </button>
+            ) : (
+              <button
+                type="submit"
+                disabled={!draft.trim()}
+                className="nova-btn nova-btn--primary justify-center disabled:opacity-50"
+              >
+                <Send size={13} strokeWidth={2.2} aria-hidden="true" />
+                {t('wsChatSend')}
+              </button>
+            )}
           </div>
         </form>
       </section>

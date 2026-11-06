@@ -45,6 +45,8 @@ export type ChatErrorCode =
   | 'EMPTY_PROVIDER_RESPONSE'
   | 'INTERNAL_ERROR'
   | 'NETWORK'
+  /** The reader pressed Stop; nothing failed, so no error bubble is shown. */
+  | 'ABORTED'
   | 'UNKNOWN';
 
 export type ChatResult =
@@ -148,7 +150,8 @@ export async function sendChat({
       signal,
     });
   } catch {
-    return { ok: false, code: 'NETWORK' };
+    // An aborted request is a user action, not a failure — keep the two apart.
+    return { ok: false, code: signal?.aborted ? 'ABORTED' : 'NETWORK' };
   }
 
   let body: Record<string, unknown> = {};

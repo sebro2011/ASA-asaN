@@ -592,3 +592,227 @@
   border: 0;
   border-top: 1px solid var(--color-ws-border);
 }
+
+/* --------------------------------------------------------------- liquid orb */
+
+.nova-orb {
+  position: relative;
+  display: grid;
+  place-items: center;
+  border-radius: 9999px;
+  isolation: isolate;
+  flex: none;
+}
+
+.nova-orb__halo {
+  position: absolute;
+  inset: -22%;
+  z-index: 0;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 50%,
+    color-mix(in srgb, var(--nova-orb-a) 42%, transparent),
+    transparent 68%);
+  filter: blur(16px);
+  opacity: 0.75;
+}
+
+.nova-orb__blob {
+  position: absolute;
+  z-index: 1;
+  border-radius: 50%;
+  filter: blur(15px);
+  opacity: 0.9;
+  will-change: transform;
+}
+
+.nova-orb__blob--a {
+  inset: 4%;
+  background: radial-gradient(circle at 32% 30%, var(--nova-orb-a), transparent 68%);
+  animation: nova-orb-drift-a 15s ease-in-out infinite alternate;
+}
+.nova-orb__blob--b {
+  inset: 10%;
+  background: radial-gradient(circle at 70% 60%, var(--nova-orb-b), transparent 66%);
+  animation: nova-orb-drift-b 19s ease-in-out infinite alternate;
+}
+.nova-orb__blob--c {
+  inset: 16%;
+  background: radial-gradient(circle at 45% 78%, var(--nova-orb-c), transparent 64%);
+  animation: nova-orb-drift-c 17s ease-in-out infinite alternate;
+}
+.nova-orb__blob--d {
+  inset: 22%;
+  background: radial-gradient(circle at 62% 28%, var(--nova-orb-d), transparent 62%);
+  animation: nova-orb-drift-d 23s ease-in-out infinite alternate;
+}
+
+.nova-orb__glass {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  border-radius: 50%;
+  border: 1px solid var(--nova-orb-edge);
+  background:
+    radial-gradient(circle at 30% 22%, var(--nova-orb-glass), transparent 52%),
+    radial-gradient(circle at 68% 84%, color-mix(in srgb, var(--nova-orb-glass) 60%, transparent), transparent 46%);
+  box-shadow:
+    inset 0 1px 1px rgba(255, 255, 255, 0.45),
+    inset 0 -22px 44px -18px rgba(0, 0, 0, 0.35),
+    var(--nova-orb-shadow);
+  backdrop-filter: blur(9px) saturate(150%);
+  -webkit-backdrop-filter: blur(9px) saturate(150%);
+}
+
+.nova-orb__shine {
+  position: absolute;
+  z-index: 3;
+  top: 12%;
+  left: 18%;
+  width: 26%;
+  height: 18%;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.85), transparent 70%);
+  filter: blur(3px);
+  opacity: 0.7;
+}
+
+.nova-orb__ring {
+  position: absolute;
+  inset: 6%;
+  z-index: 4;
+  border-radius: 50%;
+  border: 1px solid color-mix(in srgb, var(--nova-orb-a) 60%, transparent);
+  opacity: 0;
+}
+
+@keyframes nova-orb-drift-a {
+  from { transform: translate3d(-7%, -5%, 0) scale(1); }
+  to   { transform: translate3d(9%, 7%, 0) scale(1.14); }
+}
+@keyframes nova-orb-drift-b {
+  from { transform: translate3d(8%, -6%, 0) scale(1.06); }
+  to   { transform: translate3d(-9%, 8%, 0) scale(0.94); }
+}
+@keyframes nova-orb-drift-c {
+  from { transform: translate3d(-4%, 9%, 0) scale(0.96); }
+  to   { transform: translate3d(10%, -8%, 0) scale(1.1); }
+}
+@keyframes nova-orb-drift-d {
+  from { transform: translate3d(6%, 6%, 0) scale(1.02); }
+  to   { transform: translate3d(-8%, -6%, 0) scale(1.16); }
+}
+@keyframes nova-orb-pulse {
+  0%   { opacity: 0.55; transform: scale(0.94); }
+  70%  { opacity: 0;    transform: scale(1.14); }
+  100% { opacity: 0;    transform: scale(1.14); }
+}
+
+/* State speed: calmer at rest, quicker while the model is working. */
+.nova-orb[data-state='thinking'] .nova-orb__blob,
+.nova-orb[data-state='generating'] .nova-orb__blob {
+  animation-duration: 5s;
+}
+.nova-orb[data-state='generating'] .nova-orb__blob {
+  animation-duration: 3.6s;
+}
+.nova-orb[data-state='listening'] .nova-orb__ring {
+  animation: nova-orb-pulse 2.4s var(--ease-out-expo) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nova-orb__blob,
+  .nova-orb__ring {
+    animation: none !important;
+  }
+  .nova-orb__ring {
+    opacity: 0.4;
+  }
+}
+
+:root[data-nova-motion='reduced'] .nova-orb__blob,
+:root[data-nova-motion='reduced'] .nova-orb__ring {
+  animation: none !important;
+}
+:root[data-nova-motion='reduced'] .nova-orb__ring {
+  opacity: 0.4;
+}
+
+/* ------------------------------------------------------------ glass pieces */
+
+.nova-glass-strong {
+  background: var(--ws-glass-strong);
+  border: 1px solid var(--color-ws-line);
+  backdrop-filter: blur(28px) saturate(150%);
+  -webkit-backdrop-filter: blur(28px) saturate(150%);
+}
+
+.nova-hero-wash {
+  background: var(--ws-wash);
+}
+
+.nova-chip-glass {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  height: 1.85rem;
+  padding: 0 0.7rem;
+  border-radius: 9999px;
+  border: 1px solid var(--color-ws-line);
+  background: var(--ws-glass);
+  backdrop-filter: blur(14px) saturate(140%);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  font-size: 11.5px;
+  color: var(--color-ws-text-2);
+  transition: border-color 160ms var(--ease-out-expo), color 160ms var(--ease-out-expo),
+    transform 160ms var(--ease-out-expo);
+}
+.nova-chip-glass:hover {
+  border-color: var(--color-ws-line-strong);
+  color: var(--color-ws-text);
+  transform: translateY(-1px);
+}
+
+.nova-quick-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.95rem 1rem;
+  border-radius: 16px;
+  border: 1px solid var(--color-ws-line);
+  background: var(--ws-glass);
+  backdrop-filter: blur(20px) saturate(140%);
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
+  box-shadow: var(--ws-shadow-1);
+  text-align: left;
+  transition: transform 180ms var(--ease-out-expo), border-color 180ms var(--ease-out-expo),
+    box-shadow 180ms var(--ease-out-expo);
+}
+.nova-quick-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--color-ws-line-strong);
+  box-shadow: var(--ws-shadow-2);
+}
+.nova-quick-card:active {
+  transform: translateY(0);
+}
+
+.nova-composer {
+  border-radius: 22px;
+  border: 1px solid var(--color-ws-line-strong);
+  background: var(--ws-glass-strong);
+  backdrop-filter: blur(30px) saturate(160%);
+  -webkit-backdrop-filter: blur(30px) saturate(160%);
+  box-shadow: var(--ws-shadow-2);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nova-quick-card:hover,
+  .nova-chip-glass:hover {
+    transform: none;
+  }
+}
+:root[data-nova-motion='reduced'] .nova-quick-card:hover,
+:root[data-nova-motion='reduced'] .nova-chip-glass:hover {
+  transform: none;
+}

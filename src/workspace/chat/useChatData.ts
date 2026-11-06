@@ -123,6 +123,8 @@ export interface ThreadActions {
     conversationId?: string;
   }): Promise<{ saved: boolean; row: MessageRow }>;
   markUnsaved(id: string): void;
+  /** Hard delete of a single message — used by "regenerate" only. */
+  remove(id: string): Promise<void>;
 }
 
 export function useThread(client: SupabaseClient | null, userId: string | null, conversationId: string | null) {
@@ -216,5 +218,25 @@ export function useThread(client: SupabaseClient | null, userId: string | null, 
     setUnsaved((current) => (current.includes(id) ? current : [...current, id]));
   }, []);
 
-  return { messages, state, error, unsaved, reload, append, markUnsaved };
+  /**
+   * Drop a message. The local list is updated first so the UI never lags behind
+   * the click; a failed delete leaves the row out of the transcript for this
+   * session and the next reload restores it — the safer of the two failures.
+   */
+  const remove = useCallback(
+    async (id: string) => {
+      setMessages((current) => current.filter((row) => row.id !== id));
+      setUnsaved((current) => current.filter((item) => item !== id));
+      if (repo && userId) {
+        try {
+          await repo.remove(id);
+        } catch {
+          /* offline: the row survives on the server and returns on reload */
+        }
+      }
+    },
+    [repo, userId],
+  );
+
+  return { messages, state, error, unsaved, reload, append, markUnsaved, remove };
 }

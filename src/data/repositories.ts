@@ -238,6 +238,12 @@ export function messageRepo(client: SupabaseClient) {
       if (error) throw toRepositoryError(error);
       return data as MessageRow;
     },
+
+    /** Used by "regenerate": the superseded answer is removed, not duplicated. */
+    async remove(id: string): Promise<void> {
+      const { error } = await client.from('messages').delete().eq('id', id);
+      if (error) throw toRepositoryError(error);
+    },
   };
 }
 
