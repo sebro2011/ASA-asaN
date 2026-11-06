@@ -141,6 +141,13 @@ for (const lang of ['en', 'si', 'ta']) {
       assert.ok(flat.includes(value), `${lang}: renders ${key}`);
     }
 
+    // The site lockup is the eyebrow: WebP first, a PNG fallback, a translated
+    // alt and a declared intrinsic size so the overlay cannot shift on decode.
+    assert.match(html, /space-explorer-lockup\.webp/);
+    assert.match(html, /space-explorer-lockup\.png/);
+    assert.match(html, new RegExp(`alt="${i18n.t('welcomeEyebrow')}"`));
+    assert.match(html, /width="1440" height="385"/);
+
     // One primary action, one visible skip, the preference checkbox, version.
     assert.match(html, /id="welcome-begin"/);
     assert.match(html, /type="checkbox"/);

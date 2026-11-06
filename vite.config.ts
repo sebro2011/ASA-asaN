@@ -28,6 +28,9 @@ export default defineConfig(({ mode }) => {
           // is exactly how a healthy endpoint looks broken.
           navigateFallbackDenylist: [/^\/api\//],
           globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2,json}'],
+          // The social preview is fetched by crawlers, never by the app, so it has
+          // no business in the offline precache (it is also the largest image).
+          globIgnores: ['**/brand/og-image.png'],
           runtimeCaching: [
             {
               urlPattern: ({ url }) => url.pathname.startsWith('/api/apod'),

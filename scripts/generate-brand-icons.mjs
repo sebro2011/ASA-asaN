@@ -151,6 +151,9 @@ const favPngs = await Promise.all(
 );
 await writeFile(pub('favicon.ico'), icoBuffer(favPngs));
 
+// NOTE: public/brand/og-image.png is the commissioned NASA Space Explorer
+// artwork (1200x630, palette PNG). Re-running this script overwrites it with the
+// older SVG lockup — only do that if the artwork is being replaced on purpose.
 await sharp(Buffer.from(ogSvg)).resize(1200, 630).png({ compressionLevel: 9 }).toFile(pub('brand', 'og-image.png'));
 
 const mark = await readFile(pub('brand', 'nova-mark.svg'), 'utf8');
