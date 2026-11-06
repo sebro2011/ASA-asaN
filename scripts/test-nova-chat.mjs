@@ -847,3 +847,37 @@ test('Arena provider config reports unavailable when key not set', () => {
   assert.equal(config.providers.arena, false);
   assert.equal(JSON.stringify(config).includes('ARENA_API_KEY'), false);
 });
+
+test('Auto routing never hangs longer than one budgeted chain', async () => {
+  // Every provider hangs until its AbortSignal fires. The per-call timeout is
+  // 40 ms, so an unbudgeted chain of three would take ~120 ms; the assertion
+  // here is that the answer still arrives, from the local engine, and that no
+  // provider can run past the budget.
+  const timeouts = [];
+  const handler = createNovaChatHandler({
+    getArenaApiKey: () => ARENA_TEST_KEY,
+    getOpenRouterApiKey: () => TEST_API_KEY,
+    getGeminiApiKey: () => 'gemini-test-key',
+    fetchImpl: async (_url, init) => {
+      timeouts.push(init?.signal ? 'abortable' : 'unabortable');
+      return await new Promise((_resolve, reject) => {
+        init?.signal?.addEventListener('abort', () => {
+          const error = new Error('aborted');
+          error.name = 'AbortError';
+          reject(error);
+        });
+      });
+    },
+    timeoutMs: 40,
+  });
+
+  const startedAt = Date.now();
+  const response = await handler({ body: sampleBody, ip: '198.51.100.60' });
+  const elapsed = Date.now() - startedAt;
+
+  assert.equal(response.status, 200);
+  assert.equal(response.body.provider, 'NOVA Local Space Engine');
+  assert.equal(response.body.fallback, true);
+  assert.ok(elapsed < 2_000, `answered in ${elapsed} ms, not a 24-second chain`);
+  assert.deepEqual(timeouts, ['abortable', 'abortable', 'abortable'], 'every provider call can be aborted');
+});

@@ -9,6 +9,7 @@ import { earthRouter } from './server/earthIntelligence.ts';
 import { spaceVideosRouter } from './server/spaceVideos.ts';
 import { communityVideosRouter } from './server/communityVideos.ts';
 import { getNovaPublicConfig, handleNovaChatRequest } from './server/novaChat.js';
+import { handleNovaDiagnostics } from './server/novaDiagnostics.js';
 import { setupNasaRoutes } from './server/nasaRoutes.ts';
 import { workspaceConfigRouter } from './server/workspaceConfig.ts';
 
@@ -198,6 +199,19 @@ app.get('/api/nova/config', (_req, res) => {
   res.setHeader('Cache-Control', 'no-store');
   res.setHeader('X-Content-Type-Options', 'nosniff');
   return res.json(getNovaPublicConfig());
+});
+
+// Per-provider reachability. `?probe=1` performs one one-token request against each
+// configured provider and reports a redacted reason when it fails.
+app.get('/api/nova/diagnostics', async (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  try {
+    const probe = req.query?.probe === '1' || req.query?.probe === 'true';
+    return res.json(await handleNovaDiagnostics({ probe }));
+  } catch {
+    return res.status(500).json({ error: 'Diagnostics could not run.', code: 'INTERNAL_ERROR' });
+  }
 });
 
 // Additive local/Express adapter for the same isolated Vercel Nova chat handler.

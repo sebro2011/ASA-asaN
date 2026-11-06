@@ -9,7 +9,7 @@
  * the schema but nothing reads them yet, and a control that changes nothing
  * would be a lie.
  */
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Check, UserRound } from 'lucide-react';
 import { useTheme } from '../../app/theme';
@@ -17,7 +17,9 @@ import ThemeOptions from '../../app/ThemeOptions';
 import { useLanguage } from '../../app/LanguageMenu';
 import { Link } from '../../app/router';
 import { useAuth } from '../../auth/AuthProvider';
+import { useProviderConfig } from '../useProviderConfig';
 import type { ChatProvider } from '../chat/chatClient';
+import AiStatusCard from './AiStatusCard';
 
 const PROVIDERS: Array<{ id: ChatProvider; labelKey: string }> = [
   { id: 'auto', labelKey: 'wsChatProvider_auto' },
@@ -26,6 +28,22 @@ const PROVIDERS: Array<{ id: ChatProvider; labelKey: string }> = [
   { id: 'gemini', labelKey: 'wsChatProvider_gemini' },
   { id: 'local', labelKey: 'wsChatProvider_local' },
 ];
+
+/** Literal keys, so the shell parity test can see all three languages. */
+function providerLabelKey(provider: ChatProvider): string {
+  switch (provider) {
+    case 'arena':
+      return 'wsChatProvider_arena';
+    case 'openrouter':
+      return 'wsChatProvider_openrouter';
+    case 'gemini':
+      return 'wsChatProvider_gemini';
+    case 'local':
+      return 'wsChatProvider_local';
+    default:
+      return 'wsChatProvider_auto';
+  }
+}
 
 function Toggle({
   checked,
@@ -77,10 +95,23 @@ export default function SettingsSurface() {
   const { reducedMotion, setReducedMotion, highContrast, setHighContrast } = useTheme();
   const { lang, changeLanguage } = useLanguage();
   const { status, profile, updateProfile } = useAuth();
+  const { providers } = useProviderConfig();
   const [saved, setSaved] = useState(false);
 
   const signedIn = status === 'signed-in';
   const provider = (profile?.preferred_provider as ChatProvider | undefined) ?? 'auto';
+
+  // Never offer a provider this deployment cannot call. Local and Auto always
+  // exist; an online provider appears only when the server reports a key.
+  const available = useMemo(() => {
+    if (!providers) return PROVIDERS;
+    return PROVIDERS.filter((item) => {
+      if (item.id === 'auto' || item.id === 'local') return true;
+      return providers[item.id] === true;
+    });
+  }, [providers]);
+
+  const providerMissing = Boolean(providers) && !available.some((item) => item.id === provider);
 
   const chooseProvider = async (next: ChatProvider) => {
     const result = await updateProfile({ preferred_provider: next });
@@ -171,13 +202,18 @@ export default function SettingsSurface() {
                 onChange={(event) => void chooseProvider(event.target.value as ChatProvider)}
                 className="nova-field h-7 py-0 text-[12px]"
               >
-                {PROVIDERS.map((item) => (
+                {available.map((item) => (
                   <option key={item.id} value={item.id}>
                     {t(item.labelKey)}
                   </option>
                 ))}
               </select>
             </label>
+            {providerMissing ? (
+              <p className="mt-2 text-[11px] text-ws-warn">
+                {t('wsSettingsProviderUnavailable', { provider: t(providerLabelKey(provider)) })}
+              </p>
+            ) : null}
             <p className="mt-2 text-[11px] text-ws-text-3" role="status" aria-live="polite">
               {saved ? t('wsSettingsSaved') : ''}
             </p>
@@ -186,6 +222,8 @@ export default function SettingsSurface() {
           <p className="mt-3 text-[11.5px] text-ws-text-3">{t('wsSettingsSignedOutNote')}</p>
         )}
       </section>
+
+      <AiStatusCard />
 
       <section aria-labelledby="nova-settings-account" className="nova-card p-4">
         <h2 id="nova-settings-account" className="text-[12.5px] font-medium text-ws-text">

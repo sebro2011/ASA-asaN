@@ -1,7 +1,7 @@
 import { generateLocalSpaceResponse } from '../src/utils/spaceLocalAiEngine.js';
 
-const OPENROUTER_CHAT_COMPLETIONS_URL = 'https://openrouter.ai/api/v1/chat/completions';
-const GEMINI_GENERATE_CONTENT_URL = 'https://generativelanguage.googleapis.com/v1beta/models';
+export const OPENROUTER_CHAT_COMPLETIONS_URL = 'https://openrouter.ai/api/v1/chat/completions';
+export const GEMINI_GENERATE_CONTENT_URL = 'https://generativelanguage.googleapis.com/v1beta/models';
 export const OPENROUTER_FREE_MODEL = 'openrouter/free';
 export const DEFAULT_GEMINI_MODEL = 'gemini-2.5-flash';
 
@@ -23,6 +23,10 @@ const MAX_TOTAL_MESSAGE_BYTES = 20 * 1024;
 const MAX_MESSAGE_CHARS = 4_000;
 const MAX_MESSAGES = 12;
 const UPSTREAM_TIMEOUT_MS = 8_000;
+// Hard ceiling for one automatic request across every configured provider, so a
+// chain of slow failures cannot outlast the browser's patience (or the function
+// timeout) before the local engine answers.
+const AUTO_CHAIN_BUDGET_MS = 18_000;
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const RATE_LIMIT_REQUESTS = 8;
 const SUPPORTED_LANGUAGES = new Set(['en', 'si', 'ta']);
@@ -597,7 +601,12 @@ export function createNovaChatHandler({
     }
 
     let lastError = null;
+    const chainStartedAt = Date.now();
     for (const provider of providerOrder) {
+      const remainingMs = AUTO_CHAIN_BUDGET_MS - (Date.now() - chainStartedAt);
+      if (remainingMs <= 0) break;
+      const providerTimeout = Math.min(timeoutMs, remainingMs);
+
       let response;
       if (provider === 'arena') {
         response = await callArena({
@@ -606,7 +615,7 @@ export function createNovaChatHandler({
           model: models.arena,
           messages: validated.messages,
           language: validated.language,
-          timeoutMs,
+          timeoutMs: providerTimeout,
         });
       } else if (provider === 'openrouter') {
         response = await callOpenRouter({
@@ -615,7 +624,7 @@ export function createNovaChatHandler({
           model: models.openrouter,
           messages: validated.messages,
           language: validated.language,
-          timeoutMs,
+          timeoutMs: providerTimeout,
         });
       } else {
         response = await callGemini({
@@ -624,7 +633,7 @@ export function createNovaChatHandler({
           model: models.gemini,
           messages: validated.messages,
           language: validated.language,
-          timeoutMs,
+          timeoutMs: providerTimeout,
         });
       }
 

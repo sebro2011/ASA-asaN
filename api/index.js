@@ -2498,6 +2498,7 @@ var MAX_TOTAL_MESSAGE_BYTES = 20 * 1024;
 var MAX_MESSAGE_CHARS = 4e3;
 var MAX_MESSAGES = 12;
 var UPSTREAM_TIMEOUT_MS = 8e3;
+var AUTO_CHAIN_BUDGET_MS = 18e3;
 var RATE_LIMIT_WINDOW_MS = 6e4;
 var RATE_LIMIT_REQUESTS = 8;
 var SUPPORTED_LANGUAGES = /* @__PURE__ */ new Set(["en", "si", "ta"]);
@@ -2988,7 +2989,11 @@ function createNovaChatHandler({
       return getLocalResponse(validated.messages.at(-1).content, validated.language, { fallback: true });
     }
     let lastError = null;
+    const chainStartedAt = Date.now();
     for (const provider of providerOrder) {
+      const remainingMs = AUTO_CHAIN_BUDGET_MS - (Date.now() - chainStartedAt);
+      if (remainingMs <= 0) break;
+      const providerTimeout = Math.min(timeoutMs, remainingMs);
       let response;
       if (provider === "arena") {
         response = await callArena({
@@ -2997,7 +3002,7 @@ function createNovaChatHandler({
           model: models.arena,
           messages: validated.messages,
           language: validated.language,
-          timeoutMs
+          timeoutMs: providerTimeout
         });
       } else if (provider === "openrouter") {
         response = await callOpenRouter({
@@ -3006,7 +3011,7 @@ function createNovaChatHandler({
           model: models.openrouter,
           messages: validated.messages,
           language: validated.language,
-          timeoutMs
+          timeoutMs: providerTimeout
         });
       } else {
         response = await callGemini({
@@ -3015,7 +3020,7 @@ function createNovaChatHandler({
           model: models.gemini,
           messages: validated.messages,
           language: validated.language,
-          timeoutMs
+          timeoutMs: providerTimeout
         });
       }
       if (response.status === 200) return response;
@@ -3029,6 +3034,199 @@ function createNovaChatHandler({
   };
 }
 var handleNovaChatRequest = createNovaChatHandler();
+
+// server/novaDiagnostics.js
+var PROBE_TIMEOUT_MS = 6e3;
+var PROBE_COOLDOWN_MS = 1e4;
+var MAX_REASON_CHARS = 180;
+function envValue(env, key) {
+  const value = env?.[key];
+  return typeof value === "string" ? value.trim() : "";
+}
+function redactReason(text, secrets = []) {
+  let out = typeof text === "string" ? text : "";
+  for (const secret of secrets) {
+    if (typeof secret === "string" && secret.length >= 8) out = out.split(secret).join("[redacted]");
+  }
+  out = out.replace(/Bearer\s+[A-Za-z0-9._-]+/gi, "Bearer [redacted]").replace(/sk-or-[A-Za-z0-9._-]+/gi, "[redacted]").replace(/AIza[0-9A-Za-z_-]{10,}/g, "[redacted]").replace(/\bkey=[A-Za-z0-9._-]+/gi, "key=[redacted]").replace(/\s+/g, " ").trim();
+  return out.length > MAX_REASON_CHARS ? `${out.slice(0, MAX_REASON_CHARS - 1)}\u2026` : out;
+}
+function probeRequest(provider, { keys, models }) {
+  if (provider === "openrouter") {
+    return {
+      url: OPENROUTER_CHAT_COMPLETIONS_URL,
+      init: {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${keys.openrouter}`,
+          "Content-Type": "application/json",
+          "X-Title": "NOVA AI diagnostics"
+        },
+        body: JSON.stringify({
+          model: models.openrouter,
+          messages: [{ role: "user", content: "ping" }],
+          max_tokens: 1
+        })
+      }
+    };
+  }
+  if (provider === "gemini") {
+    return {
+      url: `${GEMINI_GENERATE_CONTENT_URL}/${encodeURIComponent(models.gemini)}:generateContent`,
+      init: {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-goog-api-key": keys.gemini },
+        body: JSON.stringify({
+          contents: [{ role: "user", parts: [{ text: "ping" }] }],
+          generationConfig: { maxOutputTokens: 1, temperature: 0 }
+        })
+      }
+    };
+  }
+  return {
+    url: ARENA_BASE_URL,
+    init: {
+      method: "POST",
+      headers: { Authorization: `Bearer ${keys.arena}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: models.arena,
+        messages: [{ role: "user", content: "ping" }],
+        max_tokens: 1,
+        stream: false
+      })
+    }
+  };
+}
+function codeForStatus(status) {
+  if (status === 401 || status === 403) return "PROVIDER_AUTH_ERROR";
+  if (status === 402) return "PROVIDER_CREDIT_REQUIRED";
+  if (status === 404) return "PROVIDER_MODEL_NOT_FOUND";
+  if (status === 429) return "UPSTREAM_RATE_LIMITED";
+  if (status === 408 || status === 504) return "AI_TIMEOUT";
+  if (status >= 500) return "PROVIDER_UNAVAILABLE";
+  if (status >= 400) return "PROVIDER_REJECTED";
+  return "OK";
+}
+function hostOf(url) {
+  try {
+    return new URL(url).host;
+  } catch {
+    return "invalid-url";
+  }
+}
+async function probe({ fetchImpl, provider, keys, models, secrets, timeoutMs, now }) {
+  const { url, init } = probeRequest(provider, { keys, models });
+  const started = now();
+  const controller = typeof AbortController === "function" ? new AbortController() : null;
+  const timer = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
+  try {
+    const response = await fetchImpl(url, controller ? { ...init, signal: controller.signal } : init);
+    const ms = now() - started;
+    const status = typeof response?.status === "number" ? response.status : 0;
+    let reason = "";
+    if (status >= 400) {
+      try {
+        const text = await response.text();
+        reason = redactReason(typeof text === "string" ? text : "", secrets);
+      } catch {
+        reason = "";
+      }
+    }
+    return {
+      reachable: status > 0,
+      ok: status >= 200 && status < 300,
+      status,
+      ms,
+      code: codeForStatus(status),
+      reason: reason || void 0
+    };
+  } catch (error) {
+    const ms = now() - started;
+    const aborted = error?.name === "AbortError";
+    return {
+      reachable: false,
+      ok: false,
+      status: 0,
+      ms,
+      code: aborted ? "AI_TIMEOUT" : "UPSTREAM_NETWORK_ERROR",
+      reason: redactReason(aborted ? `no answer within ${timeoutMs} ms` : error?.message || "network error", secrets)
+    };
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+function createDiagnosticsHandler({
+  fetchImpl = (...args) => globalThis.fetch(...args),
+  env = typeof process !== "undefined" ? process.env : {},
+  timeoutMs = PROBE_TIMEOUT_MS,
+  now = Date.now
+} = {}) {
+  let lastProbeAt = 0;
+  return async function handleNovaDiagnostics2({ probe: deep = false } = {}) {
+    const keys = {
+      openrouter: envValue(env, "OPENROUTER_API_KEY"),
+      gemini: envValue(env, "GEMINI_API_KEY"),
+      arena: envValue(env, "ARENA_API_KEY")
+    };
+    const models = {
+      openrouter: envValue(env, "NOVA_OPENROUTER_MODEL") || OPENROUTER_FREE_MODEL,
+      gemini: envValue(env, "NOVA_GEMINI_MODEL") || DEFAULT_GEMINI_MODEL,
+      arena: envValue(env, "NOVA_ARENA_MODEL") || "arena_smart.aria"
+    };
+    const secrets = Object.values(keys).filter(Boolean);
+    const providers = {
+      local: {
+        provider: "NOVA Local Space Engine",
+        configured: true,
+        endpoint: "in-process",
+        model: "nasa-local-engine",
+        status: "ok",
+        code: "OK"
+      }
+    };
+    const wantProbe = deep && now() - lastProbeAt >= PROBE_COOLDOWN_MS;
+    const throttled = deep && !wantProbe;
+    if (wantProbe) lastProbeAt = now();
+    const endpoints = {
+      openrouter: OPENROUTER_CHAT_COMPLETIONS_URL,
+      gemini: GEMINI_GENERATE_CONTENT_URL,
+      arena: ARENA_BASE_URL
+    };
+    const names = { openrouter: "OpenRouter", gemini: "Google Gemini", arena: "Arena AI" };
+    let probes = 0;
+    for (const provider of ["openrouter", "gemini", "arena"]) {
+      const configured = Boolean(keys[provider]);
+      const entry = {
+        provider: names[provider],
+        configured,
+        endpoint: hostOf(endpoints[provider]),
+        model: models[provider],
+        status: configured ? "configured" : "not-configured",
+        code: configured ? "NOT_PROBED" : "PROVIDER_NOT_CONFIGURED"
+      };
+      if (configured && wantProbe) {
+        probes += 1;
+        const outcome = await probe({ fetchImpl, provider, keys, models, secrets, timeoutMs, now });
+        entry.status = outcome.ok ? "ok" : "error";
+        entry.code = outcome.code;
+        entry.httpStatus = outcome.status;
+        entry.ms = outcome.ms;
+        entry.reachable = outcome.reachable;
+        if (outcome.reason) entry.reason = outcome.reason;
+      }
+      providers[provider] = entry;
+    }
+    return {
+      checkedAt: new Date(now()).toISOString(),
+      deployment: envValue(env, "VERCEL_ENV") || "local",
+      // `probed` means an upstream request actually ran, not that probing was allowed.
+      probed: probes > 0,
+      throttled,
+      providers
+    };
+  };
+}
+var handleNovaDiagnostics = createDiagnosticsHandler();
 
 // server/nasaRoutes.ts
 import { Type as Type2 } from "@google/genai";
@@ -4320,6 +4518,16 @@ app.get("/api/nova/config", (_req, res) => {
   res.setHeader("Cache-Control", "no-store");
   res.setHeader("X-Content-Type-Options", "nosniff");
   return res.json(getNovaPublicConfig());
+});
+app.get("/api/nova/diagnostics", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  try {
+    const probe2 = req.query?.probe === "1" || req.query?.probe === "true";
+    return res.json(await handleNovaDiagnostics({ probe: probe2 }));
+  } catch {
+    return res.status(500).json({ error: "Diagnostics could not run.", code: "INTERNAL_ERROR" });
+  }
 });
 app.post("/api/nova/chat", async (req, res) => {
   try {

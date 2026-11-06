@@ -277,10 +277,25 @@ const en: Copy = {
   wsSettingsProvider: 'Preferred provider',
   wsSettingsProviderBody: 'Used as the starting provider for new conversations. Availability is checked live; a provider that is not configured on this server cannot be chosen.',
   wsSettingsSignedOutNote: 'Sign in to save a provider default with your account. Appearance and language still apply on this device.',
+  wsSettingsProviderUnavailable:
+    'Your saved default ({{provider}}) is not configured on this server, so new conversations will use Auto until it is.',
   wsSettingsSaved: 'Saved to your account.',
   wsSettingsAccount: 'Account',
   wsSettingsAccountBody: 'Your account, verification, data export and local-history import live on the profile page.',
   wsSettingsOpenProfile: 'Open profile',
+
+  /* ------------------------------------------------------- AI provider status */
+  wsAiProbeIntro:
+    'Checks whether this deployment can actually reach each provider. A key that is set can still be expired, out of free-tier credit, or pointed at a model it may not use.',
+  wsAiProbeRecheck: 'Re-check',
+  wsAiProbeChecking: 'Checking…',
+  wsAiProbeOk: 'Working',
+  wsAiProbeError: 'Failing',
+  wsAiProbeConfigured: 'Configured, not checked',
+  wsAiProbeNotConfigured: 'Not configured',
+  wsAiProbeNotConfiguredDetail: 'No API key on this deployment, so NOVA cannot use it.',
+  wsAiProbeFailed: 'The status check itself failed — the server did not answer.',
+  wsAiProbeCheckedAt: 'Checked',
 
   /* ---------------------------------------------------------------- search */
   wsSearchPageTitle: 'Search your workspace',
@@ -575,10 +590,25 @@ const si: Copy = {
   wsSettingsProvider: 'කැමති සැපයුම්කරු',
   wsSettingsProviderBody: 'නව සංවාද සඳහා ආරම්භක සැපයුම්කරු ලෙස භාවිත වේ. ලබාගත හැකිද යන්න සජීවීව පරීක්ෂා කෙරේ; මෙම සේවාදායකයේ වින්‍යාස කර නැති සැපයුම්කරුවෙක් තෝරන්න බෑ.',
   wsSettingsSignedOutNote: 'සැපයුම්කරු පෙරනිමිය ගිණුම සමඟ සුරැකීමට පුරනය වන්න. පෙනුම සහ භාෂාව තවමත් මෙම උපාංගයට බලපායි.',
+  wsSettingsProviderUnavailable:
+    'ඔබ සුරකින ලද පෙරනිමිය ({{provider}}) මේ සර්වර් එකේ configure කරලා නෑ — එය configure වෙනකන් නව සංවාද Auto පාවිච්චි කරනවා.',
   wsSettingsSaved: 'ඔබේ ගිණුමට සුරැකුණා.',
   wsSettingsAccount: 'ගිණුම',
   wsSettingsAccountBody: 'ඔබේ ගිණුම, තහවුරු කිරීම, දත්ත නිර්යාතය සහ දේශීය ඉතිහාසය ආයාතය profile පිටුවේ ඇත.',
   wsSettingsOpenProfile: 'Profile විවෘත කරන්න',
+
+  /* ------------------------------------------------------- AI provider status */
+  wsAiProbeIntro:
+    'මේ deployment එකේ සෑම සපයන්නෙකුටම සැබවින්ම ළඟා වෙන්න පුළුවන්ද කියලා පරීක්ෂා කරනවා. key එකක් දාලා තිබුණත් එය කල් ඉකුත් වෙලා, free-tier ණය අවසන් වෙලා, නැත්නම් එයට අවසර නැති model එකකට යොමු වෙලා තියෙන්න පුළුවන්.',
+  wsAiProbeRecheck: 'නැවත පරීක්ෂා කරන්න',
+  wsAiProbeChecking: 'පරීක්ෂා කරමින්…',
+  wsAiProbeOk: 'වැඩ කරනවා',
+  wsAiProbeError: 'අසාර්ථක',
+  wsAiProbeConfigured: 'Configure කරලා, පරීක්ෂා කරලා නෑ',
+  wsAiProbeNotConfigured: 'Configure කරලා නෑ',
+  wsAiProbeNotConfiguredDetail: 'මේ deployment එකේ API key එකක් නෑ, ඒ නිසා NOVA ට එය පාවිච්චි කරන්න බෑ.',
+  wsAiProbeFailed: 'පරීක්ෂාවම අසාර්ථක වුණා — සර්වර් එක පිළිතුරු දුන්නේ නෑ.',
+  wsAiProbeCheckedAt: 'පරීක්ෂා කළේ',
 
   /* ---------------------------------------------------------------- search */
   wsSearchPageTitle: 'ඔබේ වැඩබිම සොයන්න',
@@ -874,10 +904,25 @@ const ta: Copy = {
   wsSettingsProvider: 'விருப்பமான வழங்குநர்',
   wsSettingsProviderBody: 'புதிய உரையாடல்களுக்கான தொடக்க வழங்குநராகப் பயன்படும். கிடைப்பது நேரடியாகச் சரிபார்க்கப்படும்; இந்தச் சேவையகத்தில் அமைக்கப்படாத வழங்குநரைத் தேர்ந்தெடுக்க முடியாது.',
   wsSettingsSignedOutNote: 'வழங்குநர் இயல்புநிலையைக் கணக்கில் சேமிக்க உள்நுழையவும். தோற்றமும் மொழியும் இந்தச் சாதனத்தில் தொடர்ந்து பொருந்தும்.',
+  wsSettingsProviderUnavailable:
+    'நீங்கள் சேமித்த இயல்புநிலை ({{provider}}) இந்தச் சேவையகத்தில் அமைக்கப்படவில்லை — அது அமைக்கப்படும் வரை புதிய உரையாடல்கள் Auto ஐப் பயன்படுத்தும்.',
   wsSettingsSaved: 'உங்கள் கணக்கில் சேமிக்கப்பட்டது.',
   wsSettingsAccount: 'கணக்கு',
   wsSettingsAccountBody: 'உங்கள் கணக்கு, சரிபார்ப்பு, தரவு ஏற்றுமதி மற்றும் உள்ளூர் வரலாற்று இறக்குமதி சுயவிவரப் பக்கத்தில் உள்ளன.',
   wsSettingsOpenProfile: 'சுயவிவரத்தைத் திற',
+
+  /* ------------------------------------------------------- AI provider status */
+  wsAiProbeIntro:
+    'இந்த deployment இல் ஒவ்வொரு வழங்குநரையும் உண்மையில் அணுக முடியுமா என்பதைச் சரிபார்க்கிறது. அமைக்கப்பட்ட ஒரு key காலாவதியாகியிருக்கலாம், free-tier இருப்பு தீர்ந்திருக்கலாம், அல்லது அதற்கு அனுமதி இல்லாத model ஒன்றை நோக்கியிருக்கலாம்.',
+  wsAiProbeRecheck: 'மீண்டும் சரிபார்',
+  wsAiProbeChecking: 'சரிபார்க்கிறது…',
+  wsAiProbeOk: 'வேலை செய்கிறது',
+  wsAiProbeError: 'தோல்வி',
+  wsAiProbeConfigured: 'அமைக்கப்பட்டது, சரிபார்க்கவில்லை',
+  wsAiProbeNotConfigured: 'அமைக்கப்படவில்லை',
+  wsAiProbeNotConfiguredDetail: 'இந்த deployment இல் API key இல்லை, எனவே NOVA அதைப் பயன்படுத்த முடியாது.',
+  wsAiProbeFailed: 'சரிபார்ப்பே தோல்வியடைந்தது — சேவையகம் பதிலளிக்கவில்லை.',
+  wsAiProbeCheckedAt: 'சரிபார்த்தது',
 
   /* ---------------------------------------------------------------- search */
   wsSearchPageTitle: 'உங்கள் பணியிடத்தைத் தேடுங்கள்',
