@@ -602,3 +602,26 @@ test('an offline answer says it is offline and lists the providers that failed',
     dom.window.close();
   }
 });
+
+test('both chat scroll regions are keyboard reachable and labelled', async () => {
+  const dom = installDom();
+  try {
+    stubFetch();
+    const { client } = createFakeClient({ conversations: [conversation('c1', 'Existing thread')] });
+
+    const app = await mountChat({ client, path: '/chat/c1' });
+
+    // A scrollable box that cannot take focus strands keyboard-only users in the
+    // middle of a conversation list (WCAG 2.1.1).
+    const scrollers = [...document.querySelectorAll('div.overflow-y-auto')];
+    assert.equal(scrollers.length, 2, `both scroll containers render (${scrollers.length})`);
+    for (const node of scrollers) {
+      assert.equal(node.getAttribute('role'), 'region');
+      assert.equal(node.getAttribute('tabindex'), '0', 'scroll container is focusable');
+      assert.ok((node.getAttribute('aria-label') || '').trim().length > 0, 'scroll container is named');
+    }
+    await app.unmount();
+  } finally {
+    dom.window.close();
+  }
+});

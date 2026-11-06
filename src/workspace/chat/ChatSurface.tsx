@@ -265,7 +265,12 @@ export default function ChatSurface() {
           </button>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+        <div
+          className="min-h-0 flex-1 overflow-y-auto overscroll-contain"
+          role="region"
+          aria-label={t('wsChatListTitle')}
+          tabIndex={0}
+        >
           {conversations.state === 'loading' && conversations.items.length === 0 ? (
             <p className="p-2 text-[12px] text-ws-text-3">{t('wsChatLoading')}</p>
           ) : null}
@@ -410,7 +415,12 @@ export default function ChatSurface() {
           <h1 className="text-[15px] font-semibold text-ws-text">{t('wsChatNew')}</h1>
         )}
 
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain rounded-xl">
+        <div
+          className="min-h-0 flex-1 overflow-y-auto overscroll-contain rounded-xl"
+          role="region"
+          aria-label={t('wsChatThreadRegion')}
+          tabIndex={0}
+        >
           {!conversationId || thread.messages.length === 0 ? (
             <div className="nova-card flex h-full flex-col items-start justify-center gap-3 p-6">
               <p className="text-[13px] font-medium text-ws-text">{t('wsChatEmptyThread')}</p>

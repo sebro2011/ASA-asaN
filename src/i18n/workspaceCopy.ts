@@ -223,6 +223,7 @@ const en: Copy = {
 
   wsChatTitle: 'Chat',
   wsChatNew: 'New chat',
+  wsChatThreadRegion: 'Conversation messages',
   wsChatListTitle: 'Conversations',
   wsChatFilterPlaceholder: 'Filter conversations',
   wsChatArchivedToggle: 'Archived',
@@ -537,6 +538,7 @@ const si: Copy = {
 
   wsChatTitle: 'සංවාදය',
   wsChatNew: 'නව සංවාදයක්',
+  wsChatThreadRegion: 'සංවාද පණිවිඩ',
   wsChatListTitle: 'සංවාද',
   wsChatFilterPlaceholder: 'සංවාද පෙරහන් කරන්න',
   wsChatArchivedToggle: 'සංරක්ෂිත',
@@ -852,6 +854,7 @@ const ta: Copy = {
 
   wsChatTitle: 'அரட்டை',
   wsChatNew: 'புதிய அரட்டை',
+  wsChatThreadRegion: 'உரையாடல் செய்திகள்',
   wsChatListTitle: 'உரையாடல்கள்',
   wsChatFilterPlaceholder: 'உரையாடல்களை வடிகட்டு',
   wsChatArchivedToggle: 'காப்பகம்',

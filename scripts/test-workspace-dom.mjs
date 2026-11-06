@@ -178,6 +178,14 @@ test('workspace shell renders, searches, switches theme and explains planned mod
   });
   assert.match(container.textContent, /This page does not exist/);
 
+  // 8. The sidebar scrolls, so a keyboard user must be able to reach it
+  // (WCAG 2.1.1) — and it must say what it is while focused.
+  const sidebarScroll = sidebar.querySelector('.nova-sidebar__scroll');
+  assert.ok(sidebarScroll, 'sidebar scroll container exists');
+  assert.equal(sidebarScroll.getAttribute('tabindex'), '0', 'sidebar scroll container is focusable');
+  assert.equal(sidebarScroll.getAttribute('role'), 'region');
+  assert.equal(sidebarScroll.getAttribute('aria-label'), 'Workspace navigation');
+
   await act(async () => {
     root.unmount();
   });
@@ -380,6 +388,7 @@ test('responsive shell: desktop, tablet and phone expose different affordances',
           ? {
               modal: panel.getAttribute('aria-modal'),
               hrefs: [...panel.querySelectorAll('a')].map((a) => a.getAttribute('href')),
+              scrollKeyboard: panel.querySelector('.nova-scroll')?.getAttribute('tabindex') ?? null,
               text: panel.textContent || '',
             }
           : null;
@@ -409,6 +418,7 @@ test('responsive shell: desktop, tablet and phone expose different affordances',
       assert.ok(snapshot.opened.hrefs.includes(href), `drawer links ${href}`);
     }
     assert.match(snapshot.opened.text, /Writing Studio/, 'drawer labels destinations');
+    assert.equal(snapshot.opened.scrollKeyboard, '0', 'drawer scroll container is keyboard reachable');
     assert.equal(snapshot.closedByEscape, true, 'Escape closes the drawer');
   }
 

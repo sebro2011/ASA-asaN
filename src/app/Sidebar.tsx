@@ -96,7 +96,14 @@ export default function Sidebar({ route, collapsed, onToggleCollapsed }: Sidebar
         )}
       </div>
 
-      <div className="nova-sidebar__scroll">
+      {/* The sidebar scrolls, so it has to be reachable without a mouse
+          (WCAG 2.1.1); the global [tabindex] focus ring covers the visual part. */}
+      <div
+        className="nova-sidebar__scroll"
+        role="region"
+        aria-label={t('wsMainNavigation')}
+        tabIndex={0}
+      >
         <Link
           to="/chat"
           className="nova-btn nova-btn--primary mb-3 w-full"
