@@ -73,6 +73,43 @@ test('an unknown API path is a 404, so the inventory above is the real surface',
   try {
     const response = await fetch(`${base}/api/does-not-exist`);
     assert.equal(response.status, 404);
+    assert.match(response.headers.get('content-type') || '', /json/);
+    assert.equal((await response.json()).code, 'NOT_FOUND');
+  } finally {
+    server.close();
+  }
+});
+
+test('a malformed body is a typed 400, never an HTML error page', async () => {
+  const { server, base } = await startServer();
+  try {
+    const response = await fetch(`${base}/api/nova/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{"messages": ',
+    });
+    assert.equal(response.status, 400);
+    assert.match(response.headers.get('content-type') || '', /json/);
+    const body = await response.json();
+    assert.equal(body.code, 'INVALID_JSON');
+    assert.ok(body.error);
+  } finally {
+    server.close();
+  }
+});
+
+test('an oversized body is refused with a code, not a stack trace', async () => {
+  const { server, base } = await startServer();
+  try {
+    const response = await fetch(`${base}/api/nova/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messages: [{ role: 'user', content: 'x'.repeat(200_000) }] }),
+    });
+    assert.ok([400, 413].includes(response.status), `got ${response.status}`);
+    const body = await response.json();
+    assert.ok(body.code, 'the refusal carries a code');
+    assert.equal(response.headers.get('cache-control'), 'no-store');
   } finally {
     server.close();
   }
@@ -111,6 +148,75 @@ test('the AI endpoints reject bad input before touching a provider', async () =>
       // must not be able to reach the network either.
       assert.equal(body.code, 'INVALID_MESSAGES');
     }
+  } finally {
+    server.close();
+  }
+});
+
+/* -------------------------------------------------------------------- CORS */
+
+test('same-origin POSTs survive a configured allow-list (the Vercel preview trap)', async () => {
+  const { decideCors, parseAllowHosts } = await import('../server/cors.ts');
+  const allowHosts = parseAllowHosts('https://nova.example.com');
+
+  const sameOrigin = decideCors({
+    origin: 'https://nova-preview-abc.vercel.app',
+    host: 'nova-preview-abc.vercel.app',
+    allowHosts,
+    dev: false,
+  });
+  assert.equal(sameOrigin.grant, true);
+  assert.equal(sameOrigin.reason, 'same-origin');
+
+  const listed = decideCors({
+    origin: 'https://nova.example.com',
+    host: 'nova-preview-abc.vercel.app',
+    allowHosts,
+    dev: false,
+  });
+  assert.equal(listed.grant, true);
+  assert.equal(listed.reason, 'allow-list');
+
+  const foreign = decideCors({
+    origin: 'https://evil.example.net',
+    host: 'nova-preview-abc.vercel.app',
+    allowHosts,
+    dev: false,
+  });
+  assert.equal(foreign.grant, false, 'a foreign origin is never granted');
+});
+
+test('an unknown origin is refused a grant, never a 403', async () => {
+  const { server, base } = await startServer();
+  try {
+    const response = await fetch(`${base}/api/health`, {
+      headers: { Origin: 'https://evil.example.net' },
+    });
+    assert.notEqual(response.status, 403, 'CORS is enforced by the browser, not a 403');
+    assert.match(response.headers.get('vary') || '', /origin/i);
+    assert.equal((await response.json()).status, 'ok');
+
+    // Development echoes any origin (iframe previews); production withholds the
+    // grant for anything that is neither same-origin nor allow-listed.
+    const dev = process.env.NODE_ENV !== 'production';
+    assert.equal(
+      response.headers.get('access-control-allow-origin'),
+      dev ? 'https://evil.example.net' : null,
+    );
+  } finally {
+    server.close();
+  }
+});
+
+test('a same-origin request is echoed back so the browser will read the body', async () => {
+  const { server, base } = await startServer();
+  try {
+    const origin = new URL(base).origin;
+    const response = await fetch(`${base}/api/health`, { headers: { Origin: origin } });
+    // The app is imported once per process, so NODE_ENV decides dev vs prod here;
+    // either way a same-origin request must be granted.
+    assert.equal(response.headers.get('access-control-allow-origin'), origin);
+    assert.equal(response.headers.get('access-control-allow-credentials'), 'true');
   } finally {
     server.close();
   }

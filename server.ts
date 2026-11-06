@@ -3,6 +3,7 @@ import dotenv from 'dotenv';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
+import { decideCors, parseAllowHosts, platformHosts } from './server/cors.ts';
 
 import { GoogleGenAI } from '@google/genai';
 import { earthRouter } from './server/earthIntelligence.ts';
@@ -30,31 +31,39 @@ const __dirname = path.dirname(__filename);
 // Exported so serverless hosts (Vercel — see api/index.ts) can invoke the same
 // Express application that runs standalone via `npm run dev` / `npm start`.
 export const app = express();
-app.use(express.json());
+// A malformed or oversized body is a client mistake the API must describe in
+// JSON — Express would otherwise answer with its own HTML error page.
+app.use(express.json({ limit: '256kb' }));
 
-// Enable CORS for trusted origins only.
-// In development / preview environments allow all origins so iframe previews
-// and cross-origin calls work. In production, restrict to known origins.
+// Enable CORS for trusted origins only — see server/cors.ts for why an unknown
+// Origin is never answered with 403 (it used to break every Vercel preview).
 // CORS_ORIGINS is a comma-separated list of allowed origins (no trailing slashes).
-const corsOriginEnv = process.env.CORS_ORIGINS || '';
-const corsOrigins = corsOriginEnv.split(',').map((o) => o.trim()).filter(Boolean);
 const isDev = process.env.NODE_ENV !== 'production';
+const corsAllowHosts = parseAllowHosts(process.env.CORS_ORIGINS);
+for (const platformHost of platformHosts(process.env)) corsAllowHosts.add(platformHost);
 
 app.use((req, res, next) => {
-  const origin = req.headers.origin;
-  let allowOrigin = '*';
-  if (!isDev && corsOrigins.length > 0 && origin && corsOrigins.includes(origin)) {
-    allowOrigin = origin;
-  } else if (!isDev && corsOrigins.length > 0) {
-    // Production with configured origins but request from unknown origin: deny
-    return res.status(403).json({ error: 'CORS origin not allowed', code: 'cors-origin' });
+  const decision = decideCors({
+    origin: req.headers.origin,
+    host: req.headers.host,
+    allowHosts: corsAllowHosts,
+    dev: isDev,
+  });
+
+  // A denied origin gets no grant: the browser blocks the read, we do not 403.
+  res.header('Vary', 'Origin');
+  if (decision.grant) {
+    res.header('Access-Control-Allow-Origin', decision.origin);
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.header(
+      'Access-Control-Allow-Headers',
+      'Origin, X-Requested-With, Content-Type, Accept, Authorization',
+    );
+    res.header('Access-Control-Allow-Credentials', 'true');
+    res.header('Access-Control-Max-Age', '600');
   }
-  res.header('Access-Control-Allow-Origin', allowOrigin);
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
-  res.header('Access-Control-Allow-Credentials', 'true');
   if (req.method === 'OPTIONS') {
-    return res.sendStatus(200);
+    return res.sendStatus(decision.grant ? 200 : 204);
   }
   next();
 });
@@ -379,6 +388,42 @@ app.use('/api/space-videos', spaceVideosRouter);
 app.use('/api/community', communityVideosRouter);
 // Workspace cloud config (Phase 3B) — publishable key only, never the service role.
 app.use('/api/workspace', workspaceConfigRouter);
+
+// Unknown API paths answer JSON, so a typo never arrives at the client as an
+// HTML page it cannot parse.
+app.use('/api', (_req, res) => {
+  res.status(404).json({ error: 'Not found', code: 'NOT_FOUND' });
+});
+
+// Last line of defence for the API: any thrown error (bad JSON, oversized body,
+// a handler bug) becomes a typed JSON response instead of a stack trace.
+app.use((error: any, req: any, res: any, next: any) => {
+  if (res.headersSent) return next(error);
+  if (!String(req.path || '').startsWith('/api')) return next(error);
+
+  const status = Number(error?.status || error?.statusCode) || 500;
+  const code =
+    status === 413
+      ? 'PAYLOAD_TOO_LARGE'
+      : status === 400
+        ? 'INVALID_JSON'
+        : status === 429
+          ? 'UPSTREAM_RATE_LIMITED'
+          : 'INTERNAL_ERROR';
+  const message =
+    status === 413
+      ? 'The request body is too large.'
+      : status === 400
+        ? 'The request body is not valid JSON.'
+        : 'NOVA could not process this request. Please retry.';
+
+  if (status >= 500) {
+    // Never echo the error object: it can carry provider URLs or headers.
+    console.error(`[api] ${req.method} ${req.path} failed with ${status}`);
+  }
+  res.setHeader('Cache-Control', 'no-store');
+  return res.status(status).json({ error: message, code });
+});
 
 // Setup Vite middleware in dev or static files in production
 async function startServer() {

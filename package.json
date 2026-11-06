@@ -4,6 +4,7 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
+    "audit:env": "node scripts/audit-env.mjs",
     "build": "npm run build:api && vite build",
     "check:apis": "node scripts/check-apis.mjs",
     "check:deployment": "node scripts/check-deployment.mjs",
