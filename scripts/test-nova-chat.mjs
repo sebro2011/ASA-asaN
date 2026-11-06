@@ -881,3 +881,78 @@ test('Auto routing never hangs longer than one budgeted chain', async () => {
   assert.ok(elapsed < 2_000, `answered in ${elapsed} ms, not a 24-second chain`);
   assert.deepEqual(timeouts, ['abortable', 'abortable', 'abortable'], 'every provider call can be aborted');
 });
+
+test('a refused provider keeps its name and upstream status on the error', async () => {
+  const handler = createNovaChatHandler({
+    getOpenRouterApiKey: () => TEST_API_KEY,
+    getGeminiApiKey: () => '',
+    getArenaApiKey: () => '',
+    fetchImpl: async () => ({ ok: false, status: 401, json: async () => ({}) }),
+  });
+
+  const response = await handler({
+    body: { ...sampleBody, provider: 'openrouter' },
+    ip: '198.51.100.21',
+  });
+
+  assert.equal(response.status, 503);
+  assert.equal(response.body.code, 'PROVIDER_AUTH_ERROR');
+  assert.equal(response.body.provider, 'OpenRouter');
+  assert.equal(response.body.upstreamStatus, 401);
+  assert.doesNotMatch(JSON.stringify(response.body), /sk-or-test/);
+});
+
+test('an offline answer lists every failed provider with its status', async () => {
+  const handler = createNovaChatHandler({
+    getOpenRouterApiKey: () => TEST_API_KEY,
+    getGeminiApiKey: () => 'gemini-test-key',
+    getArenaApiKey: () => 'arena-test-key',
+    fetchImpl: async (url) => {
+      if (String(url).includes('arena')) return { ok: false, status: 403, json: async () => ({}) };
+      if (String(url).includes('openrouter')) return { ok: false, status: 429, json: async () => ({}) };
+      return { ok: false, status: 400, json: async () => ({}) };
+    },
+  });
+
+  const response = await handler({ body: sampleBody, ip: '198.51.100.22' });
+
+  assert.equal(response.status, 200);
+  assert.equal(response.body.fallback, true);
+  assert.equal(response.body.provider, 'NOVA Local Space Engine');
+  assert.deepEqual(response.body.fallbackChain, [
+    { provider: 'Arena AI', code: 'PROVIDER_AUTH_ERROR', status: 403 },
+    { provider: 'OpenRouter', code: 'UPSTREAM_RATE_LIMITED', status: 429 },
+    { provider: 'Google Gemini', code: 'PROVIDER_ERROR', status: 400 },
+  ]);
+  assert.doesNotMatch(JSON.stringify(response.body), /sk-or-test|gemini-test-key|arena-test-key/);
+});
+
+test('a healthy chain carries no fallback chain at all', async () => {
+  const handler = createTestHandler();
+  const response = await handler({ body: sampleBody, ip: '198.51.100.23' });
+  assert.equal(response.status, 200);
+  assert.equal(response.body.fallback, false);
+  assert.equal(response.body.fallbackChain, undefined);
+});
+
+test('a provider error never leaks the key or the raw upstream body', async () => {
+  const handler = createNovaChatHandler({
+    getOpenRouterApiKey: () => TEST_API_KEY,
+    getGeminiApiKey: () => '',
+    getArenaApiKey: () => '',
+    fetchImpl: async () => ({
+      ok: false,
+      status: 500,
+      json: async () => ({ error: `bad key ${TEST_API_KEY}` }),
+    }),
+  });
+
+  const response = await handler({
+    body: { ...sampleBody, provider: 'openrouter' },
+    ip: '198.51.100.24',
+  });
+
+  assert.equal(response.body.code, 'PROVIDER_UNAVAILABLE');
+  assert.equal(response.body.upstreamStatus, 500);
+  assert.doesNotMatch(JSON.stringify(response.body), /sk-or-test/);
+});

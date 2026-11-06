@@ -534,3 +534,71 @@ test('raw HTML in a reply is never rendered as markup', async () => {
     dom.window.close();
   }
 });
+
+test('a provider refusal names the provider, the code and the HTTP status', async () => {
+  const dom = installDom();
+  try {
+    stubFetch({
+      chatResponse: {
+        status: 503,
+        body: {
+          error: 'nope',
+          code: 'PROVIDER_AUTH_ERROR',
+          provider: 'Google Gemini',
+          upstreamStatus: 403,
+        },
+      },
+    });
+    const { client } = createFakeClient({ conversations: [conversation('c1', 'Existing thread')] });
+
+    const app = await mountChat({ client, path: '/chat/c1' });
+    await typeInto(app.act, document.querySelector('#nova-chat-composer'), 'hi');
+    await submit(app.act, document.querySelector('form'));
+
+    // The sentence stays human; the line under it is the evidence.
+    assert.match(app.text(), /could not process this request/);
+    assert.match(app.text(), /Google Gemini/);
+    assert.match(app.text(), /PROVIDER_AUTH_ERROR/);
+    assert.match(app.text(), /HTTP 403/);
+    await app.unmount();
+  } finally {
+    dom.window.close();
+  }
+});
+
+test('an offline answer says it is offline and lists the providers that failed', async () => {
+  const dom = installDom();
+  try {
+    stubFetch({
+      chatResponse: {
+        status: 200,
+        body: {
+          text: 'NOVA answers from its offline space engine.',
+          provider: 'NOVA Local Space Engine',
+          model: 'nasa-local-engine',
+          fallback: true,
+          suggestions: [],
+          fallbackChain: [
+            { provider: 'Arena AI', code: 'PROVIDER_AUTH_ERROR', status: 401 },
+            { provider: 'OpenRouter', code: 'UPSTREAM_RATE_LIMITED', status: 429 },
+          ],
+        },
+      },
+    });
+    const { client } = createFakeClient({ conversations: [conversation('c1', 'Existing thread')] });
+
+    const app = await mountChat({ client, path: '/chat/c1' });
+    await typeInto(app.act, document.querySelector('#nova-chat-composer'), 'hi');
+    await submit(app.act, document.querySelector('form'));
+
+    assert.match(app.text(), /offline space engine/);
+    assert.match(app.text(), /Answered offline/);
+    assert.match(app.text(), /Arena AI/);
+    assert.match(app.text(), /PROVIDER_AUTH_ERROR/);
+    assert.match(app.text(), /HTTP 401/);
+    assert.match(app.text(), /UPSTREAM_RATE_LIMITED/);
+    await app.unmount();
+  } finally {
+    dom.window.close();
+  }
+});

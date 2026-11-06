@@ -111,3 +111,39 @@ Rules worth remembering:
 
 Not verified here: the actual key **values** (they are sensitive and were never
 read). That is exactly what `?probe=1` is for.
+
+## 7. What the chat bubble tells you now
+
+A failure used to be one vague sentence, which is how three broken providers
+looked like one mysterious outage. Every assistant turn now carries the reason:
+
+* **A refused provider** keeps the sentence and adds one line underneath:
+
+  ```
+  The provider could not process this request. Please try again later.
+  Google Gemini · PROVIDER_AUTH_ERROR · HTTP 403
+  ```
+
+* **An offline answer** (Auto fell back to the bundled engine) says so, and
+  lists every provider it tried:
+
+  ```
+  …the answer…
+  Answered offline — the online providers did not respond. Arena AI · PROVIDER_AUTH_ERROR · HTTP 401 | OpenRouter · UPSTREAM_RATE_LIMITED · HTTP 429
+  ```
+
+The details are stored with the message, so they survive a reload; only the
+provider name, the code and the upstream HTTP status are recorded — never a key,
+never the upstream response body.
+
+Server contract additions (all optional for older clients):
+
+| Field | Where | Meaning |
+| --- | --- | --- |
+| `provider` | error body | Which provider refused (`Arena AI`, `OpenRouter`, `Google Gemini`). |
+| `upstreamStatus` | error body | The status that provider returned (503 is ours, 401 is theirs). |
+| `fallbackChain` | 200 body when `fallback: true` | `[{ provider, code, status }]`, one entry per failed hop. |
+
+Reading the line: `401`/`403` = the key is wrong, revoked, or restricted;
+`429` = quota (OpenRouter free tier is 50 requests/day); `404`/`422` = the model
+name no longer exists. That single word decides the fix.

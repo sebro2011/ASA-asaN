@@ -263,6 +263,7 @@ const en: Copy = {
   wsChatErrHistoryLong: 'This conversation is too long for the model. Start a new conversation.',
   wsChatErrTooLarge: 'That message is too large. Shorten it and retry.',
   wsChatErrInvalid: 'That request was not valid. Please retry.',
+  wsChatOfflineNote: 'Answered offline — the online providers did not respond.',
   wsChatErrUnknown: 'NOVA could not process this request. Please retry.',
 
   wsSettingsTitle: 'Settings',
@@ -576,6 +577,7 @@ const si: Copy = {
   wsChatErrHistoryLong: 'මෙම සංවාදය ආකෘතියට දිග වැඩියි. නව සංවාදයක් අරඹන්න.',
   wsChatErrTooLarge: 'එම පණිවිඩය විශාල වැඩියි. කෙටි කර නැවත උත්සාහ කරන්න.',
   wsChatErrInvalid: 'එම ඉල්ලීම වලංගු නොවේ. නැවත උත්සාහ කරන්න.',
+  wsChatOfflineNote: 'නොබැඳි (offline) පිළිතුරක් — මාර්ගගත AI සේවා ප්‍රතිචාර දුන්නේ නැත.',
   wsChatErrUnknown: 'NOVA ට මෙය සකසන්න නොහැකි විය. නැවත උත්සාහ කරන්න.',
 
   wsSettingsTitle: 'සැකසුම්',
@@ -890,6 +892,7 @@ const ta: Copy = {
   wsChatErrHistoryLong: 'இந்த உரையாடல் மிக நீளமானது. புதிய உரையாடலைத் தொடங்கவும்.',
   wsChatErrTooLarge: 'செய்தி மிகப் பெரியது. சுருக்கி மீண்டும் முயற்சிக்கவும்.',
   wsChatErrInvalid: 'கோரிக்கை செல்லாதது. மீண்டும் முயற்சிக்கவும்.',
+  wsChatOfflineNote: 'இணையமில்லா (offline) பதில் — இணைய AI சேவைகள் பதிலளிக்கவில்லை.',
   wsChatErrUnknown: 'NOVA இதைச் செயலாக்க முடியவில்லை. மீண்டும் முயற்சிக்கவும்.',
 
   wsSettingsTitle: 'அமைப்புகள்',

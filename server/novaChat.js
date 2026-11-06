@@ -288,7 +288,13 @@ function providerError(status, provider, model) {
   } else {
     response = errorResult(502, 'PROVIDER_ERROR', 'The AI provider could not complete this request. Please retry.');
   }
-  return withProvider(response, provider);
+  // The status the *provider* returned, kept separate from ours: a 401 upstream
+  // becomes a 503 for the browser, and the number is what makes a failure
+  // diagnosable ("Arena AI said 401") without ever exposing the key.
+  return withProvider(
+    { ...response, body: { ...response.body, upstreamStatus: status } },
+    provider,
+  );
 }
 
 function withProvider(response, provider) {
@@ -301,7 +307,7 @@ function withProvider(response, provider) {
   };
 }
 
-function getLocalResponse(query, language, { fallback = false } = {}) {
+function getLocalResponse(query, language, { fallback = false, chain = [] } = {}) {
   const local = generateLocalSpaceResponse(query, language);
   return result(200, {
     text: local.text,
@@ -310,6 +316,9 @@ function getLocalResponse(query, language, { fallback = false } = {}) {
     provider: PROVIDER_NAMES.local,
     lang: language,
     fallback,
+    // Why every online provider was skipped: safe (codes and statuses only) and
+    // essential, because an offline answer that does not say why is a dead end.
+    ...(chain.length ? { fallbackChain: chain } : {}),
     intent: local.intent,
   });
 }
@@ -601,6 +610,8 @@ export function createNovaChatHandler({
     }
 
     let lastError = null;
+    /** One safe record per failed hop: provider, code and upstream status. */
+    const chain = [];
     const chainStartedAt = Date.now();
     for (const provider of providerOrder) {
       const remainingMs = AUTO_CHAIN_BUDGET_MS - (Date.now() - chainStartedAt);
@@ -639,13 +650,18 @@ export function createNovaChatHandler({
 
       if (response.status === 200) return response;
       lastError = response;
+      chain.push({
+        provider: typeof response.body?.provider === 'string' ? response.body.provider : PROVIDER_NAMES[provider],
+        code: typeof response.body?.code === 'string' ? response.body.code : 'PROVIDER_UNAVAILABLE',
+        status: Number(response.body?.upstreamStatus) || response.status,
+      });
       if (validated.provider !== 'auto') return response;
     }
 
     // Automatic routing is resilient: if configured online providers are unavailable,
     // answer from the bundled local knowledge engine and identify that provider honestly.
     if (validated.provider === 'auto') {
-      return getLocalResponse(validated.messages.at(-1).content, validated.language, { fallback: true });
+      return getLocalResponse(validated.messages.at(-1).content, validated.language, { fallback: true, chain });
     }
 
     return lastError || errorResult(503, 'PROVIDER_UNAVAILABLE', 'NOVA could not complete this request. Please retry.');

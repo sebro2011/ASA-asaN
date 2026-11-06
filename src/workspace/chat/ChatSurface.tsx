@@ -30,7 +30,15 @@ import {
 import { useAuth } from '../../auth/AuthProvider';
 import { Link, navigate, useRoute } from '../../app/router';
 import { useProviderConfig } from '../useProviderConfig';
-import { chatErrorKey, historyWindow, sendChat, type ChatProvider, type ChatTurn } from './chatClient';
+import {
+  chatErrorKey,
+  describeChatFailure,
+  describeFallbackChain,
+  historyWindow,
+  sendChat,
+  type ChatProvider,
+  type ChatTurn,
+} from './chatClient';
 import { useConversations, useThread } from './useChatData';
 import MessageBody from './MessageBody';
 
@@ -178,9 +186,15 @@ export default function ChatSurface() {
     const result = await sendChat({ messages: history, lang: locale.slice(0, 2), provider });
 
     if (result.ok) {
+      // An offline answer must say so in the transcript, and the server says why
+      // every online provider was skipped. Both survive a reload.
+      const chain = describeFallbackChain(result.reply.fallbackChain);
+      const offlineNote = result.reply.fallback
+        ? [t('wsChatOfflineNote'), chain].filter(Boolean).join(' — ')
+        : '';
       const saved = await thread.append({
         role: 'assistant',
-        content: result.reply.text,
+        content: offlineNote ? `${result.reply.text}\n\n${offlineNote}` : result.reply.text,
         provider: result.reply.provider,
         model: result.reply.model,
         conversationId: targetId,
@@ -188,9 +202,11 @@ export default function ChatSurface() {
       setRevealingId(saved.row.id);
       void conversations.reload();
     } else {
+      // Keep the cause on the bubble: provider, code and HTTP status, no secrets.
+      const detail = describeChatFailure(result);
       const saved = await thread.append({
         role: 'assistant',
-        content: t(chatErrorKey(result.code)),
+        content: detail ? `${t(chatErrorKey(result.code))}\n${detail}` : t(chatErrorKey(result.code)),
         isError: true,
         conversationId: targetId,
       });
@@ -423,7 +439,7 @@ export default function ChatSurface() {
                       {row.is_error ? (
                         <p className="flex items-start gap-2 text-[12.5px] leading-relaxed text-ws-text">
                           <TriangleAlert size={14} className="mt-0.5 shrink-0" aria-hidden="true" />
-                          {row.content}
+                          <span className="whitespace-pre-line">{row.content}</span>
                         </p>
                       ) : isUser ? (
                         <p className="whitespace-pre-wrap text-[12.5px] leading-relaxed text-ws-text">{row.content}</p>
