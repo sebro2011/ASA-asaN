@@ -244,7 +244,9 @@ export function createDiagnosticsHandler({
 
     return {
       checkedAt: new Date(now()).toISOString(),
-      deployment: envValue(env, 'VERCEL_ENV') || 'local',
+      // Environment plus short commit: two deployments can serve the same URL
+      // over time, and 'production' alone cannot tell them apart.
+      deployment: [envValue(env, 'VERCEL_ENV') || 'local', envValue(env, 'VERCEL_GIT_COMMIT_SHA').slice(0, 7)].filter(Boolean).join(' · '),
       // `probed` means an upstream request actually ran, not that probing was allowed.
       probed: probes > 0,
       throttled,

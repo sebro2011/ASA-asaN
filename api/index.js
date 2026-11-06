@@ -2929,7 +2929,13 @@ function readKey(getter) {
     return "";
   }
 }
+function deploymentLabel(value, fallback = null) {
+  if (typeof value !== "string") return fallback;
+  const trimmed = value.trim().slice(0, 60).replace(/[^\w.\-/]/g, "");
+  return trimmed || fallback;
+}
 function getNovaPublicConfig({ env = getProcessEnv() } = {}) {
+  const commit = deploymentLabel(env.VERCEL_GIT_COMMIT_SHA);
   return {
     providers: {
       auto: true,
@@ -2937,6 +2943,11 @@ function getNovaPublicConfig({ env = getProcessEnv() } = {}) {
       gemini: typeof env.GEMINI_API_KEY === "string" && Boolean(env.GEMINI_API_KEY.trim()),
       openrouter: typeof env.OPENROUTER_API_KEY === "string" && Boolean(env.OPENROUTER_API_KEY.trim()),
       arena: typeof env.ARENA_API_KEY === "string" && Boolean(env.ARENA_API_KEY.trim())
+    },
+    deployment: {
+      environment: deploymentLabel(env.VERCEL_ENV, "development"),
+      commit: commit && /^[0-9a-f]{7,40}$/i.test(commit) ? commit.slice(0, 7) : null,
+      branch: deploymentLabel(env.VERCEL_GIT_COMMIT_REF)
     }
   };
 }
@@ -3230,7 +3241,9 @@ function createDiagnosticsHandler({
     }
     return {
       checkedAt: new Date(now()).toISOString(),
-      deployment: envValue(env, "VERCEL_ENV") || "local",
+      // Environment plus short commit: two deployments can serve the same URL
+      // over time, and 'production' alone cannot tell them apart.
+      deployment: [envValue(env, "VERCEL_ENV") || "local", envValue(env, "VERCEL_GIT_COMMIT_SHA").slice(0, 7)].filter(Boolean).join(" \xB7 "),
       // `probed` means an upstream request actually ran, not that probing was allowed.
       probed: probes > 0,
       throttled,

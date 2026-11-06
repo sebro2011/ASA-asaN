@@ -529,8 +529,22 @@ function readKey(getter) {
   }
 }
 
-/** Return only safe provider availability information. Never return API key values. */
+/** A short, safe deployment label: no path, no query, no secret. */
+function deploymentLabel(value, fallback = null) {
+  if (typeof value !== 'string') return fallback;
+  const trimmed = value.trim().slice(0, 60).replace(/[^\w.\-/]/g, '');
+  return trimmed || fallback;
+}
+
+/**
+ * Return only safe provider availability information. Never return API key values.
+ *
+ * `providers` says whether a key is *set* — not whether it is accepted. The
+ * `deployment` block says which build answered, so a stale deployment (or a
+ * cached client) can be told apart from a real provider failure.
+ */
 export function getNovaPublicConfig({ env = getProcessEnv() } = {}) {
+  const commit = deploymentLabel(env.VERCEL_GIT_COMMIT_SHA);
   return {
     providers: {
       auto: true,
@@ -538,6 +552,11 @@ export function getNovaPublicConfig({ env = getProcessEnv() } = {}) {
       gemini: typeof env.GEMINI_API_KEY === 'string' && Boolean(env.GEMINI_API_KEY.trim()),
       openrouter: typeof env.OPENROUTER_API_KEY === 'string' && Boolean(env.OPENROUTER_API_KEY.trim()),
       arena: typeof env.ARENA_API_KEY === 'string' && Boolean(env.ARENA_API_KEY.trim()),
+    },
+    deployment: {
+      environment: deploymentLabel(env.VERCEL_ENV, 'development'),
+      commit: commit && /^[0-9a-f]{7,40}$/i.test(commit) ? commit.slice(0, 7) : null,
+      branch: deploymentLabel(env.VERCEL_GIT_COMMIT_REF),
     },
   };
 }

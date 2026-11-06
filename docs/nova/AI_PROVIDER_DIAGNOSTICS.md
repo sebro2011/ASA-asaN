@@ -147,3 +147,23 @@ Server contract additions (all optional for older clients):
 Reading the line: `401`/`403` = the key is wrong, revoked, or restricted;
 `429` = quota (OpenRouter free tier is 50 requests/day); `404`/`422` = the model
 name no longer exists. That single word decides the fix.
+
+## 8. "Is this even the new build?"
+
+Two failures look identical from the browser: a rejected key, and a page (or a
+service worker) serving an older deployment. Both endpoints now answer it:
+
+```json
+// GET /api/nova/config
+{"providers":{"auto":true,"local":true,"gemini":true,"openrouter":true,"arena":true},
+ "deployment":{"environment":"production","commit":"4a1d42d","branch":"main"}}
+```
+
+`/api/nova/diagnostics` reports the same pair as one label (`production · 4a1d42d`),
+which the Settings card prints under the timestamp. If the commit is not the one
+you just merged, you are looking at a cached client or an un-promoted deployment —
+not at a provider problem.
+
+`providers` stays what it always was: "a non-empty key is set". It is *not* a
+health check; only `?probe=1` (or a real chat request) can say whether the
+provider accepts that key.

@@ -820,6 +820,48 @@ test('Auto routing falls back to local engine when Arena and all online provider
   assert.equal(JSON.stringify(response).includes('gemini-test-key'), false);
 });
 
+test('public config names the build that answered, and nothing else', () => {
+  const config = getNovaPublicConfig({
+    env: {
+      VERCEL_ENV: 'production',
+      VERCEL_GIT_COMMIT_SHA: '4a1d42de9ad2c646c02a5188b1d48dca5a35f83f',
+      VERCEL_GIT_COMMIT_REF: 'main',
+      GEMINI_API_KEY: 'private-gemini-key',
+    },
+  });
+
+  // A stale deployment and a rejected key look identical from the browser;
+  // this is the field that separates them.
+  assert.deepEqual(config.deployment, {
+    environment: 'production',
+    commit: '4a1d42d',
+    branch: 'main',
+  });
+  assert.equal(JSON.stringify(config).includes('private-gemini-key'), false);
+});
+
+test('public config falls back to a safe label outside Vercel and sanitises env', () => {
+  assert.deepEqual(getNovaPublicConfig({ env: {} }).deployment, {
+    environment: 'development',
+    commit: null,
+    branch: null,
+  });
+
+  const hostile = getNovaPublicConfig({
+    env: {
+      VERCEL_ENV: 'preview\u0000<script>',
+      VERCEL_GIT_COMMIT_SHA: 'not-a-sha',
+      VERCEL_GIT_COMMIT_REF: 'feature/../../etc/passwd',
+    },
+  });
+
+  assert.equal(hostile.deployment.commit, null);
+  // Control characters and markup never survive; the label stays a plain string.
+  assert.equal(hostile.deployment.environment, 'previewscript');
+  assert.match(hostile.deployment.branch, /^[A-Za-z0-9._/-]+$/);
+  assert.doesNotMatch(JSON.stringify(hostile.deployment), /[<>\u0000]/);
+});
+
 test('Arena provider config reports availability without exposing key', () => {
   const config = getNovaPublicConfig({
     env: {
