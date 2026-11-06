@@ -108,10 +108,20 @@ test('workspace shell renders, searches, switches theme and explains planned mod
   // 2. Home is the live surface; planned modules are labelled, never faked.
   assert.match(container.textContent, /Good (morning|afternoon|evening)/);
   assert.ok(container.textContent.includes('Explore NASA science'));
+  const { WORKSPACE_NAV } = await import('../src/app/navConfig.ts');
+  const plannedItems = WORKSPACE_NAV.filter((item) => item.status === 'planned');
   const plannedFlags = [...container.querySelectorAll('.nova-nav-item__flag')].filter((node) =>
     /Soon/.test(node.textContent || ''),
   );
-  assert.ok(plannedFlags.length >= 8, `planned modules flagged (found ${plannedFlags.length})`);
+  // Derived from the nav model, so shipping a module tightens this instead of
+  // silently changing a magic number: every planned item is flagged, and no
+  // live item pretends to be planned.
+  assert.ok(plannedItems.length > 0, 'the roadmap still has unbuilt modules');
+  assert.equal(
+    plannedFlags.length,
+    plannedItems.length,
+    `every planned module is flagged (model ${plannedItems.length}, rendered ${plannedFlags.length})`,
+  );
 
   // 3. No AI provider is configured in the test server → the offline truth.
   await act(async () => {

@@ -36,6 +36,7 @@ test('parseRoute maps every workspace destination', () => {
     ['/knowledge', 'knowledge'],
     ['/tasks', 'tasks'],
     ['/settings', 'settings'],
+    ['/search', 'search'],
     ['/profile', 'profile'],
   ];
   for (const [path, name] of cases) assert.equal(parseRoute(path).name, name, path);

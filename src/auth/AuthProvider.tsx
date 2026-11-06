@@ -76,6 +76,8 @@ export type ActionResult<T = undefined> = { ok: true; value?: T } | { ok: false;
 
 export interface AuthContextValue {
   status: AuthStatus;
+  /** The live client, or null when the cloud is unconfigured/signed out. */
+  client: SupabaseClient | null;
   config: CloudConfig | null;
   reason: CloudConfigReason | null;
   user: AuthUser | null;
@@ -512,6 +514,7 @@ export function AuthProvider({ children, createClient, storage }: AuthProviderPr
   const value = useMemo<AuthContextValue>(
     () => ({
       status,
+      client,
       config,
       reason: config && !config.enabled ? config.reason : null,
       user,
@@ -535,6 +538,7 @@ export function AuthProvider({ children, createClient, storage }: AuthProviderPr
     }),
     [
       status,
+      client,
       config,
       user,
       profile,

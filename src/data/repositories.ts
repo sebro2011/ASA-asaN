@@ -219,6 +219,7 @@ export function messageRepo(client: SupabaseClient) {
         content: string;
         provider?: string | null;
         model?: string | null;
+        isError?: boolean;
         createdAt?: string;
       },
     ): Promise<MessageRow> {
@@ -230,6 +231,7 @@ export function messageRepo(client: SupabaseClient) {
         content: input.content.slice(0, 32000),
         provider: input.provider ?? null,
         model: input.model ?? null,
+        is_error: input.isError === true,
         ...(input.createdAt ? { created_at: input.createdAt } : {}),
       };
       const { data, error } = await client.from('messages').insert(row).select('*').single();

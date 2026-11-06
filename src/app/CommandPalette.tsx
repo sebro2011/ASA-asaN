@@ -57,6 +57,19 @@ export default function CommandPalette({ open, onClose }: { open: boolean; onClo
     const close = () => onClose();
     const list: Command[] = [];
 
+    // Workspace search first: it is the one thing people reach for by name.
+    list.push({
+      id: 'search:workspace',
+      group: 'workspace',
+      label: t('wsSearchPageTitle'),
+      hint: t('wsSearchPageIntro'),
+      icon: Search,
+      run: () => {
+        navigate('/search');
+        close();
+      },
+    });
+
     [...WORKSPACE_NAV, EXPLORE_NAV, ...ACCOUNT_NAV].forEach((item) => {
       list.push({
         id: `nav:${item.id}`,
