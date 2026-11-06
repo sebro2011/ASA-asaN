@@ -4,6 +4,10 @@
  * Renders every raster brand asset from one vector definition so the mark can
  * never drift between the favicon, the PWA icon and the in-app logo.
  *
+ * SUPERSEDED for the shipped product: the favicon, PWA icons and social
+ * preview now come from the NASA Space Explorer artwork. See
+ * docs/BRAND_ASSETS.md before running this script — it overwrites them.
+ *
  * Requires a one-off rasteriser (not a runtime/build dependency):
  *   npm i --no-save sharp
  *   node scripts/generate-brand-icons.mjs
@@ -151,6 +155,9 @@ const favPngs = await Promise.all(
 );
 await writeFile(pub('favicon.ico'), icoBuffer(favPngs));
 
+// NOTE: public/brand/og-image.png is the commissioned NASA Space Explorer
+// artwork (1200x630, palette PNG). Re-running this script overwrites it with the
+// older SVG lockup — only do that if the artwork is being replaced on purpose.
 await sharp(Buffer.from(ogSvg)).resize(1200, 630).png({ compressionLevel: 9 }).toFile(pub('brand', 'og-image.png'));
 
 const mark = await readFile(pub('brand', 'nova-mark.svg'), 'utf8');

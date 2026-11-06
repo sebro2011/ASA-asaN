@@ -69,7 +69,13 @@ export default function MobileDrawer({ open, route, onClose }: MobileDrawerProps
           </button>
         </div>
 
-        <div className="nova-scroll flex-1 overflow-y-auto px-2 py-3" style={{ overscrollBehavior: 'contain' }}>
+        <div
+          className="nova-scroll flex-1 overflow-y-auto px-2 py-3"
+          style={{ overscrollBehavior: 'contain' }}
+          role="region"
+          aria-label={t('wsMainNavigation')}
+          tabIndex={0}
+        >
           <Link to="/chat" onClick={onClose} className="nova-btn nova-btn--primary mb-3 w-full">
             <Plus size={16} strokeWidth={2.2} aria-hidden="true" />
             {t('wsNewChat')}

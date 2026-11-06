@@ -1,27 +1,47 @@
 /**
- * NOVA Home (Phase 3A).
+ * NOVA Home — the liquid-glass dashboard.
  *
- * Deliberately sparse and entirely truthful: greeting, the one surface that is
- * fully live (Explore), appearance, live provider availability, and the module
- * roadmap. No invented recents, no placeholder metrics, no dead widgets — the
- * data-backed blocks (recent conversations, projects, documents) arrive with
- * the modules that own them and will slot into the same grid.
+ * Structure, top to bottom: the orb (stateful, purely decorative to assistive
+ * tech), the greeting, a floating glass composer that hands a prompt to `/chat`,
+ * prompt suggestions, four quick actions, then the live/system cards.
+ *
+ * Everything on this page is still truthful: the provider and cloud cards read
+ * live state, the quick actions point at routes that exist, and the composer
+ * only claims to send text — the deployment has no upload or speech endpoint, so
+ * no attachment or microphone button is drawn.
  */
+import { useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ArrowRight, ArrowUpRight, CheckCircle2, Compass, ShieldCheck } from 'lucide-react';
-import { Link } from '../../app/router';
+import {
+  ArrowRight,
+  ArrowUpRight,
+  CheckCircle2,
+  Compass,
+  MessageSquare,
+  Send,
+  Settings2,
+  ShieldCheck,
+  Sparkles,
+  UserRound,
+} from 'lucide-react';
+import { Link, navigate } from '../../app/router';
 import ThemeOptions from '../../app/ThemeOptions';
 import { NovaMark } from '../../app/Brand';
 import { WORKSPACE_NAV } from '../../app/navConfig';
 import { onlineProviderNames, useProviderConfig } from '../useProviderConfig';
 import { useOptionalAuth } from '../../auth/AuthProvider';
 import SyncBadge from '../../auth/SyncBadge';
+import NovaOrb, { type OrbState } from './NovaOrb';
+import { queuePrompt } from '../chat/pendingPrompt';
 
 function greetingKey(hour: number): string {
   if (hour < 12) return 'wsGoodMorning';
   if (hour < 18) return 'wsGoodAfternoon';
   return 'wsGoodEvening';
 }
+
+/** Prompt suggestions. Plain text, so they can be edited before sending. */
+const SUGGESTIONS = ['wsHomeSuggestion1', 'wsHomeSuggestion2', 'wsHomeSuggestion3', 'wsHomeSuggestion4'];
 
 /** Cloud status: unconfigured, signed out, or signed in with live sync state. */
 function CloudCard() {
@@ -116,29 +136,208 @@ function ProviderStatus() {
   );
 }
 
+/** The floating glass composer. Sending queues the prompt for `/chat`. */
+function HomeComposer({ onSend }: { onSend: (text: string) => void }) {
+  const { t } = useTranslation();
+  const [draft, setDraft] = useState('');
+  const [focused, setFocused] = useState(false);
+  const inputRef = useRef<HTMLTextAreaElement | null>(null);
+  const canSend = draft.trim().length > 0;
+
+  const submit = useCallback(() => {
+    if (!canSend) return;
+    onSend(draft.trim());
+  }, [canSend, draft, onSend]);
+
+  const applySuggestion = (value: string) => {
+    setDraft(value);
+    inputRef.current?.focus();
+  };
+
+  return (
+    <form
+      className="nova-composer w-full p-2"
+      onSubmit={(event) => {
+        event.preventDefault();
+        submit();
+      }}
+    >
+      <label className="sr-only" htmlFor="nova-home-prompt">
+        {t('wsHomeComposerPlaceholder')}
+      </label>
+      <textarea
+        id="nova-home-prompt"
+        ref={inputRef}
+        value={draft}
+        onChange={(event) => setDraft(event.target.value)}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' && !event.shiftKey) {
+            event.preventDefault();
+            submit();
+          }
+        }}
+        rows={1}
+        placeholder={t('wsHomeComposerPlaceholder')}
+        className="nova-scroll block max-h-40 min-h-[2.75rem] w-full resize-none bg-transparent px-3 py-2.5 text-[14px] leading-relaxed text-ws-text outline-none placeholder:text-ws-text-3"
+      />
+      <div className="flex items-center justify-between gap-2 px-1.5 pb-0.5 pt-1">
+        <span className="hidden items-center gap-1.5 text-[11px] text-ws-text-3 sm:flex">
+          <Sparkles size={12} strokeWidth={1.9} aria-hidden="true" className="text-ws-accent-ink" />
+          {t('wsHomeComposerHint')}
+        </span>
+        <button
+          type="submit"
+          className="nova-btn nova-btn--primary ml-auto"
+          disabled={!canSend}
+          aria-label={t('wsChatSend')}
+        >
+          {t('wsChatSend')}
+          <Send size={14} strokeWidth={2} aria-hidden="true" />
+        </button>
+      </div>
+      <span className="sr-only" aria-live="polite">
+        {focused ? t('wsOrbListening') : ''}
+      </span>
+      <div className="hidden gap-1.5 pt-1.5 sm:flex">
+        {SUGGESTIONS.map((key) => (
+          <button
+            key={key}
+            type="button"
+            className="nova-chip-glass max-w-full truncate"
+            onClick={() => applySuggestion(t(key))}
+          >
+            {t(key)}
+          </button>
+        ))}
+      </div>
+    </form>
+  );
+}
+
 export default function HomeSurface() {
   const { t } = useTranslation();
   const hour = new Date().getHours();
   const planned = WORKSPACE_NAV.filter((item) => item.status === 'planned');
+  const auth = useOptionalAuth();
+  const signedIn = auth?.status === 'signed-in';
+  const [orbState, setOrbState] = useState<OrbState>('idle');
+  const resetTimer = useRef<number | null>(null);
+
+  /**
+   * Hand the prompt to the chat surface. Signed-out visitors are sent to sign-in
+   * instead — the conversation would have nowhere to be stored otherwise.
+   */
+  const sendPrompt = useCallback(
+    (text: string) => {
+      if (!signedIn) {
+        navigate('/profile');
+        return;
+      }
+      if (!queuePrompt(text)) return;
+      setOrbState('thinking');
+      if (resetTimer.current !== null) window.clearTimeout(resetTimer.current);
+      // The orb is left "thinking" just long enough to acknowledge the send.
+      resetTimer.current = window.setTimeout(() => setOrbState('idle'), 1_200);
+      navigate('/chat');
+    },
+    [signedIn],
+  );
+
+  const quickActions = [
+    { id: 'chat', to: '/chat', icon: MessageSquare, titleKey: 'wsMenuChat', bodyKey: 'wsAreaChatDesc' },
+    {
+      id: 'explore',
+      to: '/explore',
+      icon: Compass,
+      titleKey: 'wsExploreCardTitle',
+      bodyKey: 'wsHomeQuickExploreBody',
+    },
+    { id: 'settings', to: '/settings', icon: Settings2, titleKey: 'wsSettings', bodyKey: 'wsHomeQuickSettingsBody' },
+    { id: 'profile', to: '/profile', icon: UserRound, titleKey: 'wsProfile', bodyKey: 'wsHomeQuickProfileBody' },
+  ];
 
   return (
-    <div className="mx-auto w-full max-w-[1180px] px-4 py-7 sm:px-6 sm:py-9 lg:px-8">
-      <header className="max-w-2xl">
-        <div className="flex items-center gap-2.5">
-          <NovaMark size={20} />
-          <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-ws-text-3">
-            AI Workspace
-          </span>
-        </div>
-        <h1 className="mt-4 text-[27px] font-semibold leading-[1.15] tracking-[-0.025em] text-ws-text sm:text-[33px]">
-          {t(greetingKey(hour))}
-        </h1>
-        <p className="mt-2.5 max-w-xl text-[13.5px] leading-relaxed text-ws-text-2">{t('wsHomeSubtitle')}</p>
-      </header>
+    <div className="mx-auto w-full max-w-[1180px] px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
+      {/* ---------------------------------------------------------- hero */}
+      <section className="nova-hero-wash relative overflow-hidden rounded-[26px] border border-ws-line">
+        <div className="relative flex flex-col items-center px-4 py-8 text-center sm:px-8 sm:py-11">
+          <div className="flex items-center gap-2.5">
+            <NovaMark size={18} />
+            <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-ws-text-3">
+              AI Workspace
+            </span>
+          </div>
 
-      <div className="mt-7 grid gap-4 lg:grid-cols-[minmax(0,1.65fr)_minmax(0,1fr)]">
+          <NovaOrb state={orbState} size={148} className="mt-5 sm:mt-6" />
+
+          <h1
+            id="nova-home-greeting"
+            className="mt-5 text-[27px] font-semibold leading-[1.12] tracking-[-0.03em] text-ws-text sm:text-[36px]"
+          >
+            {t(greetingKey(hour))} <span aria-hidden="true">✌️</span>
+          </h1>
+          <p className="mt-2.5 max-w-[34rem] text-[13.5px] leading-relaxed text-ws-text-2">
+            {t('wsHomeSubtitle')}
+          </p>
+
+          <div className="mt-6 w-full max-w-[720px]">
+            <HomeComposer onSend={sendPrompt} />
+            {!signedIn && auth?.status !== 'unconfigured' ? (
+              <p className="mt-2.5 text-[11.5px] text-ws-text-3" role="note">
+                {t('wsHomeSignInNote')}{' '}
+                <Link to="/profile" className="text-ws-accent-ink underline-offset-2 hover:underline">
+                  {t('wsAuthSignIn')}
+                </Link>
+              </p>
+            ) : null}
+          </div>
+        </div>
+      </section>
+
+      {/* ------------------------------------------------- quick actions */}
+      <section aria-labelledby="nova-quick-heading" className="mt-6">
+        <h2
+          id="nova-quick-heading"
+          className="font-mono text-[10px] uppercase tracking-[0.16em] text-ws-text-3"
+        >
+          {t('wsHomeQuickTitle')}
+        </h2>
+        <div className="mt-2.5 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {quickActions.map((action) => {
+            const Icon = action.icon;
+            return (
+              <Link key={action.id} to={action.to} className="nova-quick-card group">
+                <span className="flex items-center justify-between gap-2">
+                  <span
+                    className="grid h-8 w-8 place-items-center rounded-[10px] border border-ws-line text-ws-accent-ink"
+                    style={{ background: 'color-mix(in srgb, var(--color-ws-accent) 10%, transparent)' }}
+                  >
+                    <Icon size={15} strokeWidth={1.9} aria-hidden="true" />
+                  </span>
+                  <ArrowUpRight
+                    size={15}
+                    strokeWidth={1.9}
+                    aria-hidden="true"
+                    className="text-ws-text-3 transition-transform duration-200 group-hover:-translate-y-0.5 group-hover:translate-x-0.5"
+                  />
+                </span>
+                <span className="mt-1 block text-[13px] font-medium text-ws-text">
+                  {t(action.titleKey)}
+                </span>
+                <span className="block text-[11.5px] leading-relaxed text-ws-text-3">
+                  {t(action.bodyKey)}
+                </span>
+              </Link>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* ------------------------------------------------- live + system */}
+      <div className="mt-6 grid gap-4 lg:grid-cols-[minmax(0,1.65fr)_minmax(0,1fr)]">
         <div className="flex min-w-0 flex-col gap-4">
-          {/* Live surface ------------------------------------------------ */}
           <section className="nova-card overflow-hidden" aria-labelledby="nova-explore-heading">
             <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-start sm:justify-between">
               <div className="min-w-0">
@@ -170,7 +369,6 @@ export default function HomeSurface() {
             </div>
           </section>
 
-          {/* Roadmap ---------------------------------------------------- */}
           <section aria-labelledby="nova-modules-heading" className="nova-card p-5">
             <h2 id="nova-modules-heading" className="text-[15px] font-semibold text-ws-text">
               {t('wsModulesTitle')}
@@ -214,7 +412,6 @@ export default function HomeSurface() {
           </section>
 
           <ProviderStatus />
-
           <CloudCard />
 
           <Link
@@ -223,9 +420,7 @@ export default function HomeSurface() {
           >
             <span className="min-w-0">
               <span className="block text-[12.5px] font-medium text-ws-text">{t('wsExplore')}</span>
-              <span className="mt-0.5 block text-[11.5px] text-ws-text-3">
-                {t('wsExploreEyebrow')}
-              </span>
+              <span className="mt-0.5 block text-[11.5px] text-ws-text-3">{t('wsExploreEyebrow')}</span>
             </span>
             <ArrowUpRight size={16} strokeWidth={1.9} aria-hidden="true" className="shrink-0 text-ws-text-3" />
           </Link>

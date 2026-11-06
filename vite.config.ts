@@ -18,11 +18,19 @@ export default defineConfig(({ mode }) => {
       tailwindcss(),
       VitePWA({
         registerType: 'autoUpdate',
-        includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'icon.svg', 'manifest.json'],
+        includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'manifest.json'],
         manifest: false, // Use public/manifest.json directly
         workbox: {
           maximumFileSizeToCacheInBytes: 6 * 1024 * 1024,
+          // Navigations fall back to the cached app shell. That must never apply
+          // to the API: otherwise opening /api/nova/config in a tab (or curling
+          // it from a browser session) returns index.html instead of JSON, which
+          // is exactly how a healthy endpoint looks broken.
+          navigateFallbackDenylist: [/^\/api\//],
           globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2,json}'],
+          // The social preview is fetched by crawlers, never by the app, so it has
+          // no business in the offline precache (it is also the largest image).
+          globIgnores: ['**/brand/og-image.png'],
           runtimeCaching: [
             {
               urlPattern: ({ url }) => url.pathname.startsWith('/api/apod'),

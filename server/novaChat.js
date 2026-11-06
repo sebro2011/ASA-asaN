@@ -1,7 +1,7 @@
 import { generateLocalSpaceResponse } from '../src/utils/spaceLocalAiEngine.js';
 
-const OPENROUTER_CHAT_COMPLETIONS_URL = 'https://openrouter.ai/api/v1/chat/completions';
-const GEMINI_GENERATE_CONTENT_URL = 'https://generativelanguage.googleapis.com/v1beta/models';
+export const OPENROUTER_CHAT_COMPLETIONS_URL = 'https://openrouter.ai/api/v1/chat/completions';
+export const GEMINI_GENERATE_CONTENT_URL = 'https://generativelanguage.googleapis.com/v1beta/models';
 export const OPENROUTER_FREE_MODEL = 'openrouter/free';
 export const DEFAULT_GEMINI_MODEL = 'gemini-2.5-flash';
 
@@ -23,6 +23,10 @@ const MAX_TOTAL_MESSAGE_BYTES = 20 * 1024;
 const MAX_MESSAGE_CHARS = 4_000;
 const MAX_MESSAGES = 12;
 const UPSTREAM_TIMEOUT_MS = 8_000;
+// Hard ceiling for one automatic request across every configured provider, so a
+// chain of slow failures cannot outlast the browser's patience (or the function
+// timeout) before the local engine answers.
+const AUTO_CHAIN_BUDGET_MS = 18_000;
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const RATE_LIMIT_REQUESTS = 8;
 const SUPPORTED_LANGUAGES = new Set(['en', 'si', 'ta']);
@@ -284,7 +288,13 @@ function providerError(status, provider, model) {
   } else {
     response = errorResult(502, 'PROVIDER_ERROR', 'The AI provider could not complete this request. Please retry.');
   }
-  return withProvider(response, provider);
+  // The status the *provider* returned, kept separate from ours: a 401 upstream
+  // becomes a 503 for the browser, and the number is what makes a failure
+  // diagnosable ("Arena AI said 401") without ever exposing the key.
+  return withProvider(
+    { ...response, body: { ...response.body, upstreamStatus: status } },
+    provider,
+  );
 }
 
 function withProvider(response, provider) {
@@ -297,7 +307,7 @@ function withProvider(response, provider) {
   };
 }
 
-function getLocalResponse(query, language, { fallback = false } = {}) {
+function getLocalResponse(query, language, { fallback = false, chain = [] } = {}) {
   const local = generateLocalSpaceResponse(query, language);
   return result(200, {
     text: local.text,
@@ -306,6 +316,9 @@ function getLocalResponse(query, language, { fallback = false } = {}) {
     provider: PROVIDER_NAMES.local,
     lang: language,
     fallback,
+    // Why every online provider was skipped: safe (codes and statuses only) and
+    // essential, because an offline answer that does not say why is a dead end.
+    ...(chain.length ? { fallbackChain: chain } : {}),
     intent: local.intent,
   });
 }
@@ -516,8 +529,22 @@ function readKey(getter) {
   }
 }
 
-/** Return only safe provider availability information. Never return API key values. */
+/** A short, safe deployment label: no path, no query, no secret. */
+function deploymentLabel(value, fallback = null) {
+  if (typeof value !== 'string') return fallback;
+  const trimmed = value.trim().slice(0, 60).replace(/[^\w.\-/]/g, '');
+  return trimmed || fallback;
+}
+
+/**
+ * Return only safe provider availability information. Never return API key values.
+ *
+ * `providers` says whether a key is *set* — not whether it is accepted. The
+ * `deployment` block says which build answered, so a stale deployment (or a
+ * cached client) can be told apart from a real provider failure.
+ */
 export function getNovaPublicConfig({ env = getProcessEnv() } = {}) {
+  const commit = deploymentLabel(env.VERCEL_GIT_COMMIT_SHA);
   return {
     providers: {
       auto: true,
@@ -525,6 +552,11 @@ export function getNovaPublicConfig({ env = getProcessEnv() } = {}) {
       gemini: typeof env.GEMINI_API_KEY === 'string' && Boolean(env.GEMINI_API_KEY.trim()),
       openrouter: typeof env.OPENROUTER_API_KEY === 'string' && Boolean(env.OPENROUTER_API_KEY.trim()),
       arena: typeof env.ARENA_API_KEY === 'string' && Boolean(env.ARENA_API_KEY.trim()),
+    },
+    deployment: {
+      environment: deploymentLabel(env.VERCEL_ENV, 'development'),
+      commit: commit && /^[0-9a-f]{7,40}$/i.test(commit) ? commit.slice(0, 7) : null,
+      branch: deploymentLabel(env.VERCEL_GIT_COMMIT_REF),
     },
   };
 }
@@ -597,7 +629,14 @@ export function createNovaChatHandler({
     }
 
     let lastError = null;
+    /** One safe record per failed hop: provider, code and upstream status. */
+    const chain = [];
+    const chainStartedAt = Date.now();
     for (const provider of providerOrder) {
+      const remainingMs = AUTO_CHAIN_BUDGET_MS - (Date.now() - chainStartedAt);
+      if (remainingMs <= 0) break;
+      const providerTimeout = Math.min(timeoutMs, remainingMs);
+
       let response;
       if (provider === 'arena') {
         response = await callArena({
@@ -606,7 +645,7 @@ export function createNovaChatHandler({
           model: models.arena,
           messages: validated.messages,
           language: validated.language,
-          timeoutMs,
+          timeoutMs: providerTimeout,
         });
       } else if (provider === 'openrouter') {
         response = await callOpenRouter({
@@ -615,7 +654,7 @@ export function createNovaChatHandler({
           model: models.openrouter,
           messages: validated.messages,
           language: validated.language,
-          timeoutMs,
+          timeoutMs: providerTimeout,
         });
       } else {
         response = await callGemini({
@@ -624,19 +663,24 @@ export function createNovaChatHandler({
           model: models.gemini,
           messages: validated.messages,
           language: validated.language,
-          timeoutMs,
+          timeoutMs: providerTimeout,
         });
       }
 
       if (response.status === 200) return response;
       lastError = response;
+      chain.push({
+        provider: typeof response.body?.provider === 'string' ? response.body.provider : PROVIDER_NAMES[provider],
+        code: typeof response.body?.code === 'string' ? response.body.code : 'PROVIDER_UNAVAILABLE',
+        status: Number(response.body?.upstreamStatus) || response.status,
+      });
       if (validated.provider !== 'auto') return response;
     }
 
     // Automatic routing is resilient: if configured online providers are unavailable,
     // answer from the bundled local knowledge engine and identify that provider honestly.
     if (validated.provider === 'auto') {
-      return getLocalResponse(validated.messages.at(-1).content, validated.language, { fallback: true });
+      return getLocalResponse(validated.messages.at(-1).content, validated.language, { fallback: true, chain });
     }
 
     return lastError || errorResult(503, 'PROVIDER_UNAVAILABLE', 'NOVA could not complete this request. Please retry.');

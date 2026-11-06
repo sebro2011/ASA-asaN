@@ -79,10 +79,21 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onDismiss }) => {
       <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(3,6,14,0.86)_0%,rgba(3,6,14,0.72)_45%,rgba(3,6,14,0.95)_100%)]" aria-hidden="true" />
 
       <div className="relative mx-auto flex min-h-full max-w-2xl flex-col justify-center px-5 py-14 sm:px-8">
-        <p className="eyebrow flex items-center gap-2">
-          <span className="h-1 w-1 rounded-full bg-atmo" aria-hidden="true" />
-          {t('welcomeEyebrow')}
-        </p>
+        {/* The site lockup replaces the eyebrow: it says "NASA SPACE EXPLORER"
+            itself, so the alt text carries the same sentence for screen readers
+            and nothing is announced twice. Intrinsic size is declared so the
+            overlay never shifts while the artwork decodes. */}
+        <picture>
+          <source srcSet="/brand/space-explorer-lockup.webp" type="image/webp" />
+          <img
+            src="/brand/space-explorer-lockup.png"
+            alt={t('welcomeEyebrow')}
+            width={1440}
+            height={385}
+            decoding="async"
+            className="block h-auto w-[min(320px,74vw)] select-none"
+          />
+        </picture>
 
         <h1
           id="welcome-title"

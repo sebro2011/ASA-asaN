@@ -14,12 +14,21 @@ export interface ChatTurn {
   content: string;
 }
 
+/** One online provider that was tried and failed while answering offline. */
+export interface ChatFallbackHop {
+  provider: string;
+  code: string;
+  status: number;
+}
+
 export interface ChatReply {
   text: string;
   provider: string;
   model: string;
   suggestions: string[];
   fallback: boolean;
+  /** Empty unless `fallback` — then it says which providers failed and how. */
+  fallbackChain: ChatFallbackHop[];
 }
 
 export type ChatErrorCode =
@@ -36,11 +45,19 @@ export type ChatErrorCode =
   | 'EMPTY_PROVIDER_RESPONSE'
   | 'INTERNAL_ERROR'
   | 'NETWORK'
+  /** The reader pressed Stop; nothing failed, so no error bubble is shown. */
+  | 'ABORTED'
   | 'UNKNOWN';
 
 export type ChatResult =
   | { ok: true; reply: ChatReply }
-  | { ok: false; code: ChatErrorCode };
+  | {
+      ok: false;
+      code: ChatErrorCode;
+      /** Which online provider refused, and the status it returned. Never a key. */
+      provider?: string;
+      upstreamStatus?: number;
+    };
 
 /** Server codes map to one localised sentence each; unknown codes stay generic. */
 const KNOWN_CODES = new Set<string>([
@@ -133,7 +150,8 @@ export async function sendChat({
       signal,
     });
   } catch {
-    return { ok: false, code: 'NETWORK' };
+    // An aborted request is a user action, not a failure — keep the two apart.
+    return { ok: false, code: signal?.aborted ? 'ABORTED' : 'NETWORK' };
   }
 
   let body: Record<string, unknown> = {};
@@ -144,7 +162,13 @@ export async function sendChat({
   }
 
   if (!response.ok || typeof body.text !== 'string') {
-    return { ok: false, code: normaliseErrorCode(body.code, response.status) };
+    const upstreamStatus = Number(body.upstreamStatus);
+    return {
+      ok: false,
+      code: normaliseErrorCode(body.code, response.status),
+      ...(typeof body.provider === 'string' && body.provider.trim() ? { provider: body.provider.trim() } : {}),
+      ...(Number.isFinite(upstreamStatus) && upstreamStatus > 0 ? { upstreamStatus } : {}),
+    };
   }
 
   return {
@@ -157,8 +181,43 @@ export async function sendChat({
         ? body.suggestions.filter((item): item is string => typeof item === 'string').slice(0, 4)
         : [],
       fallback: body.fallback === true,
+      fallbackChain: normaliseFallbackChain(body.fallbackChain),
     },
   };
+}
+
+function normaliseFallbackChain(value: unknown): ChatFallbackHop[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((hop): hop is Record<string, unknown> => Boolean(hop) && typeof hop === 'object')
+    .map((hop) => ({
+      provider: typeof hop.provider === 'string' ? hop.provider.slice(0, 60) : '',
+      code: typeof hop.code === 'string' ? hop.code.slice(0, 60) : '',
+      status: Number(hop.status) > 0 ? Number(hop.status) : 0,
+    }))
+    .filter((hop) => Boolean(hop.provider || hop.code))
+    .slice(0, 4);
+}
+
+/** `Google Gemini · PROVIDER_AUTH_ERROR · HTTP 401` — safe to show and to copy. */
+export function describeChatFailure(failure: {
+  code: string;
+  provider?: string;
+  upstreamStatus?: number;
+}): string {
+  return [
+    failure.provider,
+    failure.code,
+    failure.upstreamStatus && failure.upstreamStatus > 0 ? `HTTP ${failure.upstreamStatus}` : '',
+  ].filter(Boolean).join(' · ');
+}
+
+/** The same line for every failed hop behind an offline answer. */
+export function describeFallbackChain(chain: ChatFallbackHop[]): string {
+  return chain
+    .map((hop) => [hop.provider, hop.code, hop.status > 0 ? `HTTP ${hop.status}` : ''].filter(Boolean).join(' · '))
+    .filter(Boolean)
+    .join(' | ');
 }
 
 /** How many past turns are sent as context; the server enforces its own cap. */

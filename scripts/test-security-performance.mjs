@@ -7,6 +7,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
+import { readFile } from 'node:fs/promises';
 import { app } from '../server.ts';
 
 let server;
@@ -122,4 +123,15 @@ test('rate limiting returns 429 after exceeding the per-IP window', async () => 
   } finally {
     await stop();
   }
+});
+
+test('the service worker never answers an API navigation with the app shell', async () => {
+  // The generated worker falls back to index.html for navigations. Without a
+  // denylist, opening /api/nova/config in a tab renders the SPA (HTTP 200, HTML)
+  // and a healthy endpoint looks broken.
+  const config = await readFile(new URL('../vite.config.ts', import.meta.url), 'utf8');
+  const match = /navigateFallbackDenylist:\s*\[([^\]]*)\]/.exec(config);
+
+  assert.ok(match, 'vite.config.ts declares a navigateFallbackDenylist');
+  assert.match(match[1], /\^\\\/api\\\//, 'the denylist covers /api/*');
 });

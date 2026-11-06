@@ -25,12 +25,12 @@ const PROFILE = {
   updated_at: '2026-01-01T00:00:00.000Z',
 };
 
-function createFakeClient({ signedIn = true } = {}) {
+function createFakeClient({ signedIn = true, profile = {} } = {}) {
   const state = {
     session: signedIn
       ? { user: { id: 'user-1', email: 'ada@example.com', email_confirmed_at: '2026-01-01T00:00:00.000Z' } }
       : null,
-    profile: { ...PROFILE },
+    profile: { ...PROFILE, ...profile },
     profileUpdates: [],
   };
 
@@ -73,7 +73,7 @@ function createFakeClient({ signedIn = true } = {}) {
   return { client, state };
 }
 
-function installDom() {
+function installDom({ diagnostics } = {}) {
   const dom = new JSDOM('<!doctype html><html lang="en"><body><div id="root"></div></body></html>', {
     url: 'http://localhost/',
     pretendToBeVisual: false,
@@ -114,11 +114,64 @@ function installDom() {
     Object.defineProperty(globalThis, key, { value, configurable: true, writable: true });
   }
 
+  globalThis.__diagCalls = 0;
   globalThis.fetch = async (url) => {
     const target = String(url);
-    const body = target.includes('/api/workspace/config')
-      ? { enabled: true, url: 'https://project.supabase.co', publishableKey: 'sb_publishable_test_key_123456' }
-      : { providers: { auto: true, local: true, gemini: false, openrouter: false, arena: false } };
+    let body;
+    if (target.includes('/api/nova/diagnostics')) {
+      globalThis.__diagCalls += 1;
+      body = diagnostics ?? {
+        checkedAt: '2026-11-06T10:00:00.000Z',
+        deployment: 'production',
+        probed: true,
+        throttled: false,
+        providers: {
+          openrouter: {
+            provider: 'OpenRouter',
+            configured: true,
+            endpoint: 'openrouter.ai',
+            model: 'openrouter/free',
+            status: 'ok',
+            code: 'OK',
+            httpStatus: 200,
+            ms: 240,
+          },
+          gemini: {
+            provider: 'Google Gemini',
+            configured: true,
+            endpoint: 'generativelanguage.googleapis.com',
+            model: 'gemini-2.5-flash',
+            status: 'error',
+            code: 'PROVIDER_AUTH_ERROR',
+            httpStatus: 401,
+            ms: 180,
+            reason: 'API key not valid. Please pass a valid API key.',
+          },
+          arena: {
+            provider: 'Arena AI',
+            configured: true,
+            endpoint: 'api.arena.ai',
+            model: 'arena_smart.aria',
+            status: 'error',
+            code: 'PROVIDER_MODEL_NOT_FOUND',
+            httpStatus: 404,
+            ms: 95,
+          },
+          local: {
+            provider: 'NOVA Local Space Engine',
+            configured: true,
+            endpoint: 'in-process',
+            model: 'nasa-local-engine',
+            status: 'ok',
+            code: 'OK',
+          },
+        },
+      };
+    } else if (target.includes('/api/workspace/config')) {
+      body = { enabled: true, url: 'https://project.supabase.co', publishableKey: 'sb_publishable_test_key_123456' };
+    } else {
+      body = { providers: { auto: true, local: true, gemini: false, openrouter: false, arena: false } };
+    }
     return {
       ok: true,
       status: 200,
@@ -293,6 +346,95 @@ test('signed in: choosing a provider writes it to the profile', async () => {
     assert.equal(update.preferred_provider, 'local');
     assert.equal(state.profile.preferred_provider, 'local');
     assert.match(app.text(), /Saved to your account/);
+    await app.unmount();
+  } finally {
+    dom.window.close();
+  }
+});
+
+test('the AI status card names each provider and its failure reason', async () => {
+  const dom = installDom();
+  try {
+    const { client } = createFakeClient();
+    const app = await mountSettings({ client });
+    await app.settle ? await app.settle() : await app.act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 120));
+    });
+
+    const text = app.text();
+    assert.match(text, /AI providers/);
+    assert.match(text, /OpenRouter/);
+    assert.match(text, /Working/);
+    assert.match(text, /Google Gemini/);
+    assert.match(text, /PROVIDER_AUTH_ERROR \(HTTP 401\)/);
+    assert.match(text, /Arena AI/);
+    assert.match(text, /PROVIDER_MODEL_NOT_FOUND/);
+    assert.match(text, /NOVA Local Space Engine/);
+
+    const reason = document.querySelector('[data-testid="ai-status-reason-gemini"]');
+    assert.ok(reason, 'the redacted upstream reason is shown');
+    assert.match(reason.textContent, /API key not valid/);
+    assert.equal(globalThis.__diagCalls, 1, 'checked once on mount');
+  } finally {
+    dom.window.close();
+  }
+});
+
+test('Re-check asks the server again', async () => {
+  const dom = installDom();
+  try {
+    const { client } = createFakeClient();
+    const app = await mountSettings({ client });
+    await app.act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 120));
+    });
+    assert.equal(globalThis.__diagCalls, 1);
+
+    const recheck = [...document.querySelectorAll('button')].find((node) =>
+      (node.textContent || '').includes('Re-check'),
+    );
+    assert.ok(recheck, 're-check button rendered');
+    await click(app.act, recheck);
+    await app.act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 80));
+    });
+    assert.equal(globalThis.__diagCalls, 2);
+  } finally {
+    dom.window.close();
+  }
+});
+
+test('only providers this deployment can call are offered', async () => {
+  const dom = installDom();
+  try {
+    const { client } = createFakeClient();
+    const app = await mountSettings({ client });
+    await app.act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 80));
+    });
+
+    const select = document.querySelector('select');
+    const values = [...select.querySelectorAll('option')].map((option) => option.value);
+    assert.deepEqual(values, ['auto', 'local'], 'unconfigured online providers are not offered');
+    assert.doesNotMatch(app.text(), /Your saved default/);
+    await app.unmount();
+  } finally {
+    dom.window.close();
+  }
+});
+
+test('a saved default that is no longer configured is called out', async () => {
+  const dom = installDom();
+  try {
+    const { client } = createFakeClient({ profile: { preferred_provider: 'gemini' } });
+    const app = await mountSettings({ client });
+    await app.act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 80));
+    });
+
+    assert.match(app.text(), /Your saved default \(Gemini\) is not configured on this server/);
+    const values = [...document.querySelectorAll('select option')].map((option) => option.value);
+    assert.equal(values.includes('gemini'), false);
     await app.unmount();
   } finally {
     dom.window.close();
