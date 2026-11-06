@@ -60,7 +60,7 @@ function ExploreSurface({ route }: { route: AppRoute }) {
         onSelectTab={(next) => {
           navigate(next === 'home' ? '/explore' : next === 'space-shorts' ? '/cosmovision' : `/explore/${next}`);
         }}
-        onExitToWorkspace={() => navigate('/')}
+        onExitToWorkspace={() => navigate('/workspace')}
       />
     </Suspense>
   );
@@ -80,7 +80,7 @@ function ChatLoading() {
 }
 
 function WorkspaceSurface({ route }: { route: AppRoute }) {
-  if (route.name === 'home') return <HomeSurface />;
+  if (route.name === 'workspace') return <HomeSurface />;
   if (route.name === 'notFound') return <NotFound />;
 
   if (route.name === 'chat') {
@@ -129,6 +129,10 @@ function WorkspaceSurface({ route }: { route: AppRoute }) {
 export default function App() {
   const route = useRoute();
 
+  // NASA Space Explorer is the product. It owns `/` and every science
+  // destination; the NOVA workspace is a destination of its own at /workspace,
+  // and NOVA's astronomy assistant is a tab inside Explore (as it always was).
+  if (route.name === 'home') return <ExploreSurface route={{ ...route, tab: 'home' }} />;
   if (route.name === 'explore') return <ExploreSurface route={route} />;
 
   return (

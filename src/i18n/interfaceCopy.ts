@@ -13,6 +13,7 @@ type Copy = Record<string, string>;
 const en: Copy = {
   /* shell */
   navHome: 'Home',
+  wsNavWorkspace: 'NOVA workspace',
   navExplore: 'Explore',
   navEarth: 'Earth',
   navSystem: 'Solar system',
@@ -173,6 +174,7 @@ const en: Copy = {
 
 const si: Copy = {
   navHome: 'මුල් පිටුව',
+  wsNavWorkspace: 'NOVA වැඩ අවකාශය',
   navExplore: 'ගවේෂණය',
   navEarth: 'පෘථිවිය',
   navSystem: 'සෞරග්‍රහ මණ්ඩලය',
@@ -325,6 +327,7 @@ const si: Copy = {
 
 const ta: Copy = {
   navHome: 'முகப்பு',
+  wsNavWorkspace: 'NOVA பணியிடம்',
   navExplore: 'ஆராய்க',
   navEarth: 'பூமி',
   navSystem: 'சூரிய குடும்பம்',

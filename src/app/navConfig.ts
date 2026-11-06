@@ -45,7 +45,14 @@ export interface WorkspaceNavItem {
 
 /** Primary workspace destinations, in product order. */
 export const WORKSPACE_NAV: WorkspaceNavItem[] = [
-  { id: 'home', route: 'home', href: '/', labelKey: 'navHome', icon: House, status: 'live' },
+  {
+    id: 'workspace',
+    route: 'workspace',
+    href: '/workspace',
+    labelKey: 'wsNavWorkspace',
+    icon: House,
+    status: 'live',
+  },
   {
     id: 'chat',
     route: 'chat',

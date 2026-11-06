@@ -1,8 +1,8 @@
 {
   "id": "/",
-  "name": "NOVA AI — AI Workspace",
-  "short_name": "NOVA",
-  "description": "Trilingual AI workspace for chat, projects, documents, research, code and tasks — with the complete NASA science explorer built in.",
+  "name": "NASA Space Explorer",
+  "short_name": "Space Explorer",
+  "description": "NASA imagery, Earth intelligence, asteroids, missions and deep-space 3D — with the NOVA astronomy assistant built in. English, Sinhala and Tamil.",
   "theme_color": "#08090D",
   "background_color": "#08090D",
   "display": "standalone",
@@ -11,7 +11,7 @@
   "start_url": "/",
   "scope": "/",
   "lang": "en",
-  "categories": ["productivity", "education", "utilities"],
+  "categories": ["education", "utilities"],
   "icons": [
     {
       "src": "/brand/icon-192.png",
