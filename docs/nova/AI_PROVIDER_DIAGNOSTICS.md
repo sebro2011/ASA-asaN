@@ -81,3 +81,33 @@ The endpoint reports reachability; it does not prove answer **quality**, and it
 does not test the browser → `/api/nova/chat` path end to end. It also cannot run
 inside the Arena sandbox preview, which has no outbound network to any provider —
 there, every online provider correctly reports `UPSTREAM_NETWORK_ERROR`.
+
+## 6. Vercel environment layout (cleaned up 2026-11-06)
+
+The keys had been entered **twice**: once on the project, once as team-level
+"shared" variables. Vercel resolves project values over shared ones, but the two
+copies covered different environments, so the deployed behaviour depended on
+which copy applied:
+
+| Key | Before | After |
+| --- | --- | --- |
+| `GEMINI_API_KEY` | project: production only · shared: preview + production | **project: production + preview + development**; shared copy deleted |
+| `OPENROUTER_API_KEY` | project: production only · shared: preview + production | **project: production + preview + development**; shared copy deleted |
+| `YOUTUBE_API_KEY` | project: production only · shared: all projects | **project: production + preview + development**; shared copy scoped to `nova-web-os` only |
+| `ARENA_API_KEY` | project: production, preview, development (3 records) | unchanged |
+| `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY` | project: all three | unchanged |
+
+Rules worth remembering:
+
+* **Project beats shared.** A shared variable is only a default for projects that
+  do not define the key themselves.
+* **An empty project list on a shared variable means "every project".** Disconnecting
+  a project-scoped shared secret from its only project silently widens it to the
+  whole team — which is why the Gemini and OpenRouter shared copies were **deleted**
+  rather than disconnected. Only the YouTube copy was re-scoped, because
+  `nova-web-os` has no key of its own and would otherwise lose video support.
+* Environment changes apply to the **next deployment**; a running deployment keeps
+  the values it was built with.
+
+Not verified here: the actual key **values** (they are sensitive and were never
+read). That is exactly what `?probe=1` is for.
