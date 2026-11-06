@@ -45,6 +45,7 @@ import {
 import { useConversations, useThread } from './useChatData';
 import { takePrompt } from './pendingPrompt';
 import MessageBody from './MessageBody';
+import { displayModelName } from '../../lib/modelLabels';
 import NovaOrb from '../home/NovaOrb';
 
 /** Literal keys, so the shell test can verify all three languages. */
@@ -594,7 +595,9 @@ export default function ChatSurface() {
 
                       <div className="mt-1.5 flex flex-wrap items-center gap-2 text-[10.5px] text-ws-text-3">
                         {!isUser && row.provider ? <span>{row.provider}</span> : null}
-                        {!isUser && row.model ? <span>· {row.model}</span> : null}
+                        {!isUser && displayModelName(row.model) ? (
+                          <span>· {displayModelName(row.model)}</span>
+                        ) : null}
                         {thread.unsaved.includes(row.id) ? (
                           <span className="text-[color:var(--color-ws-danger)]">· {t('wsChatNotSaved')}</span>
                         ) : null}
