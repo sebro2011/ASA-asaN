@@ -34,6 +34,7 @@ export type RouteName =
   | 'knowledge'
   | 'tasks'
   | 'settings'
+  | 'search'
   | 'profile'
   | 'explore'
   | 'notFound';
@@ -67,6 +68,7 @@ const FLAT_SEGMENTS: Record<string, RouteName> = {
   knowledge: 'knowledge',
   tasks: 'tasks',
   settings: 'settings',
+  search: 'search',
   profile: 'profile',
 };
 

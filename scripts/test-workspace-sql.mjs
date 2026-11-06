@@ -24,6 +24,10 @@ const schemaSql = await readFile(
   new URL('../supabase/migrations/20261105_nova_workspace.sql', import.meta.url),
   'utf8',
 );
+const searchSql = await readFile(
+  new URL('../supabase/migrations/20261106_nova_search.sql', import.meta.url),
+  'utf8',
+);
 const storageSql = await readFile(
   new URL('../supabase/migrations/20261105_nova_workspace_storage.sql', import.meta.url),
   'utf8',
@@ -81,6 +85,7 @@ async function freshDatabase() {
   const db = new PGlite();
   await db.exec(shimSql);
   await db.exec(schemaSql);
+  await db.exec(searchSql);
   await db.exec(storageSql);
   // Two confirmed accounts. The trigger must create their profiles.
   await db.query('insert into auth.users (id, email) values ($1, $3), ($2, $4)', [
@@ -107,8 +112,9 @@ async function asOwner(db) {
 test('migrations are idempotent and bootstrap profiles from auth.users', async () => {
   const db = await freshDatabase();
   try {
-    // Re-running both files must not throw or duplicate anything.
+    // Re-running every file must not throw or duplicate anything.
     await db.exec(schemaSql);
+    await db.exec(searchSql);
     await db.exec(storageSql);
 
     const profiles = await db.query('select id, locale, theme from public.profiles order by id');
@@ -480,6 +486,132 @@ test('delete_my_workspace_data removes only the caller rows and keeps the profil
       bob_messages: 1,
       alice_profile: 1,
     });
+  } finally {
+    await db.close();
+  }
+});
+
+/** Seed one conversation with messages, as a given user. */
+async function seedSearchData(db, uid, title, messages) {
+  await asUser(db, uid);
+  const thread = await db.query(
+    'insert into public.conversations (user_id, title) values ($1, $2) returning id',
+    [uid, title],
+  );
+  const id = thread.rows[0].id;
+  for (const content of messages) {
+    await db.query(
+      "insert into public.messages (conversation_id, user_id, role, content) values ($1, $2, 'user', $3)",
+      [id, uid, content],
+    );
+  }
+  return id;
+}
+
+test('full-text search ranks matches and stays inside RLS', async () => {
+  const db = await freshDatabase();
+  try {
+    const aliceThread = await seedSearchData(db, ALICE, 'Mars mission planning', [
+      'The rover will land near Jezero crater.',
+      'Radiation shielding for the journey to Mars matters.',
+      'Radiation shielding twice, with much more about radiation shielding and its mass budget.',
+    ]);
+    await db.query(
+      "insert into public.documents (user_id, title, content) values ($1, 'Radiation notes', 'Radiation shielding dosimetry limits for crew')",
+      [ALICE],
+    );
+    const bobThread = await seedSearchData(db, BOB, 'Bob radiation secrets', [
+      'Bob private radiation shielding text that Alice must never see.',
+    ]);
+
+    await asUser(db, ALICE);
+    const hits = await db.query("select * from public.nova_search('radiation shielding')");
+    assert.ok(hits.rows.length >= 2, 'ranked hits returned');
+    assert.ok(
+      hits.rows.every((row) => row.kind !== 'message' || row.conversation_id !== bobThread),
+      'never returns another user via the function',
+    );
+    assert.ok(hits.rows.some((row) => row.kind === 'document'), 'the document is found too');
+    assert.ok(
+      hits.rows.filter((row) => row.kind === 'message').every((row) => row.title === 'Mars mission planning'),
+    );
+    assert.ok(
+      hits.rows.filter((row) => row.kind === 'message').some((row) => row.snippet.includes('<mark>')),
+      'message snippets carry highlight markers',
+    );
+
+    // Title weight A beats body weight B for the same term frequency.
+    await db.query(
+      "insert into public.documents (user_id, title, content) values ($1, 'Kuiper belt survey', 'notes'), ($1, 'Outer system notes', 'Kuiper belt survey')",
+      [ALICE],
+    );
+    const weighted = await db.query("select title, rank from public.nova_search('kuiper belt') where kind = 'document' order by rank desc");
+    assert.equal(weighted.rows[0].title, 'Kuiper belt survey', 'a title match outranks a body match');
+
+    // Ranking is monotonic.
+    const ranks = hits.rows.map((row) => Number(row.rank));
+    for (let i = 1; i < ranks.length; i += 1) assert.ok(ranks[i - 1] >= ranks[i], 'rank is descending');
+
+    // Conversation titles are searchable too.
+    const titles = await db.query("select kind, title from public.nova_search('mars mission')");
+    assert.ok(titles.rows.some((row) => row.kind === 'conversation' && row.title === 'Mars mission planning'));
+
+    // Another user's rows are invisible to the same function call.
+    await asUser(db, BOB);
+    const bobHits = await db.query("select conversation_id from public.nova_search('radiation shielding')");
+    assert.ok(bobHits.rows.length > 0);
+    assert.ok(bobHits.rows.every((row) => row.conversation_id !== aliceThread));
+  } finally {
+    await db.close();
+  }
+});
+
+test('search falls back to substrings, ignores noise, clamps the limit', async () => {
+  const db = await freshDatabase();
+  try {
+    await seedSearchData(db, ALICE, 'Streaming study', ['Provider streaming analyse later']);
+
+    await asUser(db, ALICE);
+    // No tsquery match for "streamingx", but the substring pass finds nothing either.
+    assert.equal((await db.query("select * from public.nova_search('zzzz')")).rows.length, 0);
+
+    // A partial word still resolves through the fallback pass.
+    const partial = await db.query("select kind, snippet from public.nova_search('streami')");
+    assert.deepEqual(
+      partial.rows.map((row) => row.kind).sort(),
+      ['conversation', 'message'],
+      'partial word matches both the message body and the conversation title',
+    );
+
+    // Two characters or fewer is refused before any scan happens.
+    assert.equal((await db.query("select * from public.nova_search('a')")).rows.length, 0);
+    assert.equal((await db.query("select * from public.nova_search('  ')")).rows.length, 0);
+    assert.equal((await db.query('select * from public.nova_search(null)')).rows.length, 0);
+
+    // Wildcards are treated literally, not as patterns.
+    assert.equal((await db.query("select * from public.nova_search('%')")).rows.length, 0);
+
+    // The limit is clamped, never trusted.
+    for (let i = 0; i < 4; i += 1) {
+      await seedSearchData(db, ALICE, `Lunar note ${i}`, [`Lunar regolith sample ${i}`]);
+    }
+    assert.equal((await db.query("select * from public.nova_search('lunar', 2)")).rows.length, 2);
+    assert.ok((await db.query("select * from public.nova_search('lunar', 999)")).rows.length <= 50);
+    assert.ok((await db.query("select * from public.nova_search('lunar', 0)")).rows.length >= 1);
+  } finally {
+    await db.close();
+  }
+});
+
+test('the search function is closed to anonymous callers', async () => {
+  const db = await freshDatabase();
+  try {
+    await db.exec('reset role; set role anon');
+    await assert.rejects(
+      db.query("select * from public.nova_search('anything')"),
+      /permission denied/i,
+      'anon cannot execute nova_search',
+    );
   } finally {
     await db.close();
   }

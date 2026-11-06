@@ -24,6 +24,11 @@ import type { TabId } from './ui/navigation';
 import { NovaMark } from './app/Brand';
 
 const ExploreApp = lazy(() => import('./explore/ExploreApp'));
+// Chat carries the markdown + highlighter chunk; it must never enter the entry.
+const SearchSurface = lazy(() => import('./workspace/search/SearchSurface'));
+const SettingsSurface = lazy(() => import('./workspace/settings/SettingsSurface'));
+
+const ChatSurface = lazy(() => import('./workspace/chat/ChatSurface'));
 
 /** Branded loading state for the Explore chunk (kept dark: Explore is dark). */
 function ExploreLoading() {
@@ -61,9 +66,50 @@ function ExploreSurface({ route }: { route: AppRoute }) {
   );
 }
 
+/** Shared Suspense fallback for lazily-loaded surfaces. */
+function SurfaceLoading({ label }: { label: string }) {
+  return (
+    <div className="nova-card p-6 text-[12.5px] text-ws-text-3" role="status">
+      {label}
+    </div>
+  );
+}
+
+function ChatLoading() {
+  return <SurfaceLoading label="Loading chat…" />;
+}
+
 function WorkspaceSurface({ route }: { route: AppRoute }) {
   if (route.name === 'home') return <HomeSurface />;
   if (route.name === 'notFound') return <NotFound />;
+
+  if (route.name === 'chat') {
+    return (
+      <RequireAuth>
+        <Suspense fallback={<ChatLoading />}>
+          <ChatSurface />
+        </Suspense>
+      </RequireAuth>
+    );
+  }
+
+  if (route.name === 'search') {
+    return (
+      <RequireAuth>
+        <Suspense fallback={<SurfaceLoading label="Loading search…" />}>
+          <SearchSurface />
+        </Suspense>
+      </RequireAuth>
+    );
+  }
+
+  if (route.name === 'settings') {
+    return (
+      <Suspense fallback={<SurfaceLoading label="Loading settings…" />}>
+        <SettingsSurface />
+      </Suspense>
+    );
+  }
 
   if (route.name === 'profile') {
     return (
