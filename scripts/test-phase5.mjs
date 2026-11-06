@@ -103,11 +103,13 @@ test('/api/youtube/meta rejects bad input and reports fetch failures', async () 
     assert.equal(invalid.body.code, 'invalid-url');
 
     // No outbound network to YouTube in this sandbox: a valid URL must surface a
-    // verification failure rather than fabricate a duration.
+    // verification failure rather than fabricate a duration. 502 (upstream
+    // unreachable) is the honest status — a 404 would claim the video is gone.
     const valid = await request('/api/youtube/meta?url=https%3A%2F%2Fwww.youtube.com%2Fwatch%3Fv%3DdQw4w9WgXcQ');
-    assert.equal(valid.statusCode, 404);
+    assert.equal(valid.statusCode, 502);
     assert.equal(valid.body.videoId, 'dQw4w9WgXcQ');
-    assert.ok(valid.body.code);
+    assert.equal(valid.body.code, 'YOUTUBE_UNAVAILABLE');
+    assert.equal(valid.body.error, 'youtube-unavailable');
   } finally {
     if (server) await new Promise((resolve) => server.close(resolve));
   }

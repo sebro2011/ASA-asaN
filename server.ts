@@ -285,18 +285,31 @@ export function extractYouTubeId(url: string): string | null {
   return match ? match[1] : null;
 }
 
+/**
+ * Three different failures used to collapse into one: a deleted video, an
+ * unreachable upstream and a slow upstream all came back as 404 "fetch failed".
+ * They are now distinct so the caller can tell "this video is gone" from
+ * "we could not ask YouTube".
+ */
 async function fetchYoutubeDuration(videoId: string): Promise<number> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 15_000);
   try {
-    const response = await fetch(`https://www.youtube.com/watch?v=${videoId}`, {
-      signal: controller.signal,
-      headers: { 'Accept-Language': 'en-US,en;q=0.9', 'Accept': 'text/html' }
-    });
-    if (!response.ok) throw new Error(`youtube-unavailable`);
+    let response: Response;
+    try {
+      response = await fetch(`https://www.youtube.com/watch?v=${videoId}`, {
+        signal: controller.signal,
+        headers: { 'Accept-Language': 'en-US,en;q=0.9', 'Accept': 'text/html' }
+      });
+    } catch (failure) {
+      const aborted = failure instanceof Error && failure.name === 'AbortError';
+      throw new Error(aborted ? 'youtube-timeout' : 'youtube-unreachable');
+    }
+    if (response.status === 404 || response.status === 410) throw new Error('video-not-found');
+    if (!response.ok) throw new Error('youtube-unavailable');
     const html = await response.text();
     const lengthSeconds = parseYoutubeDuration(html);
-    if (!lengthSeconds || lengthSeconds <= 0) throw new Error('video-unavailable');
+    if (!lengthSeconds || lengthSeconds <= 0) throw new Error('video-not-found');
     return lengthSeconds;
   } finally {
     clearTimeout(timeout);
@@ -342,8 +355,17 @@ app.get('/api/youtube/meta', async (req, res) => {
     const durationSeconds = await fetchYoutubeDuration(videoId);
     res.json({ videoId, durationSeconds });
   } catch (failure) {
-    const code = failure instanceof Error ? failure.message : 'youtube-unavailable';
-    res.status(404).json({ videoId, error: code, code });
+    const reason = failure instanceof Error ? failure.message : '';
+    if (reason === 'video-not-found') {
+      res.status(404).json({ videoId, error: 'video-unavailable', code: 'VIDEO_NOT_FOUND' });
+      return;
+    }
+    if (reason === 'youtube-timeout') {
+      res.status(504).json({ videoId, error: 'youtube-unavailable', code: 'YOUTUBE_TIMEOUT' });
+      return;
+    }
+    // 502, not 404: the video may well exist — we simply could not reach YouTube.
+    res.status(502).json({ videoId, error: 'youtube-unavailable', code: 'YOUTUBE_UNAVAILABLE' });
   }
 });
 

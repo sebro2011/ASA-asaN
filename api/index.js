@@ -4133,7 +4133,10 @@ function setupNasaRoutes(app2, ai2) {
     try {
       const { title, explanation, targetLang } = req.body;
       if (!title || !explanation || !targetLang) {
-        return res.status(400).json({ error: "Missing title, explanation, or targetLang" });
+        return res.status(400).json({
+          error: "Missing title, explanation, or targetLang",
+          code: "INVALID_REQUEST"
+        });
       }
       if (targetLang === "en") {
         return res.json({ success: true, data: { title, explanation } });
@@ -4354,7 +4357,10 @@ Explanation to translate: "${explanation}"`;
   app2.get("/api/missions/grounded-search", async (req, res) => {
     const q = (req.query.q || "").trim().toLowerCase();
     if (!q) {
-      return res.status(400).json({ error: 'Query parameter "q" is required' });
+      return res.status(400).json({
+        error: 'Query parameter "q" is required',
+        code: "INVALID_REQUEST"
+      });
     }
     const cacheKey = `grounded:${q}`;
     const now = Date.now();
@@ -4617,14 +4623,21 @@ async function fetchYoutubeDuration(videoId) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 15e3);
   try {
-    const response = await fetch(`https://www.youtube.com/watch?v=${videoId}`, {
-      signal: controller.signal,
-      headers: { "Accept-Language": "en-US,en;q=0.9", "Accept": "text/html" }
-    });
-    if (!response.ok) throw new Error(`youtube-unavailable`);
+    let response;
+    try {
+      response = await fetch(`https://www.youtube.com/watch?v=${videoId}`, {
+        signal: controller.signal,
+        headers: { "Accept-Language": "en-US,en;q=0.9", "Accept": "text/html" }
+      });
+    } catch (failure) {
+      const aborted = failure instanceof Error && failure.name === "AbortError";
+      throw new Error(aborted ? "youtube-timeout" : "youtube-unreachable");
+    }
+    if (response.status === 404 || response.status === 410) throw new Error("video-not-found");
+    if (!response.ok) throw new Error("youtube-unavailable");
     const html = await response.text();
     const lengthSeconds = parseYoutubeDuration(html);
-    if (!lengthSeconds || lengthSeconds <= 0) throw new Error("video-unavailable");
+    if (!lengthSeconds || lengthSeconds <= 0) throw new Error("video-not-found");
     return lengthSeconds;
   } finally {
     clearTimeout(timeout);
@@ -4678,8 +4691,16 @@ app.get("/api/youtube/meta", async (req, res) => {
     const durationSeconds2 = await fetchYoutubeDuration(videoId);
     res.json({ videoId, durationSeconds: durationSeconds2 });
   } catch (failure) {
-    const code = failure instanceof Error ? failure.message : "youtube-unavailable";
-    res.status(404).json({ videoId, error: code, code });
+    const reason = failure instanceof Error ? failure.message : "";
+    if (reason === "video-not-found") {
+      res.status(404).json({ videoId, error: "video-unavailable", code: "VIDEO_NOT_FOUND" });
+      return;
+    }
+    if (reason === "youtube-timeout") {
+      res.status(504).json({ videoId, error: "youtube-unavailable", code: "YOUTUBE_TIMEOUT" });
+      return;
+    }
+    res.status(502).json({ videoId, error: "youtube-unavailable", code: "YOUTUBE_UNAVAILABLE" });
   }
 });
 app.use("/api/earth", earthRouter);

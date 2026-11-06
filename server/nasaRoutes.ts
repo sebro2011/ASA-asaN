@@ -975,7 +975,10 @@ export function setupNasaRoutes(app: any, ai: GoogleGenAI) {
       const { title, explanation, targetLang } = req.body;
 
       if (!title || !explanation || !targetLang) {
-        return res.status(400).json({ error: 'Missing title, explanation, or targetLang' });
+        return res.status(400).json({
+          error: 'Missing title, explanation, or targetLang',
+          code: 'INVALID_REQUEST',
+        });
       }
 
       if (targetLang === 'en') {
@@ -1247,7 +1250,10 @@ Explanation to translate: "${explanation}"`;
   app.get('/api/missions/grounded-search', async (req: Request, res: Response) => {
     const q = (req.query.q as string || '').trim().toLowerCase();
     if (!q) {
-      return res.status(400).json({ error: 'Query parameter "q" is required' });
+      return res.status(400).json({
+        error: 'Query parameter "q" is required',
+        code: 'INVALID_REQUEST',
+      });
     }
 
     const cacheKey = `grounded:${q}`;
