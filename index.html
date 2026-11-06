@@ -37,9 +37,9 @@
          workspace never flashes the wrong palette. Mirrors src/app/theme.ts. */
       (function () {
         try {
-          var stored = localStorage.getItem('nova_theme') || 'system';
+          var stored = localStorage.getItem('nova_theme') || 'light';
           var prefersLight = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches;
-          var theme = stored === 'light' || stored === 'dark' ? stored : prefersLight ? 'light' : 'dark';
+          var theme = stored === 'system' ? (prefersLight ? 'light' : 'dark') : stored === 'dark' ? 'dark' : 'light';
           document.documentElement.setAttribute('data-nova-theme', theme);
           if (localStorage.getItem('nova_motion') === 'reduced') {
             document.documentElement.setAttribute('data-nova-motion', 'reduced');

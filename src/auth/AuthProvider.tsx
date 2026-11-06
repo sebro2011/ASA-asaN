@@ -22,7 +22,12 @@ import {
   type ReactNode,
 } from 'react';
 import type { Session, SupabaseClient } from '@supabase/supabase-js';
-import { loadCloudConfig, type CloudConfig, type CloudConfigReason } from '../data/config';
+import {
+  loadCloudConfig,
+  resetCloudConfigCache,
+  type CloudConfig,
+  type CloudConfigReason,
+} from '../data/config';
 import { getCloudClient } from '../data/supabaseClient';
 import { Outbox, defaultStorage, type StorageLike } from '../data/outbox';
 import { SyncEngine } from '../data/sync';
@@ -93,6 +98,8 @@ export interface AuthContextValue {
   resendVerification(email: string): Promise<ActionResult>;
   updateProfile(patch: Partial<ProfileRow>): Promise<ActionResult>;
   refreshProfile(): Promise<void>;
+  /** Re-probe `/api/workspace/config` after a network blip (never cached forever). */
+  retryConnection(): Promise<void>;
   syncNow(): Promise<void>;
   importLocalThread(): Promise<LegacyImportResult | { status: 'unavailable' }>;
   removeLocalThread(): void;
@@ -194,6 +201,9 @@ export function AuthProvider({ children, createClient, storage }: AuthProviderPr
     [store],
   );
 
+  // Bumped by `retryConnection()` so a failed probe is never cached for the session.
+  const [attempt, setAttempt] = useState(0);
+
   useEffect(() => {
     mountedRef.current = true;
     const factory = createClient ?? getCloudClient;
@@ -225,7 +235,14 @@ export function AuthProvider({ children, createClient, storage }: AuthProviderPr
     return () => {
       mountedRef.current = false;
     };
-  }, [applySession, createClient]);
+  }, [applySession, createClient, attempt]);
+
+  const retryConnection = useCallback(async () => {
+    setStatus('loading');
+    setConfig(null);
+    resetCloudConfigCache();
+    setAttempt((value) => value + 1);
+  }, []);
 
   // Subscribe separately so the listener survives the async bootstrap above.
   useEffect(() => {
@@ -530,6 +547,7 @@ export function AuthProvider({ children, createClient, storage }: AuthProviderPr
       resendVerification,
       updateProfile,
       refreshProfile,
+      retryConnection,
       syncNow,
       importLocalThread,
       removeLocalThread,
@@ -553,6 +571,7 @@ export function AuthProvider({ children, createClient, storage }: AuthProviderPr
       resendVerification,
       updateProfile,
       refreshProfile,
+      retryConnection,
       syncNow,
       importLocalThread,
       removeLocalThread,
