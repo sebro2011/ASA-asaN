@@ -167,3 +167,21 @@ not at a provider problem.
 `providers` stays what it always was: "a non-empty key is set". It is *not* a
 health check; only `?probe=1` (or a real chat request) can say whether the
 provider accepts that key.
+
+## 9. Why `/api/...` opened in a tab shows the app
+
+The PWA service worker answers every navigation with the cached `index.html`.
+That includes someone typing an API URL into the address bar to check it — the
+response is HTTP 200, `text/html`, and the endpoint looks broken while it is
+perfectly healthy. `navigateFallbackDenylist: [/^\/api\//]` in `vite.config.ts`
+keeps API paths off the app shell (locked by a test).
+
+Two ways to check an endpoint until that build is live:
+
+* a private/incognito window (no service worker registered), or
+* the DevTools console on the site — a `fetch` is not a navigation:
+
+```js
+fetch('/api/nova/config').then(r => r.json()).then(j => console.log(JSON.stringify(j)));
+fetch('/api/nova/diagnostics?probe=1').then(r => r.json()).then(j => console.log(JSON.stringify(j, null, 2)));
+```

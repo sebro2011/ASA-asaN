@@ -22,6 +22,11 @@ export default defineConfig(({ mode }) => {
         manifest: false, // Use public/manifest.json directly
         workbox: {
           maximumFileSizeToCacheInBytes: 6 * 1024 * 1024,
+          // Navigations fall back to the cached app shell. That must never apply
+          // to the API: otherwise opening /api/nova/config in a tab (or curling
+          // it from a browser session) returns index.html instead of JSON, which
+          // is exactly how a healthy endpoint looks broken.
+          navigateFallbackDenylist: [/^\/api\//],
           globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2,json}'],
           runtimeCaching: [
             {
