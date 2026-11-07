@@ -54,7 +54,7 @@ The same information is in the app: **Settings → AI providers → Re-check**.
 | --- | --- |
 | Arena | `ARENA_BASE_URL` is **not set**, so the code falls back to `https://api.arena.ai/v1/chat/completions` with model `arena_smart.aria`. Arena's own documentation shows the gateway at `https://api.arena.ai` (no `/v1`) with **workspace-specific model ids** (for example `coding-router-preview`). Neither the URL nor the model id has been confirmed for this key, so treat Arena as unverified until the probe says `OK`. |
 | OpenRouter | `openrouter/free` is a valid model id. The free tier is 20 requests/minute and **50 requests/day** (1,000/day after a one-off $10 top-up); a `429` here is a quota problem, not a broken key. |
-| Gemini | `gemini-2.5-flash` is the default. A `400`/`403` usually means the key is invalid, restricted, or the model is not enabled for that key's project. |
+| Gemini | `gemini-3.8-flash` is the default (`gemini-2.5-flash` was retired for new keys — a `404 PROVIDER_MODEL_NOT_FOUND` names the replacement). A `400`/`403` usually means the key is invalid or restricted. |
 | Local | Always available; it is the bundled space-knowledge engine, not a model provider. |
 
 ## 4. Fixing Arena properly
