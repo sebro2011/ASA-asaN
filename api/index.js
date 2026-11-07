@@ -2518,7 +2518,7 @@ function generateLocalSpaceResponse(userQuery = "", userLang) {
 var OPENROUTER_CHAT_COMPLETIONS_URL = "https://openrouter.ai/api/v1/chat/completions";
 var GEMINI_GENERATE_CONTENT_URL = "https://generativelanguage.googleapis.com/v1beta/models";
 var OPENROUTER_FREE_MODEL = "openrouter/free";
-var DEFAULT_GEMINI_MODEL = "gemini-2.5-flash";
+var DEFAULT_GEMINI_MODEL = "gemini-3.8-flash";
 var ARENA_BASE_URL = (() => {
   try {
     const configured = process.env.ARENA_BASE_URL;

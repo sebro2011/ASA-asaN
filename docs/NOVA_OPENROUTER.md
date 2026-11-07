@@ -32,7 +32,7 @@ In **Vercel → Project → Settings → Environment Variables**, add `GEMINI_AP
 
 ## Models and routing
 
-Defaults are `gemini-2.5-flash` and OpenRouter's `openrouter/free` router. Set `NOVA_GEMINI_MODEL` or `NOVA_OPENROUTER_MODEL` server-side to override either model. The OpenRouter key can be used with any model available to that key; free-model availability and rate limits can vary.
+Defaults are `gemini-3.8-flash` and OpenRouter's `openrouter/free` router. Set `NOVA_GEMINI_MODEL` or `NOVA_OPENROUTER_MODEL` server-side to override either model. The OpenRouter key can be used with any model available to that key; free-model availability and rate limits can vary.
 
 ## Limits and privacy
 

@@ -3,7 +3,7 @@ import { generateLocalSpaceResponse } from '../src/utils/spaceLocalAiEngine.js';
 export const OPENROUTER_CHAT_COMPLETIONS_URL = 'https://openrouter.ai/api/v1/chat/completions';
 export const GEMINI_GENERATE_CONTENT_URL = 'https://generativelanguage.googleapis.com/v1beta/models';
 export const OPENROUTER_FREE_MODEL = 'openrouter/free';
-export const DEFAULT_GEMINI_MODEL = 'gemini-2.5-flash';
+export const DEFAULT_GEMINI_MODEL = 'gemini-3.8-flash';
 
 // Arena AI uses an OpenAI-compatible chat completions endpoint. The exact base
 // URL is instance-specific and shown on the Arena key creation screen.

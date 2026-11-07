@@ -25,7 +25,7 @@ Audit date: 2026-11-06 · branch `arena/39123449-asa-asan` · gate at `74f9e5c` 
 | Provider | Model identifier | Override | Source |
 | --- | --- | --- | --- |
 | local | `nasa-local-engine` | — | `server/novaChat.js` (fixed) |
-| gemini | `gemini-2.5-flash` | `NOVA_GEMINI_MODEL` | default constant |
+| gemini | `gemini-3.8-flash` | `NOVA_GEMINI_MODEL` | default constant (changed 2026-11-07, see §9) |
 | openrouter | `openrouter/free` | `NOVA_OPENROUTER_MODEL` | default constant |
 | arena | `arena_smart.aria` | `NOVA_ARENA_MODEL` | default constant |
 
@@ -71,7 +71,7 @@ serves it and the UI must say so. **—**: not offered.
 
 | Level | Model | Status | Basis |
 | --- | --- | --- | --- |
-| Fast | `gemini-2.5-flash` | **verified present in config** (current default) | already served today |
+| Fast | `gemini-3.8-flash` | **verified by production probe** (§9) | replaced `2.5-flash`, which Google retired |
 | Advanced | `gemini-2.5-pro` | unverified | must be confirmed with `GET /v1beta/models` before it is enabled |
 | Expert | `gemini-2.5-pro` with a higher thinking budget | **nearest** (same model as Advanced) | Gemini's public tiers do not include a fourth model; Expert would be *Advanced + deeper budget*, which must be disclosed, not implied |
 
@@ -144,7 +144,7 @@ Proposed request/response additions (backwards compatible — `provider` keeps w
 ## 5. Configuration (proposed, additive)
 
 ```bash
-NOVA_GEMINI_MODEL_FAST="gemini-2.5-flash"
+NOVA_GEMINI_MODEL_FAST="gemini-3.8-flash"
 NOVA_GEMINI_MODEL_ADVANCED=""        # empty = level unavailable (no guess)
 NOVA_GEMINI_MODEL_EXPERT=""          # empty = nearest = Advanced
 NOVA_OPENROUTER_MODEL_FAST="openrouter/free"
@@ -198,3 +198,43 @@ Empty means **unavailable**, never "use whatever is around". The existing
 Nothing above is implemented. On approval I will implement in this order: mapping
 module + router (no UI) → config + diagnostics → UI control and disclosure → tests,
 each as its own commit.
+
+---
+
+## 9. Production verification — 2026-11-07 (real requests, no assumptions)
+
+Run against `https://nasa-space-expolere.vercel.app/api/nova/diagnostics?probe=1`
+on deployment `09f78a2` (production, branch `main`). This is the first time these
+providers could be measured at all; the sandbox used for development has no egress.
+
+| Provider | configured | probe | detail |
+| --- | --- | --- | --- |
+| local | true | **OK** | in-process, no network |
+| openrouter | true | **OK** | HTTP 200, **453 ms**, `openrouter/free` |
+| gemini | true | `PROVIDER_MODEL_NOT_FOUND` (404) | `models/gemini-2.5-flash is no longer available to new users … use models/gemini-3.8-flash` |
+| arena | **false** | `PROVIDER_NOT_CONFIGURED` | `ARENA_API_KEY` is not in the project environment (it was present in an earlier build, so it was removed) |
+
+### What this changes in this document
+
+1. **OpenRouter is verified working**, not merely configured. Level 2 (Fast) is
+   therefore available on two providers today; `ask` routing may prefer it.
+2. **Gemini's default model was retired upstream.** The default is now
+   `gemini-3.8-flash`. This also proves the mapping's core warning: a model id in
+   configuration is not a model that exists.
+3. **Arena cannot serve any level** until `ARENA_API_KEY` is restored; every level
+   that lists Arena must render as *unavailable*, not as *failed*.
+4. Level 3 (Advanced) remains unavailable everywhere: no Advanced id is pinned for
+   Gemini or OpenRouter, and `gemini-3.8-flash` is a Fast-tier model.
+
+### Consequence for the four-level design
+
+| Level | Available today | Provider + model |
+| --- | --- | --- |
+| 1 Local | yes | NOVA Local Space Engine |
+| 2 Fast | yes | OpenRouter `openrouter/free` (verified), Gemini `gemini-3.8-flash` (pending re-probe) |
+| 3 Advanced | **no** | needs a pinned Advanced id |
+| 4 Expert | **no** | needs a pinned Expert id, or the disclosed "Advanced + deeper budget" policy |
+
+The mapping still needs the six decisions in §8 — but decisions 1 and 4 are now
+partly answered by measurement: Gemini's Fast id is `gemini-3.8-flash`, and Arena
+contributes nothing until its key returns.
