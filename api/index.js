@@ -2654,7 +2654,7 @@ function validateChatRequest(body) {
   let provider = "auto";
   if (body.provider !== void 0) {
     if (typeof body.provider !== "string" || !SUPPORTED_PROVIDERS.has(body.provider.trim().toLowerCase())) {
-      return { error: errorResult(400, "INVALID_PROVIDER", "Provider must be auto, local, gemini, or openrouter.") };
+      return { error: errorResult(400, "INVALID_PROVIDER", "Provider must be auto, local, gemini, openrouter, or arena.") };
     }
     provider = body.provider.trim().toLowerCase();
   }
@@ -4562,7 +4562,12 @@ function rateLimit2(options) {
     res.setHeader("X-RateLimit-Remaining", String(Math.max(0, options.max - entry.count)));
     res.setHeader("X-RateLimit-Reset", String(Math.ceil((entry.windowStart + options.windowMs - now) / 1e3)));
     if (entry.count > options.max) {
-      return res.status(429).json({ error: "Too many requests. Please wait before trying again.", code: "rate-limit" });
+      const retryAfterSeconds = Math.max(1, Math.ceil((entry.windowStart + options.windowMs - now) / 1e3));
+      res.setHeader("Retry-After", String(retryAfterSeconds));
+      return res.status(429).json({
+        error: options.message || "Too many requests. Please wait before trying again.",
+        code: options.code || "rate-limit"
+      });
     }
     next();
   };
@@ -4573,7 +4578,15 @@ app.use("/api/workspace/config", rateLimit2({ windowMs: 6e4, max: 60, keyPrefix:
 var NOVA_CHAT_PATHS = ["/api/nova/chat", "/api/chat", "/api/openrouter/chat", "/api/nasa-ai"];
 app.use((req, res, next) => {
   if (NOVA_CHAT_PATHS.includes(req.path)) {
-    return rateLimit2({ windowMs: 6e4, max: 15, keyPrefix: "nova-chat" })(req, res, next);
+    return rateLimit2({
+      windowMs: 6e4,
+      max: 15,
+      keyPrefix: "nova-chat",
+      // Same code and wording as the handler's own limiter, so a reader who
+      // bursts is told to slow down rather than told the provider is busy.
+      code: "RATE_LIMITED",
+      message: "Too many NOVA requests. Please wait a moment and try again."
+    })(req, res, next);
   }
   next();
 });
