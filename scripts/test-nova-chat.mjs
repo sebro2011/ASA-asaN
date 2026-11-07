@@ -5,6 +5,7 @@ import {
   createNovaChatHandler,
   createNovaRateLimiter,
   DEFAULT_GEMINI_MODEL,
+  geminiGenerationConfig,
   getNovaPublicConfig,
   OPENROUTER_FREE_MODEL,
 } from '../server/novaChat.js';
@@ -997,4 +998,41 @@ test('a provider error never leaks the key or the raw upstream body', async () =
   assert.equal(response.body.code, 'PROVIDER_UNAVAILABLE');
   assert.equal(response.body.upstreamStatus, 500);
   assert.doesNotMatch(JSON.stringify(response.body), /sk-or-test/);
+});
+
+test('Gemini 3 asks for low-latency thinking and drops the retired temperature', () => {
+  const three = geminiGenerationConfig('gemini-3.8-flash');
+  assert.deepEqual(three, { maxOutputTokens: 1_200, thinkingConfig: { thinkingLevel: 'low' } });
+  assert.equal('temperature' in three, false, 'temperature is retired for Gemini 3.x');
+
+  // 2.x models do not understand thinkingLevel, so they keep the legacy config.
+  const two = geminiGenerationConfig('gemini-2.5-flash');
+  assert.equal(two.temperature, 0.7);
+  assert.equal('thinkingConfig' in two, false);
+});
+
+test('a Gemini 3 request body carries the thinking level, not a temperature', async () => {
+  let payload;
+  const handler = createNovaChatHandler({
+    getApiKey: () => '',
+    getGeminiApiKey: () => TEST_API_KEY,
+    getGeminiModel: () => 'gemini-3.8-flash',
+    fetchImpl: async (url, options) => {
+      payload = JSON.parse(options.body);
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ candidates: [{ content: { parts: [{ text: 'About 400 km.' }] } }] }),
+      };
+    },
+  });
+  const response = await handler({
+    body: { lang: 'en', provider: 'gemini', messages: [{ role: 'user', content: 'ISS altitude?' }] },
+    ip: '198.51.100.77',
+  });
+
+  assert.equal(response.status, 200);
+  assert.equal(response.body.model, 'gemini-3.8-flash');
+  assert.deepEqual(payload.generationConfig.thinkingConfig, { thinkingLevel: 'low' });
+  assert.equal(payload.generationConfig.temperature, undefined);
 });
