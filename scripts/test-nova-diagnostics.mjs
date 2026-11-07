@@ -220,3 +220,30 @@ test('the Gemini probe uses the same generation config shape as chat', async () 
   assert.equal(legacy.maxOutputTokens, 1);
   assert.equal('thinkingConfig' in legacy, false);
 });
+
+test('probes run concurrently, so one slow model does not spend another budget', async () => {
+  let inFlight = 0;
+  let maxInFlight = 0;
+  const impl = async () => {
+    inFlight += 1;
+    maxInFlight = Math.max(maxInFlight, inFlight);
+    await new Promise((resolve) => setTimeout(resolve, 40));
+    inFlight -= 1;
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({
+        choices: [{ message: { content: 'pong' } }],
+        candidates: [{ content: { parts: [{ text: 'pong' }] } }],
+      }),
+    };
+  };
+
+  const handler = createDiagnosticsHandler({ fetchImpl: impl, env: envWith() });
+  const report = await handler({ probe: true });
+
+  assert.equal(maxInFlight >= 2, true, 'at least two probes should overlap');
+  for (const provider of ['openrouter', 'gemini', 'arena']) {
+    assert.equal(report.providers[provider].status, 'ok', `${provider} should still be probed`);
+  }
+});

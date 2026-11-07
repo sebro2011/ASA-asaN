@@ -3105,7 +3105,7 @@ function createNovaChatHandler({
 var handleNovaChatRequest = createNovaChatHandler();
 
 // server/novaDiagnostics.js
-var PROBE_TIMEOUT_MS = 6e3;
+var PROBE_TIMEOUT_MS = 12e3;
 var PROBE_COOLDOWN_MS = 1e4;
 var MAX_REASON_CHARS = 180;
 function envValue(env, key) {
@@ -3269,19 +3269,18 @@ function createDiagnosticsHandler({
       arena: ARENA_BASE_URL
     };
     const names = { openrouter: "OpenRouter", gemini: "Google Gemini", arena: "Arena AI" };
-    let probes = 0;
-    for (const provider of ["openrouter", "gemini", "arena"]) {
-      const configured = Boolean(keys[provider]);
-      const entry = {
-        provider: names[provider],
-        configured,
-        endpoint: hostOf(endpoints[provider]),
-        model: models[provider],
-        status: configured ? "configured" : "not-configured",
-        code: configured ? "NOT_PROBED" : "PROVIDER_NOT_CONFIGURED"
-      };
-      if (configured && wantProbe) {
-        probes += 1;
+    const providerIds = ["openrouter", "gemini", "arena"];
+    const outcomes = await Promise.all(
+      providerIds.map(async (provider) => {
+        const entry = {
+          provider: names[provider],
+          configured: Boolean(keys[provider]),
+          endpoint: hostOf(endpoints[provider]),
+          model: models[provider],
+          status: keys[provider] ? "configured" : "not-configured",
+          code: keys[provider] ? "NOT_PROBED" : "PROVIDER_NOT_CONFIGURED"
+        };
+        if (!entry.configured || !wantProbe) return entry;
         const outcome = await probe({ fetchImpl, provider, keys, models, secrets, timeoutMs, now });
         entry.status = outcome.ok ? "ok" : "error";
         entry.code = outcome.code;
@@ -3289,9 +3288,13 @@ function createDiagnosticsHandler({
         entry.ms = outcome.ms;
         entry.reachable = outcome.reachable;
         if (outcome.reason) entry.reason = outcome.reason;
-      }
-      providers[provider] = entry;
-    }
+        return entry;
+      })
+    );
+    providerIds.forEach((provider, index) => {
+      providers[provider] = outcomes[index];
+    });
+    const probes = outcomes.filter((entry) => entry.status === "ok" || entry.status === "error").length;
     return {
       checkedAt: new Date(now()).toISOString(),
       // Environment plus short commit: two deployments can serve the same URL
