@@ -50,9 +50,13 @@ function resolveTheme(preference: ThemePreference): ResolvedTheme {
   return systemPrefersLight() ? 'light' : 'dark';
 }
 
+/**
+ * Premium light is the product default; anyone who has chosen dark or system
+ * keeps their choice, and both remain one tap away in Appearance.
+ */
 function initialPreference(): ThemePreference {
   const stored = readStored(THEME_STORAGE_KEY);
-  return stored === 'light' || stored === 'dark' || stored === 'system' ? stored : 'system';
+  return stored === 'light' || stored === 'dark' || stored === 'system' ? stored : 'light';
 }
 
 interface ThemeContextValue {

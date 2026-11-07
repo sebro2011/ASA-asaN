@@ -799,3 +799,51 @@ test('a prompt queued on Home is sent exactly once by the chat surface', async (
     dom.window.close();
   }
 });
+
+/* ------------------------------------------------------- model labels */
+
+test('internal model identifiers are never shown to readers', async () => {
+  const { displayModelName } = await import('../src/lib/modelLabels.ts');
+
+  // Hidden entirely — these are routing identifiers, not product names.
+  for (const hidden of ['nasa-local-engine', 'local', 'auto', '', null, undefined]) {
+    assert.equal(displayModelName(hidden), '', `${hidden} must render nothing`);
+  }
+
+  // Known models get a deliberate, human label.
+  assert.equal(displayModelName('gemini-2.5-flash'), 'Gemini 2.5 Flash');
+  assert.equal(displayModelName('openrouter/free'), 'OpenRouter Free');
+  assert.equal(displayModelName('arena_smart.aria'), 'Arena Smart');
+  assert.equal(displayModelName('some-vendor/some-new-model'), 'Some New Model');
+});
+
+test('the offline engine answer carries no identifier in the bubble', async () => {
+  const dom = installDom();
+  try {
+    stubFetch({
+      chatResponse: {
+        body: {
+          text: 'The ISS orbits at about 400 km.',
+          provider: 'NOVA Local Space Engine',
+          model: 'nasa-local-engine',
+        },
+      },
+    });
+    const { client, rows } = createFakeClient({ conversations: [conversation('c1', 'ISS')] });
+
+    const app = await mountChat({ client, path: '/chat/c1' });
+    await typeInto(app.act, document.querySelector('#nova-chat-composer'), 'ISS altitude?');
+    await submit(app.act, document.querySelector('form'));
+    await settle(app.act, 300);
+
+    // The reply is stored with its real identifier…
+    const stored = rows.messages.find((row) => row.role === 'assistant');
+    assert.equal(stored.model, 'nasa-local-engine');
+    // …but the reader never sees it.
+    assert.doesNotMatch(app.text(), /nasa-local-engine/);
+    assert.match(app.text(), /NOVA Local Space Engine/);
+    await app.unmount();
+  } finally {
+    dom.window.close();
+  }
+});

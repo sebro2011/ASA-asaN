@@ -194,6 +194,10 @@ const en: Copy = {
   wsAuthLoading: 'Checking your session…',
   wsAuthUnavailable: 'Cloud workspace is not configured',
   wsAuthUnavailableBody: 'This deployment has no Supabase credentials, so accounts and sync are switched off. Explore still works, and nothing you do is uploaded.',
+  wsAuthRetry: 'Try again',
+  wsAuthRetryHint: 'Re-checks the configuration endpoint.',
+  wsAuthUnavailableHint:
+    'Chat, projects and sync need a cloud workspace. Explore keeps working offline, and nothing you do here is uploaded.',
   wsAuthEmailUnconfirmed: 'Your email address is not confirmed yet.',
   wsProfileNotSignedIn: 'Sign in to see your profile.',
   wsAuthErrCredentials: 'Email or password is incorrect.',
@@ -529,6 +533,10 @@ const si: Copy = {
   wsAuthLoading: 'ඔබේ සැසිය පරීක්ෂා කරමින්…',
   wsAuthUnavailable: 'Cloud වැඩ අවකාශය වින්‍යාස කර නැත',
   wsAuthUnavailableBody: 'මෙම සේවාදායකයේ Supabase අක්තපත්‍ර නොමැති බැවින් ගිණුම් සහ සමමුහුර්තකරණය අක්‍රීයයි. ගවේෂණය තවදුරටත් ක්‍රියා කරන අතර ඔබ කරන කිසිවක් උඩුගත නොවේ.',
+  wsAuthRetry: 'නැවත උත්සාහ කරන්න',
+  wsAuthRetryHint: 'වින්‍යාස අන්තිම ලක්ෂ්‍යය නැවත පරීක්ෂා කරයි.',
+  wsAuthUnavailableHint:
+    'සංවාද, ව්‍යාපෘති සහ සමමුහුර්තකරණයට cloud වැඩ අවකාශයක් අවශ්‍යයි. ගවේෂණය නොබැඳිව ද ක්‍රියා කරයි; මෙහි කරන කිසිවක් උඩුගත නොවේ.',
   wsAuthEmailUnconfirmed: 'ඔබේ විද්‍යුත් තැපැල් ලිපිනය තවම තහවුරු කර නැත.',
   wsProfileNotSignedIn: 'ඔබේ පැතිකඩ බැලීමට පුරනය වන්න.',
   wsAuthErrCredentials: 'විද්‍යුත් තැපෑල හෝ මුරපදය වැරදිය.',
@@ -865,6 +873,10 @@ const ta: Copy = {
   wsAuthLoading: 'உங்கள் அமர்வைச் சரிபார்க்கிறது…',
   wsAuthUnavailable: 'Cloud பணியிடம் அமைக்கப்படவில்லை',
   wsAuthUnavailableBody: 'இந்த வரிசைப்படுத்தலில் Supabase சான்றுகள் இல்லாததால் கணக்குகளும் ஒத்திசைவும் அணைக்கப்பட்டுள்ளன. ஆராய்வு தொடர்ந்து வேலை செய்கிறது; நீங்கள் செய்வது எதுவும் பதிவேற்றப்படாது.',
+  wsAuthRetry: 'மீண்டும் முயல்க',
+  wsAuthRetryHint: 'கட்டமைப்பு இறுதிப்புள்ளியை மீண்டும் சரிபார்க்கிறது.',
+  wsAuthUnavailableHint:
+    'அரட்டை, திட்டங்கள், ஒத்திசைவுக்கு கிளவுட் பணியிடம் தேவை. ஆராய்வு ஆஃப்லைனிலும் வேலை செய்கிறது; இங்கே செய்வது எதுவும் பதிவேற்றப்படாது.',
   wsAuthEmailUnconfirmed: 'உங்கள் மின்னஞ்சல் முகவரி இன்னும் உறுதிப்படுத்தப்படவில்லை.',
   wsProfileNotSignedIn: 'உங்கள் சுயவிவரத்தைப் பார்க்க உள்நுழையவும்.',
   wsAuthErrCredentials: 'மின்னஞ்சல் அல்லது கடவுச்சொல் தவறானது.',

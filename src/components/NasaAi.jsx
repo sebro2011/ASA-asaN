@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef, useCallback, memo } from 'react';
 import { useTranslation } from 'react-i18next';
+import { displayModelName } from '../lib/modelLabels';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Bot, 
@@ -1604,9 +1605,9 @@ export function NasaAi({ className = '', lang: propLang }) {
                       {isUser ? (activeLang === 'si' ? 'ගවේෂකයා (ඔබ)' : activeLang === 'ta' ? 'ஆய்வாளர் (நீங்கள்)' : 'Space Explorer') : (msg.provider || 'NOVA AI Assistant')}
                     </span>
                     
-                    {!isUser && msg.model && (
+                    {!isUser && displayModelName(msg.model) && (
                       <span className="px-2 py-0.5 rounded-full bg-cyan-500/10 text-cyan-300 border border-cyan-500/20 text-[9px] font-bold">
-                        {msg.model}
+                        {displayModelName(msg.model)}
                       </span>
                     )}
                   </div>
@@ -1956,7 +1957,7 @@ export function NasaAi({ className = '', lang: propLang }) {
         <div className="flex items-center justify-between text-[10px] font-mono text-ink-3 px-1 flex-wrap gap-2">
           <span className="flex items-center gap-1.5 text-cyan-300">
             <Zap className="w-3 h-3 text-cyan-400" />
-            <span>AI Engine: {activeModel}</span>
+            <span>AI Engine: {displayModelName(activeModel) || 'NOVA Engine'}</span>
             <span className="text-ink-4">•</span>
             <span className="text-signal flex items-center gap-1">
               <ShieldCheck className="w-3 h-3" />

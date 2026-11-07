@@ -45,6 +45,8 @@ import {
 import { useConversations, useThread } from './useChatData';
 import { takePrompt } from './pendingPrompt';
 import MessageBody from './MessageBody';
+import { displayModelName } from '../../lib/modelLabels';
+import NovaOrb from '../home/NovaOrb';
 
 /** Literal keys, so the shell test can verify all three languages. */
 function providerLabel(provider: ChatProvider, t: (key: string) => string): string {
@@ -61,6 +63,9 @@ function providerLabel(provider: ChatProvider, t: (key: string) => string): stri
       return t('wsChatProvider_auto');
   }
 }
+
+/** Same four prompts as the dashboard, so the two surfaces teach one language. */
+const SUGGESTIONS = ['wsHomeSuggestion1', 'wsHomeSuggestion2', 'wsHomeSuggestion3', 'wsHomeSuggestion4'];
 
 function relativeTime(iso: string, locale: string): string {
   const then = new Date(iso).getTime();
@@ -339,7 +344,7 @@ export default function ChatSurface() {
     <div className="flex h-full min-h-0 gap-3">
       {/* Conversation list */}
       <aside
-        className={`${showList ? 'flex' : 'hidden'} w-full shrink-0 flex-col gap-3 md:flex md:w-[276px]`}
+        className={`${showList ? 'flex' : 'hidden'} nova-glass-strong w-full shrink-0 flex-col gap-3 rounded-[22px] p-3 md:flex md:w-[288px]`}
         aria-label={t('wsChatListTitle')}
       >
         <div className="flex items-center gap-2">
@@ -531,9 +536,29 @@ export default function ChatSurface() {
           tabIndex={0}
         >
           {!conversationId || thread.messages.length === 0 ? (
-            <div className="nova-card flex h-full flex-col items-start justify-center gap-3 p-6">
-              <p className="text-[13px] font-medium text-ws-text">{t('wsChatEmptyThread')}</p>
-              <p className="max-w-prose text-[12px] leading-relaxed text-ws-text-3">{t('wsChatEmptyThreadBody')}</p>
+            <div className="nova-hero-wash flex h-full flex-col items-center justify-center rounded-[22px] border border-ws-line px-5 py-10 text-center">
+              <NovaOrb state={sending ? 'generating' : 'idle'} size={96} />
+              <p className="mt-5 text-[21px] font-semibold tracking-[-0.02em] text-ws-text">
+                {t('wsChatEmptyThread')}
+              </p>
+              <p className="mt-2 max-w-[34rem] text-[13px] leading-relaxed text-ws-text-2">
+                {t('wsChatEmptyThreadBody')}
+              </p>
+              <div className="mt-5 flex max-w-[38rem] flex-wrap items-center justify-center gap-2">
+                {SUGGESTIONS.map((key) => (
+                  <button
+                    key={key}
+                    type="button"
+                    className="nova-chip-glass"
+                    onClick={() => {
+                      setDraft(t(key));
+                      document.getElementById('nova-chat-composer')?.focus();
+                    }}
+                  >
+                    {t(key)}
+                  </button>
+                ))}
+              </div>
             </div>
           ) : (
             <ul className="flex flex-col gap-3 p-1">
@@ -547,7 +572,7 @@ export default function ChatSurface() {
                     data-role={row.role}
                   >
                     <div
-                      className={`max-w-[min(46rem,92%)] rounded-2xl border px-3.5 py-2.5 ${
+                      className={`max-w-[min(46rem,92%)] rounded-[18px] border px-3.5 py-2.5 shadow-[var(--ws-shadow-1)] ${
                         row.is_error
                           ? 'border-[color-mix(in_srgb,var(--color-ws-danger)_45%,transparent)] bg-[color-mix(in_srgb,var(--color-ws-danger)_10%,transparent)]'
                           : isUser
@@ -570,7 +595,9 @@ export default function ChatSurface() {
 
                       <div className="mt-1.5 flex flex-wrap items-center gap-2 text-[10.5px] text-ws-text-3">
                         {!isUser && row.provider ? <span>{row.provider}</span> : null}
-                        {!isUser && row.model ? <span>· {row.model}</span> : null}
+                        {!isUser && displayModelName(row.model) ? (
+                          <span>· {displayModelName(row.model)}</span>
+                        ) : null}
                         {thread.unsaved.includes(row.id) ? (
                           <span className="text-[color:var(--color-ws-danger)]">· {t('wsChatNotSaved')}</span>
                         ) : null}
@@ -620,7 +647,7 @@ export default function ChatSurface() {
         </div>
 
         <form
-          className="nova-card flex flex-col gap-2 p-2.5"
+          className="nova-composer flex flex-col gap-2 p-2.5"
           onSubmit={(event) => {
             event.preventDefault();
             void send();

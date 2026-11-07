@@ -25,6 +25,8 @@ import { NAV_ENTRIES } from '../ui/navigation';
 
 export type RouteName =
   | 'home'
+  /** The NOVA workspace dashboard, moved off the front door in the recovery. */
+  | 'workspace'
   | 'chat'
   | 'projects'
   | 'documents'
@@ -59,6 +61,7 @@ const DETAIL_SEGMENTS: Record<string, RouteName> = {
 };
 
 const FLAT_SEGMENTS: Record<string, RouteName> = {
+  workspace: 'workspace',
   chat: 'chat',
   projects: 'projects',
   documents: 'documents',
@@ -133,6 +136,7 @@ export function parseRoute(pathname: string): AppRoute {
 /** Canonical pathname for a workspace destination. */
 export function routeHref(name: RouteName, options: { id?: string; tab?: TabId } = {}): string {
   if (name === 'home') return '/';
+  if (name === 'workspace') return '/workspace';
   if (name === 'notFound') return '/404';
   if (name === 'explore') {
     const tab = options.tab ?? 'home';

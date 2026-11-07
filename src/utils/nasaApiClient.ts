@@ -1,38 +1,27 @@
 /**
- * NASA API Client & Environment Variable Helper
- * Safely resolves NEXT_PUBLIC_NASA_API_KEY with guaranteed fallback to 'DEMO_KEY'.
- * Provides robust try-catch fetch wrappers to prevent blank screens on Netlify/Cloud deployments.
+ * NASA API URL helpers.
+ *
+ * The key is always the public DEMO_KEY: browser code must never resolve a
+ * credential from the environment. See `getNasaApiKey` for why.
  */
 
+/**
+ * The browser never holds a NASA key.
+ *
+ * This module used to resolve `process.env.NASA_API_KEY`, `import.meta.env.VITE_*`
+ * and friends. In a Vite build `process.env` does not exist, so it always fell
+ * through to DEMO_KEY — and had anyone "fixed" that by defining a `VITE_` variant,
+ * the key would have been inlined into a public bundle. Both paths are gone.
+ *
+ * Real NASA traffic in NOVA is proxied by the server (`/api/apod`, `/api/iss`,
+ * `/api/asteroids/neows`, …), which is where the `NASA_API_KEY` belongs. This
+ * helper only exists for direct `api.nasa.gov` URLs, where DEMO_KEY is the
+ * documented public key.
+ */
+export const NASA_PUBLIC_KEY = 'DEMO_KEY';
+
 export function getNasaApiKey(): string {
-  // 1. Next.js / Node.js process.env environment variable
-  if (typeof process !== 'undefined' && process.env) {
-    if (process.env.NEXT_PUBLIC_NASA_API_KEY && process.env.NEXT_PUBLIC_NASA_API_KEY.trim() !== '') {
-      return process.env.NEXT_PUBLIC_NASA_API_KEY.trim();
-    }
-    if (process.env.NASA_API_KEY && process.env.NASA_API_KEY.trim() !== '') {
-      return process.env.NASA_API_KEY.trim();
-    }
-  }
-
-  // 2. Vite / Client-side import.meta.env environment variable
-  try {
-    const metaEnv = (import.meta as any)?.env;
-    if (metaEnv) {
-      if (metaEnv.NEXT_PUBLIC_NASA_API_KEY && metaEnv.NEXT_PUBLIC_NASA_API_KEY.trim() !== '') {
-        return metaEnv.NEXT_PUBLIC_NASA_API_KEY.trim();
-      }
-      if (metaEnv.VITE_NASA_API_KEY && metaEnv.VITE_NASA_API_KEY.trim() !== '') {
-        return metaEnv.VITE_NASA_API_KEY.trim();
-      }
-      if (metaEnv.VITE_PUBLIC_NASA_API_KEY && metaEnv.VITE_PUBLIC_NASA_API_KEY.trim() !== '') {
-        return metaEnv.VITE_PUBLIC_NASA_API_KEY.trim();
-      }
-    }
-  } catch {}
-
-  // 3. Guaranteed Safe Fallback
-  return 'DEMO_KEY';
+  return NASA_PUBLIC_KEY;
 }
 
 /**

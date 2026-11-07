@@ -12,19 +12,30 @@ export type CloudConfig =
   | { enabled: false; reason: CloudConfigReason };
 
 export type CloudConfigReason =
+  /** The server answered and has no credentials: an operator problem. */
   | 'not-configured'
   | 'invalid-url'
   | 'invalid-key'
   | 'key-conflict'
+  /** Never got a usable answer — these are all retryable. */
   | 'unreachable'
+  | 'timeout'
+  /** 404: the deployment is not serving `/api/workspace/config` at all. */
+  | 'route-missing'
+  /** 5xx: the function started but failed. */
+  | 'server-error'
   | 'invalid-response';
 
+/** Reasons only the server may send; anything else is normalised to a default. */
 const DISABLED_REASONS: readonly CloudConfigReason[] = [
   'not-configured',
   'invalid-url',
   'invalid-key',
   'key-conflict',
 ];
+
+/** Long enough for a cold start, short enough that a hung request still ends. */
+export const CONFIG_TIMEOUT_MS = 15_000;
 
 let cached: Promise<CloudConfig> | null = null;
 
@@ -66,14 +77,28 @@ export function loadCloudConfig(): Promise<CloudConfig> {
       const response = await fetch('/api/workspace/config', {
         headers: { Accept: 'application/json' },
         credentials: 'same-origin',
+        // A cold serverless start routinely takes longer than the old 8s budget,
+        // which turned a slow-but-healthy deployment into a permanent "unreachable".
         signal: typeof AbortSignal !== 'undefined' && 'timeout' in AbortSignal
-          ? AbortSignal.timeout(8000)
+          ? AbortSignal.timeout(CONFIG_TIMEOUT_MS)
           : undefined,
       });
-      if (!response.ok) return { enabled: false, reason: 'unreachable' } as CloudConfig;
+
+      if (!response.ok) {
+        if (response.status === 404) return { enabled: false, reason: 'route-missing' } as CloudConfig;
+        if (response.status >= 500) return { enabled: false, reason: 'server-error' } as CloudConfig;
+        return { enabled: false, reason: 'unreachable' } as CloudConfig;
+      }
+
+      // A deployment whose rewrite fell through to the SPA answers 200 text/html.
+      const contentType = response.headers?.get?.('content-type') ?? '';
+      if (contentType && !contentType.includes('json')) {
+        return { enabled: false, reason: 'invalid-response' } as CloudConfig;
+      }
       return parseConfig(await response.json());
-    } catch {
-      return { enabled: false, reason: 'unreachable' } as CloudConfig;
+    } catch (error) {
+      const aborted = error instanceof Error && (error.name === 'AbortError' || error.name === 'TimeoutError');
+      return { enabled: false, reason: aborted ? 'timeout' : 'unreachable' } as CloudConfig;
     }
   })();
 
@@ -98,7 +123,13 @@ export function cloudConfigReasonText(reason: CloudConfigReason): string {
       return 'The publishable key matches the service key, so cloud sync was disabled for safety.';
     case 'unreachable':
       return 'The configuration endpoint could not be reached.';
+    case 'timeout':
+      return `The configuration endpoint did not answer within ${Math.round(CONFIG_TIMEOUT_MS / 1000)}s.`;
+    case 'route-missing':
+      return 'The configuration endpoint is missing (HTTP 404) — this deployment is not serving /api/workspace/config.';
+    case 'server-error':
+      return 'The configuration endpoint failed on the server (HTTP 5xx).';
     case 'invalid-response':
-      return 'The configuration endpoint returned an unexpected response.';
+      return 'The configuration endpoint returned something that is not JSON — the request was probably answered by the app shell.';
   }
 }

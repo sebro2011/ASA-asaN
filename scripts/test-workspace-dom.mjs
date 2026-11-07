@@ -13,7 +13,8 @@ import { JSDOM } from 'jsdom';
 
 function installDom(acceptQuery = () => false) {
   const dom = new JSDOM('<!doctype html><html><head></head><body><div id="root"></div></body></html>', {
-    url: 'http://localhost/',
+    // The workspace lives at /workspace since the recovery: `/` is NASA again.
+    url: 'http://localhost/workspace',
     // No jsdom render loop: the app schedules its own frames through the stub
     // below, and an always-on rAF loop would keep the test process alive.
     pretendToBeVisual: false,
@@ -478,4 +479,62 @@ test('the shell renders in Sinhala and Tamil, not only English', async () => {
   assert.equal(si.includes('Writing Studio'), false, 'Sinhala shell has no English nav label');
   assert.equal(ta.includes('Knowledge Space'), false, 'Tamil shell has no English nav label');
   assert.ok(direction, '<html lang> is set for the active language');
+});
+
+test('the front door is the NASA Space Explorer, not the NOVA workspace', async () => {
+  const dom = installDom();
+  dom.window.history.replaceState({}, '', '/');
+  const { act } = await import('react');
+  const React = (await import('react')).default;
+  const { createRoot } = await import('react-dom/client');
+  const { I18nextProvider } = await import('react-i18next');
+  const i18n = (await import('../src/i18n.ts')).default;
+  const { ThemeProvider } = await import('../src/app/theme.tsx');
+  const { RouterProvider } = await import('../src/app/router.tsx');
+  const App = (await import('../src/App.tsx')).default;
+  const { AuthProvider } = await import('../src/auth/AuthProvider.tsx');
+
+  const root = createRoot(document.getElementById('root'));
+  try {
+    await act(async () => {
+      root.render(
+        React.createElement(
+          I18nextProvider,
+          { i18n },
+          React.createElement(
+            ThemeProvider,
+            null,
+            React.createElement(
+              RouterProvider,
+              null,
+              React.createElement(
+                AuthProvider,
+                { createClient: async () => null },
+                React.createElement(App),
+              ),
+            ),
+          ),
+        ),
+      );
+    });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 200));
+    });
+
+    const text = document.body.textContent || '';
+    assert.match(text, /NASA Space Explorer/);
+    // Workspace chrome must not be on the front door any more.
+    assert.equal(document.querySelector('.nova-sidebar'), null);
+    assert.equal(text.includes('New chat'), false);
+    // The NOVA assistant still ships inside Explore.
+    assert.ok(
+      [...document.querySelectorAll('button')].some((button) => /assistant/i.test(button.textContent || '') || /AI/i.test(button.textContent || '')),
+      'the assistant entry point is still reachable',
+    );
+  } finally {
+    await act(async () => {
+      root.unmount();
+    });
+    dom.window.close();
+  }
 });

@@ -257,6 +257,92 @@ test('with no cloud configured the panel explains itself and offers no form', as
   }
 });
 
+test('a probe that never reached the server can be retried', async () => {
+  const dom = installDom();
+  try {
+    const { resetCloudConfigCache } = await import('../src/data/config.ts');
+    resetCloudConfigCache();
+    let calls = 0;
+    globalThis.fetch = async () => {
+      calls += 1;
+      throw new Error('offline');
+    };
+
+    const { AuthProvider } = await import('../src/auth/AuthProvider.tsx');
+    const { default: AuthPanel } = await import('../src/auth/AuthPanel.tsx');
+
+    const app = await mount((React) =>
+      React.createElement(AuthProvider, { createClient: async () => null }, React.createElement(AuthPanel)),
+    );
+    await settle(app.act, 60);
+
+    assert.match(app.text(), /could not be reached/);
+    const retry = [...document.querySelectorAll('button')].find((button) =>
+      /Try again/.test(button.textContent || ''),
+    );
+    assert.ok(retry, 'an unreachable endpoint offers a retry');
+
+    const before = calls;
+    await app.act(async () => {
+      retry.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+    });
+    await settle(app.act, 60);
+    assert.ok(calls > before, 'the retry probes the endpoint again instead of reusing the cache');
+    await app.unmount();
+  } finally {
+    dom.window.close();
+  }
+});
+
+test('missing credentials are not retryable and name the variables', async () => {
+  const dom = installDom();
+  try {
+    const { resetCloudConfigCache } = await import('../src/data/config.ts');
+    resetCloudConfigCache();
+    const { AuthProvider } = await import('../src/auth/AuthProvider.tsx');
+    const { default: AuthPanel } = await import('../src/auth/AuthPanel.tsx');
+
+    const app = await mount((React) =>
+      React.createElement(AuthProvider, { createClient: async () => null }, React.createElement(AuthPanel)),
+    );
+    await settle(app.act, 60);
+
+    assert.match(app.text(), /SUPABASE_URL/);
+    assert.match(app.text(), /SUPABASE_PUBLISHABLE_KEY/);
+    const retry = [...document.querySelectorAll('button')].find((button) =>
+      /Try again/.test(button.textContent || ''),
+    );
+    assert.equal(retry, undefined, 'configuration is an operator problem, not a retry loop');
+    assert.match(app.text(), /Explore keeps working offline/);
+    await app.unmount();
+  } finally {
+    dom.window.close();
+  }
+});
+
+test('a first visit resolves to the premium light theme', async () => {
+  const dom = installDom();
+  try {
+    const { useTheme } = await import('../src/app/theme.tsx');
+    const app = await mount((React) => {
+      const Probe = () => {
+        const theme = useTheme();
+        return React.createElement('p', { id: 'theme-probe' }, `${theme.preference}:${theme.theme}`);
+      };
+      return React.createElement(Probe);
+    });
+    await settle(app.act, 20);
+
+    // jsdom reports no colour-scheme preference, so this only passes if light is
+    // the product default rather than whatever the OS says.
+    assert.equal(document.getElementById('theme-probe').textContent, 'light:light');
+    assert.equal(document.documentElement.getAttribute('data-nova-theme'), 'light');
+    await app.unmount();
+  } finally {
+    dom.window.close();
+  }
+});
+
 test('wrong credentials show a translated error and never a raw message', async () => {
   const dom = installDom();
   try {

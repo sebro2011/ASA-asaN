@@ -64,6 +64,8 @@ test('explore routes preserve all destinations and the legacy cosmovision URL', 
 
 test('routeHref round-trips through parseRoute', () => {
   assert.equal(routeHref('home'), '/');
+  assert.equal(routeHref('workspace'), '/workspace');
+  assert.equal(parseRoute('/workspace').name, 'workspace');
   assert.equal(routeHref('chat'), '/chat');
   assert.equal(routeHref('chat', { id: 'x y' }), '/chat/x%20y');
   assert.equal(routeHref('explore'), '/explore');

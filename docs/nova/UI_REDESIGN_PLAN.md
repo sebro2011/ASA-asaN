@@ -16,7 +16,7 @@
 ## 2. Decisions
 
 1. **Preserve the engine.** Nothing in `server/novaChat.js` changed. No key ever reaches the client.
-2. **Light-first, not light-only.** The new surfaces are built on the existing tokens, so both themes work; "premium light" is the showcase, but the stored/system preference still wins. Flipping the default is a one-line change in `src/app/theme.tsx` (left to the owner).
+2. **Light-first, not light-only.** Both themes are built from the same tokens. Phase 7 made `light` the *default* preference for first visits; anyone who picks dark or system keeps their choice.
 3. **No dead controls.** The brief asks for attachments, voice input and streaming. The deployment has **no upload endpoint, no speech-to-text and no SSE chat route**, so those controls are deliberately *not* added — a button that cannot work contradicts the project rule that nothing may pretend to work. Text prompt, provider ("source") selection, keyboard shortcuts, loading/error/empty states and stop-generation are real and implemented.
 4. **Motion budget.** The orb animates transform/opacity only (GPU), pauses on `prefers-reduced-motion` and on the in-app Reduce-motion setting, and is a plain `div` tree — no three.js, no canvas loop.
 
@@ -29,6 +29,9 @@
 | 3 | Composer hand-off: Home → `/chat` via a session-scoped pending prompt that the chat surface consumes once | done |
 | 4 | Chat controls: copy, regenerate (replaces the previous answer), stop generation (abort) | done |
 | 5 | i18n in en/si/ta, tests, build | done |
+| 6 | Chat surface in the same glass language (panel list, orb empty state, shared prompts, glass composer) | done |
+| 7 | **Premium light is now the default** (`initialPreference()` + the boot script); dark and system stay one tap away | done |
+| 8 | Cloud-config recovery: an unreachable probe gets a real retry (the failed probe is no longer cached for the whole session); missing credentials name the two variables instead of suggesting a retry | done |
 
 ## 4. Test surface
 

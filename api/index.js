@@ -4,6 +4,42 @@ import dotenv from "dotenv";
 import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
+
+// server/cors.ts
+function hostFromOrigin(origin) {
+  try {
+    return new URL(origin).host.toLowerCase();
+  } catch {
+    return "";
+  }
+}
+function normaliseHost(value) {
+  const raw = (value || "").trim().toLowerCase();
+  if (!raw) return "";
+  return raw.includes("://") ? hostFromOrigin(raw) : raw;
+}
+function parseAllowHosts(cors_env) {
+  return new Set(
+    (cors_env || "").split(",").map((entry) => normaliseHost(entry)).filter(Boolean)
+  );
+}
+function decideCors({ origin, host, allowHosts, dev }) {
+  if (!origin) return { grant: false, reason: "no-origin" };
+  if (dev) return { grant: true, origin, reason: "dev" };
+  const originHost = hostFromOrigin(origin);
+  if (!originHost) return { grant: false, reason: "not-allowed" };
+  const requestHost = normaliseHost(host);
+  if (requestHost && originHost === requestHost) {
+    return { grant: true, origin, reason: "same-origin" };
+  }
+  if (allowHosts.has(originHost)) return { grant: true, origin, reason: "allow-list" };
+  return { grant: false, reason: "not-allowed" };
+}
+function platformHosts(env) {
+  return [env.VERCEL_URL, env.VERCEL_BRANCH_URL, env.VERCEL_PROJECT_PRODUCTION_URL].map((value) => normaliseHost(value)).filter(Boolean);
+}
+
+// server.ts
 import { GoogleGenAI as GoogleGenAI3 } from "@google/genai";
 
 // server/earthIntelligence.ts
@@ -4133,7 +4169,10 @@ function setupNasaRoutes(app2, ai2) {
     try {
       const { title, explanation, targetLang } = req.body;
       if (!title || !explanation || !targetLang) {
-        return res.status(400).json({ error: "Missing title, explanation, or targetLang" });
+        return res.status(400).json({
+          error: "Missing title, explanation, or targetLang",
+          code: "INVALID_REQUEST"
+        });
       }
       if (targetLang === "en") {
         return res.json({ success: true, data: { title, explanation } });
@@ -4354,7 +4393,10 @@ Explanation to translate: "${explanation}"`;
   app2.get("/api/missions/grounded-search", async (req, res) => {
     const q = (req.query.q || "").trim().toLowerCase();
     if (!q) {
-      return res.status(400).json({ error: 'Query parameter "q" is required' });
+      return res.status(400).json({
+        error: 'Query parameter "q" is required',
+        code: "INVALID_REQUEST"
+      });
     }
     const cacheKey = `grounded:${q}`;
     const now = Date.now();
@@ -4419,24 +4461,30 @@ process.on("unhandledRejection", (reason, promise) => {
 var __filename = fileURLToPath(import.meta.url);
 var __dirname = path.dirname(__filename);
 var app = express2();
-app.use(express2.json());
-var corsOriginEnv = process.env.CORS_ORIGINS || "";
-var corsOrigins = corsOriginEnv.split(",").map((o) => o.trim()).filter(Boolean);
+app.use(express2.json({ limit: "256kb" }));
 var isDev = process.env.NODE_ENV !== "production";
+var corsAllowHosts = parseAllowHosts(process.env.CORS_ORIGINS);
+for (const platformHost of platformHosts(process.env)) corsAllowHosts.add(platformHost);
 app.use((req, res, next) => {
-  const origin = req.headers.origin;
-  let allowOrigin = "*";
-  if (!isDev && corsOrigins.length > 0 && origin && corsOrigins.includes(origin)) {
-    allowOrigin = origin;
-  } else if (!isDev && corsOrigins.length > 0) {
-    return res.status(403).json({ error: "CORS origin not allowed", code: "cors-origin" });
+  const decision = decideCors({
+    origin: req.headers.origin,
+    host: req.headers.host,
+    allowHosts: corsAllowHosts,
+    dev: isDev
+  });
+  res.header("Vary", "Origin");
+  if (decision.grant) {
+    res.header("Access-Control-Allow-Origin", decision.origin);
+    res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+    res.header(
+      "Access-Control-Allow-Headers",
+      "Origin, X-Requested-With, Content-Type, Accept, Authorization"
+    );
+    res.header("Access-Control-Allow-Credentials", "true");
+    res.header("Access-Control-Max-Age", "600");
   }
-  res.header("Access-Control-Allow-Origin", allowOrigin);
-  res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
-  res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Authorization");
-  res.header("Access-Control-Allow-Credentials", "true");
   if (req.method === "OPTIONS") {
-    return res.sendStatus(200);
+    return res.sendStatus(decision.grant ? 200 : 204);
   }
   next();
 });
@@ -4617,14 +4665,21 @@ async function fetchYoutubeDuration(videoId) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 15e3);
   try {
-    const response = await fetch(`https://www.youtube.com/watch?v=${videoId}`, {
-      signal: controller.signal,
-      headers: { "Accept-Language": "en-US,en;q=0.9", "Accept": "text/html" }
-    });
-    if (!response.ok) throw new Error(`youtube-unavailable`);
+    let response;
+    try {
+      response = await fetch(`https://www.youtube.com/watch?v=${videoId}`, {
+        signal: controller.signal,
+        headers: { "Accept-Language": "en-US,en;q=0.9", "Accept": "text/html" }
+      });
+    } catch (failure) {
+      const aborted = failure instanceof Error && failure.name === "AbortError";
+      throw new Error(aborted ? "youtube-timeout" : "youtube-unreachable");
+    }
+    if (response.status === 404 || response.status === 410) throw new Error("video-not-found");
+    if (!response.ok) throw new Error("youtube-unavailable");
     const html = await response.text();
     const lengthSeconds = parseYoutubeDuration(html);
-    if (!lengthSeconds || lengthSeconds <= 0) throw new Error("video-unavailable");
+    if (!lengthSeconds || lengthSeconds <= 0) throw new Error("video-not-found");
     return lengthSeconds;
   } finally {
     clearTimeout(timeout);
@@ -4678,14 +4733,37 @@ app.get("/api/youtube/meta", async (req, res) => {
     const durationSeconds2 = await fetchYoutubeDuration(videoId);
     res.json({ videoId, durationSeconds: durationSeconds2 });
   } catch (failure) {
-    const code = failure instanceof Error ? failure.message : "youtube-unavailable";
-    res.status(404).json({ videoId, error: code, code });
+    const reason = failure instanceof Error ? failure.message : "";
+    if (reason === "video-not-found") {
+      res.status(404).json({ videoId, error: "video-unavailable", code: "VIDEO_NOT_FOUND" });
+      return;
+    }
+    if (reason === "youtube-timeout") {
+      res.status(504).json({ videoId, error: "youtube-unavailable", code: "YOUTUBE_TIMEOUT" });
+      return;
+    }
+    res.status(502).json({ videoId, error: "youtube-unavailable", code: "YOUTUBE_UNAVAILABLE" });
   }
 });
 app.use("/api/earth", earthRouter);
 app.use("/api/space-videos", spaceVideosRouter);
 app.use("/api/community", communityVideosRouter);
 app.use("/api/workspace", workspaceConfigRouter);
+app.use("/api", (_req, res) => {
+  res.status(404).json({ error: "Not found", code: "NOT_FOUND" });
+});
+app.use((error, req, res, next) => {
+  if (res.headersSent) return next(error);
+  if (!String(req.path || "").startsWith("/api")) return next(error);
+  const status = Number(error?.status || error?.statusCode) || 500;
+  const code = status === 413 ? "PAYLOAD_TOO_LARGE" : status === 400 ? "INVALID_JSON" : status === 429 ? "UPSTREAM_RATE_LIMITED" : "INTERNAL_ERROR";
+  const message = status === 413 ? "The request body is too large." : status === 400 ? "The request body is not valid JSON." : "NOVA could not process this request. Please retry.";
+  if (status >= 500) {
+    console.error(`[api] ${req.method} ${req.path} failed with ${status}`);
+  }
+  res.setHeader("Cache-Control", "no-store");
+  return res.status(status).json({ error: message, code });
+});
 async function startServer() {
   const isProduction = process.env.NODE_ENV === "production" || process.env.npm_lifecycle_event === "start" || process.env.PORT !== void 0 && process.env.PORT !== "3000";
   const distPath = path.resolve(__dirname, "dist");

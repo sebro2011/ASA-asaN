@@ -9,7 +9,7 @@
  */
 import { useCallback, useEffect, useId, useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
-import { AlertCircle, CheckCircle2, Loader2, LogIn, MailCheck, ShieldAlert } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Loader2, LogIn, MailCheck, RefreshCw, ShieldAlert } from 'lucide-react';
 import { useAuth } from './AuthProvider';
 import { cloudConfigReasonText } from '../data/config';
 import type { AuthErrorCode } from '../data/authApi';
@@ -126,26 +126,60 @@ export default function AuthPanel({ initialMode = 'sign-in', onAuthenticated, no
   /* --------------------------------------------------------- unconfigured */
 
   if (auth.status === 'unconfigured') {
+    // A probe that never reached the server is retryable; missing credentials are
+    // not — those need an operator, and the panel says so instead of guessing.
+    const retryable =
+      auth.reason === 'unreachable' ||
+      auth.reason === 'timeout' ||
+      auth.reason === 'route-missing' ||
+      auth.reason === 'server-error' ||
+      auth.reason === 'invalid-response';
     return (
-      <section className="nova-card p-5 sm:p-6" aria-labelledby={`${fieldId}-unavailable`}>
+      <section
+        className="nova-glass-strong rounded-[22px] p-5 shadow-[var(--ws-shadow-2)] sm:p-6"
+        aria-labelledby={`${fieldId}-unavailable`}
+      >
         <div className="flex items-start gap-3">
-          <span className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-full border border-ws-line bg-ws-elev text-ws-text-3">
-            <ShieldAlert size={17} strokeWidth={1.9} aria-hidden="true" />
+          <span className="mt-0.5 grid h-10 w-10 shrink-0 place-items-center rounded-full border border-ws-line bg-ws-elev-2 text-ws-accent-ink">
+            <ShieldAlert size={18} strokeWidth={1.9} aria-hidden="true" />
           </span>
           <div className="min-w-0">
             <h2 id={`${fieldId}-unavailable`} className="text-[15px] font-semibold text-ws-text">
               {t('wsAuthUnavailable')}
             </h2>
-            <p className="mt-1 text-[13px] leading-relaxed text-ws-text-2">
+            <p className="mt-1.5 text-[13px] leading-relaxed text-ws-text-2">
               {t('wsAuthUnavailableBody')}
             </p>
             {auth.reason ? (
-              <p className="mt-2 font-mono text-[10.5px] uppercase tracking-[0.14em] text-ws-text-3">
+              <p className="mt-2.5 flex items-center gap-2 text-[11.5px] text-ws-text-2">
+                <span className="nova-dot shrink-0" aria-hidden="true" style={{ background: 'var(--color-ws-warn)' }} />
                 {cloudConfigReasonText(auth.reason)}
               </p>
             ) : null}
           </div>
         </div>
+
+        {retryable ? (
+          <div className="mt-4 flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              className="nova-btn nova-btn--primary"
+              onClick={() => void auth.retryConnection()}
+            >
+              <RefreshCw size={13} strokeWidth={2.1} aria-hidden="true" />
+              {t('wsAuthRetry')}
+            </button>
+            <span className="text-[11.5px] text-ws-text-3">{t('wsAuthRetryHint')}</span>
+          </div>
+        ) : (
+          <p className="mt-4 rounded-xl border border-ws-line bg-ws-elev-2 px-3 py-2 font-mono text-[10.5px] leading-relaxed tracking-[0.06em] text-ws-text-3">
+            SUPABASE_URL · SUPABASE_PUBLISHABLE_KEY
+          </p>
+        )}
+
+        <p className="mt-3 text-[11.5px] leading-relaxed text-ws-text-3">
+          {t('wsAuthUnavailableHint')}
+        </p>
       </section>
     );
   }

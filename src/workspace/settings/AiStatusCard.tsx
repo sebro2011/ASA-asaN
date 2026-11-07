@@ -10,6 +10,7 @@
  * It is read-only on purpose: it never changes a key or a model, it only tells
  * the truth about the deployment you are looking at.
  */
+import { displayModelName } from '../../lib/modelLabels';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { CheckCircle2, CircleSlash, RefreshCw, TriangleAlert } from 'lucide-react';
@@ -139,11 +140,11 @@ export default function AiStatusCard() {
             if (!entry) return null;
             const detail =
               entry.status === 'ok'
-                ? `${entry.endpoint} · ${entry.model}${typeof entry.ms === 'number' ? ` · ${entry.ms} ms` : ''}`
+                ? `${entry.endpoint}${displayModelName(entry.model) ? ` · ${displayModelName(entry.model)}` : ''}${typeof entry.ms === 'number' ? ` · ${entry.ms} ms` : ''}`
                 : entry.status === 'error'
                   ? `${entry.code}${entry.httpStatus ? ` (HTTP ${entry.httpStatus})` : ''} · ${entry.endpoint}`
                   : entry.status === 'configured'
-                    ? `${entry.endpoint} · ${entry.model}`
+                    ? `${entry.endpoint}${displayModelName(entry.model) ? ` · ${displayModelName(entry.model)}` : ''}`
                     : t('wsAiProbeNotConfiguredDetail');
 
             return (
