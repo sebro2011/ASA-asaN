@@ -205,3 +205,18 @@ test('the Vercel route only answers GET and never caches', async () => {
   assert.equal(get.state.body.providers.local.configured, true);
   assert.equal(get.state.body.probed, false, 'no keys in the test environment');
 });
+
+test('the Gemini probe uses the same generation config shape as chat', async () => {
+  const { probeGenerationConfig } = await import('../server/novaDiagnostics.js');
+
+  assert.deepEqual(probeGenerationConfig('gemini-3.8-flash'), {
+    maxOutputTokens: 1,
+    thinkingConfig: { thinkingLevel: 'low' },
+  });
+  assert.equal('temperature' in probeGenerationConfig('gemini-3.8-flash'), false);
+
+  const legacy = probeGenerationConfig('gemini-2.5-flash');
+  assert.equal(legacy.temperature, 0);
+  assert.equal(legacy.maxOutputTokens, 1);
+  assert.equal('thinkingConfig' in legacy, false);
+});

@@ -20,6 +20,7 @@ import {
   DEFAULT_GEMINI_MODEL,
   GEMINI_GENERATE_CONTENT_URL,
   OPENROUTER_CHAT_COMPLETIONS_URL,
+  geminiGenerationConfig,
   OPENROUTER_FREE_MODEL,
 } from './novaChat.js';
 
@@ -77,7 +78,9 @@ function probeRequest(provider, { keys, models }) {
         headers: { 'Content-Type': 'application/json', 'x-goog-api-key': keys.gemini },
         body: JSON.stringify({
           contents: [{ role: 'user', parts: [{ text: 'ping' }] }],
-          generationConfig: { maxOutputTokens: 1, temperature: 0 },
+          // Same shape the chat handler sends: Gemini 3.x rejects `temperature`
+          // and thinks at "medium" by default, which alone can outlast the probe.
+          generationConfig: probeGenerationConfig(models.gemini),
         }),
       },
     };
@@ -96,6 +99,13 @@ function probeRequest(provider, { keys, models }) {
       }),
     },
   };
+}
+
+/** One-token probe config that matches how NOVA actually calls the model. */
+export function probeGenerationConfig(model) {
+  const config = { ...geminiGenerationConfig(model), maxOutputTokens: 1 };
+  if ('temperature' in config) config.temperature = 0;
+  return config;
 }
 
 /** Turn an HTTP status into the same vocabulary the chat handler uses. */

@@ -263,6 +263,27 @@ function getReferer() {
   return '';
 }
 
+/**
+ * Gemini 3.x retired `temperature`/`top_p`/`top_k` and thinks at "medium" by
+ * default, which costs ~5 s before the first token. NOVA is a chat assistant, so
+ * it asks for the "low" thinking level: measured ~3 s instead of ~5 s, and it
+ * keeps the whole request inside the 6 s diagnostics probe. Older 2.x models do
+ * not understand `thinkingLevel`, so they keep the legacy temperature.
+ */
+export function geminiGenerationConfig(model) {
+  const isGemini3 = /^gemini-3/i.test(String(model || ''));
+  if (isGemini3) {
+    return {
+      maxOutputTokens: 1_200,
+      thinkingConfig: { thinkingLevel: 'low' },
+    };
+  }
+  return {
+    temperature: 0.7,
+    maxOutputTokens: 1_200,
+  };
+}
+
 function providerError(status, provider, model) {
   let response;
   if (status === 429) {
@@ -439,10 +460,7 @@ async function callGemini({ fetchImpl, apiKey, model, messages, language, timeou
       body: JSON.stringify({
         systemInstruction: { parts: [{ text: makeSystemPrompt(language) }] },
         contents,
-        generationConfig: {
-          temperature: 0.7,
-          maxOutputTokens: 1_200,
-        },
+        generationConfig: geminiGenerationConfig(model),
       }),
     },
     timeoutMs,

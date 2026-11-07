@@ -2724,6 +2724,19 @@ function getReferer() {
   if (vercelUrl && /^[a-z0-9.-]+(?::\d+)?$/i.test(vercelUrl)) return `https://${vercelUrl}`;
   return "";
 }
+function geminiGenerationConfig(model) {
+  const isGemini3 = /^gemini-3/i.test(String(model || ""));
+  if (isGemini3) {
+    return {
+      maxOutputTokens: 1200,
+      thinkingConfig: { thinkingLevel: "low" }
+    };
+  }
+  return {
+    temperature: 0.7,
+    maxOutputTokens: 1200
+  };
+}
 function providerError(status, provider, model) {
   let response;
   if (status === 429) {
@@ -2885,10 +2898,7 @@ async function callGemini({ fetchImpl, apiKey, model, messages, language, timeou
       body: JSON.stringify({
         systemInstruction: { parts: [{ text: makeSystemPrompt(language) }] },
         contents,
-        generationConfig: {
-          temperature: 0.7,
-          maxOutputTokens: 1200
-        }
+        generationConfig: geminiGenerationConfig(model)
       })
     },
     timeoutMs,
@@ -3137,7 +3147,9 @@ function probeRequest(provider, { keys, models }) {
         headers: { "Content-Type": "application/json", "x-goog-api-key": keys.gemini },
         body: JSON.stringify({
           contents: [{ role: "user", parts: [{ text: "ping" }] }],
-          generationConfig: { maxOutputTokens: 1, temperature: 0 }
+          // Same shape the chat handler sends: Gemini 3.x rejects `temperature`
+          // and thinks at "medium" by default, which alone can outlast the probe.
+          generationConfig: probeGenerationConfig(models.gemini)
         })
       }
     };
@@ -3155,6 +3167,11 @@ function probeRequest(provider, { keys, models }) {
       })
     }
   };
+}
+function probeGenerationConfig(model) {
+  const config = { ...geminiGenerationConfig(model), maxOutputTokens: 1 };
+  if ("temperature" in config) config.temperature = 0;
+  return config;
 }
 function codeForStatus(status) {
   if (status === 401 || status === 403) return "PROVIDER_AUTH_ERROR";
