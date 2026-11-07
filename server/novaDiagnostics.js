@@ -24,7 +24,10 @@ import {
   OPENROUTER_FREE_MODEL,
 } from './novaChat.js';
 
-const PROBE_TIMEOUT_MS = 6_000;
+// One probe may now take longer than the old 6 s: probes run in parallel, so the
+// worst case for the whole endpoint is a single timeout, not the sum of three.
+// Gemini 3.x needs the headroom even at the "low" thinking level.
+const PROBE_TIMEOUT_MS = 12_000;
 const PROBE_COOLDOWN_MS = 10_000;
 const MAX_REASON_CHARS = 180;
 
@@ -225,21 +228,23 @@ export function createDiagnosticsHandler({
     };
     const names = { openrouter: 'OpenRouter', gemini: 'Google Gemini', arena: 'Arena AI' };
 
-    let probes = 0;
+    const providerIds = ['openrouter', 'gemini', 'arena'];
 
-    for (const provider of ['openrouter', 'gemini', 'arena']) {
-      const configured = Boolean(keys[provider]);
-      const entry = {
-        provider: names[provider],
-        configured,
-        endpoint: hostOf(endpoints[provider]),
-        model: models[provider],
-        status: configured ? 'configured' : 'not-configured',
-        code: configured ? 'NOT_PROBED' : 'PROVIDER_NOT_CONFIGURED',
-      };
+    // Probes run concurrently: they are independent, and a slow model would
+    // otherwise spend the next provider's budget as well. Sequential probing is
+    // what forced a 6 s timeout, which Gemini 3.x cannot always meet.
+    const outcomes = await Promise.all(
+      providerIds.map(async (provider) => {
+        const entry = {
+          provider: names[provider],
+          configured: Boolean(keys[provider]),
+          endpoint: hostOf(endpoints[provider]),
+          model: models[provider],
+          status: keys[provider] ? 'configured' : 'not-configured',
+          code: keys[provider] ? 'NOT_PROBED' : 'PROVIDER_NOT_CONFIGURED',
+        };
+        if (!entry.configured || !wantProbe) return entry;
 
-      if (configured && wantProbe) {
-        probes += 1;
         const outcome = await probe({ fetchImpl, provider, keys, models, secrets, timeoutMs, now });
         entry.status = outcome.ok ? 'ok' : 'error';
         entry.code = outcome.code;
@@ -247,10 +252,12 @@ export function createDiagnosticsHandler({
         entry.ms = outcome.ms;
         entry.reachable = outcome.reachable;
         if (outcome.reason) entry.reason = outcome.reason;
-      }
+        return entry;
+      }),
+    );
 
-      providers[provider] = entry;
-    }
+    providerIds.forEach((provider, index) => { providers[provider] = outcomes[index]; });
+    const probes = outcomes.filter((entry) => entry.status === 'ok' || entry.status === 'error').length;
 
     return {
       checkedAt: new Date(now()).toISOString(),
