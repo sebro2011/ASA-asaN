@@ -121,6 +121,9 @@ function rateLimit(options: {
   max: number;
   keyPrefix: string;
   skip?: (req: import('express').Request) => boolean;
+  /** Wire code returned on 429. The NOVA chat family uses the same code its handler uses. */
+  code?: string;
+  message?: string;
 }) {
   return (req: import('express').Request, res: import('express').Response, next: import('express').NextFunction) => {
     if (options.skip?.(req)) { return next(); }
@@ -138,7 +141,15 @@ function rateLimit(options: {
     res.setHeader('X-RateLimit-Remaining', String(Math.max(0, options.max - entry.count)));
     res.setHeader('X-RateLimit-Reset', String(Math.ceil((entry.windowStart + options.windowMs - now) / 1000)));
     if (entry.count > options.max) {
-      return res.status(429).json({ error: 'Too many requests. Please wait before trying again.', code: 'rate-limit' });
+      // Retry-After is what lets a client wait instead of hammering; the NOVA
+      // chat handler already sends it, and one endpoint must not answer 429 two
+      // different ways.
+      const retryAfterSeconds = Math.max(1, Math.ceil((entry.windowStart + options.windowMs - now) / 1000));
+      res.setHeader('Retry-After', String(retryAfterSeconds));
+      return res.status(429).json({
+        error: options.message || 'Too many requests. Please wait before trying again.',
+        code: options.code || 'rate-limit',
+      });
     }
     next();
   };
@@ -159,7 +170,15 @@ app.use('/api/workspace/config', rateLimit({ windowMs: 60_000, max: 60, keyPrefi
 const NOVA_CHAT_PATHS = ['/api/nova/chat', '/api/chat', '/api/openrouter/chat', '/api/nasa-ai'];
 app.use((req, res, next) => {
   if (NOVA_CHAT_PATHS.includes(req.path)) {
-    return rateLimit({ windowMs: 60_000, max: 15, keyPrefix: 'nova-chat' })(req, res, next);
+    return rateLimit({
+      windowMs: 60_000,
+      max: 15,
+      keyPrefix: 'nova-chat',
+      // Same code and wording as the handler's own limiter, so a reader who
+      // bursts is told to slow down rather than told the provider is busy.
+      code: 'RATE_LIMITED',
+      message: 'Too many NOVA requests. Please wait a moment and try again.',
+    })(req, res, next);
   }
   next();
 });

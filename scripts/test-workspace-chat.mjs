@@ -847,3 +847,27 @@ test('the offline engine answer carries no identifier in the bubble', async () =
     dom.window.close();
   }
 });
+
+/* --------------------------------------------- throttling and model errors */
+
+test('our own throttle is reported as a throttle, not as a busy provider', async () => {
+  const { normaliseErrorCode } = await import('../src/workspace/chat/chatClient.ts');
+
+  // Handler limiter, Express limiter, and a bare 429 must agree.
+  assert.equal(normaliseErrorCode('RATE_LIMITED'), 'RATE_LIMITED');
+  assert.equal(normaliseErrorCode('rate-limit'), 'RATE_LIMITED');
+  assert.equal(normaliseErrorCode(undefined, 429), 'RATE_LIMITED');
+  // A provider's own 429 keeps its distinct meaning.
+  assert.equal(normaliseErrorCode('UPSTREAM_RATE_LIMITED'), 'UPSTREAM_RATE_LIMITED');
+});
+
+test('a retired or missing model gets its own sentence, not "try again"', async () => {
+  const { normaliseErrorCode, chatErrorKey } = await import('../src/workspace/chat/chatClient.ts');
+
+  assert.equal(normaliseErrorCode('PROVIDER_MODEL_NOT_FOUND'), 'PROVIDER_MODEL_NOT_FOUND');
+  assert.equal(chatErrorKey('PROVIDER_MODEL_NOT_FOUND'), 'wsChatErrModelRetired');
+
+  assert.equal(normaliseErrorCode('MODEL_UNAVAILABLE'), 'MODEL_UNAVAILABLE');
+  assert.equal(normaliseErrorCode('FREE_MODEL_UNAVAILABLE'), 'MODEL_UNAVAILABLE');
+  assert.equal(chatErrorKey('MODEL_UNAVAILABLE'), 'wsChatErrModel');
+});

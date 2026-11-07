@@ -43,6 +43,9 @@ export type ChatErrorCode =
   | 'REQUEST_TOO_LARGE'
   | 'INVALID_REQUEST'
   | 'EMPTY_PROVIDER_RESPONSE'
+  | 'RATE_LIMITED'
+  | 'MODEL_UNAVAILABLE'
+  | 'PROVIDER_MODEL_NOT_FOUND'
   | 'INTERNAL_ERROR'
   | 'NETWORK'
   /** The reader pressed Stop; nothing failed, so no error bubble is shown. */
@@ -79,6 +82,13 @@ const KNOWN_CODES = new Set<string>([
   'EMPTY_PROVIDER_RESPONSE',
   'INVALID_PROVIDER_RESPONSE',
   'PROVIDER_ERROR',
+  'RATE_LIMITED',
+  // The server answers 429 with a lowercase 'rate-limit' from the Express
+  // middleware, and with 'RATE_LIMITED' from the chat handler. Same thing.
+  'rate-limit',
+  'MODEL_UNAVAILABLE',
+  'FREE_MODEL_UNAVAILABLE',
+  'PROVIDER_MODEL_NOT_FOUND',
   'INTERNAL_ERROR',
 ]);
 
@@ -91,9 +101,16 @@ export function normaliseErrorCode(code: unknown, status?: number): ChatErrorCod
     if (code === 'INVALID_PROVIDER_RESPONSE' || code === 'PROVIDER_ERROR') {
       return 'PROVIDER_UNAVAILABLE';
     }
+    if (code === 'rate-limit') {
+      return 'RATE_LIMITED';
+    }
+    if (code === 'FREE_MODEL_UNAVAILABLE' || code === 'MODEL_UNAVAILABLE') {
+      return 'MODEL_UNAVAILABLE';
+    }
     return code as ChatErrorCode;
   }
-  if (status === 429) return 'UPSTREAM_RATE_LIMITED';
+  // A 429 without a code came from our own limiter, not from a provider.
+  if (status === 429) return 'RATE_LIMITED';
   if (status === 413) return 'MESSAGE_TOO_LARGE';
   if (status === 504) return 'AI_TIMEOUT';
   return 'UNKNOWN';
@@ -112,6 +129,12 @@ export function chatErrorKey(code: ChatErrorCode): string {
     case 'PROVIDER_UNAVAILABLE':
     case 'EMPTY_PROVIDER_RESPONSE':
       return 'wsChatErrUnavailable';
+    case 'RATE_LIMITED':
+      return 'wsChatErrRateLimited';
+    case 'PROVIDER_MODEL_NOT_FOUND':
+      return 'wsChatErrModelRetired';
+    case 'MODEL_UNAVAILABLE':
+      return 'wsChatErrModel';
     case 'PROVIDER_AUTH_ERROR':
       return 'wsChatErrAuth';
     case 'AI_TIMEOUT':

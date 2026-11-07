@@ -162,7 +162,7 @@ function validateChatRequest(body) {
   let provider = 'auto';
   if (body.provider !== undefined) {
     if (typeof body.provider !== 'string' || !SUPPORTED_PROVIDERS.has(body.provider.trim().toLowerCase())) {
-      return { error: errorResult(400, 'INVALID_PROVIDER', 'Provider must be auto, local, gemini, or openrouter.') };
+      return { error: errorResult(400, 'INVALID_PROVIDER', 'Provider must be auto, local, gemini, openrouter, or arena.') };
     }
     provider = body.provider.trim().toLowerCase();
   }

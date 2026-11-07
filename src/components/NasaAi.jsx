@@ -50,7 +50,7 @@ import { generateLocalSpaceResponse } from '../utils/spaceLocalAiEngine.js';
 
 const STORAGE_KEY = 'nasa_ai_chat_thread_v3';
 const NOVA_PROVIDER_STORAGE_KEY = 'nova_ai_provider_v1';
-const NOVA_PROVIDER_VALUES = new Set(['auto', 'local', 'gemini', 'openrouter']);
+const NOVA_PROVIDER_VALUES = new Set(['auto', 'local', 'gemini', 'openrouter', 'arena']);
 
 function getSavedNovaProvider() {
   if (typeof window === 'undefined' || !window.localStorage) return 'auto';
@@ -377,6 +377,11 @@ function getNovaErrorMessage(error, lang = 'en') {
       MESSAGE_TOO_LARGE: 'That message is too long. Shorten it and try again.',
       HISTORY_TOO_LARGE: 'The conversation is too long to send. Start a new chat or shorten your message.',
       HISTORY_TOO_LONG: 'The conversation history is too long. Start a new chat and try again.',
+      INVALID_PROVIDER: 'That AI provider is not available. Choose Auto, or pick another provider.',
+      PROVIDER_MODEL_NOT_FOUND: 'The selected model has been retired by the provider. Choose Auto so NOVA can use a current model.',
+      EMPTY_PROVIDER_RESPONSE: 'The AI provider returned an empty answer. Please retry.',
+      PROVIDER_ERROR: 'The AI provider could not answer this request. Please retry.',
+      INVALID_JSON: 'That message could not be sent. Please check it and try again.',
     },
     si: {
       AI_NOT_CONFIGURED: 'මෙම යෙදවුමේ NOVA AI සකසා නැත. කරුණාකර අඩවි පරිපාලක අමතන්න.',
@@ -395,6 +400,11 @@ function getNovaErrorMessage(error, lang = 'en') {
       MESSAGE_TOO_LARGE: 'එම පණිවිඩය දිග වැඩිය. කෙටි කර නැවත උත්සාහ කරන්න.',
       HISTORY_TOO_LARGE: 'සංවාදය යැවීමට දිග වැඩිය. නව සංවාදයක් ආරම්භ කරන්න හෝ පණිවිඩය කෙටි කරන්න.',
       HISTORY_TOO_LONG: 'සංවාද ඉතිහාසය දිග වැඩිය. නව සංවාදයක් ආරම්භ කර නැවත උත්සාහ කරන්න.',
+      INVALID_PROVIDER: 'එම AI සේවාව ලබාගත නොහැක. Auto තෝරන්න, නැතහොත් වෙනත් සේවාවක් තෝරන්න.',
+      PROVIDER_MODEL_NOT_FOUND: 'තෝරාගත් AI මාදිලිය සේවාදායකය විසින් ඉවත් කර ඇත. නවතම මාදිලියක් භාවිතා කිරීමට Auto තෝරන්න.',
+      EMPTY_PROVIDER_RESPONSE: 'AI සේවාව හිස් පිළිතුරක් ලබා දුන්නේය. නැවත උත්සාහ කරන්න.',
+      PROVIDER_ERROR: 'AI සේවාවට මෙම ඉල්ලීමට පිළිතුරු දිය නොහැකි විය. නැවත උත්සාහ කරන්න.',
+      INVALID_JSON: 'එම පණිවිඩය යැවිය නොහැක. එය පරීක්ෂා කර නැවත උත්සාහ කරන්න.',
     },
     ta: {
       AI_NOT_CONFIGURED: 'இந்த வெளியீட்டில் NOVA AI அமைக்கப்படவில்லை. தள நிர்வாகியைத் தொடர்புகொள்ளவும்.',
@@ -413,13 +423,20 @@ function getNovaErrorMessage(error, lang = 'en') {
       MESSAGE_TOO_LARGE: 'இந்தச் செய்தி மிக நீளமாக உள்ளது. சுருக்கி மீண்டும் முயற்சிக்கவும்.',
       HISTORY_TOO_LARGE: 'உரையாடல் மிக நீளமாக உள்ளது. புதிய உரையாடலைத் தொடங்கவும் அல்லது செய்தியைச் சுருக்கவும்.',
       HISTORY_TOO_LONG: 'உரையாடல் வரலாறு மிக நீளமாக உள்ளது. புதிய உரையாடலைத் தொடங்கி மீண்டும் முயற்சிக்கவும்.',
+      INVALID_PROVIDER: 'அந்த AI சேவை கிடைக்கவில்லை. Auto தேர்ந்தெடுக்கவும் அல்லது வேறு சேவையைத் தேர்ந்தெடுக்கவும்.',
+      PROVIDER_MODEL_NOT_FOUND: 'தேர்ந்தெடுத்த மாதிரி வழங்குநரால் நீக்கப்பட்டுள்ளது. தற்போதைய மாதிரியைப் பயன்படுத்த Auto தேர்ந்தெடுக்கவும்.',
+      EMPTY_PROVIDER_RESPONSE: 'AI சேவை காலியான பதிலை வழங்கியது. மீண்டும் முயற்சிக்கவும்.',
+      PROVIDER_ERROR: 'AI சேவையால் இந்தக் கோரிக்கைக்கு பதிலளிக்க முடியவில்லை. மீண்டும் முயற்சிக்கவும்.',
+      INVALID_JSON: 'இந்தச் செய்தியை அனுப்ப முடியவில்லை. சரிபார்த்து மீண்டும் முயற்சிக்கவும்.',
     },
   };
 
   const languageMessages = messages[language] || messages.en;
   if (languageMessages[code]) return languageMessages[code];
   if (code.includes('TOO_LARGE') || code === 'HISTORY_TOO_LONG') return languageMessages.REQUEST_TOO_LARGE;
-  if (code.startsWith('INVALID_') || code === 'LATEST_MESSAGE_MUST_BE_USER') return languageMessages.INVALID_REQUEST;
+  if (code === 'LATEST_MESSAGE_MUST_BE_USER') return languageMessages.INVALID_REQUEST;
+  if (code.startsWith('INVALID_')) return languageMessages.INVALID_REQUEST;
+  if (code === 'PROVIDER_MODEL_NOT_FOUND') return languageMessages.PROVIDER_MODEL_NOT_FOUND;
   return languageMessages.PROVIDER_UNAVAILABLE;
 }
 

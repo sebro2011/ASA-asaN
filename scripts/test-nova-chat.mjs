@@ -1036,3 +1036,57 @@ test('a Gemini 3 request body carries the thinking level, not a temperature', as
   assert.deepEqual(payload.generationConfig.thinkingConfig, { thinkingLevel: 'low' });
   assert.equal(payload.generationConfig.temperature, undefined);
 });
+
+test('the browser client accepts Arena, the provider the assistant offers', async () => {
+  const originalFetch = globalThis.fetch;
+  let payload;
+  globalThis.fetch = async (url, options) => {
+    payload = JSON.parse(options.body);
+    return {
+      ok: true,
+      status: 200,
+      headers: { get: () => null },
+      json: async () => ({ text: 'Arena answer.', provider: 'Arena AI', model: 'arena_smart.aria' }),
+    };
+  };
+  try {
+    const result = await askNovaAi('What is a Lagragian orbit?', 'en', [], { provider: 'arena' });
+    // Before the fix this threw INVALID_PROVIDER and never reached the network.
+    assert.equal(payload.provider, 'arena');
+    assert.equal(result.provider, 'Arena AI');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('the invalid-provider message names every provider the server accepts', async () => {
+  const handler = createNovaChatHandler({ getApiKey: () => '', getGeminiApiKey: () => '' });
+  const response = await handler({
+    body: { provider: 'nope', messages: [{ role: 'user', content: 'hi' }] },
+    ip: '198.51.100.91',
+  });
+  assert.equal(response.status, 400);
+  assert.equal(response.body.code, 'INVALID_PROVIDER');
+  for (const provider of ['auto', 'local', 'gemini', 'openrouter', 'arena']) {
+    assert.match(response.body.error, new RegExp(provider, 'i'));
+  }
+});
+
+test('a throttled request tells the client when to come back', async () => {
+  const handler = createNovaChatHandler({
+    getApiKey: () => '',
+    getGeminiApiKey: () => '',
+    rateLimiter: createNovaRateLimiter({ limit: 1, windowMs: 60_000 }),
+  });
+  const request = {
+    body: { provider: 'local', messages: [{ role: 'user', content: 'hi' }] },
+    ip: '198.51.100.92',
+  };
+  const first = await handler(request);
+  const second = await handler(request);
+
+  assert.equal(first.status, 200);
+  assert.equal(second.status, 429);
+  assert.equal(second.body.code, 'RATE_LIMITED');
+  assert.ok(Number(second.headers?.['Retry-After']) > 0, 'Retry-After must be present');
+});
