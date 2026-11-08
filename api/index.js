@@ -5060,6 +5060,7 @@ import express2 from "express";
 
 // server/life/store.js
 import { mkdirSync, existsSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 
@@ -5501,8 +5502,24 @@ function openLifeStore({
     close: () => db.close()
   };
 }
+function canCreate(dir) {
+  try {
+    mkdirSync(dir, { recursive: true });
+    return true;
+  } catch {
+    return false;
+  }
+}
 function defaultDbPath(env = process.env) {
-  return env.NOVA_LIFE_DB || join(process.cwd(), ".nova-life", "life.sqlite");
+  if (env.NOVA_LIFE_DB) return env.NOVA_LIFE_DB;
+  const preferred = join(process.cwd(), ".nova-life", "life.sqlite");
+  if (canCreate(dirname(preferred))) return preferred;
+  return join(tmpdir(), "nova-life", "life.sqlite");
+}
+function isEphemeralPath(path2) {
+  if (!path2 || path2 === ":memory:") return path2 === ":memory:";
+  const temp = tmpdir();
+  return path2 === temp || path2.startsWith(`${temp}/`);
 }
 
 // server/life/security.js
@@ -8601,7 +8618,7 @@ function safeParse3(value, fallback) {
 import { execFile as execFile2 } from "node:child_process";
 import { cp, mkdtemp, readFile as readFile2, rm, stat as stat2, writeFile } from "node:fs/promises";
 import { existsSync as existsSync2 } from "node:fs";
-import { tmpdir } from "node:os";
+import { tmpdir as tmpdir2 } from "node:os";
 import { dirname as dirname2, join as join3, relative as relative2 } from "node:path";
 var MAX_FILES = 20;
 var MAX_BYTES = 4e5;
@@ -8612,7 +8629,7 @@ function createSimulationService({
   clock = () => /* @__PURE__ */ new Date(),
   env = process.env,
   runCommand = defaultRunCommand2,
-  baseTmp = tmpdir()
+  baseTmp = tmpdir2()
 } = {}) {
   if (!root || !security) throw new Error("simulation service needs a project root and a security kernel");
   const executeEnabled = String(env.NOVA_LIFE_ALLOW_EXECUTE || "") === "1";
@@ -9080,7 +9097,14 @@ function createLifeEngine({
       architecture: "NOVA L.I.F.E. \u2014 Local Intelligence, Feedback & Evolution",
       version: 1,
       schemaVersion: store.schemaVersion,
-      storage: { engine: "sqlite", fts: store.hasFts, path: path2 === ":memory:" ? ":memory:" : "local file" },
+      storage: {
+        engine: "sqlite",
+        fts: store.hasFts,
+        path: path2 === ":memory:" ? ":memory:" : isEphemeralPath(path2) ? "temporary file" : "local file",
+        // Serverless runtimes have no writable project directory, so the engine
+        // falls back to a temp database. Say so instead of implying durability.
+        ephemeral: isEphemeralPath(path2)
+      },
       mode: { localOnly: fabric.localOnly, executionEnabled: String(env.NOVA_LIFE_ALLOW_EXECUTE || "") === "1" },
       hardware: hardware.profile,
       language: detectLanguage2(language).language,

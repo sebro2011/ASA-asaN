@@ -602,6 +602,9 @@ const en: Copy = {
   wsIntelCloudAllowed: 'Cloud providers allowed',
   wsIntelExecutionOn: 'Code execution enabled',
   wsIntelExecutionOff: 'Code execution disabled',
+  wsIntelEphemeral: 'Temporary storage',
+  wsIntelEphemeralHint:
+    'The engine is running on a read-only deployment, so its database lives in the system temp directory and resets when the instance restarts.',
   wsIntelMemoryCount: 'Memories',
   wsIntelTaskCount: 'Tasks',
   wsIntelSkillCount: 'Active skills',
@@ -1286,6 +1289,9 @@ const si: Copy = {
   wsIntelCloudAllowed: 'ක්ලවුඩ් සැපයුම්කරුවන්ට අවසර ඇත',
   wsIntelExecutionOn: 'කේත ධාවනය සක්‍රීයයි',
   wsIntelExecutionOff: 'කේත ධාවනය අක්‍රීයයි',
+  wsIntelEphemeral: 'තාවකාලික ගබඩාව',
+  wsIntelEphemeralHint:
+    'ධාවනය වන්නේ කියවීමට පමණක් හැකි පරිසරයක බැවින් දත්ත සමුදාය පද්ධතියේ තාවකාලික ෆෝල්ඩරයේ ඇත. උදාහරණය නැවත ආරම්භ වන විට එය මැකේ.',
   wsIntelMemoryCount: 'මතක',
   wsIntelTaskCount: 'කාර්ය',
   wsIntelSkillCount: 'සක්‍රීය නිපුණතා',
@@ -1971,6 +1977,9 @@ const ta: Copy = {
   wsIntelCloudAllowed: 'கிளவுட் வழங்குநர்கள் அனுமதிக்கப்பட்டுள்ளனர்',
   wsIntelExecutionOn: 'குறியீட்டு இயக்கம் இயக்கத்தில்',
   wsIntelExecutionOff: 'குறியீட்டு இயக்கம் முடக்கப்பட்டுள்ளது',
+  wsIntelEphemeral: 'தற்காலிக சேமிப்பு',
+  wsIntelEphemeralHint:
+    'இயந்திரம் படிக்க-மட்டும் சூழலில் இயங்குவதால் அதன் தரவுத்தளம் கணினியின் தற்காலிக கோப்புறையில் உள்ளது; நிகழ்வு மீண்டும் தொடங்கும்போது அது அழியும்.',
   wsIntelMemoryCount: 'நினைவுகள்',
   wsIntelTaskCount: 'பணிகள்',
   wsIntelSkillCount: 'செயலில் உள்ள திறன்கள்',

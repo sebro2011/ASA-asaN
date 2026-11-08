@@ -63,7 +63,7 @@ export interface LifeStatus {
   name: string;
   architecture: string;
   schemaVersion: number;
-  storage: { engine: string; fts: boolean; path: string };
+  storage: { engine: string; fts: boolean; path: string; ephemeral?: boolean };
   mode: { localOnly: boolean; executionEnabled: boolean };
   hardware: { id: string; label: string; contextTokens: number; maxConcurrentModels: number; notes: string[] };
   providers: { total: number; localConfigured: number; cloudConfigured: number };

@@ -60,7 +60,7 @@ const STATUS = {
   architecture: 'NOVA L.I.F.E. — Local Intelligence, Feedback & Evolution',
   version: 1,
   schemaVersion: 1,
-  storage: { engine: 'sqlite', fts: true, path: 'local file' },
+  storage: { engine: 'sqlite', fts: true, path: 'local file', ephemeral: true },
   mode: { localOnly: true, executionEnabled: false },
   hardware: { id: 'balanced', label: 'Balanced', contextTokens: 8192, maxConcurrentModels: 1, notes: [] },
   providers: { total: 5, localConfigured: 1, cloudConfigured: 0 },
@@ -211,6 +211,8 @@ test('the overview shows the mode, hardware and counts the API returned', async 
     // Counts come from status.counts, not from a hard-coded number.
     assert.match(app.text(), /Memories\s*3/);
     assert.match(app.text(), /Active skills\s*1\/1/);
+    // A temp-directory database on a read-only deployment must be labelled.
+    assert.match(app.text(), /Temporary storage/);
     assert.equal(document.querySelectorAll('[role="tab"]').length, 8);
   } finally {
     await app.unmount();

@@ -189,6 +189,11 @@ function OverviewPanel() {
             <Database size={10} aria-hidden="true" /> {data.storage.engine}
             {data.storage.fts ? ' · FTS5' : ''} · v{data.schemaVersion}
           </span>
+          {data.storage.ephemeral ? (
+            <span className="nova-chip" title={t('wsIntelEphemeralHint')}>
+              {t('wsIntelEphemeral')}
+            </span>
+          ) : null}
           {data.mode.executionEnabled ? (
             <span className="nova-chip nova-chip--danger">{t('wsIntelExecutionOn')}</span>
           ) : (
