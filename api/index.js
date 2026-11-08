@@ -2654,6 +2654,18 @@ var RATE_LIMIT_WINDOW_MS = 6e4;
 var RATE_LIMIT_REQUESTS = 8;
 var SUPPORTED_LANGUAGES = /* @__PURE__ */ new Set(["en", "si", "ta"]);
 var SUPPORTED_PROVIDERS = /* @__PURE__ */ new Set(["auto", "local", "gemini", "openrouter", "arena"]);
+var RETRYABLE_FAILURES = /* @__PURE__ */ new Set([
+  "EMPTY_PROVIDER_RESPONSE",
+  "PROVIDER_UNAVAILABLE",
+  "PROVIDER_ERROR",
+  "INVALID_PROVIDER_RESPONSE",
+  "UPSTREAM_RATE_LIMITED",
+  "UPSTREAM_NETWORK_ERROR",
+  "MODEL_UNAVAILABLE",
+  "FREE_MODEL_UNAVAILABLE",
+  "PROVIDER_MODEL_NOT_FOUND",
+  "AI_TIMEOUT"
+]);
 var PROVIDER_NAMES = {
   local: "NOVA Local Space Engine",
   gemini: "Google Gemini",
@@ -3175,7 +3187,8 @@ function createNovaChatHandler({
       gemini: cleanModelName(readKey(getGeminiModel), DEFAULT_GEMINI_MODEL),
       arena: cleanModelName(readKey(getArenaModel), "arena_smart.aria")
     };
-    const providerOrder = validated.provider === "auto" ? ["arena", "openrouter", "gemini"].filter((provider) => Boolean(keys[provider])) : [validated.provider];
+    const onlineOrder = ["arena", "openrouter", "gemini"].filter((provider) => Boolean(keys[provider]));
+    const providerOrder = validated.provider === "auto" ? onlineOrder : [validated.provider, ...onlineOrder.filter((provider) => provider !== validated.provider)];
     if (validated.provider !== "auto" && !keys[validated.provider]) {
       return errorResult(
         503,
@@ -3230,23 +3243,31 @@ function createNovaChatHandler({
           timeoutMs: providerTimeout
         });
       }
-      if (response.status === 200) return response;
+      if (response.status === 200) {
+        if (chain.length === 0) return response;
+        return {
+          ...response,
+          body: {
+            ...response.body,
+            fallback: true,
+            fallbackChain: chain
+          }
+        };
+      }
       lastError = response;
+      const failureCode = typeof response.body?.code === "string" ? response.body.code : "PROVIDER_UNAVAILABLE";
       chain.push({
         provider: typeof response.body?.provider === "string" ? response.body.provider : PROVIDER_NAMES[provider],
-        code: typeof response.body?.code === "string" ? response.body.code : "PROVIDER_UNAVAILABLE",
+        code: failureCode,
         status: Number(response.body?.upstreamStatus) || response.status
       });
-      if (validated.provider !== "auto") return response;
+      if (validated.provider !== "auto" && !RETRYABLE_FAILURES.has(failureCode)) return response;
     }
-    if (validated.provider === "auto") {
-      return getLocalResponse(validated.messages.at(-1).content, validated.language, {
-        fallback: true,
-        chain,
-        thinking: validated.thinking
-      });
-    }
-    return lastError || errorResult(503, "PROVIDER_UNAVAILABLE", "NOVA could not complete this request. Please retry.");
+    return getLocalResponse(validated.messages.at(-1).content, validated.language, {
+      fallback: true,
+      chain,
+      thinking: validated.thinking
+    });
   };
 }
 var handleNovaChatRequest = createNovaChatHandler();

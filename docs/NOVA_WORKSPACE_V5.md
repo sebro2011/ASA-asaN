@@ -200,9 +200,9 @@ astronomy studio grid. The level chosen on Home travels with the queued prompt
 
 Two cards were **removed** from the dashboard on request: the per-provider
 inventory (it lives in Settings → AI providers, where the probes already are)
-and the "Workspace modules" roadmap list (planned destinations keep their
-`Soon` flag and phase on the sidebar and on their own route surface). The
-remaining utility cards sit in one responsive row under the Explore card.
+and the "Workspace modules" roadmap list. Since every destination now ships a
+real surface (section 6), the sidebar no longer carries a `Soon` flag at all.
+The remaining utility cards sit in one responsive row under the Explore card.
 
 The legacy service worker in `public/sw.js` used stale-while-revalidate for
 every non-image request, including Vite's unhashed `/src/*` modules, so the
@@ -223,3 +223,77 @@ which deletes the stale shell on activate.
 - `test:workspace-dom` and `test:workspace-search` assert the astronomy labels
   ("Research Journal", "Observation Logs") and that Sinhala/Tamil shells carry no
   English leakage.
+
+## 6. Astronomy modules — the seven placeholders became real tools
+
+`/projects`, `/documents`, `/writing`, `/research`, `/code`, `/knowledge` and
+`/tasks` used to render a "Not available yet" surface. Each is now a working
+module, lazy-loaded in its own chunk, with copy in English, Sinhala and Tamil
+(`src/i18n/workspaceCopy.ts`).
+
+| Route | Module | What it really does |
+| --- | --- | --- |
+| `/projects` | Missions | records: name, agency, target, launch date, status, objectives |
+| `/documents` | Observation Logs | dated entries: target, instrument, seeing, notes/conclusions |
+| `/writing` | Research Journal | title, question, entry, source table (one per row) |
+| `/research` | Deep-Sky Research | question, instruments, target table, source register |
+| `/code` | Orbit Lab | Kepler's third law, circular speed, escape speed — with the formula and the substituted numbers printed beside the result |
+| `/knowledge` | Star Library | adds plain-text sources (paste or file), byte count from the text itself, preview, search, "Ask NOVA" |
+| `/tasks` | Observing Plan | sessions with targets, priority, status, and the Moon phase computed from the date |
+
+Shared pieces:
+
+- `src/workspace/modules/astronomy.ts` — pure maths, no React and no fetch:
+  `orbitalPeriodSeconds|Days`, `orbitalSpeedKmS`, `escapeSpeedKmS`,
+  `radiusFromAltitude`, `lightTimeSeconds`, `angularDiameterDegrees`,
+  `moonPhase` (mean synodic month from the 2000-01-06 new moon),
+  `formatPeriod`. Every helper returns `null` on invalid input instead of a
+  misleading number.
+- `src/workspace/modules/records.ts` — one versioned, validated on-device store
+  (`nova_module_records_v1`) shared by the record modules. Values are strings and
+  capped, records are capped per module, unknown versions and malformed rows are
+  discarded, and a failed write returns `false` so the UI can say "Not saved".
+- `src/workspace/modules/ModuleSurface.tsx` — the schema-driven form/list surface
+  (create, edit, delete-with-confirmation, pipe-separated tables, and an
+  "Ask NOVA" hand-off that quotes exactly the stored record).
+- `src/workspace/modules/surfaces.tsx` — the five record modules' schemas.
+
+Honesty rules kept: nothing is pre-filled; an empty module says it is empty;
+Orbit Lab states which effects its two-body model ignores; Star Library refuses
+binary files and oversized files with a reason instead of storing a placeholder;
+"Ask NOVA" sends the record text, so the model cannot invent entries the reader
+did not make.
+
+**Persistence is deliberately local.** These modules write to the reader's own
+browser, which works signed-out and cannot silently diverge from a server. No
+Supabase table, sync or index exists for them yet; that is the next step if
+records must follow the account across devices.
+
+## 7. Chat fallback chain
+
+A failing provider no longer dead-ends the conversation. `server/novaChat.js`
+walks an ordered chain — the selected provider first, then every other
+configured online provider, then the bundled `NOVA Local Space Engine`.
+
+- First hop succeeds → unchanged response (`fallback:false`).
+- A later hop succeeds → the same body plus `fallback:true` and
+  `fallbackChain:[{provider, code, status}…]`, rendered by the chat surface as a
+  labelled "answered by … after … failed" line.
+- Every hop fails → `200` from the local engine with the full chain, never a
+  silent substitution.
+- An explicit provider still stops immediately on a non-retryable failure
+  (`PROVIDER_AUTH_ERROR`, `PROVIDER_CONFIG_ERROR`, `INVALID_REQUEST`, …) and keeps
+  walking on retryable ones (`EMPTY_PROVIDER_RESPONSE`, `PROVIDER_UNAVAILABLE`,
+  `UPSTREAM_RATE_LIMITED`, `AI_TIMEOUT`, …).
+
+## 8. Tests added
+
+- `npm run test:workspace-astronomy` (14) — textbook values for LEO, GEO, the
+  Moon (both Earth-only and barycentric μ), escape speeds, light time, angular
+  diameters, all eight Moon-phase boundaries, and `null` on invalid input.
+- `npm run test:workspace-modules` (10) — store round-trip, update, delete,
+  corrupt/unknown-version payloads, value capping, blocked storage, rendered
+  Missions/Orbit Lab/Observing Plan/Star Library surfaces, the "Ask NOVA"
+  hand-off, the live nav model and trilingual copy parity.
+- `test:workspace-dom` now navigates to `/tasks` and `/code` and asserts the real
+  surfaces render, and that no navigation item is still planned.

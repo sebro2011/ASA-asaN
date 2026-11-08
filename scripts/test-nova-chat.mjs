@@ -8,6 +8,7 @@ import {
   geminiGenerationConfig,
   getNovaPublicConfig,
   OPENROUTER_FREE_MODEL,
+  providerError,
 } from '../server/novaChat.js';
 import vercelNovaChatHandler from '../api/nova/chat.js';
 import vercelNovaConfigHandler from '../api/nova/config.js';
@@ -238,13 +239,23 @@ test('maps provider rate limits and outages to safe retryable errors', async () 
   const unavailable = await upstream500({ body: selectedOpenRouter, ip: '198.51.100.20' });
   const noFreeModel = await unavailableFreeModel({ body: selectedOpenRouter, ip: '198.51.100.21' });
 
-  assert.equal(rateLimited.status, 429);
-  assert.equal(rateLimited.body.code, 'UPSTREAM_RATE_LIMITED');
-  assert.equal(rateLimited.headers['Retry-After'], '30');
-  assert.equal(unavailable.status, 503);
-  assert.equal(unavailable.body.code, 'PROVIDER_UNAVAILABLE');
-  assert.equal(noFreeModel.status, 503);
-  assert.equal(noFreeModel.body.code, 'FREE_MODEL_UNAVAILABLE');
+  // The mapping itself is unit-tested below through providerError(); an explicit
+  // provider that fails transiently now answers from the offline engine instead
+  // of dead-ending, and the chain keeps the exact reason.
+  assert.equal(providerError(429, 'openrouter').body.code, 'UPSTREAM_RATE_LIMITED');
+  assert.equal(providerError(429, 'openrouter').status, 429);
+  assert.equal(providerError(429, 'openrouter').headers['Retry-After'], '30');
+  assert.equal(providerError(500, 'openrouter').body.code, 'PROVIDER_UNAVAILABLE');
+  assert.equal(providerError(404, 'openrouter', OPENROUTER_FREE_MODEL).body.code, 'FREE_MODEL_UNAVAILABLE');
+
+  assert.equal(rateLimited.status, 200);
+  assert.equal(rateLimited.body.fallback, true);
+  assert.equal(rateLimited.body.provider, 'NOVA Local Space Engine');
+  assert.deepEqual(rateLimited.body.fallbackChain, [
+    { provider: 'OpenRouter', code: 'UPSTREAM_RATE_LIMITED', status: 429 },
+  ]);
+  assert.equal(unavailable.body.fallbackChain[0].code, 'PROVIDER_UNAVAILABLE');
+  assert.equal(noFreeModel.body.fallbackChain[0].code, 'FREE_MODEL_UNAVAILABLE');
   assert.equal(JSON.stringify([rateLimited, unavailable, noFreeModel]).includes(TEST_API_KEY), false);
 });
 
@@ -457,9 +468,50 @@ test('Auto falls through from a rate-limited OpenRouter request to Gemini', asyn
   assert.equal(response.status, 200);
   assert.deepEqual(attemptedProviders, ['openrouter', 'gemini']);
   assert.equal(response.body.provider, 'Google Gemini');
-  assert.equal(response.body.fallback, false);
+  assert.equal(response.body.fallback, true, 'a skipped provider is disclosed');
+  assert.deepEqual(response.body.fallbackChain, [
+    { provider: 'OpenRouter', code: 'UPSTREAM_RATE_LIMITED', status: 429 },
+  ]);
   assert.equal(JSON.stringify(response).includes(TEST_API_KEY), false);
   assert.equal(JSON.stringify(response).includes('gemini-test-key'), false);
+});
+
+test('an explicit provider that answers empty falls through to another configured provider', async () => {
+  // The production symptom this covers: OpenRouter's free router returns 200 with
+  // no content, and the chat used to dead-end on an error bubble even though a
+  // working Gemini key was configured.
+  const attempted = [];
+  const handler = createNovaChatHandler({
+    getOpenRouterApiKey: () => TEST_API_KEY,
+    getGeminiApiKey: () => 'gemini-test-key',
+    getArenaApiKey: () => '',
+    fetchImpl: async (url) => {
+      attempted.push(url.includes('openrouter.ai') ? 'openrouter' : 'gemini');
+      if (url.includes('openrouter.ai')) {
+        return { ok: true, status: 200, json: async () => ({ model: 'openrouter/free', choices: [] }) };
+      }
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ candidates: [{ content: { parts: [{ text: 'Gemini answered instead.' }] } }] }),
+      };
+    },
+  });
+
+  const response = await handler({
+    body: { ...sampleBody, provider: 'openrouter' },
+    ip: '198.51.100.61',
+  });
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(attempted, ['openrouter', 'gemini']);
+  assert.equal(response.body.provider, 'Google Gemini');
+  assert.equal(response.body.text, 'Gemini answered instead.');
+  assert.equal(response.body.fallback, true);
+  assert.deepEqual(response.body.fallbackChain, [
+    { provider: 'OpenRouter', code: 'EMPTY_PROVIDER_RESPONSE', status: 502 },
+  ]);
+  assert.equal(JSON.stringify(response).includes(TEST_API_KEY), false);
 });
 
 test('Auto falls back to the local engine when every configured online provider fails', async () => {
@@ -554,8 +606,12 @@ test('aborts a provider request after the configured timeout', async () => {
   });
 
   const response = await handler({ body: { ...sampleBody, provider: 'openrouter' }, ip: '198.51.100.22' });
-  assert.equal(response.status, 504);
-  assert.equal(response.body.code, 'AI_TIMEOUT');
+  assert.equal(response.status, 200, 'a timeout no longer dead-ends the conversation');
+  assert.equal(response.body.fallback, true);
+  assert.equal(response.body.provider, 'NOVA Local Space Engine');
+  assert.deepEqual(response.body.fallbackChain, [
+    { provider: 'OpenRouter', code: 'AI_TIMEOUT', status: 504 },
+  ]);
   assert.equal(JSON.stringify(response).includes(TEST_API_KEY), false);
 });
 
@@ -674,33 +730,32 @@ test('Arena forbidden request (403) maps to PROVIDER_AUTH_ERROR', async () => {
   assert.equal(response.body.provider, 'Arena AI');
 });
 
-test('Arena rate limit (429) maps to UPSTREAM_RATE_LIMITED', async () => {
-  const handler = arenaKeyHandler({
+test('Arena failures map to their codes and fall back to the offline engine', async () => {
+  assert.equal(providerError(429, 'arena').body.code, 'UPSTREAM_RATE_LIMITED');
+  assert.equal(providerError(429, 'arena').body.provider, 'Arena AI');
+  assert.equal(providerError(429, 'arena').headers['Retry-After'], '30');
+  assert.equal(providerError(500, 'arena').body.code, 'PROVIDER_UNAVAILABLE');
+  assert.equal(providerError(401, 'arena').body.code, 'PROVIDER_AUTH_ERROR');
+  assert.equal(providerError(408, 'arena').body.code, 'AI_TIMEOUT');
+
+  const rateLimited = arenaKeyHandler({
     fetchImpl: async () => ({ ok: false, status: 429, json: async () => ({ error: 'rate limited' }) }),
   });
+  const limited = await rateLimited({ body: { ...sampleBody, provider: 'arena' }, ip: '198.51.100.44' });
+  assert.equal(limited.status, 200);
+  assert.equal(limited.body.fallback, true);
+  assert.deepEqual(limited.body.fallbackChain, [
+    { provider: 'Arena AI', code: 'UPSTREAM_RATE_LIMITED', status: 429 },
+  ]);
 
-  const response = await handler({ body: { ...sampleBody, provider: 'arena' }, ip: '198.51.100.44' });
-
-  assert.equal(response.status, 429);
-  assert.equal(response.body.code, 'UPSTREAM_RATE_LIMITED');
-  assert.equal(response.body.provider, 'Arena AI');
-  assert.equal(response.headers['Retry-After'], '30');
-});
-
-test('Arena server error (500) maps to PROVIDER_UNAVAILABLE', async () => {
-  const handler = arenaKeyHandler({
+  const serverError = arenaKeyHandler({
     fetchImpl: async () => ({ ok: false, status: 500, json: async () => ({ error: 'internal' }) }),
   });
+  const broken = await serverError({ body: { ...sampleBody, provider: 'arena' }, ip: '198.51.100.45' });
+  assert.equal(broken.status, 200);
+  assert.equal(broken.body.fallbackChain[0].code, 'PROVIDER_UNAVAILABLE');
 
-  const response = await handler({ body: { ...sampleBody, provider: 'arena' }, ip: '198.51.100.45' });
-
-  assert.equal(response.status, 503);
-  assert.equal(response.body.code, 'PROVIDER_UNAVAILABLE');
-  assert.equal(response.body.provider, 'Arena AI');
-});
-
-test('Arena timeout maps to AI_TIMEOUT', async () => {
-  const handler = arenaKeyHandler({
+  const timedOut = arenaKeyHandler({
     timeoutMs: 5,
     fetchImpl: (_url, { signal }) => new Promise((resolve, reject) => {
       signal.addEventListener('abort', () => {
@@ -710,44 +765,31 @@ test('Arena timeout maps to AI_TIMEOUT', async () => {
       }, { once: true });
     }),
   });
+  const slow = await timedOut({ body: { ...sampleBody, provider: 'arena' }, ip: '198.51.100.46' });
+  assert.equal(slow.status, 200);
+  assert.equal(slow.body.fallbackChain[0].code, 'AI_TIMEOUT');
 
-  const response = await handler({ body: { ...sampleBody, provider: 'arena' }, ip: '198.51.100.46' });
-
-  assert.equal(response.status, 504);
-  assert.equal(response.body.code, 'AI_TIMEOUT');
-  assert.equal(response.body.provider, 'Arena AI');
-});
-
-test('Arena invalid JSON response maps to INVALID_PROVIDER_RESPONSE', async () => {
-  const handler = arenaKeyHandler({
+  const invalidJson = arenaKeyHandler({
     fetchImpl: async () => ({
       ok: true,
       status: 200,
       json: async () => { throw new Error('not json'); },
     }),
   });
+  const unreadable = await invalidJson({ body: { ...sampleBody, provider: 'arena' }, ip: '198.51.100.47' });
+  assert.equal(unreadable.status, 200);
+  assert.equal(unreadable.body.fallbackChain[0].code, 'INVALID_PROVIDER_RESPONSE');
 
-  const response = await handler({ body: { ...sampleBody, provider: 'arena' }, ip: '198.51.100.47' });
-
-  assert.equal(response.status, 502);
-  assert.equal(response.body.code, 'INVALID_PROVIDER_RESPONSE');
-  assert.equal(response.body.provider, 'Arena AI');
-});
-
-test('Arena empty response maps to EMPTY_PROVIDER_RESPONSE', async () => {
-  const handler = arenaKeyHandler({
+  const empty = arenaKeyHandler({
     fetchImpl: async () => ({
       ok: true,
       status: 200,
       json: async () => ({ model: 'arena_smart.aria', choices: [] }),
     }),
   });
-
-  const response = await handler({ body: { ...sampleBody, provider: 'arena' }, ip: '198.51.100.48' });
-
-  assert.equal(response.status, 502);
-  assert.equal(response.body.code, 'EMPTY_PROVIDER_RESPONSE');
-  assert.equal(response.body.provider, 'Arena AI');
+  const blank = await empty({ body: { ...sampleBody, provider: 'arena' }, ip: '198.51.100.48' });
+  assert.equal(blank.status, 200);
+  assert.equal(blank.body.fallbackChain[0].code, 'EMPTY_PROVIDER_RESPONSE');
 });
 
 test('Auto routing prefers Arena when configured, falls back to Gemini', async () => {
@@ -771,7 +813,10 @@ test('Auto routing prefers Arena when configured, falls back to Gemini', async (
   assert.equal(response.status, 200);
   assert.deepEqual(attemptedProviders, ['arena', 'gemini']);
   assert.equal(response.body.provider, 'Google Gemini');
-  assert.equal(response.body.fallback, false);
+  assert.equal(response.body.fallback, true);
+  assert.deepEqual(response.body.fallbackChain, [
+    { provider: 'Arena AI', code: 'PROVIDER_UNAVAILABLE', status: 503 },
+  ]);
   assert.equal(JSON.stringify(response).includes(ARENA_TEST_KEY), false);
   assert.equal(JSON.stringify(response).includes('gemini-test-key'), false);
 });
@@ -800,7 +845,10 @@ test('Auto routing falls back from Arena to OpenRouter', async () => {
   assert.equal(response.status, 200);
   assert.deepEqual(attemptedProviders, ['arena', 'openrouter']);
   assert.equal(response.body.provider, 'OpenRouter');
-  assert.equal(response.body.fallback, false);
+  assert.equal(response.body.fallback, true);
+  assert.deepEqual(response.body.fallbackChain, [
+    { provider: 'Arena AI', code: 'UPSTREAM_RATE_LIMITED', status: 429 },
+  ]);
 });
 
 test('Auto routing falls back to local engine when Arena and all online providers fail', async () => {
@@ -995,8 +1043,11 @@ test('a provider error never leaks the key or the raw upstream body', async () =
     ip: '198.51.100.24',
   });
 
-  assert.equal(response.body.code, 'PROVIDER_UNAVAILABLE');
-  assert.equal(response.body.upstreamStatus, 500);
+  assert.equal(response.status, 200);
+  assert.equal(response.body.provider, 'NOVA Local Space Engine');
+  assert.deepEqual(response.body.fallbackChain, [
+    { provider: 'OpenRouter', code: 'PROVIDER_UNAVAILABLE', status: 500 },
+  ]);
   assert.doesNotMatch(JSON.stringify(response.body), /sk-or-test/);
 });
 

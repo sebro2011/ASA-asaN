@@ -11,12 +11,11 @@
  * It is not modified — `src/explore/ExploreApp.tsx` is the original tab shell
  * with the URL now owned by the router.
  */
-import { lazy, Suspense, useEffect } from 'react';
+import { lazy, Suspense, useEffect, type LazyExoticComponent, type ReactElement } from 'react';
 import { navigate, normalisePath, useNavigate, useRoute, type AppRoute } from './app/router';
 import AppShell from './app/AppShell';
 import { navItemForRoute } from './app/navConfig';
 import HomeSurface from './workspace/home/HomeSurface';
-import PlannedSurface from './workspace/PlannedSurface';
 import ProfileSurface from './workspace/profile/ProfileSurface';
 import RequireAuth from './auth/RequireAuth';
 import NotFound from './workspace/NotFound';
@@ -31,6 +30,26 @@ const SettingsSurface = lazy(() => import('./workspace/settings/SettingsSurface'
 const ChatSurface = lazy(() => import('./workspace/chat/ChatSurface'));
 // The news surface fetches two feeds; keep it out of the workspace entry chunk.
 const NewsSurface = lazy(() => import('./workspace/news/NewsSurface'));
+
+// Astronomy modules: one lazy chunk each, so a reader who never opens a module
+// never downloads its surface.
+const MissionsSurface = lazy(() => import('./workspace/modules/surfaces').then((m) => ({ default: m.MissionsSurface })));
+const ObservationLogsSurface = lazy(() => import('./workspace/modules/surfaces').then((m) => ({ default: m.ObservationLogsSurface })));
+const ResearchJournalSurface = lazy(() => import('./workspace/modules/surfaces').then((m) => ({ default: m.ResearchJournalSurface })));
+const DeepSkyResearchSurface = lazy(() => import('./workspace/modules/surfaces').then((m) => ({ default: m.DeepSkyResearchSurface })));
+const ObservingPlanSurface = lazy(() => import('./workspace/modules/surfaces').then((m) => ({ default: m.ObservingPlanSurface })));
+const OrbitLabSurface = lazy(() => import('./workspace/modules/OrbitLabSurface'));
+const StarLibrarySurface = lazy(() => import('./workspace/modules/StarLibrarySurface'));
+
+const MODULE_SURFACES: Partial<Record<AppRoute['name'], LazyExoticComponent<() => ReactElement>>> = {
+  projects: MissionsSurface,
+  documents: ObservationLogsSurface,
+  writing: ResearchJournalSurface,
+  research: DeepSkyResearchSurface,
+  code: OrbitLabSurface,
+  knowledge: StarLibrarySurface,
+  tasks: ObservingPlanSurface,
+};
 
 /** Branded loading state for the Explore chunk (kept dark: Explore is dark). */
 function ExploreLoading() {
@@ -131,8 +150,14 @@ function WorkspaceSurface({ route }: { route: AppRoute }) {
     );
   }
 
-  const item = navItemForRoute(route.name);
-  if (item && item.status === 'planned') return <PlannedSurface item={item} />;
+  const ModuleSurface = MODULE_SURFACES[route.name];
+  if (ModuleSurface) {
+    return (
+      <Suspense fallback={<SurfaceLoading label="Loading module…" />}>
+        <ModuleSurface />
+      </Suspense>
+    );
+  }
 
   // A route exists but has no surface yet — never render a blank page.
   return <NotFound />;
