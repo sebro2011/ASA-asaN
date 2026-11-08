@@ -2409,3 +2409,51 @@ button.nova-chip:hover {
   overflow-x: auto;
   white-space: nowrap;
 }
+
+/* ------------------------------------------------- NOVA NEXUS intelligence */
+
+.nova-stat {
+  min-width: 0;
+  padding: 0.625rem 0.75rem;
+  border-radius: 10px;
+  border: 1px solid var(--color-ws-line);
+  background: color-mix(in srgb, var(--color-ws-bg) 45%, transparent);
+}
+.nova-stat__label {
+  font-family: var(--font-mono);
+  font-size: 0.5625rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-ws-text-3);
+}
+.nova-stat__value {
+  margin-top: 0.25rem;
+  font-family: var(--font-mono);
+  font-size: 1rem;
+  color: var(--color-ws-text);
+  overflow-wrap: anywhere;
+}
+
+.nova-chip--accent {
+  border-color: color-mix(in srgb, var(--color-ws-accent) 55%, transparent);
+  color: var(--color-ws-accent-ink);
+}
+.nova-chip--ok {
+  border-color: color-mix(in srgb, #39d98a 45%, transparent);
+  color: color-mix(in srgb, #39d98a 85%, var(--color-ws-text));
+}
+
+.nova-record__table th {
+  padding: 0 0.5rem 0.375rem 0;
+  text-align: left;
+  font-family: var(--font-mono);
+  font-size: 0.5625rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-ws-text-3);
+  border-bottom: 1px solid var(--color-ws-line);
+  font-weight: 500;
+}
+.nova-record__table td {
+  font-size: 0.72rem;
+}

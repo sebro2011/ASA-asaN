@@ -11,6 +11,7 @@
  */
 import {
   BookOpen,
+  Brain,
   CheckSquare,
   Code2,
   Compass,
@@ -143,6 +144,15 @@ export const WORKSPACE_NAV: WorkspaceNavItem[] = [
     status: 'live',
     descriptionKey: 'wsAreaTasksDesc',
     bulletKeys: ['wsAreaTasksB1', 'wsAreaTasksB2'],
+  },
+  {
+    id: 'intelligence',
+    route: 'intelligence',
+    href: '/intelligence',
+    labelKey: 'wsMenuIntelligence',
+    icon: Brain,
+    status: 'live',
+    descriptionKey: 'wsIntelSubtitle',
   },
 ];
 

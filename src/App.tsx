@@ -40,6 +40,8 @@ const DeepSkyResearchSurface = lazy(() => import('./workspace/modules/surfaces')
 const ObservingPlanSurface = lazy(() => import('./workspace/modules/surfaces').then((m) => ({ default: m.ObservingPlanSurface })));
 const OrbitLabSurface = lazy(() => import('./workspace/modules/OrbitLabSurface'));
 const StarLibrarySurface = lazy(() => import('./workspace/modules/StarLibrarySurface'));
+// The L.I.F.E. engine surface (memory, skills, verification, security, benchmarks).
+const IntelligenceSurface = lazy(() => import('./workspace/intelligence/IntelligenceSurface'));
 
 const MODULE_SURFACES: Partial<Record<AppRoute['name'], LazyExoticComponent<() => ReactElement>>> = {
   projects: MissionsSurface,
@@ -49,6 +51,7 @@ const MODULE_SURFACES: Partial<Record<AppRoute['name'], LazyExoticComponent<() =
   code: OrbitLabSurface,
   knowledge: StarLibrarySurface,
   tasks: ObservingPlanSurface,
+  intelligence: IntelligenceSurface,
 };
 
 /** Branded loading state for the Explore chunk (kept dark: Explore is dark). */
