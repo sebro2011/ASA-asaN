@@ -6,3 +6,6 @@ coverage/
 *.log
 .env*
 !.env.example
+
+# NOVA L.I.F.E. local state — never commit the running database or simulation backups
+.nova-life/

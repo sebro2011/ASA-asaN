@@ -115,9 +115,9 @@ test('workspace shell renders, searches, switches theme and explains planned mod
     /Soon/.test(node.textContent || ''),
   );
   // Derived from the nav model, so shipping a module tightens this instead of
-  // silently changing a magic number: every planned item is flagged, and no
-  // live item pretends to be planned.
-  assert.ok(plannedItems.length > 0, 'the roadmap still has unbuilt modules');
+  // silently changing a magic number: the roadmap is empty because every
+  // destination now has a real surface, and nothing carries a "Soon" flag.
+  assert.equal(plannedItems.length, 0, 'no module is still a placeholder');
   assert.equal(
     plannedFlags.length,
     plannedItems.length,
@@ -168,13 +168,28 @@ test('workspace shell renders, searches, switches theme and explains planned mod
   assert.equal(document.documentElement.getAttribute('data-nova-theme'), 'light');
   assert.equal(window.localStorage.getItem('nova_theme'), 'light');
 
-  // 6. A planned module explains itself and names its phase.
+  // 6. Every module is a real surface now: /tasks is the Observing Plan, and an
+  //    empty plan says it is empty instead of pretending to have data.
   await act(async () => {
     navigate('/tasks');
   });
-  assert.match(container.textContent, /Not available yet/);
-  assert.match(container.textContent, /4F/);
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 120));
+  });
+  assert.match(container.textContent, /Observing Plan/);
+  assert.match(container.textContent, /No records yet\./);
+  assert.doesNotMatch(container.textContent, /Not available yet/);
   assert.doesNotMatch(container.textContent, /Good (morning|afternoon|evening)/);
+
+  // 6b. Orbit Lab is reachable and computes from the formula it prints.
+  await act(async () => {
+    navigate('/code');
+  });
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 120));
+  });
+  assert.match(container.textContent, /Orbit Lab/);
+  assert.match(container.textContent, /Semi-major axis \(km\)/);
 
   // 7. Unknown paths land on the honest 404, still inside the shell.
   await act(async () => {
