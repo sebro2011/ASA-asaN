@@ -41,6 +41,22 @@ const RATE_LIMIT_WINDOW_MS = 60_000;
 const RATE_LIMIT_REQUESTS = 8;
 const SUPPORTED_LANGUAGES = new Set(['en', 'si', 'ta']);
 const SUPPORTED_PROVIDERS = new Set(['auto', 'local', 'gemini', 'openrouter', 'arena']);
+// Upstream failures worth routing around. A missing key, a rejected key or a bad
+// request is NOT in this set: those are deployment/client mistakes and must
+// surface instead of being answered by a different provider.
+const RETRYABLE_FAILURES = new Set([
+  'EMPTY_PROVIDER_RESPONSE',
+  'PROVIDER_UNAVAILABLE',
+  'PROVIDER_ERROR',
+  'INVALID_PROVIDER_RESPONSE',
+  'UPSTREAM_RATE_LIMITED',
+  'UPSTREAM_NETWORK_ERROR',
+  'MODEL_UNAVAILABLE',
+  'FREE_MODEL_UNAVAILABLE',
+  'PROVIDER_MODEL_NOT_FOUND',
+  'AI_TIMEOUT',
+]);
+
 const PROVIDER_NAMES = {
   local: 'NOVA Local Space Engine',
   gemini: 'Google Gemini',
@@ -308,7 +324,7 @@ function arenaThinkingFields(thinking) {
   return fields;
 }
 
-function providerError(status, provider, model) {
+export function providerError(status, provider, model) {
   let response;
   if (status === 429) {
     response = errorResult(
@@ -665,10 +681,15 @@ export function createNovaChatHandler({
       arena: cleanModelName(readKey(getArenaModel), 'arena_smart.aria'),
     };
 
-    // Auto routing prefers Arena when configured, then falls through to other online providers.
+    // Auto routing prefers Arena when configured, then falls through to other
+    // online providers. An explicitly chosen provider is tried first, but a
+    // transient failure there must not dead-end the conversation: the remaining
+    // configured providers (and finally the offline engine) still answer, and
+    // the response says who did.
+    const onlineOrder = ['arena', 'openrouter', 'gemini'].filter((provider) => Boolean(keys[provider]));
     const providerOrder = validated.provider === 'auto'
-      ? ['arena', 'openrouter', 'gemini'].filter((provider) => Boolean(keys[provider]))
-      : [validated.provider];
+      ? onlineOrder
+      : [validated.provider, ...onlineOrder.filter((provider) => provider !== validated.provider)];
 
     if (validated.provider !== 'auto' && !keys[validated.provider]) {
       return errorResult(
@@ -729,27 +750,41 @@ export function createNovaChatHandler({
         });
       }
 
-      if (response.status === 200) return response;
+      if (response.status === 200) {
+        // A later hop answered after an earlier one failed: keep the chain so the
+        // UI can say which provider was skipped and why.
+        if (chain.length === 0) return response;
+        return {
+          ...response,
+          body: {
+            ...response.body,
+            fallback: true,
+            fallbackChain: chain,
+          },
+        };
+      }
       lastError = response;
+      const failureCode = typeof response.body?.code === 'string' ? response.body.code : 'PROVIDER_UNAVAILABLE';
       chain.push({
         provider: typeof response.body?.provider === 'string' ? response.body.provider : PROVIDER_NAMES[provider],
-        code: typeof response.body?.code === 'string' ? response.body.code : 'PROVIDER_UNAVAILABLE',
+        code: failureCode,
         status: Number(response.body?.upstreamStatus) || response.status,
       });
-      if (validated.provider !== 'auto') return response;
+      // With an explicitly selected provider, a deployment problem (missing or
+      // rejected key) or a bad request is reported as-is: routing around it
+      // would hide the misconfiguration. Auto keeps walking the chain, because
+      // one broken provider says nothing about the others.
+      if (validated.provider !== 'auto' && !RETRYABLE_FAILURES.has(failureCode)) return response;
     }
 
-    // Automatic routing is resilient: if configured online providers are unavailable,
-    // answer from the bundled local knowledge engine and identify that provider honestly.
-    if (validated.provider === 'auto') {
-      return getLocalResponse(validated.messages.at(-1).content, validated.language, {
-        fallback: true,
-        chain,
-        thinking: validated.thinking,
-      });
-    }
-
-    return lastError || errorResult(503, 'PROVIDER_UNAVAILABLE', 'NOVA could not complete this request. Please retry.');
+    // Every hop that could answer failed transiently. The bundled offline engine
+    // still holds real astronomy knowledge, so it answers — labelled, with the
+    // chain that explains why the online providers were skipped.
+    return getLocalResponse(validated.messages.at(-1).content, validated.language, {
+      fallback: true,
+      chain,
+      thinking: validated.thinking,
+    });
   };
 }
 
