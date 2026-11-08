@@ -1160,6 +1160,114 @@
   margin-top: 1rem;
 }
 
+/* ------------------------------------------------------------- sky now */
+
+.nova-sky-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.75rem;
+}
+@media (min-width: 720px) {
+  .nova-sky-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.nova-sky-card {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.875rem;
+  border-radius: 16px;
+  border: 1px solid var(--color-ws-line);
+  background: var(--ws-glass);
+  backdrop-filter: blur(18px) saturate(140%);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+  box-shadow: var(--ws-shadow-1);
+}
+
+.nova-sky-card__head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+.nova-sky-card__icon {
+  display: grid;
+  width: 1.625rem;
+  height: 1.625rem;
+  flex: none;
+  place-items: center;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--color-ws-accent) 26%, transparent);
+  background: color-mix(in srgb, var(--color-ws-accent) 12%, transparent);
+  color: var(--color-ws-accent-ink);
+}
+.nova-sky-card__title {
+  min-width: 0;
+  flex: 1;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-ws-text);
+}
+.nova-sky-card__flag {
+  flex: none;
+  padding: 0.0625rem 0.375rem;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--color-ws-warning, #d9a441) 40%, transparent);
+  font-family: var(--font-mono);
+  font-size: 0.5rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-ws-text-3);
+}
+
+.nova-sky-card__body {
+  display: flex;
+  min-height: 3.25rem;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+.nova-sky-card__image {
+  width: 100%;
+  height: 5.25rem;
+  margin-bottom: 0.375rem;
+  border-radius: 10px;
+  border: 1px solid var(--color-ws-line);
+  object-fit: cover;
+}
+.nova-sky-card__value {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--color-ws-text);
+  overflow-wrap: anywhere;
+}
+.nova-sky-card__meta {
+  font-family: var(--font-mono);
+  font-size: 0.59375rem;
+  line-height: 1.5;
+  letter-spacing: 0.03em;
+  color: var(--color-ws-text-3);
+}
+.nova-sky-card__status {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: 0.71875rem;
+  color: var(--color-ws-text-3);
+}
+.nova-sky-card__status--error {
+  color: var(--color-ws-danger, #d96a6a);
+}
+.nova-sky-card__action {
+  margin-top: auto;
+  height: 1.875rem;
+  align-self: flex-start;
+  font-size: 0.6875rem;
+}
+
 /* ------------------------------------------------------- science starters */
 
 .nova-science-grid {

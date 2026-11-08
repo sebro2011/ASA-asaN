@@ -279,10 +279,10 @@ test('scope chips filter the list without another query', async () => {
     assert.equal(calls.length, 1);
 
     const chip = [...document.querySelectorAll('button')].find((node) =>
-      (node.textContent || '').startsWith('Documents'),
+      (node.textContent || '').startsWith('Observation Logs'),
     );
     assert.ok(chip, 'documents chip rendered with a count');
-    assert.match(chip.textContent, /Documents 1/);
+    assert.match(chip.textContent, /Observation Logs 1/);
 
     await app.act(async () => {
       chip.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
@@ -341,8 +341,8 @@ test('document hits are not links yet, chat hits navigate to the thread', async 
 
     const items = [...document.querySelectorAll('ul[aria-label="Search results"] li')];
     assert.equal(items[0].querySelector('a').getAttribute('href'), '/chat/conv-1');
-    assert.equal(items[1].querySelector('a'), null, 'no dead link into the documents placeholder');
-    assert.match(items[1].textContent, /Phase 4B/);
+    assert.equal(items[1].querySelector('a'), null, 'no dead link into the Observation Logs placeholder');
+    assert.match(items[1].textContent, /Observation Logs arrive in Phase 4C/);
 
     // Keyboard: ArrowDown moves to the document row, ArrowUp back, Enter opens.
     const input = searchInput();

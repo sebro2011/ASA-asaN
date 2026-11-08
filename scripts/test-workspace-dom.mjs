@@ -418,7 +418,7 @@ test('responsive shell: desktop, tablet and phone expose different affordances',
     for (const href of ['/chat', '/projects', '/documents', '/explore', '/settings']) {
       assert.ok(snapshot.opened.hrefs.includes(href), `drawer links ${href}`);
     }
-    assert.match(snapshot.opened.text, /Writing Studio/, 'drawer labels destinations');
+    assert.match(snapshot.opened.text, /Research Journal/, 'drawer labels destinations');
     assert.equal(snapshot.opened.scrollKeyboard, '0', 'drawer scroll container is keyboard reachable');
     assert.equal(snapshot.closedByEscape, true, 'Escape closes the drawer');
   }
@@ -476,8 +476,8 @@ test('the shell renders in Sinhala and Tamil, not only English', async () => {
     assert.ok(ta.includes(workspaceCopy.ta[key]), `Tamil shell shows ${key}`);
   }
   // No English leakage into the navigation labels.
-  assert.equal(si.includes('Writing Studio'), false, 'Sinhala shell has no English nav label');
-  assert.equal(ta.includes('Knowledge Space'), false, 'Tamil shell has no English nav label');
+  assert.equal(si.includes('Research Journal'), false, 'Sinhala shell has no English nav label');
+  assert.equal(ta.includes('Star Library'), false, 'Tamil shell has no English nav label');
   assert.ok(direction, '<html lang> is set for the active language');
 });
 

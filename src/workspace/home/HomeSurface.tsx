@@ -3,7 +3,8 @@
  *
  * Structure, top to bottom: the orb (stateful, purely decorative to assistive
  * tech), the greeting, a floating glass composer that hands a prompt to `/chat`,
- * prompt suggestions, four quick actions, then the live/system cards.
+ * prompt suggestions, four quick actions, the live "Sky now" feeds (APOD, next
+ * close approach, ISS), the astronomy studio, then the live/system cards.
  *
  * Everything on this page is still truthful: the provider and cloud cards read
  * live state, the quick actions point at routes that exist, and the composer
@@ -49,6 +50,7 @@ import {
   type ThinkingLevel,
 } from '../chat/thinking';
 import { SCIENCE_PROMPTS } from '../chat/sciencePrompts';
+import SkyNow from './SkyNow';
 
 function greetingKey(hour: number): string {
   if (hour < 12) return 'wsGoodMorning';
@@ -312,7 +314,7 @@ export default function HomeSurface() {
           <div className="flex items-center gap-2.5">
             <NovaMark size={18} />
             <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-ws-text-3">
-              AI Workspace
+              {t('wsHomeEyebrow')}
             </span>
           </div>
 
@@ -385,6 +387,9 @@ export default function HomeSurface() {
           })}
         </div>
       </section>
+
+      {/* ------------------------------------------------------- sky now */}
+      <SkyNow onAsk={(prompt) => sendPrompt(prompt)} />
 
       {/* ------------------------------------------------- astronomy studio */}
       <section aria-labelledby="nova-science-heading" className="mt-6">

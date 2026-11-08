@@ -77,11 +77,16 @@ function installDom() {
 }
 
 /** Only what Home touches: auth session, the profile row and `/api/nova/config`. */
-function stubFetch() {
+function stubFetch({ feeds = null } = {}) {
   const calls = [];
   globalThis.fetch = async (url) => {
     const target = String(url);
     calls.push(target);
+    if (feeds) {
+      for (const [path, body] of Object.entries(feeds)) {
+        if (target.includes(path)) return json(body);
+      }
+    }
     if (target.includes('/api/workspace/config')) {
       return json({
         enabled: true,
@@ -246,10 +251,10 @@ test('the greeting, subtitle and composer are on the page', async () => {
     stubFetch();
     const app = await mountHome();
     assert.match(app.text(), /Good (morning|afternoon|evening)/);
-    assert.match(app.text(), /AI workspace for thinking, writing and organising/);
+    assert.match(app.text(), /Your astronomy workspace/);
     const composer = document.querySelector('#nova-home-prompt');
     assert.ok(composer, 'a composer input exists');
-    assert.match(composer.getAttribute('placeholder'), /Ask Nova anything/);
+    assert.match(composer.getAttribute('placeholder'), /Ask NOVA about the sky/);
     assert.equal(document.querySelectorAll('.nova-chip-glass').length, 4, 'four prompt suggestions');
     await app.unmount();
   } finally {
@@ -319,6 +324,96 @@ test('a starter chosen on Home carries its thinking level into the chat queue', 
     assert.equal(window.location.pathname, '/chat');
     assert.match(window.sessionStorage.getItem('nova_pending_prompt') || '', /Artemis/);
     assert.equal(window.sessionStorage.getItem('nova_pending_thinking'), 'thinking');
+    await app.unmount();
+  } finally {
+    dom.window.close();
+  }
+});
+
+test('Sky now reads the three live feeds and grounds a prompt on real values', async () => {
+  const dom = installDom();
+  try {
+    stubFetch({
+      feeds: {
+        '/api/apod': {
+          success: true,
+          data: {
+            title: 'The Pillars of Creation',
+            date: '2026-11-08',
+            media_type: 'image',
+            url: 'https://apod.example/pillars.jpg',
+          },
+        },
+        '/api/asteroids/neows': {
+          success: true,
+          data: {
+            near_earth_objects: {
+              '2026-11-08': [
+                {
+                  name: '99942 Apophis (2004 MN4)',
+                  close_approach_data: [
+                    {
+                      close_approach_date: '2026-11-08',
+                      relative_velocity: { kilometers_per_second: '30.73' },
+                      miss_distance: { kilometers: '31600', lunar: '0.08' },
+                    },
+                  ],
+                },
+              ],
+            },
+          },
+        },
+        '/api/iss': {
+          success: true,
+          data: { latitude: 12.34, longitude: 56.78, altitude: 420.1, velocity: 27600 },
+        },
+      },
+    });
+    window.sessionStorage.clear();
+    const app = await mountHome();
+    await settle(app.act, 80);
+
+    const text = app.text();
+    assert.match(text, /Sky now/, 'the live astronomy section is on the dashboard');
+    assert.match(text, /The Pillars of Creation/);
+    assert.match(text, /0\.08 lunar distances/);
+    assert.match(text, /12\.34°, 56\.78° · 420\.1 km/);
+    assert.equal(text.includes('Feed unavailable right now.'), false, 'a served feed is not shown as unavailable');
+
+    const card = [...document.querySelectorAll('.nova-sky-card')].find((node) =>
+      /The Pillars of Creation/.test(node.textContent || ''),
+    );
+    const ask = [...card.querySelectorAll('button')].find((node) => /Ask NOVA/.test(node.textContent || ''));
+    assert.ok(ask, 'each live card can hand its values to the AI');
+    await app.act(async () => {
+      ask.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+    });
+    await settle(app.act, 40);
+
+    const prompt = window.sessionStorage.getItem('nova_pending_prompt') || '';
+    assert.match(prompt, /The Pillars of Creation/);
+    assert.match(prompt, /2026-11-08/);
+    assert.equal(window.location.pathname, '/chat');
+    await app.unmount();
+  } finally {
+    dom.window.close();
+  }
+});
+
+test('a failed sky feed says so instead of inventing a value', async () => {
+  const dom = installDom();
+  try {
+    stubFetch({ feeds: { '/api/apod': { success: false } } });
+    const app = await mountHome();
+    await settle(app.act, 80);
+
+    const card = [...document.querySelectorAll('.nova-sky-card')].find((node) =>
+      /Picture of the day/.test(node.textContent || ''),
+    );
+    assert.ok(card, 'the APOD card is rendered');
+    assert.match(card.textContent, /Feed unavailable right now\./);
+    const retry = [...card.querySelectorAll('button')].find((node) => /Retry/.test(node.textContent || ''));
+    assert.ok(retry, 'a failed feed offers a retry, not a fake value');
     await app.unmount();
   } finally {
     dom.window.close();

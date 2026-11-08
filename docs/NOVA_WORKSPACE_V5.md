@@ -77,6 +77,44 @@ back to a cached reference entry, the UI says so.
 
 All copy exists in English, Sinhala and Tamil (`src/i18n/workspaceCopy.ts`).
 
+## 3a. Astronomy sections and the live "Sky now" row
+
+Every destination in the workspace is an astronomy domain, not a generic
+productivity module. The labels, descriptions and bullets live in
+`src/i18n/workspaceCopy.ts` and are identical in shape across en/si/ta:
+
+| Route | Section | Phase | What it is |
+| --- | --- | --- | --- |
+| `/workspace` | Mission Control | live | the dashboard |
+| `/chat` | NOVA Chat | live | the trilingual astronomy assistant |
+| `/projects` | Missions | 4B | objectives, hardware, timelines per mission |
+| `/documents` | Observation Logs | 4C | dated observing records |
+| `/writing` | Research Journal | 4C | observations → reviewable journal entry |
+| `/research` | Deep-Sky Research | 4D | structured research questions and a source register |
+| `/code` | Orbit Lab | 4D | orbital/observing maths with the formula shown |
+| `/knowledge` | Star Library | 4E | your star charts, briefs and datasets |
+| `/tasks` | Observing Plan | 4F | session planning with Moon-phase constraints |
+| `/explore` | Explore | live | the fifteen NASA destinations, unchanged |
+
+Route slugs are unchanged so existing links and tests keep working; only the
+visible names and copy moved to astronomy vocabulary (the search scope chip now
+reads "Observation Logs" for the same reason).
+
+The dashboard also gained a **Sky now** section — three cards reading routes the
+server already ships, with no fourth data path:
+
+| Card | Endpoint | Shows | Hand-off |
+| --- | --- | --- | --- |
+| Picture of the day | `/api/apod` | title, date, thumbnail | prompt asks NOVA to separate image from interpretation |
+| Next close approach | `/api/asteroids/neows` | nearest object, lunar distances, relative velocity | prompt asks what the numbers mean, without exaggeration |
+| ISS position | `/api/iss` | latitude, longitude, altitude | prompt asks what the ground track means and how to see the station |
+
+Each card is explicit about state: a loading line, a plain "Feed unavailable
+right now." with a retry button, and a `cached reference` flag when the server
+served its fallback payload. The AI button is disabled while there is nothing
+real to ground on, so a prompt can never quote a value the server did not send.
+Feeds load independently: one failing card never blanks the other two.
+
 ## 3b. Chat without an account
 
 `/chat` is no longer wrapped in `RequireAuth`. The session state decides where a
@@ -119,3 +157,10 @@ level chosen on Home travels with the queued prompt
   validation, per-level model pinning, the public catalogue and Gemini levels.
 - `npm run test:workspace-chat`, `test:workspace-home`, `test:workspace-dom` and
   `test:workspace-shell` cover the surfaces, copy parity and the retired tab.
+- `test:workspace-home` also mounts the **Sky now** row against stubbed feeds:
+  it asserts the real values render, that a served feed is not labelled
+  unavailable, that a failed feed shows the retry copy instead of a value, and
+  that "Ask NOVA" queues a prompt quoting the live title and date.
+- `test:workspace-dom` and `test:workspace-search` assert the astronomy labels
+  ("Research Journal", "Observation Logs") and that Sinhala/Tamil shells carry no
+  English leakage.
