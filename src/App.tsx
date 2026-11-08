@@ -85,12 +85,13 @@ function WorkspaceSurface({ route }: { route: AppRoute }) {
   if (route.name === 'notFound') return <NotFound />;
 
   if (route.name === 'chat') {
+    // Chat is open to everyone. Signed-in readers get cloud-synced threads;
+    // signed-out readers get the on-device guest store (see localChat.ts), so a
+    // missing account never blocks the AI surface.
     return (
-      <RequireAuth>
-        <Suspense fallback={<ChatLoading />}>
-          <ChatSurface />
-        </Suspense>
-      </RequireAuth>
+      <Suspense fallback={<ChatLoading />}>
+        <ChatSurface />
+      </Suspense>
     );
   }
 

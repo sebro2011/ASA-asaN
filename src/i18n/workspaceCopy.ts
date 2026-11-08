@@ -73,7 +73,7 @@ const en: Copy = {
   wsHomeSuggestion2: 'Summarise my notes from this week',
   wsHomeSuggestion3: 'Explain the phases of the Moon',
   wsHomeSuggestion4: 'Rewrite this idea more clearly',
-  wsHomeSignInNote: 'Sign in to keep your chat history.',
+  wsHomeSignInNote: 'Chat works without signing in — threads stay in this browser until you sign in to sync them.',
   wsHomeQuickTitle: 'Quick actions',
   wsHomeQuickExploreBody: 'Live NASA science suites, offline-ready.',
   wsHomeQuickSettingsBody: 'Theme, motion and accessibility.',
@@ -319,6 +319,11 @@ const en: Copy = {
     'A level is served by an online model only when the deployment has a provider key for it; otherwise NOVA answers from the offline space engine and says so.',
   wsChatComposerHint: 'Enter to send · Shift+Enter for a new line',
   wsChatErrThinking: 'That thinking level is not valid. Choose Auto or another level.',
+  wsChatGuestTitle: 'This device only',
+  wsChatGuestBody:
+    'You are signed out, so conversations stay in this browser. Sign in any time to keep them across devices.',
+  wsChatGuestCta: 'Sign in to sync',
+  wsChatGuestChip: 'On this device',
 
   /* -------------------------------------------------- astronomy studio (v5) */
   wsScienceTitle: 'Astronomy studio',
@@ -474,7 +479,7 @@ const si: Copy = {
   wsHomeSuggestion2: 'මේ සතියේ මගේ සටහන් සාරාංශ කරන්න',
   wsHomeSuggestion3: 'චන්ද්‍රයාගේ කලාප පැහැදිලි කරන්න',
   wsHomeSuggestion4: 'මේ අදහස වඩා පැහැදිලිව ලියන්න',
-  wsHomeSignInNote: 'කතාබස් ඉතිහාසය තබා ගැනීමට පුරනය වන්න.',
+  wsHomeSignInNote: 'පිවිසීමකින් තොරවත් කතාබස් කළ හැක — පිවිසෙන තෙක් සංවාද මෙම බ්‍රව්සරයේ රැඳේ.',
   wsHomeQuickTitle: 'ඉක්මන් ක්‍රියා',
   wsHomeQuickExploreBody: 'නාසා විද්‍යා කට්ටල, නොබැඳිව ද ක්‍රියා කරයි.',
   wsHomeQuickSettingsBody: 'තේමාව, චලනය සහ ප්‍රවේශ්‍යතාව.',
@@ -720,6 +725,11 @@ const si: Copy = {
     'මට්ටමක් සබැඳි ආකෘතියකින් ලැබෙන්නේ එයට අදාළ සේවා සැපයුම්කරු යතුර මෙම සේවාදායකයේ ඇති විටය; එසේ නොවේ නම් NOVA නොබැඳි අභ්‍යවකාශ එන්ජිමෙන් පිළිතුරු දෙන බව පවසයි.',
   wsChatComposerHint: 'යැවීමට Enter · නව පේළියකට Shift+Enter',
   wsChatErrThinking: 'එම සිතුම් මට්ටම වලංගු නොවේ. ස්වයංක්‍රීය හෝ වෙනත් මට්ටමක් තෝරන්න.',
+  wsChatGuestTitle: 'මෙම උපාංගයේ පමණි',
+  wsChatGuestBody:
+    'ඔබ පිවිසී නැති නිසා සංවාද මෙම බ්‍රව්සරයේ රැඳේ. උපාංග අතර සමමුහුර්ත කිරීමට ඕනෑම වේලාවක පිවිසෙන්න.',
+  wsChatGuestCta: 'සමමුහුර්ත කිරීමට පිවිසෙන්න',
+  wsChatGuestChip: 'මෙම උපාංගයේ',
 
   /* -------------------------------------------------- astronomy studio (v5) */
   wsScienceTitle: 'තාරකා විද්‍යා අධ්‍යයනාගාරය',
@@ -875,7 +885,7 @@ const ta: Copy = {
   wsHomeSuggestion2: 'இந்த வாரக் குறிப்புகளைச் சுருக்கு',
   wsHomeSuggestion3: 'சந்திரனின் கட்டங்களை விளக்கு',
   wsHomeSuggestion4: 'இந்த யோசனையைத் தெளிவாக எழுது',
-  wsHomeSignInNote: 'அரட்டை வரலாற்றைச் சேமிக்க உள்நுழையுங்கள்.',
+  wsHomeSignInNote: 'உள்நுழையாமலும் அரட்டை வேலை செய்யும் — உள்நுழையும் வரை உரையாடல்கள் இந்த உலாவியில் இருக்கும்.',
   wsHomeQuickTitle: 'விரைவு செயல்கள்',
   wsHomeQuickExploreBody: 'நாசா அறிவியல் தொகுப்புகள், ஆஃப்லைனிலும்.',
   wsHomeQuickSettingsBody: 'தீம், இயக்கம், அணுகல்.',
@@ -1122,6 +1132,11 @@ const ta: Copy = {
     'ஒரு நிலை, அதற்கான வழங்குநர் விசை இந்தச் சேவையகத்தில் இருந்தால் மட்டுமே இணைய மாதிரியால் வழங்கப்படும்; இல்லையெனில் NOVA ஆஃப்லைன் விண்வெளி இயந்திரத்திலிருந்து பதிலளிப்பதாகத் தெரிவிக்கும்.',
   wsChatComposerHint: 'அனுப்ப Enter · புதிய வரிக்கு Shift+Enter',
   wsChatErrThinking: 'அந்தச் சிந்தனை நிலை செல்லாதது. தானியங்கி அல்லது வேறு நிலையைத் தேர்ந்தெடுக்கவும்.',
+  wsChatGuestTitle: 'இந்தச் சாதனத்தில் மட்டும்',
+  wsChatGuestBody:
+    'நீங்கள் உள்நுழையவில்லை, எனவே உரையாடல்கள் இந்த உலாவியில் இருக்கும். சாதனங்களுக்கிடையே ஒத்திசைக்க எப்போதும் உள்நுழையலாம்.',
+  wsChatGuestCta: 'ஒத்திசைக்க உள்நுழைக',
+  wsChatGuestChip: 'இந்தச் சாதனத்தில்',
 
   /* -------------------------------------------------- astronomy studio (v5) */
   wsScienceTitle: 'வானியல் அரங்கம்',

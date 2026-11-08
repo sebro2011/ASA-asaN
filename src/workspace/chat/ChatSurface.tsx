@@ -158,7 +158,7 @@ function useTypewriter(text: string, enabled: boolean) {
 export default function ChatSurface() {
   const { t, i18n } = useTranslation();
   const route = useRoute();
-  const { client, user, profile } = useAuth();
+  const { client, user, profile, status: authStatus } = useAuth();
   const { providers, thinking: thinkingCatalogue } = useProviderConfig();
   const userId = user?.id ?? null;
   const conversationId = route.id ?? null;
@@ -439,6 +439,7 @@ export default function ChatSurface() {
    */
   useEffect(() => {
     if (pendingRef.current || conversationId) return;
+    if (authStatus === 'loading') return;
     if (conversations.state !== 'ready') return;
     pendingRef.current = true;
     const pending = takePrompt();
@@ -446,7 +447,7 @@ export default function ChatSurface() {
     if (pending) {
       void send(pending, isThinkingLevel(pendingLevel) ? pendingLevel : undefined);
     }
-  }, [conversationId, conversations.state, send]);
+  }, [authStatus, conversationId, conversations.state, send]);
 
   const reveal = useTypewriter(
     revealingId && lastAssistant?.id === revealingId ? lastAssistant.content : '',
@@ -457,6 +458,18 @@ export default function ChatSurface() {
   useEffect(() => {
     if (revealingId && reveal.done) setRevealingId(null);
   }, [revealingId, reveal.done]);
+
+  // The session state decides where conversations live (cloud vs. device), so
+  // the surface waits one tick rather than briefly reading the wrong store.
+  if (authStatus === 'loading') {
+    return (
+      <div className="nova-chat-shell">
+        <div className="nova-card m-auto p-5 text-[12.5px] text-ws-text-3" role="status">
+          {t('wsChatLoading')}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="nova-chat-shell">
@@ -476,6 +489,16 @@ export default function ChatSurface() {
             {t('wsChatNew')}
           </button>
         </div>
+
+        {authStatus !== 'signed-in' ? (
+          <div className="nova-chat-guest">
+            <p className="nova-chat-guest__title">{t('wsChatGuestTitle')}</p>
+            <p className="nova-chat-guest__body">{t('wsChatGuestBody')}</p>
+            <Link to="/profile" className="nova-chat-guest__cta">
+              {t('wsChatGuestCta')}
+            </Link>
+          </div>
+        ) : null}
 
         <div className="nova-chat-rail__search">
           <Search size={13} strokeWidth={1.9} aria-hidden="true" />
@@ -660,6 +683,9 @@ export default function ChatSurface() {
             <h1 className="nova-chat-head__title">
               {active ? active.title : t('wsChatNew')}
               {active?.archived ? <span className="nova-chip ml-2">{t('wsChatArchivedChip')}</span> : null}
+              {authStatus !== 'signed-in' ? (
+                <span className="nova-chip ml-2">{t('wsChatGuestChip')}</span>
+              ) : null}
             </h1>
             <p className="nova-chat-head__sub">
               <span className="nova-chat-head__dot" aria-hidden="true" />

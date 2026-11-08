@@ -137,7 +137,7 @@ function createFakeClient() {
   return client;
 }
 
-async function mountHome() {
+async function mountHome({ client } = {}) {
   const React = (await import('react')).default;
   const { act } = await import('react');
   const { createRoot } = await import('react-dom/client');
@@ -163,7 +163,7 @@ async function mountHome() {
             null,
             React.createElement(
               AuthProvider,
-              { createClient: async () => createFakeClient() },
+              { createClient: async () => (client === undefined ? createFakeClient() : client) },
               React.createElement(HomeSurface),
             ),
           ),
@@ -347,6 +347,34 @@ test('sending from Home queues the prompt and opens the chat', async () => {
     assert.equal(window.location.pathname, '/chat');
     // The orb acknowledges the hand-off rather than staying idle.
     assert.equal(document.querySelector('.nova-orb').getAttribute('data-state'), 'thinking');
+    await app.unmount();
+  } finally {
+    dom.window.close();
+  }
+});
+
+test('a signed-out visitor is not blocked from the AI surface', async () => {
+  const dom = installDom();
+  try {
+    stubFetch();
+    window.sessionStorage.clear();
+    window.localStorage.clear();
+    const app = await mountHome({ client: null });
+
+    const input = document.querySelector('#nova-home-prompt');
+    await app.act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set;
+      setter.call(input, 'Explain the Moon phases');
+      input.dispatchEvent(new window.Event('input', { bubbles: true }));
+    });
+    await app.act(async () => {
+      input.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    });
+    await settle(app.act, 60);
+
+    // No sign-in detour: the guest lands in the chat workspace with the prompt.
+    assert.equal(window.location.pathname, '/chat');
+    assert.equal(window.sessionStorage.getItem('nova_pending_prompt'), 'Explain the Moon phases');
     await app.unmount();
   } finally {
     dom.window.close();

@@ -77,6 +77,24 @@ back to a cached reference entry, the UI says so.
 
 All copy exists in English, Sinhala and Tamil (`src/i18n/workspaceCopy.ts`).
 
+## 3b. Chat without an account
+
+`/chat` is no longer wrapped in `RequireAuth`. The session state decides where a
+thread lives:
+
+| State | Storage | What the surface says |
+| --- | --- | --- |
+| Signed in | Supabase (`conversations` / `messages`, RLS) | normal, with sync badge |
+| Signed out / cloud unconfigured | localStorage (`nova_local_chat_v1`) | "This device only" + a sign-in link |
+
+- The guest store is versioned, capped (40 conversations, 800 messages) and
+  validated on read; a corrupt payload is ignored rather than repaired in place.
+- A failed device write marks the bubble "not saved" — it never pretends.
+- Signing in does **not** silently merge guest rows; the copy says threads stay
+  in this browser until you sign in, and no upload happens automatically.
+- The dashboard composer no longer detours to `/profile` for guests: a prompt is
+  queued and delivered to `/chat` exactly as it is for a signed-in reader.
+
 ## 4. UI/UX
 
 The chat surface is a modern two-pane workspace:

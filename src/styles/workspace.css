@@ -1902,3 +1902,32 @@
 .nova-thinking__option--offline.nova-thinking__option--selected {
   opacity: 0.8;
 }
+
+/* ------------------------------------------------------------- guest notice */
+
+.nova-chat-guest {
+  border-radius: 12px;
+  border: 1px dashed color-mix(in srgb, var(--color-ws-accent) 36%, transparent);
+  background: color-mix(in srgb, var(--color-ws-accent) 7%, transparent);
+  padding: 0.5rem 0.5625rem;
+}
+.nova-chat-guest__title {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: var(--color-ws-text);
+}
+.nova-chat-guest__body {
+  margin-top: 0.125rem;
+  font-size: 0.625rem;
+  line-height: 1.5;
+  color: var(--color-ws-text-3);
+}
+.nova-chat-guest__cta {
+  display: inline-block;
+  margin-top: 0.3125rem;
+  font-size: 0.65625rem;
+  font-weight: 550;
+  color: var(--color-ws-accent-ink);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}

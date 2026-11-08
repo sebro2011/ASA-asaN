@@ -478,6 +478,46 @@ test('the composer sends the chosen thinking level, and remembers it', async () 
   }
 });
 
+test('a signed-out reader can chat: threads stay on this device and survive a reload', async () => {
+  const dom = installDom();
+  try {
+    stubFetch({
+      chatResponse: {
+        body: { text: 'A guest answer.', provider: 'NOVA Local Space Engine', model: 'nasa-local-engine' },
+      },
+    });
+
+    const app = await mountChat({ client: null });
+    assert.match(app.text(), /This device only/, 'the surface says where the thread lives');
+
+    await typeInto(app.act, document.querySelector('#nova-chat-composer'), 'What is a black hole?');
+    await submit(app.act, document.querySelector('form'));
+    await settle(app.act, 300);
+
+    const stored = JSON.parse(window.localStorage.getItem('nova_local_chat_v1'));
+    assert.equal(stored.conversations.length, 1, 'one local conversation');
+    assert.equal(stored.conversations[0].title, 'What is a black hole?');
+    assert.equal(stored.messages.length, 2, 'both turns are stored on the device');
+    assert.equal(stored.messages[0].role, 'user');
+    assert.equal(stored.messages[1].role, 'assistant');
+    assert.match(app.text(), /A guest answer/);
+    assert.doesNotMatch(app.text(), /not saved/, 'a device write is a real save');
+
+    const id = stored.conversations[0].id;
+    assert.equal(window.location.pathname, `/chat/${id}`);
+
+    // A reload re-reads the same store rather than losing the thread.
+    await app.unmount();
+    const again = await mountChat({ client: null, path: `/chat/${id}` });
+    await settle(again.act, 120);
+    assert.match(again.text(), /What is a black hole/);
+    assert.match(again.text(), /A guest answer/);
+    await again.unmount();
+  } finally {
+    dom.window.close();
+  }
+});
+
 test('a provider failure shows the translated error and marks the reply unsaved', async () => {
   const dom = installDom();
   try {

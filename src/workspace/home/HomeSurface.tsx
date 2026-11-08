@@ -275,15 +275,11 @@ export default function HomeSurface() {
   }, [unavailable, thinking]);
 
   /**
-   * Hand the prompt to the chat surface. Signed-out visitors are sent to sign-in
-   * instead — the conversation would have nowhere to be stored otherwise.
+   * Hand the prompt to the chat surface. Guests are welcome: the chat keeps
+   * their thread on this device until they sign in.
    */
   const sendPrompt = useCallback(
     (text: string, level: ThinkingLevel = thinking) => {
-      if (!signedIn) {
-        navigate('/profile');
-        return;
-      }
       if (!queuePrompt(text)) return;
       queueThinking(unavailable.includes(level) ? 'auto' : level);
       setOrbState('thinking');
@@ -292,7 +288,7 @@ export default function HomeSurface() {
       resetTimer.current = window.setTimeout(() => setOrbState('idle'), 1_200);
       navigate('/chat');
     },
-    [signedIn, thinking, unavailable],
+    [thinking, unavailable],
   );
 
   const quickActions = [
