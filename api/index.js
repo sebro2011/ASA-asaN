@@ -3273,7 +3273,8 @@ function createNovaChatHandler({
 var handleNovaChatRequest = createNovaChatHandler();
 
 // server/novaDiagnostics.js
-var PROBE_TIMEOUT_MS = 12e3;
+var PROBE_TIMEOUT_MS = 2e4;
+var KEY_CHECK_TIMEOUT_MS = 6e3;
 var PROBE_COOLDOWN_MS = 1e4;
 var MAX_REASON_CHARS = 180;
 function envValue(env, key2) {
@@ -3288,6 +3289,18 @@ function redactReason(text, secrets = []) {
   out = out.replace(/Bearer\s+[A-Za-z0-9._-]+/gi, "Bearer [redacted]").replace(/sk-or-[A-Za-z0-9._-]+/gi, "[redacted]").replace(/AIza[0-9A-Za-z_-]{10,}/g, "[redacted]").replace(/\bkey=[A-Za-z0-9._-]+/gi, "key=[redacted]").replace(/\s+/g, " ").trim();
   return out.length > MAX_REASON_CHARS ? `${out.slice(0, MAX_REASON_CHARS - 1)}\u2026` : out;
 }
+var KEY_CHECKS = {
+  openrouter: (key2) => ({
+    label: "GET /api/v1/key",
+    url: "https://openrouter.ai/api/v1/key",
+    init: { method: "GET", headers: { Authorization: `Bearer ${key2}` } }
+  }),
+  gemini: (key2) => ({
+    label: "GET /v1beta/models",
+    url: "https://generativelanguage.googleapis.com/v1beta/models?pageSize=1",
+    init: { method: "GET", headers: { "x-goog-api-key": key2 } }
+  })
+};
 function probeRequest(provider, { keys, models }) {
   if (provider === "openrouter") {
     return {
@@ -3358,6 +3371,37 @@ function hostOf(url) {
     return "invalid-url";
   }
 }
+async function validateKey({ fetchImpl, provider, keys, secrets, timeoutMs, now }) {
+  const build = KEY_CHECKS[provider];
+  if (!build || !keys[provider]) return null;
+  const { label, url, init } = build(keys[provider]);
+  const started = now();
+  const controller = typeof AbortController === "function" ? new AbortController() : null;
+  const timer = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
+  try {
+    const response = await fetchImpl(url, controller ? { ...init, signal: controller.signal } : init);
+    const status = typeof response?.status === "number" ? response.status : 0;
+    return {
+      valid: status >= 200 && status < 300 ? true : status === 401 || status === 403 ? false : null,
+      httpStatus: status,
+      ms: now() - started,
+      code: codeForStatus(status),
+      check: label
+    };
+  } catch (error) {
+    const aborted = error?.name === "AbortError";
+    return {
+      valid: null,
+      httpStatus: 0,
+      ms: now() - started,
+      code: aborted ? "AI_TIMEOUT" : "UPSTREAM_NETWORK_ERROR",
+      check: label,
+      reason: redactReason(aborted ? `key check timed out after ${timeoutMs} ms` : error?.message || "network error", secrets)
+    };
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
 async function probe({ fetchImpl, provider, keys, models, secrets, timeoutMs, now }) {
   const { url, init } = probeRequest(provider, { keys, models });
   const started = now();
@@ -3403,6 +3447,7 @@ function createDiagnosticsHandler({
   fetchImpl = (...args) => globalThis.fetch(...args),
   env = typeof process !== "undefined" ? process.env : {},
   timeoutMs = PROBE_TIMEOUT_MS,
+  keyCheckTimeoutMs = KEY_CHECK_TIMEOUT_MS,
   now = Date.now
 } = {}) {
   let lastProbeAt = 0;
@@ -3456,6 +3501,25 @@ function createDiagnosticsHandler({
         entry.ms = outcome.ms;
         entry.reachable = outcome.reachable;
         if (outcome.reason) entry.reason = outcome.reason;
+        if (outcome.code === "AI_TIMEOUT" || outcome.code === "UPSTREAM_NETWORK_ERROR" || outcome.code === "PROVIDER_UNAVAILABLE") {
+          const check = await validateKey({
+            fetchImpl,
+            provider,
+            keys,
+            secrets,
+            timeoutMs: keyCheckTimeoutMs,
+            now
+          });
+          if (check) {
+            entry.keyValid = check.valid;
+            entry.keyCheck = { request: check.check, httpStatus: check.httpStatus, ms: check.ms, code: check.code };
+            if (check.reason) entry.keyCheck.reason = check.reason;
+            if (check.valid === false) {
+              entry.code = "PROVIDER_AUTH_ERROR";
+              entry.status = "error";
+            }
+          }
+        }
         return entry;
       })
     );
@@ -3481,6 +3545,8 @@ var handleNovaDiagnostics = createDiagnosticsHandler();
 import { Type as Type2 } from "@google/genai";
 var translationCache = /* @__PURE__ */ new Map();
 var apodCache = /* @__PURE__ */ new Map();
+var APOD_TODAY_TTL_MS = 15 * 6e4;
+var apodTodayCachedAt = 0;
 var FALLBACK_APODS = {
   "2026-09-30": {
     date: "2026-09-30",
@@ -3932,9 +3998,14 @@ function setupNasaRoutes(app2, ai2) {
     if (date && apodCache.has(date)) {
       return res.json({ success: true, data: apodCache.get(date), cached: true });
     }
+    if (!date && apodCache.has("today") && Date.now() - apodTodayCachedAt < APOD_TODAY_TTL_MS) {
+      return res.json({ success: true, data: apodCache.get("today"), cached: true });
+    }
     const nasaApiKey = process.env.NEXT_PUBLIC_NASA_API_KEY || process.env.NASA_API_KEY || "DEMO_KEY";
     const url = date ? `https://api.nasa.gov/planetary/apod?api_key=${nasaApiKey}&date=${date}` : `https://api.nasa.gov/planetary/apod?api_key=${nasaApiKey}`;
     let timeout;
+    let upstreamStatus = 0;
+    let failureKind = "network";
     try {
       const controller = new AbortController();
       timeout = setTimeout(() => {
@@ -3944,20 +4015,37 @@ function setupNasaRoutes(app2, ai2) {
         }
       }, 3500);
       const nasaRes = await fetch(url, { signal: controller.signal });
+      upstreamStatus = nasaRes.status;
       if (nasaRes.ok) {
         const data = await nasaRes.json();
         if (data && data.title && data.url) {
           if (date) apodCache.set(date, data);
           apodCache.set("today", data);
+          apodTodayCachedAt = Date.now();
           return res.json({ success: true, data });
         }
+        failureKind = "shape";
+      } else {
+        failureKind = nasaRes.status === 429 || nasaRes.status === 403 ? "rate-limited" : "upstream";
       }
     } catch (err) {
+      failureKind = "network";
     } finally {
       if (timeout) clearTimeout(timeout);
     }
     const fallback = FALLBACK_APODS[date] || FALLBACK_APODS[date.slice(0, 10)] || FALLBACK_APODS["2026-09-30"] || FALLBACK_APODS.default;
-    return res.json({ success: true, data: fallback, isFallback: true });
+    const usingDemoKey = nasaApiKey === "DEMO_KEY";
+    return res.json({
+      success: true,
+      data: fallback,
+      isFallback: true,
+      // Be explicit about why the live image is missing — the app never pretends
+      // the bundled reference entry is today's astronomy picture.
+      fallbackReason: failureKind,
+      upstreamStatus: upstreamStatus || void 0,
+      keySource: usingDemoKey ? "DEMO_KEY" : "configured",
+      hint: usingDemoKey ? "No NASA_API_KEY is configured, so the shared DEMO_KEY is used and rate limits are expected. Set NASA_API_KEY to restore live images." : "The configured NASA_API_KEY was rejected or the API was unreachable; the bundled reference entry is shown."
+    });
   });
   app2.get("/api/asteroids/neows", async (req, res) => {
     const nasaApiKey = process.env.NEXT_PUBLIC_NASA_API_KEY || process.env.NASA_API_KEY || "DEMO_KEY";
@@ -3966,6 +4054,8 @@ function setupNasaRoutes(app2, ai2) {
     const endDate = req.query.end_date || "";
     const url = endDate ? `https://api.nasa.gov/neo/rest/v1/feed?start_date=${encodeURIComponent(startDate)}&end_date=${encodeURIComponent(endDate)}&api_key=${nasaApiKey}` : `https://api.nasa.gov/neo/rest/v1/feed?start_date=${encodeURIComponent(startDate)}&api_key=${nasaApiKey}`;
     let timeout;
+    let upstreamStatus = 0;
+    let failureKind = "network";
     try {
       const controller = new AbortController();
       timeout = setTimeout(() => {
@@ -4124,6 +4214,8 @@ function setupNasaRoutes(app2, ai2) {
     const nasaApiKey = process.env.NEXT_PUBLIC_NASA_API_KEY || process.env.NASA_API_KEY || "DEMO_KEY";
     const url = `https://api.nasa.gov/EPIC/api/natural?api_key=${nasaApiKey}`;
     let timeout;
+    let upstreamStatus = 0;
+    let failureKind = "network";
     try {
       const controller = new AbortController();
       timeout = setTimeout(() => {
@@ -4234,6 +4326,8 @@ function setupNasaRoutes(app2, ai2) {
     const query = `select pl_name,hostname,pl_rade,pl_masse,pl_orbper,pl_eqt,sy_dist,disc_year,disc_facility from ps where default_flag=1 and pl_rade is not null order by sy_dist asc`;
     const tapUrl = `https://exoplanetarchive.ipac.caltech.edu/TAP/sync?query=${encodeURIComponent(query)}&format=json`;
     let timeout;
+    let upstreamStatus = 0;
+    let failureKind = "network";
     try {
       const controller = new AbortController();
       timeout = setTimeout(() => {
@@ -4457,6 +4551,8 @@ Explanation to translate: "${explanation}"`;
     const nasaApiKey = process.env.NEXT_PUBLIC_NASA_API_KEY || process.env.NASA_API_KEY || "DEMO_KEY";
     const url = `https://api.nasa.gov/planetary/apod?api_key=${nasaApiKey}&start_date=${startDate}&end_date=${endDate}`;
     let timeout;
+    let upstreamStatus = 0;
+    let failureKind = "network";
     try {
       const controller = new AbortController();
       timeout = setTimeout(() => {
@@ -8727,9 +8823,27 @@ ${result2.stderr}`.slice(0, 8e3)
     workspaces.delete(workspaceId);
     return { removed: true };
   };
+  const projectWritable = async () => {
+    const probe2 = join3(root, ".nova-life", ".write-probe");
+    try {
+      await mkdirp(dirname2(probe2));
+      await writeFile(probe2, "", "utf8");
+      await rm(probe2, { force: true });
+      return true;
+    } catch {
+      return false;
+    }
+  };
   const apply = async ({ files, approvalId = null, tests = null } = {}) => {
     const entries = normaliseFiles(files);
     security.require("simulation.apply", { approvalId });
+    if (!await projectWritable()) {
+      throw new LifeError(
+        "READ_ONLY_FILESYSTEM",
+        "This deployment mounts the project read-only, so a simulated change cannot be applied here. Run the engine where the workspace is writable.",
+        { status: 409 }
+      );
+    }
     const changeSetId = randomId("changeset");
     const backupDir = join3(root, ".nova-life", "backups", changeSetId);
     const applied = [];

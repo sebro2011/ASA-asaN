@@ -6,7 +6,7 @@
  * Run: node --import tsx --test --test-force-exit scripts/test-life-orchestration.mjs
  */
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync } from 'node:fs';
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
@@ -324,6 +324,34 @@ test('candidate discovery only proposes skills from verified experience', async 
     assert.equal(candidates[0].existingSkillId, null);
   } finally {
     life.close();
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('apply refuses a read-only workspace instead of throwing a filesystem error', async () => {
+  const root = project();
+  const life = engine(root);
+  try {
+    life.security.setGrant('simulation.apply', true);
+    const approval = life.security.decide({ subjectType: 'simulation', subjectId: 'ro-1', decision: 'approved' });
+
+    // A serverless deployment mounts the project read-only; the engine must say
+    // so plainly rather than surfacing EACCES/EROFS from deep inside the write.
+    chmodSync(root, 0o500);
+    try {
+      await assert.rejects(
+        () => life.simulation.apply({ files: [{ path: 'src/app.ts', next: 'export const answer = 43;\n' }], approvalId: approval.id }),
+        (error) => error.code === 'READ_ONLY_FILESYSTEM',
+      );
+    } finally {
+      chmodSync(root, 0o700);
+    }
+    // Preview still works (it only reads), and nothing was written.
+    const preview = await life.simulation.preview({ files: [{ path: 'src/app.ts', next: 'export const answer = 43;\n' }] });
+    assert.equal(preview.files[0].existed, true);
+    assert.match(readFileSync(join(root, 'src/app.ts'), 'utf8'), /answer = 42/);
+  } finally {
+    life.store.close();
     rmSync(root, { recursive: true, force: true });
   }
 });

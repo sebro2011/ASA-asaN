@@ -440,6 +440,8 @@ const en: Copy = {
   wsAiProbeNotConfigured: 'Not configured',
   wsAiProbeNotConfiguredDetail: 'No API key on this deployment, so NOVA cannot use it.',
   wsAiProbeFailed: 'The status check itself failed — the server did not answer.',
+  wsAiKeyValid: 'API key is valid — the model itself did not answer in time.',
+  wsAiKeyRejected: 'API key rejected by the provider.',
   wsAiProbeCheckedAt: 'Checked',
 
   /* ---------------------------------------------------------------- search */
@@ -1127,6 +1129,8 @@ const si: Copy = {
   wsAiProbeNotConfigured: 'Configure කරලා නෑ',
   wsAiProbeNotConfiguredDetail: 'මේ deployment එකේ API key එකක් නෑ, ඒ නිසා NOVA ට එය පාවිච්චි කරන්න බෑ.',
   wsAiProbeFailed: 'පරීක්ෂාවම අසාර්ථක වුණා — සර්වර් එක පිළිතුරු දුන්නේ නෑ.',
+  wsAiKeyValid: 'API යතුර වලංගුයි — මොඩලය විනාඩියක් තුළ පිළිතුරු දුන්නේ නෑ.',
+  wsAiKeyRejected: 'සැපයුම්කරු API යතුර ප්‍රතික්ෂේප කළා.',
   wsAiProbeCheckedAt: 'පරීක්ෂා කළේ',
 
   /* ---------------------------------------------------------------- search */
@@ -1815,6 +1819,8 @@ const ta: Copy = {
   wsAiProbeNotConfigured: 'அமைக்கப்படவில்லை',
   wsAiProbeNotConfiguredDetail: 'இந்த deployment இல் API key இல்லை, எனவே NOVA அதைப் பயன்படுத்த முடியாது.',
   wsAiProbeFailed: 'சரிபார்ப்பே தோல்வியடைந்தது — சேவையகம் பதிலளிக்கவில்லை.',
+  wsAiKeyValid: 'API விசை செல்லுபடியாகும் — மாதிரியே நேரத்தில் பதிலளிக்கவில்லை.',
+  wsAiKeyRejected: 'வழங்குநர் API விசையை நிராகரித்தார்.',
   wsAiProbeCheckedAt: 'சரிபார்த்தது',
 
   /* ---------------------------------------------------------------- search */

@@ -132,10 +132,30 @@ export function createSimulationService({
     return { removed: true };
   };
 
+  /** True when the project directory accepts writes (serverless mounts it read-only). */
+  const projectWritable = async () => {
+    const probe = join(root, '.nova-life', '.write-probe');
+    try {
+      await mkdirp(dirname(probe));
+      await writeFile(probe, '', 'utf8');
+      await rm(probe, { force: true });
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
   /** Apply a change set to the real project. Requires an approval record. */
   const apply = async ({ files, approvalId = null, tests = null } = {}) => {
     const entries = normaliseFiles(files);
     security.require('simulation.apply', { approvalId });
+    if (!(await projectWritable())) {
+      throw new LifeError(
+        'READ_ONLY_FILESYSTEM',
+        'This deployment mounts the project read-only, so a simulated change cannot be applied here. Run the engine where the workspace is writable.',
+        { status: 409 },
+      );
+    }
     const changeSetId = randomId('changeset');
     const backupDir = join(root, '.nova-life', 'backups', changeSetId);
     const applied = [];

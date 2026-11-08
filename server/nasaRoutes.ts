@@ -13,6 +13,13 @@ export const translationCache = new Map<string, { title: string; explanation: st
 // In-memory APOD cache: date -> ApodData
 export const apodCache = new Map<string, any>();
 
+// APOD's "today" entry is served from memory for a short window. Without this the
+// route called NASA on every page load, which is what exhausts the shared
+// DEMO_KEY rate limit (30 requests/hour per IP) and pushes the app onto the
+// bundled fallback image.
+export const APOD_TODAY_TTL_MS = 15 * 60_000;
+let apodTodayCachedAt = 0;
+
 // Pre-seeded fallback APOD items for reliability in case NASA API rate limits
 export const FALLBACK_APODS: Record<string, any> = {
   '2026-09-30': {
@@ -512,6 +519,9 @@ export function setupNasaRoutes(app: any, ai: GoogleGenAI) {
     if (date && apodCache.has(date)) {
       return res.json({ success: true, data: apodCache.get(date), cached: true });
     }
+    if (!date && apodCache.has('today') && Date.now() - apodTodayCachedAt < APOD_TODAY_TTL_MS) {
+      return res.json({ success: true, data: apodCache.get('today'), cached: true });
+    }
 
     const nasaApiKey = process.env.NEXT_PUBLIC_NASA_API_KEY || process.env.NASA_API_KEY || 'DEMO_KEY';
     const url = date
@@ -519,6 +529,8 @@ export function setupNasaRoutes(app: any, ai: GoogleGenAI) {
       : `https://api.nasa.gov/planetary/apod?api_key=${nasaApiKey}`;
 
     let timeout: any;
+    let upstreamStatus = 0;
+    let failureKind: 'network' | 'rate-limited' | 'upstream' | 'shape' = 'network';
     try {
       const controller = new AbortController();
       // Fast 3.5s timeout for high responsiveness
@@ -526,17 +538,25 @@ export function setupNasaRoutes(app: any, ai: GoogleGenAI) {
         try { controller.abort(new DOMException('Request timeout', 'AbortError')); } catch (_) {}
       }, 3500);
       const nasaRes = await fetch(url, { signal: controller.signal });
+      upstreamStatus = nasaRes.status;
 
       if (nasaRes.ok) {
         const data = await nasaRes.json();
         if (data && data.title && data.url) {
           if (date) apodCache.set(date, data);
           apodCache.set('today', data);
+          apodTodayCachedAt = Date.now();
           return res.json({ success: true, data });
         }
+        failureKind = 'shape';
+      } else {
+        // 429/403 are what a shared DEMO_KEY hits first; say so instead of
+        // reporting a generic outage.
+        failureKind = nasaRes.status === 429 || nasaRes.status === 403 ? 'rate-limited' : 'upstream';
       }
     } catch (err: any) {
       // Gracefully handle network timeouts or DEMO_KEY rate limits without noisy warnings
+      failureKind = 'network';
     } finally {
       if (timeout) clearTimeout(timeout);
     }
@@ -545,7 +565,20 @@ export function setupNasaRoutes(app: any, ai: GoogleGenAI) {
     // write it to the cache: caching a placeholder would make a later genuine
     // request look like a successful network read.
     const fallback = FALLBACK_APODS[date] || FALLBACK_APODS[date.slice(0, 10)] || FALLBACK_APODS['2026-09-30'] || FALLBACK_APODS.default;
-    return res.json({ success: true, data: fallback, isFallback: true });
+    const usingDemoKey = nasaApiKey === 'DEMO_KEY';
+    return res.json({
+      success: true,
+      data: fallback,
+      isFallback: true,
+      // Be explicit about why the live image is missing — the app never pretends
+      // the bundled reference entry is today's astronomy picture.
+      fallbackReason: failureKind,
+      upstreamStatus: upstreamStatus || undefined,
+      keySource: usingDemoKey ? 'DEMO_KEY' : 'configured',
+      hint: usingDemoKey
+        ? 'No NASA_API_KEY is configured, so the shared DEMO_KEY is used and rate limits are expected. Set NASA_API_KEY to restore live images.'
+        : 'The configured NASA_API_KEY was rejected or the API was unreachable; the bundled reference entry is shown.',
+    });
   });
 
   // ====================================================
@@ -561,6 +594,8 @@ export function setupNasaRoutes(app: any, ai: GoogleGenAI) {
       : `https://api.nasa.gov/neo/rest/v1/feed?start_date=${encodeURIComponent(startDate)}&api_key=${nasaApiKey}`;
 
     let timeout: any;
+    let upstreamStatus = 0;
+    let failureKind: 'network' | 'rate-limited' | 'upstream' | 'shape' = 'network';
     try {
       const controller = new AbortController();
       timeout = setTimeout(() => {
@@ -726,6 +761,8 @@ export function setupNasaRoutes(app: any, ai: GoogleGenAI) {
     const url = `https://api.nasa.gov/EPIC/api/natural?api_key=${nasaApiKey}`;
 
     let timeout: any;
+    let upstreamStatus = 0;
+    let failureKind: 'network' | 'rate-limited' | 'upstream' | 'shape' = 'network';
     try {
       const controller = new AbortController();
       timeout = setTimeout(() => {
@@ -845,6 +882,8 @@ export function setupNasaRoutes(app: any, ai: GoogleGenAI) {
     const tapUrl = `https://exoplanetarchive.ipac.caltech.edu/TAP/sync?query=${encodeURIComponent(query)}&format=json`;
 
     let timeout: any;
+    let upstreamStatus = 0;
+    let failureKind: 'network' | 'rate-limited' | 'upstream' | 'shape' = 'network';
     try {
       const controller = new AbortController();
       timeout = setTimeout(() => {
@@ -1107,6 +1146,8 @@ Explanation to translate: "${explanation}"`;
     const url = `https://api.nasa.gov/planetary/apod?api_key=${nasaApiKey}&start_date=${startDate}&end_date=${endDate}`;
 
     let timeout: any;
+    let upstreamStatus = 0;
+    let failureKind: 'network' | 'rate-limited' | 'upstream' | 'shape' = 'network';
     try {
       const controller = new AbortController();
       timeout = setTimeout(() => {

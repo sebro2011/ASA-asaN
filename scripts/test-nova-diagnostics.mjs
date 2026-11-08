@@ -123,10 +123,72 @@ test('network failures and timeouts are named, not swallowed', async () => {
     fetchImpl: fetchStub({ hang: true }).impl,
     env: envWith(),
     timeoutMs: 20,
+    keyCheckTimeoutMs: 20,
     now: () => Date.now(),
   });
   const slow = await timedOut({ probe: true });
   assert.equal(slow.providers.gemini.code, 'AI_TIMEOUT');
+});
+
+/** A stub that answers metadata calls and can hang the generation call. */
+function keyCheckStub({ keyStatus = 200, generation = 'ok' } = {}) {
+  const calls = [];
+  const impl = async (url, init) => {
+    calls.push({ url, method: init?.method || 'GET' });
+    // The generation call POSTs to `/v1beta/models/<model>:generateContent`; the
+    // key check is the GET variant, so method is what tells them apart.
+    const method = (init?.method || 'GET').toUpperCase();
+    const isKeyCheck = (method === 'GET' && url.includes('/v1beta/models')) || url.endsWith('/api/v1/key');
+    if (isKeyCheck) {
+      return { status: keyStatus, ok: keyStatus < 300, text: async () => '{}', json: async () => ({}) };
+    }
+    if (generation === 'hang') {
+      return new Promise((_, reject) => {
+        init?.signal?.addEventListener('abort', () => {
+          const error = new Error('aborted');
+          error.name = 'AbortError';
+          reject(error);
+        });
+      });
+    }
+    return { status: 200, ok: true, text: async () => '{}', json: async () => ({}) };
+  };
+  return { impl, calls };
+}
+
+test('a timed-out generation is explained by a token-free key check', async () => {
+  const { impl, calls } = keyCheckStub({ keyStatus: 200, generation: 'hang' });
+  const handler = createDiagnosticsHandler({
+    fetchImpl: impl,
+    env: envWith(),
+    timeoutMs: 20,
+    keyCheckTimeoutMs: 200,
+    now: () => Date.now(),
+  });
+  const report = await handler({ probe: true });
+
+  const gemini = report.providers.gemini;
+  assert.equal(gemini.code, 'AI_TIMEOUT', 'the generation probe still reports the timeout');
+  assert.equal(gemini.keyValid, true, 'the key itself is valid');
+  assert.equal(gemini.keyCheck.request, 'GET /v1beta/models');
+  assert.equal(gemini.keyCheck.httpStatus, 200);
+  assert.ok(calls.some((call) => call.url.includes('/v1beta/models')), 'the metadata call was made');
+});
+
+test('a rejected key is reported as an auth error, not as a timeout', async () => {
+  const { impl } = keyCheckStub({ keyStatus: 403, generation: 'hang' });
+  const handler = createDiagnosticsHandler({
+    fetchImpl: impl,
+    env: envWith(),
+    timeoutMs: 20,
+    keyCheckTimeoutMs: 200,
+    now: () => Date.now(),
+  });
+  const report = await handler({ probe: true });
+
+  assert.equal(report.providers.gemini.keyValid, false);
+  assert.equal(report.providers.gemini.code, 'PROVIDER_AUTH_ERROR');
+  assert.equal(report.providers.gemini.keyCheck.httpStatus, 403);
 });
 
 test('no key fragment can appear anywhere in the report', async () => {

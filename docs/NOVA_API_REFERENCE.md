@@ -113,7 +113,7 @@ Selection prefers the smallest configured local model that satisfies the request
 | POST | `/simulation/preview` | `{ files: [{ path, next }] }` | `{ dryRun: true, applied: false, files: [{ path, existed, beforeBytes, afterBytes, added, removed, diff }], totals, note }` — writes nothing |
 | POST | `/simulation/workspace` | `{ files, copyProject? }` | `{ id, path, files[], copied }` |
 | POST | `/simulation/run-tests` | `{ workspaceId, script, approvalId? }` | `{ workspaceId, script, exitCode, passed, durationMs, output }` |
-| POST | `/simulation/apply` | `{ files, approvalId, tests? }` | `{ changeSetId, applied[], backupDir, tests }`; 403 `APPROVAL_REQUIRED` |
+| POST | `/simulation/apply` | `{ files, approvalId, tests? }` | `{ changeSetId, applied[], backupDir, tests }`; 403 `APPROVAL_REQUIRED`; 409 `READ_ONLY_FILESYSTEM` when the workspace cannot be written (serverless) |
 | POST | `/simulation/rollback` | `{ changeSetId }` | `{ restored[] }` |
 
 Limits: 20 files, 400 KB per changeset; simulation scripts are limited to
