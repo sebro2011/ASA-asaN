@@ -5,6 +5,7 @@ import { interfaceCopy } from './i18n/interfaceCopy';
 import { pageCopy } from './i18n/pageCopy';
 import { spaceShortsCopy } from './i18n/spaceShorts';
 import { workspaceCopy } from './i18n/workspaceCopy';
+import { hypothesisForgeCopy } from './i18n/hypothesisForge';
 
 export const resources = {
   en: {
@@ -426,6 +427,8 @@ export const resources = {
     Object.assign(bucket, spaceShortsCopy[lang]);
     // NOVA workspace shell / home / planned-module copy (Phase 3A).
     Object.assign(bucket, workspaceCopy[lang]);
+    // NOVA Hypothesis Forge interface copy (scientific investigation mode).
+    Object.assign(bucket, hypothesisForgeCopy[lang]);
   }
 });
 

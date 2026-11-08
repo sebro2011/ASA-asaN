@@ -1,5 +1,5 @@
 // server.ts
-import express3 from "express";
+import express4 from "express";
 import dotenv from "dotenv";
 import path from "path";
 import fs from "fs";
@@ -131,14 +131,33 @@ function describeCoverage(domain) {
 }
 
 // src/lib/earth/gibsCatalog.ts
+var GIBS_ATTRIBUTION = "NASA EOSDIS Global Imagery Browse Services (GIBS) \u2014 Worldview imagery. Imagery is provided by NASA and is not validated for operational use.";
 var GIBS_WMTS_BASE = "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best";
+var GIBS_WMS_BASE = "https://gibs.earthdata.nasa.gov/wms/epsg3857/best/wms.cgi";
 var WMTS_URL_TEMPLATE = `${GIBS_WMTS_BASE}/{layer}/default/{date}/{tileMatrixSet}/{z}/{y}/{x}.{ext}`;
-function wmtsTileUrl(layer2, date, tileMatrixSet, format, z, y, x) {
-  return WMTS_URL_TEMPLATE.replace("{layer}", layer2.id).replace("{date}", date).replace("{tileMatrixSet}", tileMatrixSet).replace("{ext}", format).replace("{z}", String(z)).replace("{y}", String(y)).replace("{x}", String(x));
+function wmtsTileUrl(layer2, date, tileMatrixSet, format2, z, y, x) {
+  return WMTS_URL_TEMPLATE.replace("{layer}", layer2.id).replace("{date}", date).replace("{tileMatrixSet}", tileMatrixSet).replace("{ext}", format2).replace("{z}", String(z)).replace("{y}", String(y)).replace("{x}", String(x));
 }
 function describeDomainsUrl(layer2) {
   const tms = layer2.tileMatrixSet || "GoogleMapsCompatible_Level9";
   return `${GIBS_WMTS_BASE}/1.0.0/${layer2.id}/default/${tms}/all/all.xml`;
+}
+function wmsGetMapUrl({ layer: layer2, time, bbox3857, width, height, transparent = true }) {
+  const params = new URLSearchParams({
+    SERVICE: "WMS",
+    REQUEST: "GetMap",
+    VERSION: "1.3.0",
+    LAYERS: layer2.id,
+    STYLES: "",
+    FORMAT: layer2.format === "jpg" && !transparent ? "image/jpeg" : "image/png",
+    TRANSPARENT: transparent ? "true" : "false",
+    CRS: "EPSG:3857",
+    BBOX: bbox3857.map((value) => value.toFixed(2)).join(","),
+    WIDTH: String(width),
+    HEIGHT: String(height)
+  });
+  if (time) params.set("TIME", time);
+  return `${GIBS_WMS_BASE}?${params.toString()}`;
 }
 var VERIFIED_ON = "2026-10-11";
 function layer(input) {
@@ -493,6 +512,7 @@ var TTL = {
 
 // src/lib/earth/power.ts
 var POWER_MONTHLY_POINT_URL = "https://power.larc.nasa.gov/api/temporal/monthly/point";
+var POWER_FILL_VALUE_THRESHOLD = -900;
 var POWER_PARAMETERS = [
   {
     code: "T2M",
@@ -552,6 +572,72 @@ var POWER_PARAMETERS = [
   }
 ];
 var CORE_PARAMETER_CODES = POWER_PARAMETERS.filter((p) => p.core).map((p) => p.code);
+var EARLIEST_POWER_YEAR = 1981;
+function clampYear(year) {
+  const current = (/* @__PURE__ */ new Date()).getFullYear();
+  if (year < EARLIEST_POWER_YEAR) return EARLIEST_POWER_YEAR;
+  if (year > current) return current;
+  return year;
+}
+function buildPowerUrl(latitude, longitude, parameters, startYear, endYear) {
+  const params = new URLSearchParams({
+    parameters: parameters.join(","),
+    community: "RE",
+    longitude: longitude.toFixed(4),
+    latitude: latitude.toFixed(4),
+    start: String(clampYear(startYear)),
+    end: String(clampYear(endYear)),
+    format: "JSON"
+  });
+  return `${POWER_MONTHLY_POINT_URL}?${params.toString()}`;
+}
+function parseParameter(raw) {
+  const byMonth = /* @__PURE__ */ new Map();
+  if (!raw || typeof raw !== "object") return byMonth;
+  for (const [key2, value] of Object.entries(raw)) {
+    const match = /^(\d{4})(0[1-9]|1[0-2])$/.exec(key2);
+    if (!match) continue;
+    const num = Number(value);
+    if (!Number.isFinite(num) || num <= POWER_FILL_VALUE_THRESHOLD) continue;
+    byMonth.set(key2, num);
+  }
+  return byMonth;
+}
+function parsePowerResponse(payload, requested) {
+  const root = payload || {};
+  const parameterBlock = root?.properties?.parameter || {};
+  const header = root?.header || {};
+  const parsed = /* @__PURE__ */ new Map();
+  for (const code of requested) {
+    const months2 = parseParameter(parameterBlock[code]);
+    if (months2.size) parsed.set(code, months2);
+  }
+  const available = requested.filter((code) => parsed.has(code));
+  const unavailable2 = requested.filter((code) => !parsed.has(code));
+  const months = /* @__PURE__ */ new Set();
+  parsed.forEach((byMonth) => byMonth.forEach((_value, key2) => months.add(key2)));
+  const rows = [...months].sort().map((key2) => {
+    const year = Number(key2.slice(0, 4));
+    const month = Number(key2.slice(4, 6));
+    const values2 = {};
+    for (const code of requested) {
+      const raw = parsed.get(code)?.get(key2);
+      values2[code] = typeof raw === "number" ? Number(raw.toFixed(3)) : null;
+    }
+    return { date: `${key2.slice(0, 4)}-${key2.slice(4, 6)}`, year, month, values: values2 };
+  });
+  const coordinates = root?.geometry?.coordinates;
+  const elevation = Array.isArray(coordinates) && coordinates.length > 2 && Number.isFinite(Number(coordinates[2])) ? Number(coordinates[2]) : null;
+  return {
+    rows,
+    available,
+    unavailable: unavailable2,
+    elevationMeters: elevation,
+    serviceTitle: header?.title ? String(header.title) : void 0,
+    serviceVersion: header?.version ? String(header.version) : void 0,
+    cellCoordinates: Array.isArray(coordinates) && coordinates.length >= 2 ? [Number(coordinates[0]), Number(coordinates[1])] : void 0
+  };
+}
 
 // server/earthIntelligence.ts
 var earthRouter = express.Router();
@@ -778,9 +864,9 @@ earthRouter.get("/gibs/probe", rateLimit("gibs-probe", 240, 6e4), async (req, re
   }
   const known = getGibsLayer(layerId);
   const tileMatrixSet = String(req.query.tileMatrixSet || known?.tileMatrixSet || "GoogleMapsCompatible_Level9");
-  const format = String(req.query.format || known?.format || "jpg") === "png" ? "png" : "jpg";
-  const url = known ? wmtsTileUrl(known, date, tileMatrixSet, format, 1, 1, 1) : `${GIBS_WMTS_BASE}/${layerId}/default/${date}/${tileMatrixSet}/1/1/1.${format}`;
-  const cacheKey = `probe:${layerId}:${tileMatrixSet}:${format}:${date}`;
+  const format2 = String(req.query.format || known?.format || "jpg") === "png" ? "png" : "jpg";
+  const url = known ? wmtsTileUrl(known, date, tileMatrixSet, format2, 1, 1, 1) : `${GIBS_WMTS_BASE}/${layerId}/default/${date}/${tileMatrixSet}/1/1/1.${format2}`;
+  const cacheKey = `probe:${layerId}:${tileMatrixSet}:${format2}:${date}`;
   const cached2 = cacheGet2(cacheKey);
   if (cached2) return res.json({ ...cached2, fromCache: true });
   try {
@@ -792,7 +878,7 @@ earthRouter.get("/gibs/probe", rateLimit("gibs-probe", 240, 6e4), async (req, re
       layerId,
       date,
       tileMatrixSet,
-      format,
+      format: format2,
       status: response.status,
       contentType,
       bytes: Number(response.headers.get("content-length") || 0) || null,
@@ -1605,8 +1691,8 @@ function youtubeIdFromUrl(input) {
     id = match?.[1] ?? null;
   } else if (["youtube.com", "www.youtube.com", "m.youtube.com"].includes(url.hostname)) {
     if (url.pathname === "/watch") {
-      const values = url.searchParams.getAll("v");
-      id = values.length === 1 ? values[0] : null;
+      const values2 = url.searchParams.getAll("v");
+      id = values2.length === 1 ? values2[0] : null;
     } else {
       const match = /^\/shorts\/([A-Za-z0-9_-]{11})\/?$/.exec(url.pathname);
       id = match?.[1] ?? null;
@@ -5151,8 +5237,4889 @@ function createSpaceNewsRouter() {
 }
 var spaceNewsRouter = createSpaceNewsRouter();
 
-// server/life/router.js
+// server/forgeRoutes.ts
 import express2 from "express";
+
+// src/lib/forge/types.ts
+var FORGE_MODEL_VERSION = "forge/1";
+
+// src/lib/forge/vocab.ts
+var VARIABLES = [
+  {
+    id: "kp",
+    unit: "Kp (dimensionless, 0\u20139)",
+    datasetId: "noaa-swpc-kp",
+    englishLabel: "Planetary K index (Kp)",
+    kind: "space-weather",
+    notes: "Planetary 3-hour geomagnetic index derived from ground magnetometer observatories. Kp is a quasi-logarithmic index, not a physical field strength."
+  },
+  {
+    id: "solar_wind_speed",
+    unit: "km/s",
+    datasetId: "noaa-swpc-solar-wind",
+    englishLabel: "Solar wind speed",
+    kind: "space-weather",
+    notes: "Bulk proton speed measured near the Sun\u2013Earth L1 point (DSCOVR/ACE)."
+  },
+  {
+    id: "bz_gsm",
+    unit: "nT",
+    datasetId: "noaa-swpc-solar-wind",
+    englishLabel: "Interplanetary magnetic field Bz (GSM)",
+    kind: "space-weather",
+    notes: "North\u2013south component of the interplanetary magnetic field in GSM coordinates. Sustained negative Bz favours magnetic reconnection at the dayside magnetopause."
+  },
+  {
+    id: "bt",
+    unit: "nT",
+    datasetId: "noaa-swpc-solar-wind",
+    englishLabel: "Interplanetary magnetic field magnitude (Bt)",
+    kind: "space-weather",
+    notes: "Total field strength at L1."
+  },
+  {
+    id: "proton_density",
+    unit: "p/cm\xB3",
+    datasetId: "noaa-swpc-solar-wind",
+    englishLabel: "Solar wind proton density",
+    kind: "space-weather",
+    notes: "Proton number density at L1."
+  },
+  {
+    id: "cme_speed",
+    unit: "km/s",
+    datasetId: "nasa-donki",
+    englishLabel: "CME linear speed (model fit)",
+    kind: "space-weather",
+    notes: "Speed from DONKI CME analysis. It is a model fit to coronagraph imagery, not an in-situ measurement."
+  },
+  {
+    id: "temperature",
+    unit: "\xB0C",
+    datasetId: "nasa-power",
+    englishLabel: "Air temperature at 2 m",
+    kind: "earth-climate",
+    notes: "POWER monthly mean for the grid cell containing the study point."
+  },
+  {
+    id: "precipitation",
+    unit: "mm/day",
+    datasetId: "nasa-power",
+    englishLabel: "Precipitation rate",
+    kind: "earth-climate",
+    notes: "POWER bias-corrected precipitation rate (monthly mean of daily rate)."
+  },
+  {
+    id: "asteroid_miss_distance",
+    unit: "au",
+    datasetId: "nasa-neows",
+    englishLabel: "Close-approach miss distance",
+    kind: "planetary",
+    notes: "Nominal close-approach distance from NeoWs."
+  },
+  {
+    id: "asteroid_diameter",
+    unit: "km",
+    datasetId: "nasa-neows",
+    englishLabel: "Estimated asteroid diameter",
+    kind: "planetary",
+    notes: "NeoWs diameter range is an estimate derived from absolute magnitude and an assumed albedo."
+  },
+  {
+    id: "orbital_altitude",
+    unit: "km",
+    datasetId: "nova-iss-tle",
+    englishLabel: "ISS orbital altitude",
+    kind: "orbital",
+    notes: "Derived from the publicly published TLE used by the existing ISS tracker."
+  }
+];
+function variableMeta(id) {
+  return VARIABLES.find((entry) => entry.id === id);
+}
+var DATASETS = [
+  {
+    id: "noaa-swpc-kp",
+    organisation: "NOAA",
+    programme: "SWPC \u2014 Planetary K index",
+    title: "NOAA SWPC planetary K index (3-hour)",
+    description: "The official NOAA Space Weather Prediction Center planetary K index product: one Kp value per 3-hour interval, derived from a network of ground magnetometers.",
+    documentationUrl: "https://www.swpc.noaa.gov/products/planetary-k-index",
+    endpoint: "https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json",
+    access: "open",
+    coverage: {
+      kind: "rolling",
+      rollingDays: 30,
+      description: "The JSON product is a rolling window (up to ~30 days). It is not a historical archive."
+    },
+    cadence: "3 hours",
+    variables: [
+      { id: "kp", label: "Planetary K index", unit: "Kp" }
+    ],
+    domains: ["space-weather"],
+    limitations: [
+      "Kp is a global index: it cannot localise a disturbance to a country or a city.",
+      "Kp saturates at 9; the largest storms are indistinguishable in Kp alone.",
+      "The rolling window means historical events require a different archive (e.g. GFZ Potsdam), which this project does not integrate."
+    ],
+    attribution: "NOAA Space Weather Prediction Center (SWPC), planetary K index product.",
+    keyRequired: false
+  },
+  {
+    id: "noaa-swpc-solar-wind",
+    organisation: "NOAA",
+    programme: "SWPC \u2014 Real-time solar wind",
+    title: "NOAA SWPC real-time solar wind (L1 magnetometer + plasma)",
+    description: "In-situ interplanetary magnetic field and solar wind plasma measurements from the L1 monitor, published by NOAA SWPC as one-day JSON tables.",
+    documentationUrl: "https://www.swpc.noaa.gov/products/real-time-solar-wind",
+    endpoint: "https://services.swpc.noaa.gov/products/solar-wind/mag-1-day.json",
+    access: "open",
+    coverage: {
+      kind: "rolling",
+      rollingDays: 1,
+      description: "One-day (and two-hour) JSON tables only. There is no historical archive on this endpoint."
+    },
+    cadence: "1 minute (published as a one-day table)",
+    variables: [
+      { id: "bz_gsm", label: "IMF Bz (GSM)", unit: "nT" },
+      { id: "bt", label: "IMF magnitude", unit: "nT" },
+      { id: "solar_wind_speed", label: "Proton speed", unit: "km/s" },
+      { id: "proton_density", label: "Proton density", unit: "p/cm\xB3" }
+    ],
+    domains: ["space-weather"],
+    limitations: [
+      "L1 measurements are a single point upstream of Earth, not a global field map.",
+      "The one-day window is far shorter than a geomagnetic storm sequence.",
+      "Rows flagged by the source as fill values are preserved as missing, never interpolated into the analysis."
+    ],
+    attribution: "NOAA SWPC real-time solar wind (DSCOVR/ACE) products.",
+    keyRequired: false
+  },
+  {
+    id: "nasa-donki",
+    organisation: "NASA",
+    programme: "CCMC \u2014 DONKI",
+    title: "NASA DONKI space-weather notifications and CME catalogue",
+    description: "The Database Of Notifications, Knowledge, Information: human-curated and automated space-weather notifications plus the CME catalogue with modelled speeds.",
+    documentationUrl: "https://ccmc.gsfc.nasa.gov/tools/DONKI/",
+    endpoint: "https://api.nasa.gov/DONKI/notifications",
+    access: "api-key",
+    coverage: {
+      kind: "archive",
+      earliest: "2008-01-01",
+      description: "DONKI events are available from roughly 2008 onwards. Pre-2008 events are not in the service."
+    },
+    cadence: "event-based",
+    variables: [
+      { id: "cme_speed", label: "CME speed (model fit)", unit: "km/s" }
+    ],
+    domains: ["space-weather"],
+    limitations: [
+      "Notifications are curated text summaries, not measurements.",
+      "CME speeds are model fits to coronagraph imagery with substantial uncertainty.",
+      "Requires a NASA API key on the server; DEMO_KEY exists but is heavily rate-limited."
+    ],
+    attribution: "NASA Community Coordinated Modeling Center, DONKI.",
+    keyRequired: false
+  },
+  {
+    id: "nasa-power",
+    organisation: "NASA",
+    programme: "POWER \u2014 Prediction Of Worldwide Energy Resources",
+    title: "NASA POWER monthly environmental archive",
+    description: "Satellite/re-analysis derived monthly climate estimates for the grid cell containing a requested point (1981 to near-present). Already used by the Earth Intelligence Lab.",
+    documentationUrl: "https://power.larc.nasa.gov/docs/services/api/temporal/monthly/",
+    endpoint: "https://power.larc.nasa.gov/api/temporal/monthly/point",
+    access: "open",
+    coverage: {
+      kind: "archive",
+      earliest: "1981-01-01",
+      description: "1981 to near-present at monthly resolution. This is a re-analysis product, not station data."
+    },
+    cadence: "1 month",
+    variables: [
+      { id: "temperature", label: "Air temperature at 2 m", unit: "\xB0C" },
+      { id: "precipitation", label: "Precipitation rate", unit: "mm/day" }
+    ],
+    domains: ["earth-environment"],
+    limitations: [
+      "Monthly means cannot resolve individual storms or daily events.",
+      "Values are grid-cell estimates, not local station measurements.",
+      "A monthly series is strongly autocorrelated, which inflates naive significance tests."
+    ],
+    attribution: "NASA POWER (NASA Langley Research Center).",
+    keyRequired: false
+  },
+  {
+    id: "nasa-neows",
+    organisation: "NASA",
+    programme: "Planetary Defense \u2014 NeoWs",
+    title: "NASA NeoWs near-Earth object close approaches",
+    description: "Near-Earth object close-approach feed with estimated diameters and miss distances for a requested 7-day window.",
+    documentationUrl: "https://api.nasa.gov/",
+    endpoint: "https://api.nasa.gov/neo/rest/v1/feed",
+    access: "api-key",
+    coverage: {
+      kind: "archive",
+      earliest: "1900-01-01",
+      description: "The feed accepts at most a 7-day window per request and is not a complete impact-risk assessment."
+    },
+    cadence: "per close approach",
+    variables: [
+      { id: "asteroid_miss_distance", label: "Miss distance", unit: "au" },
+      { id: "asteroid_diameter", label: "Estimated diameter", unit: "km" }
+    ],
+    domains: ["near-earth-objects"],
+    limitations: [
+      "Only objects that were detected are listed \u2014 a strong selection effect.",
+      "Diameters are estimated from brightness and assumed albedo.",
+      "A close approach is not an impact risk; orbital solutions carry uncertainty."
+    ],
+    attribution: "NASA JPL Near Earth Object Web Service (NeoWs).",
+    keyRequired: false
+  },
+  {
+    id: "nasa-gibs",
+    organisation: "NASA",
+    programme: "EOSDIS \u2014 GIBS",
+    title: "NASA GIBS satellite imagery",
+    description: "Global Imagery Browse Services provides map tiles of satellite imagery for specific layers and dates. Used here for context imagery, not for measurement.",
+    documentationUrl: "https://nasa-gibs.github.io/gibs-api-docs/",
+    endpoint: "https://gibs.earthdata.nasa.gov/wms/epsg3857/best/wms.cgi",
+    access: "open",
+    coverage: {
+      kind: "archive",
+      earliest: "2000-02-24",
+      description: "Layer-dependent observation dates, validated by the existing Earth Lab catalogue."
+    },
+    cadence: "daily (layer dependent)",
+    variables: [],
+    domains: ["earth-environment", "space-weather", "planetary-imagery"],
+    limitations: [
+      "Imagery is visual context only; no quantitative value is extracted from a tile here.",
+      "Availability has gaps that the existing catalogue refuses to paper over."
+    ],
+    attribution: "NASA EOSDIS Global Imagery Browse Services (GIBS).",
+    keyRequired: false
+  },
+  {
+    id: "nasa-apod",
+    organisation: "NASA",
+    programme: "APOD",
+    title: "Astronomy Picture of the Day",
+    description: "NASA APOD entries give astronomy context (image + caption) for a date. They are educational material, not measurements.",
+    documentationUrl: "https://apod.nasa.gov/apod/lib/about_apod.html",
+    endpoint: "https://api.nasa.gov/planetary/apod",
+    access: "api-key",
+    coverage: {
+      kind: "archive",
+      earliest: "1995-06-16",
+      description: "Daily since 1995-06-16."
+    },
+    cadence: "1 day",
+    variables: [],
+    domains: ["astronomy-context"],
+    limitations: [
+      "Caption text is human-written editorial content and is never used as a numeric measurement."
+    ],
+    attribution: "NASA APOD.",
+    keyRequired: false
+  },
+  {
+    id: "nasa-mars-photos",
+    organisation: "NASA",
+    programme: "Mars Rover Photos",
+    title: "NASA Mars rover imagery",
+    description: "Surface imagery from Curiosity, Perseverance and the older rovers, indexed by Earth date.",
+    documentationUrl: "https://api.nasa.gov/",
+    endpoint: "https://api.nasa.gov/mars-photos/api/v1/rovers/curiosity/photos",
+    access: "api-key",
+    coverage: {
+      kind: "archive",
+      earliest: "2012-08-06",
+      description: "Rover-dependent; a date with no downlink returns an empty list, which is reported as a gap."
+    },
+    cadence: "sol / Earth date",
+    variables: [],
+    domains: ["planetary-imagery"],
+    limitations: [
+      "Imagery is qualitative; no surface variable is measured here.",
+      "Camera availability per sol varies, so absence of a photo is not evidence of absence of a phenomenon."
+    ],
+    attribution: "NASA Mars rover photo archives.",
+    keyRequired: false
+  },
+  {
+    id: "nova-iss-tle",
+    organisation: "Other",
+    programme: "Existing ISS integration",
+    title: "ISS orbital elements (existing Space Explorer feed)",
+    description: "Two-line elements already used by the app\u2019s ISS tracker, served by wheretheiss.at. Provides orbital information, not measurements of any Earth phenomenon.",
+    documentationUrl: "https://wheretheiss.at/w/developer",
+    endpoint: "https://api.wheretheiss.at/v1/satellites/25544/tles",
+    access: "open",
+    coverage: {
+      kind: "rolling",
+      rollingDays: 10,
+      description: "Current TLE only."
+    },
+    cadence: "TLE epoch",
+    variables: [
+      { id: "orbital_altitude", label: "Derived ISS altitude", unit: "km" }
+    ],
+    domains: ["orbital"],
+    limitations: [
+      "A propagated altitude is a derived quantity, not a direct measurement.",
+      "Not a NASA API; attribution is shown wherever it is used."
+    ],
+    attribution: "wheretheiss.at orbital data (existing NASA Space Explorer integration).",
+    keyRequired: false
+  }
+];
+function datasetById(id) {
+  return DATASETS.find((entry) => entry.id === id);
+}
+var DOMAIN_DEFINITIONS = [
+  {
+    id: "space-weather",
+    keywords: [
+      "solar storm",
+      "geomagnetic",
+      "magnetic storm",
+      "solar wind",
+      "coronal",
+      "cme",
+      "flare",
+      "aurora",
+      "magnetosphere",
+      "space weather",
+      "kp index",
+      "sunspot",
+      "radiation storm",
+      "solar activity",
+      "imf",
+      "dsto",
+      "dst",
+      "\u0DC3\u0DD6\u0DBB\u0DCA\u0DBA",
+      "\u0D9A\u0DD4\u0DAB\u0DCF\u0DA7\u0DD4",
+      "\u0DA0\u0DD4\u0DB8\u0DCA\u0DB6\u0D9A",
+      "\u0D85\u0DBB\u0DDD\u0DBB\u0DCF",
+      "\u0DC3\u0DDE\u0DBB",
+      "\u0DC0\u0DCF\u0DBA\u0DD4\u0D9C\u0DDD\u0DBD\u0DBA",
+      "\u0B9A\u0BC2\u0BB0\u0BBF\u0BAF",
+      "\u0BAA\u0BC1\u0BAF\u0BB2\u0BCD",
+      "\u0B95\u0BBE\u0BA8\u0BCD\u0BA4",
+      "\u0BB5\u0BB3\u0BBF\u0BAE\u0BA3\u0BCD\u0B9F\u0BB2",
+      "\u0BB5\u0BBF\u0BA3\u0BCD\u0BB5\u0BC6\u0BB3\u0BBF \u0B95\u0BBE\u0BB2\u0BA8\u0BBF\u0BB2\u0BC8"
+    ],
+    datasets: ["noaa-swpc-kp", "noaa-swpc-solar-wind", "nasa-donki"],
+    variables: ["kp", "solar_wind_speed", "bz_gsm", "bt", "proton_density", "cme_speed"],
+    resolution: "hour",
+    objective: "Quantify the relationship between solar-wind drivers and geomagnetic response."
+  },
+  {
+    id: "earth-environment",
+    keywords: [
+      "rain",
+      "rainfall",
+      "precipitation",
+      "temperature",
+      "climate",
+      "drought",
+      "monsoon",
+      "heat",
+      "weather",
+      "humidity",
+      "warming",
+      "flood",
+      "\u0DC0\u0DBB\u0DCA\u0DC2\u0DCF",
+      "\u0DC0\u0DD0\u0DC3\u0DD2",
+      "\u0D8B\u0DC2\u0DCA\u0DAB\u0DAD\u0DCA\u0DC0",
+      "\u0DAF\u0DDA\u0DC1\u0D9C\u0DD4\u0DAB",
+      "\u0DB1\u0DD2\u0DBA\u0D9F",
+      "\u0DB8\u0DDD\u0DC3\u0DB8\u0DCA",
+      "\u0BAE\u0BB4\u0BC8",
+      "\u0BB5\u0BC6\u0BAA\u0BCD\u0BAA\u0BA8\u0BBF\u0BB2\u0BC8",
+      "\u0B95\u0BBE\u0BB2\u0BA8\u0BBF\u0BB2\u0BC8",
+      "\u0BB5\u0BB1\u0B9F\u0BCD\u0B9A\u0BBF",
+      "\u0BAA\u0BB0\u0BC1\u0BB5\u0BAE\u0BB4\u0BC8",
+      "\u0BB5\u0BC6\u0BAA\u0BCD\u0BAA\u0BAE\u0BCD"
+    ],
+    datasets: ["nasa-power"],
+    variables: ["temperature", "precipitation"],
+    resolution: "month",
+    objective: "Characterise an environmental time series and its limitations for a study area."
+  },
+  {
+    id: "near-earth-objects",
+    keywords: [
+      "asteroid",
+      "near-earth",
+      "neo",
+      "meteor",
+      "impact",
+      "comet",
+      "space rock",
+      "\u0D9C\u0DCA\u200D\u0DBB\u0DC4\u0D9A",
+      "\u0D8B\u0DBD\u0DCA\u0D9A\u0DCF",
+      "asteroid",
+      "\u0B9A\u0BBF\u0BB1\u0BC1\u0B95\u0BCB\u0BB3\u0BCD",
+      "\u0BB5\u0BBF\u0BA3\u0BCD\u0B95\u0BB2\u0BCD",
+      "asteroid"
+    ],
+    datasets: ["nasa-neows"],
+    variables: ["asteroid_miss_distance", "asteroid_diameter"],
+    resolution: "day",
+    objective: "Examine reported near-Earth object close approaches and their selection effects."
+  },
+  {
+    id: "orbital",
+    keywords: [
+      "iss",
+      "space station",
+      "satellite",
+      "orbit",
+      "orbital",
+      "tle",
+      "altitude",
+      "\u0DB1\u0DD2\u0DBD\u0DB0\u0DCF\u0DBB\u0DD3",
+      "\u0D9A\u0D9A\u0DCA\u0DC2",
+      "\u0DA0\u0DB1\u0DCA\u0DAF\u0DCA\u200D\u0DBB\u0DD2\u0D9A\u0DCF",
+      "\u0B9A\u0BC6\u0BAF\u0BB1\u0BCD\u0B95\u0BC8\u0B95\u0BCD\u0B95\u0BCB\u0BB3\u0BCD",
+      "\u0B9A\u0BC1\u0BB1\u0BCD\u0BB1\u0BC1\u0BAA\u0BCD\u0BAA\u0BBE\u0BA4\u0BC8",
+      "\u0BA8\u0BBF\u0BB2\u0BC8\u0BAF\u0BAE\u0BCD"
+    ],
+    datasets: ["nova-iss-tle"],
+    variables: ["orbital_altitude"],
+    resolution: "hour",
+    objective: "Describe the current orbital state and what it cannot tell us."
+  },
+  {
+    id: "planetary-imagery",
+    keywords: ["mars", "rover", "perseverance", "curiosity", "jezero", "martian", "\u0D85\u0D9F\u0DC4\u0DBB\u0DD4", "\u0B9A\u0BC6\u0BB5\u0BCD\u0BB5\u0BBE\u0BAF\u0BCD"],
+    datasets: ["nasa-mars-photos"],
+    variables: [],
+    resolution: "day",
+    objective: "Retrieve planetary surface imagery for the requested date and state its limits."
+  },
+  {
+    id: "astronomy-context",
+    keywords: ["apod", "galaxy", "nebula", "telescope", "jwst", "hubble", "star", "black hole", "\u0DB8\u0DB1\u0DCA\u0DAF\u0DCF\u0D9A\u0DD2\u0DAB\u0DD2", "\u0DB1\u0DD2\u0DC4\u0DCF\u0DBB\u0DD2\u0D9A\u0DCF", "\u0BB5\u0BBF\u0BA3\u0BCD\u0BAE\u0BC0\u0BA9\u0BCD", "\u0BA8\u0BC6\u0BAA\u0BC1\u0BB2\u0BBE"],
+    datasets: ["nasa-apod"],
+    variables: [],
+    resolution: "day",
+    objective: "Provide astronomy context for the requested date and label it as editorial material."
+  }
+];
+var NAMED_EVENTS = [
+  {
+    id: "carrington-1859",
+    names: ["carrington event", "carrington"],
+    start: "1859-09-01T00:00:00.000Z",
+    end: "1859-09-03T23:59:59.000Z",
+    label: "Carrington Event (1859)"
+  },
+  {
+    id: "quebec-1989",
+    names: ["quebec", "hydro-quebec", "hydro qu\xE9bec"],
+    start: "1989-03-12T00:00:00.000Z",
+    end: "1989-03-15T23:59:59.000Z",
+    label: "March 1989 geomagnetic storm"
+  },
+  {
+    id: "halloween-2003",
+    names: ["halloween storms", "halloween"],
+    start: "2003-10-28T00:00:00.000Z",
+    end: "2003-11-04T23:59:59.000Z",
+    label: "Halloween 2003 solar storms"
+  },
+  {
+    id: "st-patrick-2015",
+    names: ["st patrick", "saint patrick", "st. patrick"],
+    start: "2015-03-16T00:00:00.000Z",
+    end: "2015-03-19T23:59:59.000Z",
+    label: "St Patrick\u2019s Day 2015 storm"
+  },
+  {
+    id: "gannon-2024",
+    names: ["gannon"],
+    start: "2024-05-09T00:00:00.000Z",
+    end: "2024-05-13T23:59:59.000Z",
+    label: "May 2024 Gannon storm"
+  }
+];
+var METHOD_REASONS = {
+  descriptive: "methodWhyDescriptive",
+  correlation: "methodWhyCorrelation",
+  "cross-correlation": "methodWhyCrossCorrelation",
+  "before-after": "methodWhyBeforeAfter",
+  "threshold-exceedance": "methodWhyThreshold",
+  trend: "methodWhyTrend",
+  anomaly: "methodWhyAnomaly",
+  "missing-data": "methodWhyMissing"
+};
+
+// src/lib/forge/strings.ts
+var FORGE_STRINGS = {
+  /* ---------------------------------------------------------- interpreter */
+  obj_spaceWeather: {
+    en: "Quantify the relationship between solar-wind drivers and geomagnetic response.",
+    si: "\u0DC3\u0DD6\u0DBB\u0DCA\u0DBA \u0DC3\u0DD4\u0DC5\u0D82 \u0DC3\u0DCF\u0DB0\u0D9A \u0DC3\u0DC4 \u0DB7\u0DD6-\u0DA0\u0DD4\u0DB8\u0DCA\u0DB6\u0D9A \u0DB4\u0DCA\u200D\u0DBB\u0DAD\u0DD2\u0DA0\u0DCF\u0DBB\u0DBA \u0D85\u0DAD\u0DBB \u0DC3\u0DB8\u0DCA\u0DB6\u0DB1\u0DCA\u0DB0\u0DAD\u0DCF\u0DC0\u0DBA \u0DB4\u0DCA\u200D\u0DBB\u0DB8\u0DCF\u0DAB\u0DB1\u0DBA \u0D9A\u0DD2\u0DBB\u0DD3\u0DB8.",
+    ta: "\u0B9A\u0BC2\u0BB0\u0BBF\u0BAF\u0B95\u0BCD \u0B95\u0BBE\u0BB1\u0BCD\u0BB1\u0BC1 \u0B95\u0BBE\u0BB0\u0BA3\u0BBF\u0B95\u0BB3\u0BCD \u0BAE\u0BB1\u0BCD\u0BB1\u0BC1\u0BAE\u0BCD \u0BAA\u0BC1\u0BB5\u0BBF\u0B95\u0BCD \u0B95\u0BBE\u0BA8\u0BCD\u0BA4\u0BA4\u0BCD \u0BA4\u0BC1\u0BB2\u0B99\u0BCD\u0B95\u0BB2\u0BC1\u0B95\u0BCD\u0B95\u0BC1 \u0B87\u0B9F\u0BC8\u0BAF\u0BBF\u0BB2\u0BBE\u0BA9 \u0BA4\u0BCA\u0B9F\u0BB0\u0BCD\u0BAA\u0BC8 \u0B85\u0BB3\u0BB5\u0BBF\u0B9F\u0BC1\u0BA4\u0BB2\u0BCD."
+  },
+  obj_earthEnvironment: {
+    en: "Characterise an environmental time series and state what it cannot establish.",
+    si: "\u0DB4\u0DCF\u0DBB\u0DD2\u0DC3\u0DBB\u0DD2\u0D9A \u0D9A\u0DCF\u0DBD \u0DC1\u0DCA\u200D\u0DBB\u0DDA\u0DAB\u0DD2\u0DBA\u0D9A\u0DCA \u0DC0\u0DD2\u0DC3\u0DCA\u0DAD\u0DBB \u0D9A\u0DBB \u0D91\u0DBA \u0DAD\u0DC4\u0DC0\u0DD4\u0DBB\u0DD4 \u0D9A\u0DC5 \u0DB1\u0DDC\u0DC4\u0DD0\u0D9A\u0DD2 \u0DAF\u0DDA \u0DB4\u0DCA\u200D\u0DBB\u0D9A\u0DCF\u0DC1 \u0D9A\u0DD2\u0DBB\u0DD3\u0DB8.",
+    ta: "\u0B9A\u0BC1\u0BB1\u0BCD\u0BB1\u0BC1\u0B9A\u0BCD\u0B9A\u0BC2\u0BB4\u0BB2\u0BCD \u0B95\u0BBE\u0BB2\u0BA4\u0BCD \u0BA4\u0BCA\u0B9F\u0BB0\u0BC8 \u0BB5\u0BBF\u0BB5\u0BB0\u0BBF\u0BA4\u0BCD\u0BA4\u0BC1, \u0B85\u0BA4\u0BC1 \u0BA8\u0BBF\u0BB1\u0BC1\u0BB5 \u0BAE\u0BC1\u0B9F\u0BBF\u0BAF\u0BBE\u0BA4\u0BA4\u0BC8\u0BA4\u0BCD \u0BA4\u0BC6\u0BB3\u0BBF\u0BB5\u0BC1\u0BAA\u0B9F\u0BC1\u0BA4\u0BCD\u0BA4\u0BC1\u0BA4\u0BB2\u0BCD."
+  },
+  obj_nearEarthObjects: {
+    en: "Examine reported near-Earth object close approaches and their selection effects.",
+    si: "\u0DC0\u0DCF\u0DBB\u0DCA\u0DAD\u0DCF \u0DC0\u0DD6 \u0DB4\u0DD8\u0DAE\u0DD2\u0DC0\u0DD2\u0DBA\u0DA7 \u0DC3\u0DB8\u0DD3\u0DB4 \u0DC0\u0DC3\u0DCA\u0DAD\u0DD4 \u0DC3\u0DB8\u0DD3\u0DB4\u0DC0\u0DD3\u0DB8\u0DCA \u0DC3\u0DC4 \u0D92\u0DC0\u0DCF\u0DBA\u0DDA \u0DAD\u0DDA\u0DBB\u0DD3\u0DB8\u0DCA \u0DB6\u0DBD\u0DB4\u0DD1\u0DB8\u0DCA \u0DC0\u0DD2\u0DB8\u0DBB\u0DCA\u0DC1\u0DB1\u0DBA \u0D9A\u0DD2\u0DBB\u0DD3\u0DB8.",
+    ta: "\u0BAA\u0BA4\u0BBF\u0BB5\u0BBE\u0BA9 \u0BAA\u0BC1\u0BB5\u0BBF-\u0B85\u0BB0\u0BC1\u0B95\u0BC1 \u0BB5\u0BBF\u0BA3\u0BCD\u0BAA\u0BCA\u0BB0\u0BC1\u0BB3\u0BCD \u0B85\u0BA3\u0BC1\u0B95\u0BB2\u0BCD\u0B95\u0BB3\u0BC8\u0BAF\u0BC1\u0BAE\u0BCD \u0B85\u0BB5\u0BB1\u0BCD\u0BB1\u0BBF\u0BA9\u0BCD \u0BA4\u0BC7\u0BB0\u0BCD\u0BB5\u0BC1\u0B9A\u0BCD \u0B9A\u0BBE\u0BB0\u0BCD\u0BAA\u0BC8\u0BAF\u0BC1\u0BAE\u0BCD \u0B86\u0BB0\u0BBE\u0BAF\u0BCD\u0BA4\u0BB2\u0BCD."
+  },
+  obj_orbital: {
+    en: "Describe the current orbital state and its limits.",
+    si: "\u0DC0\u0DBB\u0DCA\u0DAD\u0DB8\u0DCF\u0DB1 \u0D9A\u0D9A\u0DCA\u0DC2\u0DD3\u0DBA \u0DAD\u0DAD\u0DCA\u0DAD\u0DCA\u0DC0\u0DBA \u0DC3\u0DC4 \u0D91\u0DC4\u0DD2 \u0DC3\u0DD3\u0DB8\u0DCF \u0DC0\u0DD2\u0DC3\u0DCA\u0DAD\u0DBB \u0D9A\u0DD2\u0DBB\u0DD3\u0DB8.",
+    ta: "\u0BA4\u0BB1\u0BCD\u0BAA\u0BCB\u0BA4\u0BC8\u0BAF \u0B9A\u0BC1\u0BB1\u0BCD\u0BB1\u0BC1\u0BAA\u0BCD\u0BAA\u0BBE\u0BA4\u0BC8 \u0BA8\u0BBF\u0BB2\u0BC8\u0BAF\u0BC8\u0BAF\u0BC1\u0BAE\u0BCD \u0B85\u0BA4\u0BA9\u0BCD \u0BB5\u0BB0\u0BAE\u0BCD\u0BAA\u0BC1\u0B95\u0BB3\u0BC8\u0BAF\u0BC1\u0BAE\u0BCD \u0BB5\u0BBF\u0BB5\u0BB0\u0BBF\u0BA4\u0BCD\u0BA4\u0BB2\u0BCD."
+  },
+  obj_planetaryImagery: {
+    en: "Retrieve planetary surface imagery and label it as qualitative context.",
+    si: "\u0D9C\u0DCA\u200D\u0DBB\u0DC4\u0DBD\u0DDD\u0D9A \u0DB8\u0DAD\u0DD4\u0DB4\u0DD2\u0DA7 \u0DBB\u0DD6\u0DB4 \u0DBD\u0DB6\u0DCF\u0D9C\u0DD9\u0DB1 \u0D92\u0DC0\u0DCF \u0D9C\u0DD4\u0DAB\u0DCF\u0DAD\u0DCA\u0DB8\u0D9A \u0DB4\u0DC3\u0DD4\u0DB6\u0DD2\u0DB8\u0D9A\u0DCA \u0DBD\u0DD9\u0DC3 \u0DBD\u0DDA\u0DB6\u0DBD\u0DCA \u0D9A\u0DD2\u0DBB\u0DD3\u0DB8.",
+    ta: "\u0B95\u0BCB\u0BB3\u0BCD \u0BAE\u0BC7\u0BB1\u0BCD\u0BAA\u0BB0\u0BAA\u0BCD\u0BAA\u0BC1 \u0BAA\u0B9F\u0B99\u0BCD\u0B95\u0BB3\u0BC8\u0BAA\u0BCD \u0BAA\u0BC6\u0BB1\u0BCD\u0BB1\u0BC1 \u0B85\u0BB5\u0BB1\u0BCD\u0BB1\u0BC8\u0BA4\u0BCD \u0BA4\u0BB0\u0BAE\u0BBE\u0BA9 \u0BAA\u0BBF\u0BA9\u0BCD\u0BA9\u0BA3\u0BBF\u0BAF\u0BBE\u0B95\u0B95\u0BCD \u0B95\u0BC1\u0BB1\u0BBF\u0BA4\u0BCD\u0BA4\u0BB2\u0BCD."
+  },
+  obj_astronomyContext: {
+    en: "Provide astronomy context and label it as editorial material.",
+    si: "\u0DAD\u0DCF\u0DBB\u0D9A\u0DCF \u0DC0\u0DD2\u0DAF\u0DCA\u200D\u0DBA\u0DCF \u0DB4\u0DC3\u0DD4\u0DB6\u0DD2\u0DB8 \u0DBD\u0DB6\u0DCF \u0DAF\u0DD3 \u0D91\u0DBA \u0DC3\u0D82\u0DC3\u0DCA\u0D9A\u0DCF\u0DBB\u0D9A \u0DAF\u0DCA\u200D\u0DBB\u0DC0\u0DCA\u200D\u0DBA \u0DBD\u0DD9\u0DC3 \u0DBD\u0DDA\u0DB6\u0DBD\u0DCA \u0D9A\u0DD2\u0DBB\u0DD3\u0DB8.",
+    ta: "\u0BB5\u0BBE\u0BA9\u0BBF\u0BAF\u0BB2\u0BCD \u0BAA\u0BBF\u0BA9\u0BCD\u0BA9\u0BA3\u0BBF\u0BAF\u0BC8 \u0BB5\u0BB4\u0B99\u0BCD\u0B95\u0BBF \u0B85\u0BA4\u0BC8\u0BA4\u0BCD \u0BA4\u0BCA\u0B95\u0BC1\u0BAA\u0BCD\u0BAA\u0BC1\u0BAA\u0BCD \u0BAA\u0BCA\u0BB0\u0BC1\u0BB3\u0BBE\u0B95\u0B95\u0BCD \u0B95\u0BC1\u0BB1\u0BBF\u0BA4\u0BCD\u0BA4\u0BB2\u0BCD."
+  },
+  obj_unsupported: {
+    en: "The question could not be mapped onto a connected NASA or NOAA dataset.",
+    si: "\u0DB4\u0DCA\u200D\u0DBB\u0DC1\u0DCA\u0DB1\u0DBA \u0DC3\u0DB8\u0DCA\u0DB6\u0DB1\u0DCA\u0DB0\u0DD2\u0DAD NASA \u0DC4\u0DDD NOAA \u0DAF\u0DAD\u0DCA\u0DAD \u0D9A\u0DA7\u0DCA\u0DA7\u0DBD\u0DBA\u0D9A\u0DA7 \u0DC3\u0DD2\u0DAD\u0DD2\u0DBA\u0DB8\u0DCA \u0D9A\u0DC5 \u0DB1\u0DDC\u0DC4\u0DD0\u0D9A\u0DD2 \u0DC0\u0DD2\u0DBA.",
+    ta: "\u0B87\u0BA8\u0BCD\u0BA4\u0B95\u0BCD \u0B95\u0BC7\u0BB3\u0BCD\u0BB5\u0BBF\u0BAF\u0BC8 \u0B87\u0BA3\u0BC8\u0B95\u0BCD\u0B95\u0BAA\u0BCD\u0BAA\u0B9F\u0BCD\u0B9F NASA \u0B85\u0BB2\u0BCD\u0BB2\u0BA4\u0BC1 NOAA \u0BA4\u0BB0\u0BB5\u0BC1\u0BA4\u0BCD\u0BA4\u0BCA\u0B95\u0BC1\u0BAA\u0BCD\u0BAA\u0BC1\u0B9F\u0BA9\u0BCD \u0BAA\u0BCA\u0BB0\u0BC1\u0BA4\u0BCD\u0BA4 \u0BAE\u0BC1\u0B9F\u0BBF\u0BAF\u0BB5\u0BBF\u0BB2\u0BCD\u0BB2\u0BC8."
+  },
+  /* --------------------------------------------------------------- range */
+  rangeDefault: {
+    en: "No explicit period was stated, so the most recent 30 days were planned. This is an assumption, not a reading of the question.",
+    si: "\u0DB4\u0DD0\u0DC4\u0DD0\u0DAF\u0DD2\u0DBD\u0DD2 \u0D9A\u0DCF\u0DBD \u0DB4\u0DBB\u0DCF\u0DC3\u0DBA\u0D9A\u0DCA \u0DC3\u0DB3\u0DC4\u0DB1\u0DCA \u0DB1\u0DDC\u0DC0\u0DD6 \u0DB6\u0DD0\u0DC0\u0DD2\u0DB1\u0DCA \u0D85\u0DC0\u0DC3\u0DB1\u0DCA \u0DAF\u0DD2\u0DB1 30 \u0DC3\u0DD0\u0DBD\u0DC3\u0DD4\u0DB8\u0DCA \u0D9A\u0DBB\u0DB1 \u0DBD\u0DAF\u0DD3. \u0DB8\u0DD9\u0DBA \u0D8B\u0DB4\u0D9A\u0DBD\u0DCA\u0DB4\u0DB1\u0DBA\u0D9A\u0DCA \u0DB8\u0DD2\u0DC3 \u0DB4\u0DCA\u200D\u0DBB\u0DC1\u0DCA\u0DB1\u0DBA\u0DD9\u0DB1\u0DCA \u0DBD\u0DB6\u0DCF\u0D9C\u0DAD\u0DCA \u0D85\u0D9C\u0DBA\u0D9A\u0DCA \u0DB1\u0DDC\u0DC0\u0DDA.",
+    ta: "\u0BA4\u0BC6\u0BB3\u0BBF\u0BB5\u0BBE\u0BA9 \u0B95\u0BBE\u0BB2 \u0B8E\u0BB2\u0BCD\u0BB2\u0BC8 \u0BA4\u0BB0\u0BAA\u0BCD\u0BAA\u0B9F\u0BBE\u0BA4\u0BA4\u0BBE\u0BB2\u0BCD \u0B95\u0B9F\u0BC8\u0B9A\u0BBF 30 \u0BA8\u0BBE\u0B9F\u0BCD\u0B95\u0BB3\u0BCD \u0BA4\u0BBF\u0B9F\u0BCD\u0B9F\u0BAE\u0BBF\u0B9F\u0BAA\u0BCD\u0BAA\u0B9F\u0BCD\u0B9F\u0BA9. \u0B87\u0BA4\u0BC1 \u0B92\u0BB0\u0BC1 \u0B85\u0BA9\u0BC1\u0BAE\u0BBE\u0BA9\u0BAE\u0BCD, \u0B95\u0BC7\u0BB3\u0BCD\u0BB5\u0BBF\u0BAF\u0BBF\u0BB2\u0BBF\u0BB0\u0BC1\u0BA8\u0BCD\u0BA4\u0BC1 \u0BAA\u0BC6\u0BB1\u0BAA\u0BCD\u0BAA\u0B9F\u0BCD\u0B9F\u0BA4\u0BC1 \u0B85\u0BB2\u0BCD\u0BB2."
+  },
+  rangeNamedEvent: {
+    en: "The period was taken from a named historical event ({event}).",
+    si: "\u0D9A\u0DCF\u0DBD \u0DB4\u0DBB\u0DCF\u0DC3\u0DBA \u0DB1\u0DB8\u0DCA \u0D9A\u0DBB\u0DB1 \u0DBD\u0DAF \u0D93\u0DAD\u0DD2\u0DC4\u0DCF\u0DC3\u0DD2\u0D9A \u0DC3\u0DD2\u0DAF\u0DD4\u0DC0\u0DD3\u0DB8\u0D9A\u0DD2\u0DB1\u0DCA ({event}) \u0DBD\u0DB6\u0DCF \u0D9C\u0DB1\u0DCA\u0DB1\u0DCF \u0DBD\u0DAF\u0DD3.",
+    ta: "\u0B95\u0BBE\u0BB2 \u0B8E\u0BB2\u0BCD\u0BB2\u0BC8 \u0BAA\u0BC6\u0BAF\u0BB0\u0BBF\u0B9F\u0BAA\u0BCD\u0BAA\u0B9F\u0BCD\u0B9F \u0BB5\u0BB0\u0BB2\u0BBE\u0BB1\u0BCD\u0BB1\u0BC1 \u0BA8\u0BBF\u0B95\u0BB4\u0BCD\u0BB5\u0BBF\u0BB2\u0BBF\u0BB0\u0BC1\u0BA8\u0BCD\u0BA4\u0BC1 ({event}) \u0B8E\u0B9F\u0BC1\u0B95\u0BCD\u0B95\u0BAA\u0BCD\u0BAA\u0B9F\u0BCD\u0B9F\u0BA4\u0BC1."
+  },
+  rangeExplicit: {
+    en: "The period was read directly from the question.",
+    si: "\u0D9A\u0DCF\u0DBD \u0DB4\u0DBB\u0DCF\u0DC3\u0DBA \u0DB4\u0DCA\u200D\u0DBB\u0DC1\u0DCA\u0DB1\u0DBA\u0DD9\u0DB1\u0DCA \u0DC3\u0DD8\u0DA2\u0DD4\u0DC0\u0DB8 \u0D9A\u0DD2\u0DBA\u0DC0\u0DB1 \u0DBD\u0DAF\u0DD3.",
+    ta: "\u0B95\u0BBE\u0BB2 \u0B8E\u0BB2\u0BCD\u0BB2\u0BC8 \u0B95\u0BC7\u0BB3\u0BCD\u0BB5\u0BBF\u0BAF\u0BBF\u0BB2\u0BBF\u0BB0\u0BC1\u0BA8\u0BCD\u0BA4\u0BC1 \u0BA8\u0BC7\u0BB0\u0B9F\u0BBF\u0BAF\u0BBE\u0B95\u0BAA\u0BCD \u0BAA\u0B9F\u0BBF\u0B95\u0BCD\u0B95\u0BAA\u0BCD\u0BAA\u0B9F\u0BCD\u0B9F\u0BA4\u0BC1."
+  },
+  regionGlobal: {
+    en: "No study area was named, so a global (planetary) frame is used. Kp and solar-wind measurements are global or single-point by nature.",
+    si: "\u0D85\u0DB0\u0DCA\u200D\u0DBA\u0DBA\u0DB1 \u0DB4\u0DCA\u200D\u0DBB\u0DAF\u0DDA\u0DC1\u0DBA\u0D9A\u0DCA \u0DB1\u0DB8\u0DCA \u0DB1\u0DDC\u0D9A\u0DC5 \u0DB6\u0DD0\u0DC0\u0DD2\u0DB1\u0DCA \u0D9C\u0DDD\u0DBD\u0DD3\u0DBA \u0DBB\u0DCF\u0DB8\u0DD4\u0DC0\u0D9A\u0DCA \u0DB7\u0DCF\u0DC0\u0DD2\u0DAD\u0DCF \u0DC0\u0DDA. Kp \u0DC3\u0DC4 \u0DC3\u0DD6\u0DBB\u0DCA\u0DBA \u0DC3\u0DD4\u0DC5\u0D82 \u0DB8\u0DD2\u0DB1\u0DD4\u0DB8\u0DCA \u0DC3\u0DCA\u0DC0\u0DB7\u0DCF\u0DC0\u0DBA\u0DD9\u0DB1\u0DCA\u0DB8 \u0D9C\u0DDD\u0DBD\u0DD3\u0DBA \u0DC4\u0DDD \u0DAD\u0DB1\u0DD2 \u0DBD\u0D9A\u0DCA\u0DC2\u0DCA\u200D\u0DBA \u0DC0\u0DDA.",
+    ta: "\u0B86\u0BAF\u0BCD\u0BB5\u0BC1\u0BAA\u0BCD \u0BAA\u0B95\u0BC1\u0BA4\u0BBF \u0B95\u0BC1\u0BB1\u0BBF\u0BAA\u0BCD\u0BAA\u0BBF\u0B9F\u0BAA\u0BCD\u0BAA\u0B9F\u0BBE\u0BA4\u0BA4\u0BBE\u0BB2\u0BCD \u0B89\u0BB2\u0B95\u0BB3\u0BBE\u0BB5\u0BBF\u0BAF \u0B95\u0B9F\u0BCD\u0B9F\u0BAE\u0BC8\u0BAA\u0BCD\u0BAA\u0BC1 \u0BAA\u0BAF\u0BA9\u0BCD\u0BAA\u0B9F\u0BC1\u0BA4\u0BCD\u0BA4\u0BAA\u0BCD\u0BAA\u0B9F\u0BC1\u0B95\u0BBF\u0BB1\u0BA4\u0BC1. Kp \u0BAE\u0BB1\u0BCD\u0BB1\u0BC1\u0BAE\u0BCD \u0B9A\u0BC2\u0BB0\u0BBF\u0BAF\u0B95\u0BCD \u0B95\u0BBE\u0BB1\u0BCD\u0BB1\u0BC1 \u0B85\u0BB3\u0BB5\u0BC0\u0B9F\u0BC1\u0B95\u0BB3\u0BCD \u0B87\u0BAF\u0BB1\u0BCD\u0B95\u0BC8\u0BAF\u0BBE\u0B95\u0BB5\u0BC7 \u0B89\u0BB2\u0B95\u0BB3\u0BBE\u0BB5\u0BBF\u0BAF\u0BB5\u0BC8 \u0B85\u0BB2\u0BCD\u0BB2\u0BA4\u0BC1 \u0B92\u0BB0\u0BC1 \u0BAA\u0BC1\u0BB3\u0BCD\u0BB3\u0BBF \u0B9A\u0BBE\u0BB0\u0BCD\u0BA8\u0BCD\u0BA4\u0BB5\u0BC8."
+  },
+  regionResolved: {
+    en: "Study area resolved to {region} using the built-in gazetteer ({lat}, {lon}).",
+    si: "\u0D85\u0DB0\u0DCA\u200D\u0DBA\u0DBA\u0DB1 \u0DB4\u0DCA\u200D\u0DBB\u0DAF\u0DDA\u0DC1\u0DBA \u0D9C\u0DDC\u0DA9\u0DB1\u0DD0\u0D9C\u0DD6 \u0DB7\u0DD6\u0D9C\u0DDD\u0DBD\u0DD3\u0DBA \u0DB1\u0DCF\u0DB8\u0DCF\u0DC0\u0DBD\u0DD2\u0DBA \u0DB8\u0D9C\u0DD2\u0DB1\u0DCA {region} \u0DBD\u0DD9\u0DC3 \u0DC0\u0DD2\u0DC3\u0DB3\u0DB1 \u0DBD\u0DAF\u0DD3 ({lat}, {lon}).",
+    ta: "\u0B86\u0BAF\u0BCD\u0BB5\u0BC1\u0BAA\u0BCD \u0BAA\u0B95\u0BC1\u0BA4\u0BBF \u0B89\u0BB3\u0BCD\u0BB3\u0BAE\u0BC8\u0BA8\u0BCD\u0BA4 \u0B87\u0B9F\u0BAA\u0BCD\u0BAA\u0BC6\u0BAF\u0BB0\u0BCD \u0B85\u0B95\u0BB0\u0BBE\u0BA4\u0BBF\u0BAF\u0BBE\u0BB2\u0BCD {region} \u0B8E\u0BA9\u0BA4\u0BCD \u0BA4\u0BC0\u0BB0\u0BCD\u0BAE\u0BBE\u0BA9\u0BBF\u0B95\u0BCD\u0B95\u0BAA\u0BCD\u0BAA\u0B9F\u0BCD\u0B9F\u0BA4\u0BC1 ({lat}, {lon})."
+  },
+  followUpMerged: {
+    en: "This is a follow-up: the previous investigation context was carried forward.",
+    si: "\u0DB8\u0DD9\u0DBA \u0D85\u0DB1\u0DD4\u0D9C\u0DCF\u0DB8\u0DD3 \u0DB4\u0DCA\u200D\u0DBB\u0DC1\u0DCA\u0DB1\u0DBA\u0D9A\u0DD2: \u0DB4\u0DD9\u0DBB \u0DC0\u0DD2\u0DB8\u0DBB\u0DCA\u0DC1\u0DB1\u0DBA\u0DDA \u0DC3\u0DB1\u0DCA\u0DAF\u0DBB\u0DCA\u0DB7\u0DBA \u0D89\u0DAF\u0DD2\u0DBB\u0DD2\u0DBA\u0DA7 \u0D9C\u0DD9\u0DB1 \u0DBA\u0DB1 \u0DBD\u0DAF\u0DD3.",
+    ta: "\u0B87\u0BA4\u0BC1 \u0BA4\u0BCA\u0B9F\u0BB0\u0BCD\u0BB5\u0BBF\u0BA9\u0BBE: \u0BAE\u0BC1\u0BA8\u0BCD\u0BA4\u0BC8\u0BAF \u0B86\u0BAF\u0BCD\u0BB5\u0BC1\u0B9A\u0BCD \u0B9A\u0BC2\u0BB4\u0BB2\u0BCD \u0BA4\u0BCA\u0B9F\u0BB0\u0BCD\u0BA8\u0BCD\u0BA4\u0BC1 \u0B8E\u0B9F\u0BC1\u0BA4\u0BCD\u0BA4\u0BC1\u0B9A\u0BCD \u0B9A\u0BC6\u0BB2\u0BCD\u0BB2\u0BAA\u0BCD\u0BAA\u0B9F\u0BCD\u0B9F\u0BA4\u0BC1."
+  },
+  noCompatibleDataset: {
+    en: "No connected dataset can address this question, so no investigation can be executed.",
+    si: "\u0DB8\u0DD9\u0DB8 \u0DB4\u0DCA\u200D\u0DBB\u0DC1\u0DCA\u0DB1\u0DBA\u0DA7 \u0D85\u0DAF\u0DCF\u0DC5 \u0DC0\u0DD2\u0DBA \u0DC4\u0DD0\u0D9A\u0DD2 \u0DC3\u0DB8\u0DCA\u0DB6\u0DB1\u0DCA\u0DB0\u0DD2\u0DAD \u0DAF\u0DAD\u0DCA\u0DAD \u0D9A\u0DA7\u0DCA\u0DA7\u0DBD\u0DBA\u0D9A\u0DCA \u0DB1\u0DDC\u0DB8\u0DD0\u0DAD\u0DD2 \u0DB6\u0DD0\u0DC0\u0DD2\u0DB1\u0DCA \u0DC0\u0DD2\u0DB8\u0DBB\u0DCA\u0DC1\u0DB1\u0DBA\u0D9A\u0DCA \u0D9A\u0DCA\u200D\u0DBB\u0DD2\u0DBA\u0DCF\u0DAD\u0DCA\u0DB8\u0D9A \u0D9A\u0DC5 \u0DB1\u0DDC\u0DC4\u0DD0\u0D9A.",
+    ta: "\u0B87\u0BA8\u0BCD\u0BA4\u0B95\u0BCD \u0B95\u0BC7\u0BB3\u0BCD\u0BB5\u0BBF\u0B95\u0BCD\u0B95\u0BC1\u0BAA\u0BCD \u0BAA\u0BCA\u0BB0\u0BC1\u0BA8\u0BCD\u0BA4\u0BC1\u0BAE\u0BCD \u0B87\u0BA3\u0BC8\u0B95\u0BCD\u0B95\u0BAA\u0BCD\u0BAA\u0B9F\u0BCD\u0B9F \u0BA4\u0BB0\u0BB5\u0BC1\u0BA4\u0BCD\u0BA4\u0BCA\u0B95\u0BC1\u0BAA\u0BCD\u0BAA\u0BC1 \u0B87\u0BB2\u0BCD\u0BB2\u0BBE\u0BA4\u0BA4\u0BBE\u0BB2\u0BCD \u0B86\u0BAF\u0BCD\u0BB5\u0BC8 \u0B87\u0BAF\u0B95\u0BCD\u0B95 \u0BAE\u0BC1\u0B9F\u0BBF\u0BAF\u0BBE\u0BA4\u0BC1."
+  },
+  /* ----------------------------------------------------------- variables */
+  var_kp: { en: "Planetary K index (Kp)", si: "\u0D9C\u0DCA\u200D\u0DBB\u0DC4\u0DBD\u0DDD\u0D9A Kp \u0DAF\u0DBB\u0DCA\u0DC1\u0D9A\u0DBA (Kp)", ta: "\u0B95\u0BCB\u0BB3\u0BCD Kp \u0B95\u0BC1\u0BB1\u0BBF\u0BAF\u0BC0\u0B9F\u0BC1 (Kp)" },
+  var_solar_wind_speed: {
+    en: "Solar wind speed",
+    si: "\u0DC3\u0DD6\u0DBB\u0DCA\u0DBA \u0DC3\u0DD4\u0DC5\u0D82 \u0DC0\u0DDA\u0D9C\u0DBA (solar wind speed)",
+    ta: "\u0B9A\u0BC2\u0BB0\u0BBF\u0BAF\u0B95\u0BCD \u0B95\u0BBE\u0BB1\u0BCD\u0BB1\u0BBF\u0BA9\u0BCD \u0BB5\u0BC7\u0B95\u0BAE\u0BCD (solar wind speed)"
+  },
+  var_bz_gsm: {
+    en: "IMF Bz (GSM)",
+    si: "\u0D85\u0DB1\u0DCA\u0DAD\u0DBB\u0DCA\u0D9C\u0DCA\u200D\u0DBB\u0DC4\u0DBD\u0DDD\u0D9A \u0DA0\u0DD4\u0DB8\u0DCA\u0DB6\u0D9A \u0D9A\u0DCA\u0DC2\u0DDA\u0DAD\u0DCA\u200D\u0DBB Bz (IMF Bz, GSM)",
+    ta: "\u0B95\u0BBE\u0BA8\u0BCD\u0BA4\u0BAA\u0BCD\u0BAA\u0BC1\u0BB2 Bz (IMF Bz, GSM)"
+  },
+  var_bt: {
+    en: "IMF magnitude (Bt)",
+    si: "\u0DA0\u0DD4\u0DB8\u0DCA\u0DB6\u0D9A \u0D9A\u0DCA\u0DC2\u0DDA\u0DAD\u0DCA\u200D\u0DBB \u0DC0\u0DD2\u0DC1\u0DCF\u0DBD\u0DAD\u0DCA\u0DC0\u0DBA (Bt)",
+    ta: "\u0B95\u0BBE\u0BA8\u0BCD\u0BA4\u0BAA\u0BCD\u0BAA\u0BC1\u0BB2 \u0B85\u0BB3\u0BB5\u0BC1 (Bt)"
+  },
+  var_proton_density: {
+    en: "Solar wind proton density",
+    si: "\u0DC3\u0DD6\u0DBB\u0DCA\u0DBA \u0DC3\u0DD4\u0DC5\u0D82 \u0DB4\u0DCA\u200D\u0DBB\u0DDD\u0DA7\u0DDD\u0DB1 \u0D9D\u0DB1\u0DAD\u0DCA\u0DC0\u0DBA (proton density)",
+    ta: "\u0B9A\u0BC2\u0BB0\u0BBF\u0BAF\u0B95\u0BCD \u0B95\u0BBE\u0BB1\u0BCD\u0BB1\u0BC1 \u0BAA\u0BC1\u0BB0\u0BCB\u0B9F\u0BCD\u0B9F\u0BBE\u0BA9\u0BCD \u0B85\u0B9F\u0BB0\u0BCD\u0BA4\u0BCD\u0BA4\u0BBF"
+  },
+  var_cme_speed: {
+    en: "CME linear speed (model fit)",
+    si: "CME \u0DBB\u0DDA\u0D9B\u0DD3\u0DBA \u0DC0\u0DDA\u0D9C\u0DBA (\u0D86\u0D9A\u0DD8\u0DAD\u0DD2 \u0D87\u0DC3\u0DCA\u0DAD\u0DB8\u0DDA\u0DB1\u0DCA\u0DAD\u0DD4\u0DC0)",
+    ta: "CME \u0BA8\u0BC7\u0BB0\u0BCD\u0B95\u0BCB\u0B9F\u0BCD\u0B9F\u0BC1 \u0BB5\u0BC7\u0B95\u0BAE\u0BCD (\u0BAE\u0BBE\u0BA4\u0BBF\u0BB0\u0BBF \u0BAE\u0BA4\u0BBF\u0BAA\u0BCD\u0BAA\u0BC0\u0B9F\u0BC1)"
+  },
+  var_temperature: {
+    en: "Air temperature at 2 m",
+    si: "\u0DB8\u0DD3\u0DA7\u0DBB\u0DCA 2 \u0DC4\u0DD2 \u0DC0\u0DCF\u0DBA\u0DD4 \u0D8B\u0DC2\u0DCA\u0DAB\u0DAD\u0DCA\u0DC0\u0DBA",
+    ta: "2 m \u0B95\u0BBE\u0BB1\u0BCD\u0BB1\u0BC1 \u0BB5\u0BC6\u0BAA\u0BCD\u0BAA\u0BA8\u0BBF\u0BB2\u0BC8"
+  },
+  var_precipitation: {
+    en: "Precipitation rate",
+    si: "\u0DC0\u0DBB\u0DCA\u0DC2\u0DCF\u0DB4\u0DAD\u0DB1 \u0D85\u0DB1\u0DD4\u0DB4\u0DCF\u0DAD\u0DBA",
+    ta: "\u0BAE\u0BB4\u0BC8 \u0BB5\u0BC0\u0BA4\u0BAE\u0BCD"
+  },
+  var_asteroid_miss_distance: {
+    en: "Close-approach miss distance",
+    si: "\u0DC3\u0DB8\u0DD3\u0DB4\u0DC0\u0DD3\u0DB8\u0DDA \u0DAF\u0DD4\u0DBB (miss distance)",
+    ta: "\u0B85\u0BA3\u0BC1\u0B95\u0BB2\u0BCD \u0BA4\u0BC2\u0BB0\u0BAE\u0BCD (miss distance)"
+  },
+  var_asteroid_diameter: {
+    en: "Estimated asteroid diameter",
+    si: "\u0D87\u0DC3\u0DCA\u0DAD\u0DB8\u0DDA\u0DB1\u0DCA\u0DAD\u0DD4\u0D9C\u0DAD \u0D9C\u0DCA\u200D\u0DBB\u0DC4\u0D9A \u0DC0\u0DD2\u0DC2\u0DCA\u0D9A\u0DB8\u0DCA\u0DB7\u0DBA",
+    ta: "\u0BAE\u0BA4\u0BBF\u0BAA\u0BCD\u0BAA\u0BBF\u0B9F\u0BAA\u0BCD\u0BAA\u0B9F\u0BCD\u0B9F \u0B9A\u0BBF\u0BB1\u0BC1\u0B95\u0BCB\u0BB3\u0BCD \u0BB5\u0BBF\u0B9F\u0BCD\u0B9F\u0BAE\u0BCD"
+  },
+  var_orbital_altitude: {
+    en: "Orbital altitude",
+    si: "\u0D9A\u0D9A\u0DCA\u0DC2\u0DD3\u0DBA \u0D8B\u0DC3",
+    ta: "\u0B9A\u0BC1\u0BB1\u0BCD\u0BB1\u0BC1\u0BAA\u0BCD\u0BAA\u0BBE\u0BA4\u0BC8 \u0B89\u0BAF\u0BB0\u0BAE\u0BCD"
+  },
+  /* ---------------------------------------------------------- hypotheses */
+  hyp_lead_lag_statement: {
+    en: "During {period}, changes in {driver} lead changes in {response} by up to {lag} hours, with a {direction} association.",
+    si: "{period} \u0D9A\u0DCF\u0DBD\u0DBA \u0DAD\u0DD4\u0DC5, {driver} \u0DC4\u0DD2 \u0DC0\u0DD9\u0DB1\u0DC3\u0DCA\u0D9A\u0DB8\u0DCA {response} \u0DC4\u0DD2 \u0DC0\u0DD9\u0DB1\u0DC3\u0DCA\u0D9A\u0DB8\u0DCA\u0DC0\u0DBD\u0DA7 \u0DB4\u0DD0\u0DBA {lag} \u0D9A\u0DCA \u0DAF\u0D9A\u0DCA\u0DC0\u0DCF \u0DB4\u0DD9\u0DBB\u0DAF\u0DD0\u0DBB\u0DD2 \u0DC0\u0DB1 \u0D85\u0DAD\u0DBB, {direction} \u0DC3\u0DB8\u0DCA\u0DB6\u0DB1\u0DCA\u0DB0\u0DAD\u0DCF\u0DC0\u0DBA\u0D9A\u0DCA \u0DB4\u0DC0\u0DAD\u0DD3.",
+    ta: "{period} \u0B95\u0BBE\u0BB2\u0BA4\u0BCD\u0BA4\u0BBF\u0BB2\u0BCD, {driver} \u0BAE\u0BBE\u0BB1\u0BCD\u0BB1\u0B99\u0BCD\u0B95\u0BB3\u0BCD {response} \u0BAE\u0BBE\u0BB1\u0BCD\u0BB1\u0B99\u0BCD\u0B95\u0BB3\u0BC1\u0B95\u0BCD\u0B95\u0BC1 {lag} \u0BAE\u0BA3\u0BBF \u0BA8\u0BC7\u0BB0\u0BAE\u0BCD \u0BB5\u0BB0\u0BC8 \u0BAE\u0BC1\u0BA9\u0BCD\u0BA9\u0BCB\u0B9F\u0BBF\u0BAF\u0BBE\u0B95 \u0B87\u0BB0\u0BC1\u0B95\u0BCD\u0B95\u0BC1\u0BAE\u0BCD; {direction} \u0BA4\u0BCA\u0B9F\u0BB0\u0BCD\u0BAA\u0BC1 \u0B87\u0BB0\u0BC1\u0B95\u0BCD\u0B95\u0BC1\u0BAE\u0BCD."
+  },
+  hyp_lead_lag_explanation: {
+    en: "If the driver genuinely couples energy into the system, it should change before the response, not after it. The claim is testable with a lagged cross-correlation and is falsified by a peak at a negative lag.",
+    si: "\u0DC3\u0DCF\u0DB0\u0D9A\u0DBA \u0DC3\u0DD0\u0DB6\u0DC0\u0DD2\u0DB1\u0DCA\u0DB8 \u0DB4\u0DAF\u0DCA\u0DB0\u0DAD\u0DD2\u0DBA\u0DA7 \u0DC1\u0D9A\u0DCA\u0DAD\u0DD2\u0DBA \u0DC3\u0DB8\u0DCA\u0DB4\u0DCA\u200D\u0DBB\u0DDA\u0DC2\u0DAB\u0DBA \u0D9A\u0DBB\u0DB1\u0DCA\u0DB1\u0DDA \u0DB1\u0DB8\u0DCA, \u0D91\u0DBA \u0DB4\u0DCA\u200D\u0DBB\u0DAD\u0DD2\u0DA0\u0DCF\u0DBB\u0DBA\u0DA7 \u0DB4\u0DD9\u0DBB \u0DC0\u0DD9\u0DB1\u0DC3\u0DCA \u0DC0\u0DD2\u0DBA \u0DBA\u0DD4\u0DAD\u0DD4\u0DBA. \u0DB4\u0DCA\u200D\u0DBB\u0DB8\u0DCF\u0DAF\u0DD2\u0DAD \u0DC4\u0DBB\u0DC3\u0DCA-\u0DC3\u0DC4\u0DC3\u0DB8\u0DCA\u0DB6\u0DB1\u0DCA\u0DB0\u0DBA\u0D9A\u0DD2\u0DB1\u0DCA \u0DB8\u0DD9\u0DBA \u0DB4\u0DBB\u0DD3\u0D9A\u0DCA\u0DC2\u0DCF \u0D9A\u0DC5 \u0DC4\u0DD0\u0D9A\u0DD2 \u0D85\u0DAD\u0DBB \u0DC3\u0DD8\u0DAB \u0DB4\u0DCA\u200D\u0DBB\u0DB8\u0DCF\u0DAF\u0DBA\u0D9A \u0D8B\u0DB4\u0DBB\u0DD2\u0DB8\u0DBA\u0D9A\u0DCA \u0DB8\u0D9C\u0DD2\u0DB1\u0DCA \u0D91\u0DBA \u0DB6\u0DDC\u0DBB\u0DD4 \u0DB6\u0DC0 \u0DB4\u0DD9\u0DB1\u0DCA\u0DC0\u0DBA\u0DD2.",
+    ta: "\u0B95\u0BBE\u0BB0\u0BA3\u0BBF \u0B89\u0BA3\u0BCD\u0BAE\u0BC8\u0BAF\u0BBF\u0BB2\u0BCD \u0B86\u0BB1\u0BCD\u0BB1\u0BB2\u0BC8 \u0B87\u0BA3\u0BC8\u0B95\u0BCD\u0B95\u0BC1\u0BAE\u0BBE\u0BA9\u0BBE\u0BB2\u0BCD, \u0B85\u0BA4\u0BC1 \u0BA4\u0BC1\u0BB2\u0B99\u0BCD\u0B95\u0BB2\u0BC1\u0B95\u0BCD\u0B95\u0BC1 \u0BAE\u0BC1\u0BA9\u0BCD \u0BAE\u0BBE\u0BB1 \u0BB5\u0BC7\u0BA3\u0BCD\u0B9F\u0BC1\u0BAE\u0BCD. \u0BA4\u0BBE\u0BAE\u0BA4\u0B95\u0BCD \u0B95\u0BC1\u0BB1\u0BC1\u0B95\u0BCD\u0B95\u0BC1\u0BA4\u0BCD \u0BA4\u0BCA\u0B9F\u0BB0\u0BCD\u0BAA\u0BBE\u0BB2\u0BCD \u0B87\u0BA4\u0BC8\u0B9A\u0BCD \u0B9A\u0BCB\u0BA4\u0BBF\u0B95\u0BCD\u0B95\u0BB2\u0BBE\u0BAE\u0BCD; \u0B8E\u0BA4\u0BBF\u0BB0\u0BCD\u0BAE\u0BB1\u0BC8 \u0BA4\u0BBE\u0BAE\u0BA4\u0BA4\u0BCD\u0BA4\u0BBF\u0BB2\u0BCD \u0B89\u0B9A\u0BCD\u0B9A\u0BAE\u0BCD \u0B87\u0BB0\u0BC1\u0BA8\u0BCD\u0BA4\u0BBE\u0BB2\u0BCD \u0B87\u0BA4\u0BC1 \u0BAA\u0BCA\u0BAF\u0BCD\u0BAF\u0BBE\u0B95\u0BC1\u0BAE\u0BCD."
+  },
+  hyp_threshold_statement: {
+    en: "During {period}, {response} exceeds {threshold} only in intervals where {driver} crosses its storm threshold, at a higher rate than the baseline.",
+    si: "{period} \u0D9A\u0DCF\u0DBD\u0DBA \u0DAD\u0DD4\u0DC5, {driver} \u0D91\u0DC4\u0DD2 \u0D9A\u0DD4\u0DAB\u0DCF\u0DA7\u0DD4 \u0DC3\u0DD3\u0DB8\u0DCF\u0DC0 \u0D89\u0D9A\u0DCA\u0DB8\u0DC0\u0DB1 \u0D9A\u0DCF\u0DBD \u0DB4\u0DBB\u0DAD\u0DBB\u0DBA\u0DB1\u0DCA\u0DC4\u0DD2\u0DAF\u0DD3 \u0DB4\u0DB8\u0DAB\u0D9A\u0DCA {response} {threshold} \u0D89\u0D9A\u0DCA\u0DB8\u0DC0\u0DBA\u0DD2; \u0D91\u0DBA \u0DB4\u0DCF\u0DAF\u0D9A \u0D85\u0D9C\u0DBA\u0DA7 \u0DC0\u0DA9\u0DCF \u0D89\u0DC4\u0DC5 \u0D85\u0DB1\u0DD4\u0DB4\u0DCF\u0DAD\u0DBA\u0D9A\u0DD2.",
+    ta: "{period} \u0B95\u0BBE\u0BB2\u0BA4\u0BCD\u0BA4\u0BBF\u0BB2\u0BCD, {driver} \u0B85\u0BA4\u0BA9\u0BCD \u0BAA\u0BC1\u0BAF\u0BB2\u0BCD \u0BB5\u0BB0\u0BAE\u0BCD\u0BAA\u0BC8\u0B95\u0BCD \u0B95\u0B9F\u0B95\u0BCD\u0B95\u0BC1\u0BAE\u0BCD \u0B87\u0B9F\u0BC8\u0BB5\u0BC6\u0BB3\u0BBF\u0B95\u0BB3\u0BBF\u0BB2\u0BCD \u0BAE\u0B9F\u0BCD\u0B9F\u0BC1\u0BAE\u0BC7 {response} {threshold} \u0B90 \u0BAE\u0BC0\u0BB1\u0BC1\u0BAE\u0BCD; \u0B87\u0BA4\u0BC1 \u0B85\u0B9F\u0BBF\u0BAA\u0BCD\u0BAA\u0B9F\u0BC8 \u0BB5\u0BBF\u0B95\u0BBF\u0BA4\u0BA4\u0BCD\u0BA4\u0BC8 \u0BB5\u0BBF\u0B9F \u0B85\u0BA4\u0BBF\u0B95\u0BAE\u0BCD."
+  },
+  hyp_threshold_explanation: {
+    en: "A threshold response is a stronger, more specific claim than a correlation: it predicts that exceedances cluster where the driver is extreme. It can fail either because exceedances are independent of the driver, or because the threshold is wrong.",
+    si: "\u0DC3\u0DD3\u0DB8\u0DCF \u0DB4\u0DCA\u200D\u0DBB\u0DAD\u0DD2\u0DA0\u0DCF\u0DBB\u0DBA\u0D9A\u0DCA \u0DC3\u0DC4\u0DC3\u0DB8\u0DCA\u0DB6\u0DB1\u0DCA\u0DB0\u0DBA\u0D9A\u0DA7 \u0DC0\u0DA9\u0DCF \u0DC1\u0D9A\u0DCA\u0DAD\u0DD2\u0DB8\u0DAD\u0DCA \u0DC4\u0DCF \u0DC0\u0DD2\u0DC1\u0DDA\u0DC2\u0DD2\u0DAD \u0DB4\u0DCA\u200D\u0DBB\u0D9A\u0DCF\u0DC1\u0DBA\u0D9A\u0DD2: \u0DC3\u0DCF\u0DB0\u0D9A\u0DBA \u0D85\u0DB1\u0DCA\u0DAD \u0DC0\u0DB1 \u0DAD\u0DD0\u0DB1 \u0D85\u0D9C\u0DBA \u0D89\u0D9A\u0DCA\u0DB8\u0DC0\u0DD3\u0DB8\u0DCA \u0D91\u0D9A\u0DAD\u0DD4 \u0DC0\u0DDA \u0DBA\u0DD0\u0DBA\u0DD2 \u0D91\u0DBA \u0D85\u0DB1\u0DCF\u0DC0\u0DD0\u0D9A\u0DD2 \u0DB4\u0DC5 \u0D9A\u0DBB\u0DBA\u0DD2. \u0D85\u0D9C\u0DBA \u0D89\u0D9A\u0DCA\u0DB8\u0DC0\u0DD3\u0DB8\u0DCA \u0DC3\u0DCF\u0DB0\u0D9A\u0DBA\u0DA7 \u0DC3\u0DCA\u0DC0\u0DCF\u0DB0\u0DD3\u0DB1 \u0DB1\u0DB8\u0DCA \u0DC4\u0DDD \u0DC3\u0DD3\u0DB8\u0DCF\u0DC0 \u0DC0\u0DD0\u0DBB\u0DAF\u0DD2 \u0DB1\u0DB8\u0DCA \u0D91\u0DBA \u0D85\u0DC3\u0DCF\u0DBB\u0DCA\u0DAE\u0D9A \u0DC0\u0DDA.",
+    ta: "\u0BB5\u0BB0\u0BAE\u0BCD\u0BAA\u0BC1\u0BA4\u0BCD \u0BA4\u0BC1\u0BB2\u0B99\u0BCD\u0B95\u0BB2\u0BCD \u0BA4\u0BCA\u0B9F\u0BB0\u0BCD\u0BAA\u0BC8 \u0BB5\u0BBF\u0B9F \u0BB5\u0BB2\u0BC1\u0BB5\u0BBE\u0BA9, \u0B95\u0BC1\u0BB1\u0BBF\u0BAA\u0BCD\u0BAA\u0BBE\u0BA9 \u0B95\u0BC2\u0BB1\u0BCD\u0BB1\u0BC1: \u0B95\u0BBE\u0BB0\u0BA3\u0BBF \u0BA4\u0BC0\u0BB5\u0BBF\u0BB0\u0BAE\u0BBE\u0B95 \u0B87\u0BB0\u0BC1\u0B95\u0BCD\u0B95\u0BC1\u0BAE\u0BCD \u0B87\u0B9F\u0B99\u0BCD\u0B95\u0BB3\u0BBF\u0BB2\u0BCD \u0BAE\u0BC0\u0BB1\u0BB2\u0BCD\u0B95\u0BB3\u0BCD \u0B95\u0BC1\u0BB5\u0BBF\u0BAF\u0BC1\u0BAE\u0BCD \u0B8E\u0BA9\u0B95\u0BCD \u0B95\u0BA3\u0BBF\u0B95\u0BCD\u0B95\u0BBF\u0BB1\u0BA4\u0BC1. \u0BAE\u0BC0\u0BB1\u0BB2\u0BCD\u0B95\u0BB3\u0BCD \u0B95\u0BBE\u0BB0\u0BA3\u0BBF\u0BAF\u0BBF\u0BB2\u0BBF\u0BB0\u0BC1\u0BA8\u0BCD\u0BA4\u0BC1 \u0B9A\u0BC1\u0BAF\u0BBE\u0BA4\u0BC0\u0BA9\u0BAE\u0BBE\u0B95 \u0B87\u0BB0\u0BC1\u0BA8\u0BCD\u0BA4\u0BBE\u0BB2\u0BCB \u0BB5\u0BB0\u0BAE\u0BCD\u0BAA\u0BC1 \u0BA4\u0BB5\u0BB1\u0BBE\u0B95 \u0B87\u0BB0\u0BC1\u0BA8\u0BCD\u0BA4\u0BBE\u0BB2\u0BCB \u0B87\u0BA4\u0BC1 \u0BA4\u0BCB\u0BB2\u0BCD\u0BB5\u0BBF\u0BAF\u0B9F\u0BC8\u0BAF\u0BC1\u0BAE\u0BCD."
+  },
+  hyp_null_statement: {
+    en: "There is no detectable association between {driver} and {response} over {period}; any apparent relationship is consistent with chance.",
+    si: "{period} \u0D9A\u0DCF\u0DBD\u0DBA \u0DAD\u0DD4\u0DC5 {driver} \u0DC3\u0DC4 {response} \u0D85\u0DAD\u0DBB \u0DC4\u0DB3\u0DD4\u0DB1\u0DCF\u0D9C\u0DAD \u0DC4\u0DD0\u0D9A\u0DD2 \u0DC3\u0DB8\u0DCA\u0DB6\u0DB1\u0DCA\u0DB0\u0DAD\u0DCF\u0DC0\u0DBA\u0D9A\u0DCA \u0DB1\u0DDC\u0DB8\u0DD0\u0DAD; \u0DB4\u0DD9\u0DB1\u0DD9\u0DB1 \u0DC3\u0DB8\u0DCA\u0DB6\u0DB1\u0DCA\u0DB0\u0DAD\u0DCF\u0DC0\u0DBA \u0D85\u0DC4\u0DB8\u0DCA\u0DB6\u0DBA\u0D9A\u0DA7 \u0D85\u0DB1\u0DD4\u0D9A\u0DD6\u0DBD\u0DBA.",
+    ta: "{period} \u0B95\u0BBE\u0BB2\u0BA4\u0BCD\u0BA4\u0BBF\u0BB2\u0BCD {driver} \u0BAE\u0BB1\u0BCD\u0BB1\u0BC1\u0BAE\u0BCD {response} \u0B87\u0B9F\u0BC8\u0BAF\u0BC7 \u0B95\u0BA3\u0BCD\u0B9F\u0BB1\u0BBF\u0BAF\u0B95\u0BCD\u0B95\u0BC2\u0B9F\u0BBF\u0BAF \u0BA4\u0BCA\u0B9F\u0BB0\u0BCD\u0BAA\u0BC1 \u0B87\u0BB2\u0BCD\u0BB2\u0BC8; \u0BA4\u0BC6\u0BB0\u0BBF\u0BAF\u0BC1\u0BAE\u0BCD \u0BA4\u0BCA\u0B9F\u0BB0\u0BCD\u0BAA\u0BC1 \u0BA4\u0BB1\u0BCD\u0B9A\u0BC6\u0BAF\u0BB2\u0BBE\u0BA9\u0BA4\u0BC1."
+  },
+  hyp_null_explanation: {
+    en: "The null hypothesis is stated explicitly so the investigation can fail to reject it. Reporting only confirmations would be a serious methodological error.",
+    si: "\u0DC1\u0DD4\u0DB1\u0DCA\u200D\u0DBA \u0D8B\u0DB4\u0D9A\u0DBD\u0DCA\u0DB4\u0DB1\u0DBA \u0DB4\u0DD0\u0DC4\u0DD0\u0DAF\u0DD2\u0DBD\u0DD2\u0DC0 \u0DB4\u0DCA\u200D\u0DBB\u0D9A\u0DCF\u0DC1 \u0D9A\u0DBB\u0DB1\u0DCA\u0DB1\u0DDA \u0DC0\u0DD2\u0DB8\u0DBB\u0DCA\u0DC1\u0DB1\u0DBA\u0DA7 \u0D91\u0DBA \u0DB4\u0DCA\u200D\u0DBB\u0DAD\u0DD2\u0D9A\u0DCA\u0DC2\u0DDA\u0DB4 \u0DB1\u0DDC\u0D9A\u0DD2\u0DBB\u0DD3\u0DB8\u0DA7 \u0DC4\u0DD0\u0D9A\u0DD2 \u0DC0\u0DB1 \u0DB4\u0DBB\u0DD2\u0DAF\u0DD2\u0DBA. \u0DAD\u0DC4\u0DC0\u0DD4\u0DBB\u0DD4 \u0D9A\u0DD2\u0DBB\u0DD3\u0DB8\u0DCA \u0DB4\u0DB8\u0DAB\u0D9A\u0DCA \u0DC0\u0DCF\u0DBB\u0DCA\u0DAD\u0DCF \u0D9A\u0DD2\u0DBB\u0DD3\u0DB8 \u0DB6\u0DBB\u0DB4\u0DAD\u0DBD \u0D9A\u0DCA\u200D\u0DBB\u0DB8\u0DC0\u0DDA\u0DAF \u0DAF\u0DDD\u0DC2\u0DBA\u0D9A\u0DD2.",
+    ta: "\u0BAA\u0BC2\u0B9C\u0BCD\u0BAF \u0B95\u0BB0\u0BC1\u0BA4\u0BC1\u0B95\u0BCB\u0BB3\u0BCD \u0BB5\u0BC6\u0BB3\u0BBF\u0BAA\u0BCD\u0BAA\u0B9F\u0BC8\u0BAF\u0BBE\u0B95\u0B95\u0BCD \u0B95\u0BC2\u0BB1\u0BAA\u0BCD\u0BAA\u0B9F\u0BC1\u0BB5\u0BA4\u0BBE\u0BB2\u0BCD \u0B86\u0BAF\u0BCD\u0BB5\u0BC1 \u0B85\u0BA4\u0BC8 \u0BA8\u0BBF\u0BB0\u0BBE\u0B95\u0BB0\u0BBF\u0B95\u0BCD\u0B95\u0BA4\u0BCD \u0BA4\u0BB5\u0BB1\u0BB2\u0BBE\u0BAE\u0BCD. \u0B89\u0BB1\u0BC1\u0BA4\u0BBF\u0BAA\u0BCD\u0BAA\u0B9F\u0BC1\u0BA4\u0BCD\u0BA4\u0BB2\u0BCD\u0B95\u0BB3\u0BC8 \u0BAE\u0B9F\u0BCD\u0B9F\u0BC1\u0BAE\u0BCD \u0B85\u0BB1\u0BBF\u0BB5\u0BBF\u0BAA\u0BCD\u0BAA\u0BA4\u0BC1 \u0B95\u0B9F\u0BC1\u0BAE\u0BCD \u0BAE\u0BC1\u0BB1\u0BC8\u0BAF\u0BBF\u0BAF\u0BB2\u0BCD \u0BA4\u0BB5\u0BB1\u0BC1."
+  },
+  hyp_trend_statement: {
+    en: "Between {start} and {end}, {response} in {region} shows a {direction} linear trend that is distinguishable from zero.",
+    si: "{start} \u0DC3\u0DC4 {end} \u0D85\u0DAD\u0DBB, {region} \u0DC4\u0DD2 {response} \u0DC1\u0DD4\u0DB1\u0DCA\u200D\u0DBA\u0DBA\u0DD9\u0DB1\u0DCA \u0DC0\u0DD9\u0DB1\u0DCA\u0D9A\u0DC5 \u0DC4\u0DD0\u0D9A\u0DD2 {direction} \u0DBB\u0DDA\u0D9B\u0DD3\u0DBA \u0DB4\u0DCA\u200D\u0DBB\u0DC0\u0DAB\u0DAD\u0DCF\u0DC0\u0DBA\u0D9A\u0DCA \u0DB4\u0DD9\u0DB1\u0DCA\u0DC0\u0DBA\u0DD2.",
+    ta: "{start} \u0BAE\u0BC1\u0BA4\u0BB2\u0BCD {end} \u0BB5\u0BB0\u0BC8, {region} \u0BAA\u0B95\u0BC1\u0BA4\u0BBF\u0BAF\u0BBF\u0BB2\u0BCD {response} \u0BAA\u0BC2\u0B9C\u0BCD\u0B9C\u0BBF\u0BAF\u0BA4\u0BCD\u0BA4\u0BBF\u0BB2\u0BBF\u0BB0\u0BC1\u0BA8\u0BCD\u0BA4\u0BC1 \u0BB5\u0BC7\u0BB1\u0BC1\u0BAA\u0B9F\u0BC1\u0BA4\u0BCD\u0BA4\u0B95\u0BCD\u0B95\u0BC2\u0B9F\u0BBF\u0BAF {direction} \u0BA8\u0BC7\u0BB0\u0BCD\u0B95\u0BCB\u0B9F\u0BCD\u0B9F\u0BC1\u0BAA\u0BCD \u0BAA\u0BCB\u0B95\u0BCD\u0B95\u0BC8\u0B95\u0BCD \u0B95\u0BBE\u0B9F\u0BCD\u0B9F\u0BC1\u0B95\u0BBF\u0BB1\u0BA4\u0BC1."
+  },
+  hyp_trend_explanation: {
+    en: "A trend claim is only meaningful with its uncertainty: slope, confidence interval, sample size and autocorrelation all matter. A monthly series has far fewer independent samples than rows.",
+    si: "\u0DB4\u0DCA\u200D\u0DBB\u0DC0\u0DAB\u0DAD\u0DCF \u0DB4\u0DCA\u200D\u0DBB\u0D9A\u0DCF\u0DC1\u0DBA\u0D9A\u0DCA \u0D85\u0DBB\u0DCA\u0DAE\u0DC0\u0DAD\u0DCA \u0DC0\u0DB1\u0DCA\u0DB1\u0DDA \u0D91\u0DC4\u0DD2 \u0D85\u0DB1\u0DD2\u0DC1\u0DCA\u0DA0\u0DD2\u0DAD\u0DAD\u0DCF\u0DC0\u0DBA \u0DC3\u0DB8\u0D9F\u0DBA: \u0DB6\u0DD1\u0DC0\u0DD4\u0DB8, \u0DC0\u0DD2\u0DC1\u0DCA\u0DC0\u0DCF\u0DC3 \u0DB4\u0DBB\u0DCF\u0DC3\u0DBA, \u0DB1\u0DD2\u0DBA\u0DD0\u0DAF\u0DD2 \u0DB4\u0DCA\u200D\u0DBB\u0DB8\u0DCF\u0DAB\u0DBA \u0DC3\u0DC4 \u0DC3\u0DCA\u0DC0\u0DBA\u0D82-\u0DC3\u0DC4\u0DC3\u0DB8\u0DCA\u0DB6\u0DB1\u0DCA\u0DB0\u0DAD\u0DCF\u0DC0\u0DBA \u0DC0\u0DD0\u0DAF\u0D9C\u0DAD\u0DCA \u0DC0\u0DDA. \u0DB8\u0DCF\u0DC3\u0DD2\u0D9A \u0DC1\u0DCA\u200D\u0DBB\u0DDA\u0DAB\u0DD2\u0DBA\u0D9A \u0DC3\u0DCA\u0DC0\u0DCF\u0DB0\u0DD3\u0DB1 \u0DB1\u0DD2\u0DBA\u0DD0\u0DAF\u0DD2 \u0DB4\u0DDA\u0DC5\u0DD2 \u0D9C\u0DAB\u0DB1\u0DA7 \u0DC0\u0DA9\u0DCF \u0DB6\u0DD9\u0DC4\u0DD9\u0DC0\u0DD2\u0DB1\u0DCA \u0D85\u0DA9\u0DD4\u0DBA.",
+    ta: "\u0BAA\u0BCB\u0B95\u0BCD\u0B95\u0BC1\u0B95\u0BCD \u0B95\u0BC2\u0BB1\u0BCD\u0BB1\u0BC1 \u0B85\u0BA4\u0BA9\u0BCD \u0BA8\u0BBF\u0B9A\u0BCD\u0B9A\u0BAF\u0BAE\u0BB1\u0BCD\u0BB1 \u0BA4\u0BA9\u0BCD\u0BAE\u0BC8\u0BAF\u0BC1\u0B9F\u0BA9\u0BCD \u0BAE\u0B9F\u0BCD\u0B9F\u0BC1\u0BAE\u0BC7 \u0BAA\u0BCA\u0BB0\u0BC1\u0BB3\u0BCD\u0BAA\u0B9F\u0BC1\u0BAE\u0BCD: \u0B9A\u0BBE\u0BAF\u0BCD\u0BB5\u0BC1, \u0BA8\u0BAE\u0BCD\u0BAA\u0B95 \u0B87\u0B9F\u0BC8\u0BB5\u0BC6\u0BB3\u0BBF, \u0BAE\u0BBE\u0BA4\u0BBF\u0BB0\u0BBF \u0B85\u0BB3\u0BB5\u0BC1, \u0BA4\u0BA9\u0BCD-\u0BA4\u0BCA\u0B9F\u0BB0\u0BCD\u0BAA\u0BC1 \u0B86\u0B95\u0BBF\u0BAF\u0BB5\u0BC8 \u0BAE\u0BC1\u0B95\u0BCD\u0B95\u0BBF\u0BAF\u0BAE\u0BCD. \u0BAE\u0BBE\u0BA4\u0BBE\u0BA8\u0BCD\u0BA4\u0BBF\u0BB0 \u0BA4\u0BCA\u0B9F\u0BB0\u0BBF\u0BB2\u0BCD \u0B9A\u0BC1\u0BAF\u0BBE\u0BA4\u0BC0\u0BA9 \u0BAE\u0BBE\u0BA4\u0BBF\u0BB0\u0BBF\u0B95\u0BB3\u0BCD \u0BB5\u0BB0\u0BBF\u0B95\u0BB3\u0BC8 \u0BB5\u0BBF\u0B9F \u0BAE\u0BBF\u0B95\u0B95\u0BCD \u0B95\u0BC1\u0BB1\u0BC8\u0BB5\u0BC1."
+  },
+  hyp_before_after_statement: {
+    en: "During {period}, {response} is higher inside the event window than in the surrounding baseline windows.",
+    si: "{period} \u0D9A\u0DCF\u0DBD\u0DBA \u0DAD\u0DD4\u0DC5, \u0DC3\u0DD2\u0DAF\u0DD4\u0DC0\u0DD3\u0DB8\u0DCA \u0D9A\u0DC0\u0DD4\u0DC5\u0DD4\u0DC0 \u0DAD\u0DD4\u0DC5 {response} \u0D85\u0DC0\u0DA7 \u0DB4\u0DCF\u0DAF\u0D9A \u0D9A\u0DC0\u0DD4\u0DC5\u0DD4\u0DC0\u0DBD\u0DA7 \u0DC0\u0DA9\u0DCF \u0D89\u0DC4\u0DC5 \u0DBA.",
+    ta: "{period} \u0B95\u0BBE\u0BB2\u0BA4\u0BCD\u0BA4\u0BBF\u0BB2\u0BCD, \u0BA8\u0BBF\u0B95\u0BB4\u0BCD\u0BB5\u0BC1 \u0B9A\u0BBE\u0BB3\u0BB0\u0BA4\u0BCD\u0BA4\u0BBF\u0BB1\u0BCD\u0B95\u0BC1\u0BB3\u0BCD {response} \u0B9A\u0BC1\u0BB1\u0BCD\u0BB1\u0BBF\u0BAF\u0BC1\u0BB3\u0BCD\u0BB3 \u0B85\u0B9F\u0BBF\u0BAA\u0BCD\u0BAA\u0B9F\u0BC8 \u0B9A\u0BBE\u0BB3\u0BB0\u0B99\u0BCD\u0B95\u0BB3\u0BC8 \u0BB5\u0BBF\u0B9F \u0B85\u0BA4\u0BBF\u0B95\u0BAE\u0BBE\u0B95 \u0B89\u0BB3\u0BCD\u0BB3\u0BA4\u0BC1."
+  },
+  hyp_before_after_explanation: {
+    en: "A before/after comparison tests whether an event window differs from its surroundings. It is weak evidence on its own because the baseline may itself be unusual.",
+    si: "\u0DB4\u0DD9\u0DBB/\u0DB4\u0DC3\u0DD4 \u0DC3\u0D82\u0DC3\u0DB1\u0DCA\u0DAF\u0DB1\u0DBA \u0DB8\u0D9C\u0DD2\u0DB1\u0DCA \u0DC3\u0DD2\u0DAF\u0DD4\u0DC0\u0DD3\u0DB8\u0DCA \u0D9A\u0DC0\u0DD4\u0DC5\u0DD4\u0DC0\u0D9A\u0DCA \u0D91\u0DC4\u0DD2 \u0DB4\u0DBB\u0DD2\u0DC3\u0DBB\u0DBA\u0DA7 \u0DC0\u0DA9\u0DCF \u0DC0\u0DD9\u0DB1\u0DC3\u0DCA\u0DAF \u0DBA\u0DB1\u0DCA\u0DB1 \u0DB4\u0DBB\u0DD3\u0D9A\u0DCA\u0DC2\u0DCF \u0D9A\u0DBB\u0DBA\u0DD2. \u0DB4\u0DCF\u0DAF\u0D9A\u0DBA\u0DAF \u0D85\u0DC3\u0DCF\u0DB8\u0DCF\u0DB1\u0DCA\u200D\u0DBA \u0DC0\u0DD2\u0DBA \u0DC4\u0DD0\u0D9A\u0DD2 \u0DB6\u0DD0\u0DC0\u0DD2\u0DB1\u0DCA \u0D91\u0DBA \u0DAD\u0DB1\u0DD2\u0DC0 \u0DAF\u0DD4\u0DBB\u0DCA\u0DC0\u0DBD \u0DC3\u0DCF\u0D9A\u0DCA\u0DC2\u0DD2\u0DBA\u0D9A\u0DD2.",
+    ta: "\u0BAE\u0BC1\u0BA9\u0BCD/\u0BAA\u0BBF\u0BA9\u0BCD \u0B92\u0BAA\u0BCD\u0BAA\u0BC0\u0B9F\u0BC1 \u0BA8\u0BBF\u0B95\u0BB4\u0BCD\u0BB5\u0BC1\u0B9A\u0BCD \u0B9A\u0BBE\u0BB3\u0BB0\u0BAE\u0BCD \u0B85\u0BA4\u0BA9\u0BCD \u0B9A\u0BC1\u0BB1\u0BCD\u0BB1\u0BC1\u0BAA\u0BCD\u0BAA\u0BC1\u0BB1\u0BA4\u0BCD\u0BA4\u0BBF\u0BB2\u0BBF\u0BB0\u0BC1\u0BA8\u0BCD\u0BA4\u0BC1 \u0BB5\u0BC7\u0BB1\u0BC1\u0BAA\u0B9F\u0BC1\u0B95\u0BBF\u0BB1\u0BA4\u0BBE \u0B8E\u0BA9\u0B9A\u0BCD \u0B9A\u0BCB\u0BA4\u0BBF\u0B95\u0BCD\u0B95\u0BBF\u0BB1\u0BA4\u0BC1. \u0B85\u0B9F\u0BBF\u0BAA\u0BCD\u0BAA\u0B9F\u0BC8\u0BAF\u0BC1\u0BAE\u0BCD \u0B85\u0B9A\u0BBE\u0BA4\u0BBE\u0BB0\u0BA3\u0BAE\u0BBE\u0B95 \u0B87\u0BB0\u0BC1\u0B95\u0BCD\u0B95\u0BB2\u0BBE\u0BAE\u0BCD \u0B8E\u0BA9\u0BCD\u0BAA\u0BA4\u0BBE\u0BB2\u0BCD \u0B87\u0BA4\u0BC1 \u0BA4\u0BA9\u0BBF\u0BAF\u0BBE\u0B95 \u0BAA\u0BB2\u0BB5\u0BC0\u0BA9\u0BAE\u0BBE\u0BA9 \u0B9A\u0BBE\u0BA9\u0BCD\u0BB1\u0BC1."
+  },
+  hyp_context_statement: {
+    en: "The requested date has retrievable {sourceType} available for {period}; the claim under test is data availability, not a physical relationship.",
+    si: "\u0D89\u0DBD\u0DCA\u0DBD\u0DCF \u0DC3\u0DD2\u0DA7\u0DD2 \u0DAF\u0DD2\u0DB1\u0DBA \u0DC3\u0DB3\u0DC4\u0DCF {period} \u0DAD\u0DD4\u0DC5 {sourceType} \u0DBD\u0DB6\u0DCF\u0D9C\u0DAD \u0DC4\u0DD0\u0D9A\u0DD2\u0DBA; \u0DB4\u0DBB\u0DD3\u0D9A\u0DCA\u0DC2\u0DCF \u0D9A\u0DBB\u0DB1 \u0DB4\u0DCA\u200D\u0DBB\u0D9A\u0DCF\u0DC1\u0DBA \u0DAF\u0DAD\u0DCA\u0DAD \u0DBD\u0DB6\u0DCF\u0D9C\u0DD0\u0DB1\u0DD3\u0DB8\u0DDA \u0DC4\u0DD0\u0D9A\u0DD2\u0DBA\u0DCF\u0DC0 \u0DB8\u0DD2\u0DC3 \u0DB7\u0DDE\u0DAD\u0DD2\u0D9A \u0DC3\u0DB8\u0DCA\u0DB6\u0DB1\u0DCA\u0DB0\u0DAD\u0DCF\u0DC0\u0DBA\u0D9A\u0DCA \u0DB1\u0DDC\u0DC0\u0DDA.",
+    ta: "\u0B95\u0BCB\u0BB0\u0BAA\u0BCD\u0BAA\u0B9F\u0BCD\u0B9F \u0BA4\u0BC7\u0BA4\u0BBF\u0B95\u0BCD\u0B95\u0BC1 {period} \u0B95\u0BBE\u0BB2\u0BA4\u0BCD\u0BA4\u0BBF\u0BB2\u0BCD {sourceType} \u0BAA\u0BC6\u0BB1\u0B95\u0BCD\u0B95\u0BC2\u0B9F\u0BBF\u0BAF\u0BA4\u0BBE\u0B95 \u0B89\u0BB3\u0BCD\u0BB3\u0BA4\u0BC1; \u0B9A\u0BCB\u0BA4\u0BBF\u0B95\u0BCD\u0B95\u0BAA\u0BCD\u0BAA\u0B9F\u0BC1\u0BAE\u0BCD \u0B95\u0BC2\u0BB1\u0BCD\u0BB1\u0BC1 \u0BA4\u0BB0\u0BB5\u0BC1 \u0B95\u0BBF\u0B9F\u0BC8\u0B95\u0BCD\u0B95\u0BC1\u0BAE\u0BCD \u0BA4\u0BA9\u0BCD\u0BAE\u0BC8, \u0B87\u0BAF\u0BB1\u0BCD\u0BAA\u0BBF\u0BAF\u0BB2\u0BCD \u0BA4\u0BCA\u0B9F\u0BB0\u0BCD\u0BAA\u0BC1 \u0B85\u0BB2\u0BCD\u0BB2."
+  },
+  hyp_context_explanation: {
+    en: "Imagery and editorial datasets are qualitative. NOVA will not derive a measurement or a trend from them. The only testable statement they support is whether the record exists for the date requested.",
+    si: "\u0DBB\u0DD6\u0DB4 \u0DC3\u0DC4 \u0DC3\u0D82\u0DC3\u0DCA\u0D9A\u0DCF\u0DBB\u0D9A \u0DAF\u0DAD\u0DCA\u0DAD \u0D9A\u0DA7\u0DCA\u0DA7\u0DBD \u0D9C\u0DD4\u0DAB\u0DCF\u0DAD\u0DCA\u0DB8\u0D9A \u0DBA. NOVA \u0D92\u0DC0\u0DCF\u0DBA\u0DD2\u0DB1\u0DCA \u0DB8\u0DD2\u0DB1\u0DD4\u0DB8\u0D9A\u0DCA \u0DC4\u0DDD \u0DB4\u0DCA\u200D\u0DBB\u0DC0\u0DAB\u0DAD\u0DCF\u0DC0\u0DBA\u0D9A\u0DCA \u0DBD\u0DB6\u0DCF \u0DB1\u0DDC\u0D9C\u0DB1\u0DD3. \u0D92\u0DC0\u0DCF \u0DC3\u0DC4\u0DCF\u0DBA \u0DAF\u0D9A\u0DCA\u0DC0\u0DB1 \u0D91\u0D9A\u0DB8 \u0DB4\u0DBB\u0DD3\u0D9A\u0DCA\u0DC2\u0DAB\u0DD3\u0DBA \u0DB4\u0DCA\u200D\u0DBB\u0D9A\u0DCF\u0DC1\u0DBA \u0DC0\u0DB1\u0DCA\u0DB1\u0DDA \u0D89\u0DBD\u0DCA\u0DBD\u0DCF \u0DC3\u0DD2\u0DA7\u0DD2 \u0DAF\u0DD2\u0DB1\u0DBA \u0DC3\u0DB3\u0DC4\u0DCF \u0DC0\u0DCF\u0DBB\u0DCA\u0DAD\u0DCF\u0DC0 \u0DB4\u0DC0\u0DAD\u0DD3\u0DAF \u0DBA\u0DB1\u0DCA\u0DB1\u0DBA\u0DD2.",
+    ta: "\u0BAA\u0B9F\u0B99\u0BCD\u0B95\u0BB3\u0BCD \u0BAE\u0BB1\u0BCD\u0BB1\u0BC1\u0BAE\u0BCD \u0BA4\u0BCA\u0B95\u0BC1\u0BAA\u0BCD\u0BAA\u0BC1\u0BA4\u0BCD \u0BA4\u0BB0\u0BB5\u0BC1\u0BA4\u0BCD\u0BA4\u0BCA\u0B95\u0BC1\u0BAA\u0BCD\u0BAA\u0BC1\u0B95\u0BB3\u0BCD \u0BA4\u0BB0\u0BAE\u0BBE\u0BA9\u0BB5\u0BC8. NOVA \u0B85\u0BB5\u0BB1\u0BCD\u0BB1\u0BBF\u0BB2\u0BBF\u0BB0\u0BC1\u0BA8\u0BCD\u0BA4\u0BC1 \u0B85\u0BB3\u0BB5\u0BC0\u0B9F\u0BC1 \u0B85\u0BB2\u0BCD\u0BB2\u0BA4\u0BC1 \u0BAA\u0BCB\u0B95\u0BCD\u0B95\u0BC8\u0BAA\u0BCD \u0BAA\u0BC6\u0BB1\u0BBE\u0BA4\u0BC1. \u0B85\u0BB5\u0BC8 \u0B86\u0BA4\u0BB0\u0BBF\u0B95\u0BCD\u0B95\u0BC1\u0BAE\u0BCD \u0B92\u0BB0\u0BC7 \u0B9A\u0BCB\u0BA4\u0BA9\u0BC8\u0B95\u0BCD \u0B95\u0BC2\u0BB1\u0BCD\u0BB1\u0BC1, \u0B95\u0BCB\u0BB0\u0BAA\u0BCD\u0BAA\u0B9F\u0BCD\u0B9F \u0BA4\u0BC7\u0BA4\u0BBF\u0B95\u0BCD\u0B95\u0BBE\u0BA9 \u0BAA\u0BA4\u0BBF\u0BB5\u0BC1 \u0B89\u0BB3\u0BCD\u0BB3\u0BA4\u0BBE \u0B8E\u0BA9\u0BCD\u0BAA\u0BA4\u0BC7."
+  },
+  sourceType_imagery: { en: "surface imagery", si: "\u0DB8\u0DAD\u0DD4\u0DB4\u0DD2\u0DA7 \u0DBB\u0DD6\u0DB4", ta: "\u0BAE\u0BC7\u0BB1\u0BCD\u0BAA\u0BB0\u0BAA\u0BCD\u0BAA\u0BC1\u0BAA\u0BCD \u0BAA\u0B9F\u0B99\u0BCD\u0B95\u0BB3\u0BCD" },
+  sourceType_context: { en: "astronomy context", si: "\u0DAD\u0DCF\u0DBB\u0D9A\u0DCF \u0DC0\u0DD2\u0DAF\u0DCA\u200D\u0DBA\u0DCF \u0DB4\u0DC3\u0DD4\u0DB6\u0DD2\u0DB8", ta: "\u0BB5\u0BBE\u0BA9\u0BBF\u0BAF\u0BB2\u0BCD \u0BAA\u0BBF\u0BA9\u0BCD\u0BA9\u0BA3\u0BBF" },
+  direction_positive: { en: "positive", si: "\u0DB0\u0DB1\u0DCF\u0DAD\u0DCA\u0DB8\u0D9A", ta: "\u0BA8\u0BC7\u0BB0\u0BCD\u0BAE\u0BB1\u0BC8" },
+  direction_negative: { en: "negative", si: "\u0DC3\u0DD8\u0DAB\u0DCF\u0DAD\u0DCA\u0DB8\u0D9A", ta: "\u0B8E\u0BA4\u0BBF\u0BB0\u0BCD\u0BAE\u0BB1\u0BC8" },
+  alt_autocorrelation: {
+    en: "Serial autocorrelation in finely sampled series inflates apparent significance; the effective sample size is smaller than the row count.",
+    si: "\u0DC3\u0DD2\u0DBA\u0DD4\u0DB8\u0DCA\u0DC0 \u0DB1\u0DD2\u0DBA\u0DD0\u0DAF\u0DD2 \u0D9A\u0DBB\u0DB1 \u0DBD\u0DAF \u0DC1\u0DCA\u200D\u0DBB\u0DDA\u0DAB\u0DD2\u0DC0\u0DBD \u0D85\u0DB1\u0DD4\u0D9A\u0DCA\u200D\u0DBB\u0DB8\u0DD2\u0D9A \u0DC3\u0DCA\u0DC0\u0DBA\u0D82-\u0DC3\u0DC4\u0DC3\u0DB8\u0DCA\u0DB6\u0DB1\u0DCA\u0DB0\u0DAD\u0DCF\u0DC0\u0DBA \u0DB4\u0DD9\u0DB1\u0DD9\u0DB1 \u0DC0\u0DD0\u0DAF\u0D9C\u0DAD\u0DCA\u0D9A\u0DB8 \u0D89\u0DC4\u0DC5 \u0DB1\u0D82\u0DC0\u0DBA\u0DD2; \u0DB5\u0DBD\u0DAF\u0DCF\u0DBA\u0DD3 \u0DB1\u0DD2\u0DBA\u0DD0\u0DAF\u0DD2 \u0DB4\u0DCA\u200D\u0DBB\u0DB8\u0DCF\u0DAB\u0DBA \u0DB4\u0DDA\u0DC5\u0DD2 \u0D9C\u0DAB\u0DB1\u0DA7 \u0DC0\u0DA9\u0DCF \u0D85\u0DA9\u0DD4\u0DBA.",
+    ta: "\u0BA8\u0BC1\u0B9F\u0BCD\u0BAA\u0BAE\u0BBE\u0B95 \u0BAE\u0BBE\u0BA4\u0BBF\u0BB0\u0BBF\u0BAF\u0BC6\u0B9F\u0BC1\u0B95\u0BCD\u0B95\u0BAA\u0BCD\u0BAA\u0B9F\u0BCD\u0B9F \u0BA4\u0BCA\u0B9F\u0BB0\u0BCD\u0B95\u0BB3\u0BBF\u0BB2\u0BCD \u0BA4\u0BCA\u0B9F\u0BB0\u0BCD \u0BA4\u0BA9\u0BCD-\u0BA4\u0BCA\u0B9F\u0BB0\u0BCD\u0BAA\u0BC1 \u0BA4\u0BCB\u0BB1\u0BCD\u0BB1 \u0B85\u0BB0\u0BCD\u0BA4\u0BCD\u0BA4\u0BA4\u0BCD\u0BA4\u0BC8 \u0B8A\u0BA4\u0BBF\u0BAA\u0BCD \u0BAA\u0BC6\u0BB0\u0BC1\u0B95\u0BCD\u0B95\u0BC1\u0BAE\u0BCD; \u0BAA\u0BAF\u0BA9\u0BC1\u0BB3\u0BCD\u0BB3 \u0BAE\u0BBE\u0BA4\u0BBF\u0BB0\u0BBF \u0B85\u0BB3\u0BB5\u0BC1 \u0BB5\u0BB0\u0BBF\u0B95\u0BB3\u0BBF\u0BA9\u0BCD \u0B8E\u0BA3\u0BCD\u0BA3\u0BBF\u0B95\u0BCD\u0B95\u0BC8\u0BAF\u0BC8 \u0BB5\u0BBF\u0B9F\u0B95\u0BCD \u0B95\u0BC1\u0BB1\u0BC8\u0BB5\u0BC1."
+  },
+  alt_chance: {
+    en: "Repeated or multiple testing can produce an apparent correlation by chance alone.",
+    si: "\u0DB4\u0DD4\u0DB1\u0DBB\u0DCF\u0DC0\u0DBB\u0DCA\u0DAD \u0DC4\u0DDD \u0DB6\u0DC4\u0DD4 \u0DB4\u0DBB\u0DD3\u0D9A\u0DCA\u0DC2\u0DAB \u0DB1\u0DD2\u0DC3\u0DCF \u0D85\u0DC4\u0DB8\u0DCA\u0DB6\u0DBA\u0DD9\u0DB1\u0DCA \u0DB4\u0DB8\u0DAB\u0D9A\u0DCA \u0DB4\u0DD9\u0DB1\u0DD9\u0DB1 \u0DC3\u0DC4\u0DC3\u0DB8\u0DCA\u0DB6\u0DB1\u0DCA\u0DB0\u0DBA\u0D9A\u0DCA \u0D87\u0DAD\u0DD2 \u0DC0\u0DD2\u0DBA \u0DC4\u0DD0\u0D9A.",
+    ta: "\u0BAE\u0BC0\u0BA3\u0BCD\u0B9F\u0BC1\u0BAE\u0BCD \u0BAE\u0BC0\u0BA3\u0BCD\u0B9F\u0BC1\u0BAE\u0BCD \u0B85\u0BB2\u0BCD\u0BB2\u0BA4\u0BC1 \u0BAA\u0BB2 \u0B9A\u0BCB\u0BA4\u0BA9\u0BC8\u0B95\u0BB3\u0BCD \u0BA4\u0BB1\u0BCD\u0B9A\u0BC6\u0BAF\u0BB2\u0BBE\u0B95 \u0B92\u0BB0\u0BC1 \u0BA4\u0BCA\u0B9F\u0BB0\u0BCD\u0BAA\u0BC8 \u0B89\u0BB0\u0BC1\u0BB5\u0BBE\u0B95\u0BCD\u0B95\u0BB2\u0BBE\u0BAE\u0BCD."
+  },
+  alt_selection: {
+    en: "The records are a selected sample (detected objects, reported events), so absence from the record is not evidence of absence in nature.",
+    si: "\u0DC0\u0DCF\u0DBB\u0DCA\u0DAD\u0DCF \u0DAD\u0DDD\u0DBB\u0DCF\u0D9C\u0DAD\u0DCA \u0DB1\u0DD2\u0DBA\u0DD0\u0DAF\u0DD2\u0DBA\u0D9A\u0DD2 (\u0DC4\u0DB3\u0DD4\u0DB1\u0DCF\u0D9C\u0DAD\u0DCA \u0DC0\u0DC3\u0DCA\u0DAD\u0DD4, \u0DC0\u0DCF\u0DBB\u0DCA\u0DAD\u0DCF \u0DC0\u0DD6 \u0DC3\u0DD2\u0DAF\u0DD4\u0DC0\u0DD3\u0DB8\u0DCA); \u0D91\u0DB6\u0DD0\u0DC0\u0DD2\u0DB1\u0DCA \u0DC0\u0DCF\u0DBB\u0DCA\u0DAD\u0DCF\u0DC0\u0DDA \u0DB1\u0DDC\u0DB8\u0DD0\u0DAD\u0DD2 \u0DC0\u0DD3\u0DB8 \u0DC3\u0DCA\u0DC0\u0DB7\u0DCF\u0DC0\u0DBA\u0DDA \u0DB1\u0DDC\u0DB8\u0DD0\u0DAD\u0DD2 \u0DC0\u0DD3\u0DB8\u0DA7 \u0DC3\u0DCF\u0D9A\u0DCA\u0DC2\u0DD2\u0DBA\u0D9A\u0DCA \u0DB1\u0DDC\u0DC0\u0DDA.",
+    ta: "\u0BAA\u0BA4\u0BBF\u0BB5\u0BC1\u0B95\u0BB3\u0BCD \u0BA4\u0BC7\u0BB0\u0BCD\u0BA8\u0BCD\u0BA4\u0BC6\u0B9F\u0BC1\u0B95\u0BCD\u0B95\u0BAA\u0BCD\u0BAA\u0B9F\u0BCD\u0B9F \u0BAE\u0BBE\u0BA4\u0BBF\u0BB0\u0BBF (\u0B95\u0BA3\u0BCD\u0B9F\u0BB1\u0BBF\u0BAF\u0BAA\u0BCD\u0BAA\u0B9F\u0BCD\u0B9F \u0BAA\u0BCA\u0BB0\u0BC1\u0B9F\u0BCD\u0B95\u0BB3\u0BCD, \u0B85\u0BB1\u0BBF\u0BB5\u0BBF\u0B95\u0BCD\u0B95\u0BAA\u0BCD\u0BAA\u0B9F\u0BCD\u0B9F \u0BA8\u0BBF\u0B95\u0BB4\u0BCD\u0BB5\u0BC1\u0B95\u0BB3\u0BCD); \u0BAA\u0BA4\u0BBF\u0BB5\u0BBF\u0BB2\u0BCD \u0B87\u0BB2\u0BCD\u0BB2\u0BBE\u0BA4\u0BA4\u0BC1 \u0B87\u0BAF\u0BB1\u0BCD\u0B95\u0BC8\u0BAF\u0BBF\u0BB2\u0BCD \u0B87\u0BB2\u0BCD\u0BB2\u0BBE\u0BA4\u0BA4\u0BB1\u0BCD\u0B95\u0BC1\u0B9A\u0BCD \u0B9A\u0BBE\u0BA9\u0BCD\u0BB1\u0BC1 \u0B85\u0BB2\u0BCD\u0BB2."
+  },
+  alt_seasonal: {
+    en: "Seasonal, diurnal or solar-cycle phase effects can create an association unrelated to the hypothesised driver.",
+    si: "\u0D8D\u0DAD\u0DD4\u0DB8\u0DBA, \u0DAF\u0DDB\u0DB1\u0DD2\u0D9A \u0DC4\u0DDD \u0DC3\u0DD6\u0DBB\u0DCA\u0DBA \u0DA0\u0D9A\u0DCA\u200D\u0DBB \u0D85\u0DC0\u0DC3\u0DCA\u0DAE\u0DCF \u0DB6\u0DBD\u0DB4\u0DD1\u0DB8\u0DCA \u0D8B\u0DB4\u0D9A\u0DBD\u0DCA\u0DB4\u0DD2\u0DAD \u0DC3\u0DCF\u0DB0\u0D9A\u0DBA\u0DA7 \u0DC3\u0DB8\u0DCA\u0DB6\u0DB1\u0DCA\u0DB0 \u0DB1\u0DDC\u0DC0\u0DB1 \u0DC3\u0DB8\u0DCA\u0DB6\u0DB1\u0DCA\u0DB0\u0DAD\u0DCF\u0DC0\u0DBA\u0D9A\u0DCA \u0D87\u0DAD\u0DD2 \u0D9A\u0DC5 \u0DC4\u0DD0\u0D9A.",
+    ta: "\u0BAA\u0BB0\u0BC1\u0BB5\u0B95\u0BBE\u0BB2, \u0BA4\u0BBF\u0BA9\u0B9A\u0BB0\u0BBF \u0B85\u0BB2\u0BCD\u0BB2\u0BA4\u0BC1 \u0B9A\u0BC2\u0BB0\u0BBF\u0BAF\u0B9A\u0BCD \u0B9A\u0BC1\u0BB4\u0BB1\u0BCD\u0B9A\u0BBF \u0B95\u0B9F\u0BCD\u0B9F\u0BAA\u0BCD \u0BAA\u0BBE\u0BA4\u0BBF\u0BAA\u0BCD\u0BAA\u0BC1\u0B95\u0BB3\u0BCD \u0B95\u0BB0\u0BC1\u0BA4\u0BC1\u0B95\u0BCB\u0BB3\u0BCD \u0B95\u0BBE\u0BB0\u0BA3\u0BBF\u0B95\u0BCD\u0B95\u0BC1\u0BA4\u0BCD \u0BA4\u0BCA\u0B9F\u0BB0\u0BCD\u0BAA\u0BBF\u0BB2\u0BCD\u0BB2\u0BBE\u0BA4 \u0BA4\u0BCA\u0B9F\u0BB0\u0BCD\u0BAA\u0BC8 \u0B89\u0BB0\u0BC1\u0BB5\u0BBE\u0B95\u0BCD\u0B95\u0BB2\u0BBE\u0BAE\u0BCD."
+  },
+  alt_instrument: {
+    en: "Instrument calibration, fill values or a change of source can produce an apparent step or trend.",
+    si: "\u0D8B\u0DB4\u0D9A\u0DBB\u0DAB \u0D9A\u0DCA\u200D\u0DBB\u0DB8\u0DCF\u0D82\u0D9A\u0DB1\u0DBA, \u0DB4\u0DD2\u0DBB\u0DC0\u0DD4\u0DB8\u0DCA \u0D85\u0D9C\u0DBA\u0DB1\u0DCA \u0DC4\u0DDD \u0DB8\u0DD6\u0DBD\u0DCF\u0DC1\u0DCA\u200D\u0DBB \u0DC0\u0DD9\u0DB1\u0DC3\u0D9A\u0DCA \u0DB4\u0DD9\u0DB1\u0DD9\u0DB1 \u0DB4\u0DD2\u0DBA\u0DC0\u0DBB\u0D9A\u0DCA \u0DC4\u0DDD \u0DB4\u0DCA\u200D\u0DBB\u0DC0\u0DAB\u0DAD\u0DCF\u0DC0\u0DBA\u0D9A\u0DCA \u0D87\u0DAD\u0DD2 \u0D9A\u0DC5 \u0DC4\u0DD0\u0D9A.",
+    ta: "\u0B95\u0BB0\u0BC1\u0BB5\u0BBF \u0B85\u0BB3\u0BB5\u0BC1\u0BA4\u0BCD\u0BA4\u0BBF\u0BB0\u0BC1\u0BA4\u0BCD\u0BA4\u0BAE\u0BCD, \u0BA8\u0BBF\u0BB0\u0BAA\u0BCD\u0BAA\u0BC1 \u0BAE\u0BA4\u0BBF\u0BAA\u0BCD\u0BAA\u0BC1\u0B95\u0BB3\u0BCD \u0B85\u0BB2\u0BCD\u0BB2\u0BA4\u0BC1 \u0BAE\u0BC2\u0BB2 \u0BAE\u0BBE\u0BB1\u0BCD\u0BB1\u0BAE\u0BCD \u0BA4\u0BCB\u0BB1\u0BCD\u0BB1\u0BAA\u0BCD \u0BAA\u0B9F\u0BBF\u0BA8\u0BBF\u0BB2\u0BC8 \u0B85\u0BB2\u0BCD\u0BB2\u0BA4\u0BC1 \u0BAA\u0BCB\u0B95\u0BCD\u0B95\u0BC8 \u0B89\u0BB0\u0BC1\u0BB5\u0BBE\u0B95\u0BCD\u0B95\u0BB2\u0BBE\u0BAE\u0BCD."
+  },
+  alt_saturation: {
+    en: "A bounded index such as Kp saturates, so the strongest responses are compressed and linear statistics understate them.",
+    si: "Kp \u0DC0\u0DD0\u0DB1\u0DD2 \u0DC3\u0DD3\u0DB8\u0DCF \u0DC3\u0DC4\u0DD2\u0DAD \u0DAF\u0DBB\u0DCA\u0DC1\u0D9A\u0DBA\u0D9A\u0DCA \u0DC3\u0D82\u0DAD\u0DD8\u0DB4\u0DCA\u0DAD \u0DC0\u0DDA; \u0D91\u0DB6\u0DD0\u0DC0\u0DD2\u0DB1\u0DCA \u0DC1\u0D9A\u0DCA\u0DAD\u0DD2\u0DB8\u0DAD\u0DCA\u0DB8 \u0DB4\u0DCA\u200D\u0DBB\u0DAD\u0DD2\u0DA0\u0DCF\u0DBB \u0DC3\u0D82\u0D9A\u0DDD\u0DA0\u0DB1\u0DBA \u0DC0\u0DB1 \u0D85\u0DAD\u0DBB \u0DBB\u0DDA\u0D9B\u0DD3\u0DBA \u0DC3\u0D82\u0D9B\u0DCA\u200D\u0DBA\u0DCF\u0DBD\u0DDA\u0D9B\u0DB1 \u0D92\u0DC0\u0DCF \u0D85\u0DC0\u0DAD\u0D9A\u0DCA\u0DC3\u0DDA\u0DBB\u0DD4 \u0D9A\u0DBB\u0DBA\u0DD2.",
+    ta: "Kp \u0BAA\u0BCB\u0BA9\u0BCD\u0BB1 \u0BB5\u0BB0\u0BAE\u0BCD\u0BAA\u0BC1\u0BB3\u0BCD\u0BB3 \u0B95\u0BC1\u0BB1\u0BBF\u0BAF\u0BC0\u0B9F\u0BC1 \u0BA8\u0BBF\u0BB0\u0BAE\u0BCD\u0BAA\u0BBF\u0BB5\u0BBF\u0B9F\u0BC1\u0BAE\u0BCD; \u0B8E\u0BA9\u0BB5\u0BC7 \u0BB5\u0BB2\u0BC1\u0BB5\u0BBE\u0BA9 \u0BA4\u0BC1\u0BB2\u0B99\u0BCD\u0B95\u0BB2\u0BCD\u0B95\u0BB3\u0BCD \u0B9A\u0BC1\u0BB0\u0BC1\u0B95\u0BCD\u0B95\u0BAA\u0BCD\u0BAA\u0B9F\u0BC1\u0BAE\u0BCD, \u0BA8\u0BC7\u0BB0\u0BCD\u0B95\u0BCB\u0B9F\u0BCD\u0B9F\u0BC1\u0BAA\u0BCD \u0BAA\u0BC1\u0BB3\u0BCD\u0BB3\u0BBF\u0BAF\u0BBF\u0BAF\u0BB2\u0BCD \u0B85\u0BB5\u0BB1\u0BCD\u0BB1\u0BC8\u0B95\u0BCD \u0B95\u0BC1\u0BB1\u0BC8\u0BA4\u0BCD\u0BA4\u0BC1 \u0BAE\u0BA4\u0BBF\u0BAA\u0BCD\u0BAA\u0BBF\u0B9F\u0BC1\u0BAE\u0BCD."
+  },
+  alt_other_driver: {
+    en: "An unmeasured variable (solar-cycle phase, prior substorm history, local time of the observing site) may influence both series.",
+    si: "\u0DB8\u0DB1\u0DD2\u0DB1 \u0DB1\u0DDC\u0DBD\u0DAF \u0DC0\u0DD2\u0DA0\u0DBD\u0DCA\u200D\u0DBA\u0DBA\u0D9A\u0DCA (\u0DC3\u0DD6\u0DBB\u0DCA\u0DBA \u0DA0\u0D9A\u0DCA\u200D\u0DBB \u0D85\u0DC0\u0DC3\u0DCA\u0DAE\u0DCF\u0DC0, \u0DB4\u0DD9\u0DBB \u0D8B\u0DB4-\u0D9A\u0DD4\u0DAB\u0DCF\u0DA7\u0DD4 \u0D89\u0DAD\u0DD2\u0DC4\u0DCF\u0DC3\u0DBA, \u0DB1\u0DD2\u0DBB\u0DD3\u0D9A\u0DCA\u0DC2\u0DAB \u0DC3\u0DCA\u0DAE\u0DCF\u0DB1\u0DBA\u0DDA \u0DAF\u0DDA\u0DC1\u0DD3\u0DBA \u0DC0\u0DDA\u0DBD\u0DCF\u0DC0) \u0DC1\u0DCA\u200D\u0DBB\u0DDA\u0DAB\u0DD2 \u0DAF\u0DD9\u0D9A\u0DA7\u0DB8 \u0DB6\u0DBD\u0DB4\u0DD1 \u0DC4\u0DD0\u0D9A.",
+    ta: "\u0B85\u0BB3\u0BB5\u0BBF\u0B9F\u0BAA\u0BCD\u0BAA\u0B9F\u0BBE\u0BA4 \u0BAE\u0BBE\u0BB1\u0BBF (\u0B9A\u0BC2\u0BB0\u0BBF\u0BAF\u0B9A\u0BCD \u0B9A\u0BC1\u0BB4\u0BB1\u0BCD\u0B9A\u0BBF\u0B95\u0BCD \u0B95\u0B9F\u0BCD\u0B9F\u0BAE\u0BCD, \u0BAE\u0BC1\u0BA8\u0BCD\u0BA4\u0BC8\u0BAF \u0BA4\u0BC1\u0BA3\u0BC8\u0BAA\u0BCD \u0BAA\u0BC1\u0BAF\u0BB2\u0BCD \u0BB5\u0BB0\u0BB2\u0BBE\u0BB1\u0BC1, \u0B95\u0BA3\u0BCD\u0B95\u0BBE\u0BA3\u0BBF\u0BAA\u0BCD\u0BAA\u0BC1 \u0BA4\u0BB3\u0BA4\u0BCD\u0BA4\u0BBF\u0BA9\u0BCD \u0B89\u0BB3\u0BCD\u0BB3\u0BC2\u0BB0\u0BCD \u0BA8\u0BC7\u0BB0\u0BAE\u0BCD) \u0B87\u0BB0\u0BC1 \u0BA4\u0BCA\u0B9F\u0BB0\u0BCD\u0B95\u0BB3\u0BC8\u0BAF\u0BC1\u0BAE\u0BCD \u0BAA\u0BBE\u0BA4\u0BBF\u0B95\u0BCD\u0B95\u0BB2\u0BBE\u0BAE\u0BCD."
+  },
+  alt_no_mechanism: {
+    en: "No physical mechanism is demonstrated here; observational co-variation alone cannot distinguish a driver from a coincidence.",
+    si: "\u0DB8\u0DD9\u0DC4\u0DD2 \u0DB7\u0DDE\u0DAD\u0DD2\u0D9A \u0DBA\u0DCF\u0DB1\u0DCA\u0DAD\u0DCA\u200D\u0DBB\u0DAB\u0DBA\u0D9A\u0DCA \u0DB4\u0DCA\u200D\u0DBB\u0DAF\u0DBB\u0DCA\u0DC1\u0DB1\u0DBA \u0DB1\u0DDC\u0DC0\u0DDA; \u0DB1\u0DD2\u0DBB\u0DD3\u0D9A\u0DCA\u0DC2\u0DAB \u0DC3\u0DC4-\u0DC0\u0DD2\u0DA0\u0DBD\u0DB1\u0DBA \u0DB4\u0DB8\u0DAB\u0D9A\u0DCA \u0DC3\u0DCF\u0DB0\u0D9A\u0DBA\u0D9A\u0DCA \u0DC3\u0DC4 \u0D85\u0DC4\u0DB8\u0DCA\u0DB6\u0DBA\u0D9A\u0DCA \u0DC0\u0DD9\u0DB1\u0DCA\u0D9A\u0DBB \u0DC4\u0DB3\u0DD4\u0DB1\u0DCF\u0D9C\u0DAD \u0DB1\u0DDC\u0DC4\u0DD0\u0D9A.",
+    ta: "\u0B87\u0B99\u0BCD\u0B95\u0BC1 \u0B87\u0BAF\u0BB1\u0BCD\u0BAA\u0BBF\u0BAF\u0BB2\u0BCD \u0B87\u0BAF\u0B99\u0BCD\u0B95\u0BC1\u0BAE\u0BC1\u0BB1\u0BC8 \u0BA8\u0BBF\u0BB0\u0BC2\u0BAA\u0BBF\u0B95\u0BCD\u0B95\u0BAA\u0BCD\u0BAA\u0B9F\u0BB5\u0BBF\u0BB2\u0BCD\u0BB2\u0BC8; \u0B95\u0BA3\u0BCD\u0B95\u0BBE\u0BA3\u0BBF\u0BAA\u0BCD\u0BAA\u0BC1 \u0B87\u0BA3\u0BC8-\u0BAE\u0BBE\u0BB1\u0BCD\u0BB1\u0BAE\u0BCD \u0BAE\u0B9F\u0BCD\u0B9F\u0BC1\u0BAE\u0BCD \u0B95\u0BBE\u0BB0\u0BA3\u0BBF\u0BAF\u0BC8\u0BAF\u0BC1\u0BAE\u0BCD \u0BA4\u0BB1\u0BCD\u0B9A\u0BC6\u0BAF\u0BB2\u0BC8\u0BAF\u0BC1\u0BAE\u0BCD \u0BB5\u0BC7\u0BB1\u0BC1\u0BAA\u0B9F\u0BC1\u0BA4\u0BCD\u0BA4 \u0BAE\u0BC1\u0B9F\u0BBF\u0BAF\u0BBE\u0BA4\u0BC1."
+  },
+  falsify_lead_lag: {
+    en: "Reject if the peak cross-correlation is not at a positive lead of the driver, or if the association disappears after detrending.",
+    si: "\u0D8B\u0DB4\u0DBB\u0DD2\u0DB8 \u0DC4\u0DBB\u0DC3\u0DCA-\u0DC3\u0DC4\u0DC3\u0DB8\u0DCA\u0DB6\u0DB1\u0DCA\u0DB0\u0DBA \u0DC3\u0DCF\u0DB0\u0D9A\u0DBA\u0DDA \u0DB0\u0DB1 \u0DB4\u0DD9\u0DBB\u0DB8\u0DD4\u0DAB\u0D9A \u0DB1\u0DDC\u0DB8\u0DD0\u0DAD\u0DD2 \u0DB1\u0DB8\u0DCA, \u0DC4\u0DDD \u0DB4\u0DCA\u200D\u0DBB\u0DC0\u0DAB\u0DAD\u0DCF \u0D89\u0DC0\u0DAD\u0DCA \u0D9A\u0DD2\u0DBB\u0DD3\u0DB8\u0DD9\u0DB1\u0DCA \u0DB4\u0DC3\u0DD4 \u0DC3\u0DB8\u0DCA\u0DB6\u0DB1\u0DCA\u0DB0\u0DBA \u0D85\u0DAD\u0DD4\u0DBB\u0DD4\u0DAF\u0DC4\u0DB1\u0DCA \u0DC0\u0DD4\u0DC0\u0DC4\u0DDC\u0DAD\u0DCA \u0DB4\u0DCA\u200D\u0DBB\u0DAD\u0DD2\u0D9A\u0DCA\u0DC2\u0DDA\u0DB4 \u0D9A\u0DBB\u0DB1\u0DCA\u0DB1.",
+    ta: "\u0B89\u0B9A\u0BCD\u0B9A\u0B95\u0BCD \u0B95\u0BC1\u0BB1\u0BC1\u0B95\u0BCD\u0B95\u0BC1\u0BA4\u0BCD \u0BA4\u0BCA\u0B9F\u0BB0\u0BCD\u0BAA\u0BC1 \u0B95\u0BBE\u0BB0\u0BA3\u0BBF\u0BAF\u0BBF\u0BA9\u0BCD \u0BA8\u0BC7\u0BB0\u0BCD\u0BAE\u0BB1\u0BC8 \u0BAE\u0BC1\u0BA9\u0BCD\u0BA9\u0BBF\u0BB2\u0BC8\u0BAF\u0BBF\u0BB2\u0BCD \u0B87\u0BB2\u0BCD\u0BB2\u0BBE\u0BB5\u0BBF\u0B9F\u0BCD\u0B9F\u0BBE\u0BB2\u0BCD, \u0B85\u0BB2\u0BCD\u0BB2\u0BA4\u0BC1 \u0BAA\u0BCB\u0B95\u0BCD\u0B95\u0BC1 \u0BA8\u0BC0\u0B95\u0BCD\u0B95\u0BBF\u0BAF \u0BAA\u0BBF\u0BA9\u0BCD \u0BA4\u0BCA\u0B9F\u0BB0\u0BCD\u0BAA\u0BC1 \u0BAE\u0BB1\u0BC8\u0BA8\u0BCD\u0BA4\u0BBE\u0BB2\u0BCD \u0BA8\u0BBF\u0BB0\u0BBE\u0B95\u0BB0\u0BBF\u0B95\u0BCD\u0B95\u0BB5\u0BC1\u0BAE\u0BCD."
+  },
+  falsify_threshold: {
+    en: "Reject if the exceedance rate inside the event window is indistinguishable from the baseline, or if exceedances occur without the driver crossing its threshold.",
+    si: "\u0DC3\u0DD2\u0DAF\u0DD4\u0DC0\u0DD3\u0DB8\u0DCA \u0D9A\u0DC0\u0DD4\u0DC5\u0DD4\u0DC0 \u0DAD\u0DD4\u0DC5 \u0D89\u0D9A\u0DCA\u0DB8\u0DC0\u0DD3\u0DB8\u0DCA \u0D85\u0DB1\u0DD4\u0DB4\u0DCF\u0DAD\u0DBA \u0DB4\u0DCF\u0DAF\u0D9A\u0DBA\u0DA7 \u0DC0\u0DD9\u0DB1\u0DC3\u0DCA \u0D9A\u0DC5 \u0DB1\u0DDC\u0DC4\u0DD0\u0D9A\u0DD2 \u0DB1\u0DB8\u0DCA, \u0DC4\u0DDD \u0DC3\u0DCF\u0DB0\u0D9A\u0DBA \u0DC3\u0DD3\u0DB8\u0DCF\u0DC0 \u0D89\u0D9A\u0DCA\u0DB8\u0DC0\u0DCF \u0DB1\u0DDC\u0DBA\u0DB1 \u0DC0\u0DD2\u0DA7 \u0D89\u0D9A\u0DCA\u0DB8\u0DC0\u0DD3\u0DB8\u0DCA \u0DC3\u0DD2\u0DAF\u0DD4\u0DC0\u0DD4\u0DC0\u0DC4\u0DDC\u0DAD\u0DCA \u0DB4\u0DCA\u200D\u0DBB\u0DAD\u0DD2\u0D9A\u0DCA\u0DC2\u0DDA\u0DB4 \u0D9A\u0DBB\u0DB1\u0DCA\u0DB1.",
+    ta: "\u0BA8\u0BBF\u0B95\u0BB4\u0BCD\u0BB5\u0BC1\u0B9A\u0BCD \u0B9A\u0BBE\u0BB3\u0BB0\u0BA4\u0BCD\u0BA4\u0BBF\u0BB2\u0BCD \u0BAE\u0BC0\u0BB1\u0BB2\u0BCD \u0BB5\u0BBF\u0B95\u0BBF\u0BA4\u0BAE\u0BCD \u0B85\u0B9F\u0BBF\u0BAA\u0BCD\u0BAA\u0B9F\u0BC8\u0BAF\u0BBF\u0BB2\u0BBF\u0BB0\u0BC1\u0BA8\u0BCD\u0BA4\u0BC1 \u0BB5\u0BC7\u0BB1\u0BC1\u0BAA\u0B9F\u0BC1\u0BA4\u0BCD\u0BA4 \u0BAE\u0BC1\u0B9F\u0BBF\u0BAF\u0BBE\u0BB5\u0BBF\u0B9F\u0BCD\u0B9F\u0BBE\u0BB2\u0BCD, \u0B85\u0BB2\u0BCD\u0BB2\u0BA4\u0BC1 \u0B95\u0BBE\u0BB0\u0BA3\u0BBF \u0BB5\u0BB0\u0BAE\u0BCD\u0BAA\u0BC8\u0B95\u0BCD \u0B95\u0B9F\u0B95\u0BCD\u0B95\u0BBE\u0BAE\u0BB2\u0BCD \u0BAE\u0BC0\u0BB1\u0BB2\u0BCD\u0B95\u0BB3\u0BCD \u0BA8\u0BBF\u0B95\u0BB4\u0BCD\u0BA8\u0BCD\u0BA4\u0BBE\u0BB2\u0BCD \u0BA8\u0BBF\u0BB0\u0BBE\u0B95\u0BB0\u0BBF\u0B95\u0BCD\u0B95\u0BB5\u0BC1\u0BAE\u0BCD."
+  },
+  falsify_null: {
+    en: "Reject the null only if a robust association survives the autocorrelation and multiple-comparison checks. That is evidence against the null, never proof of the alternative.",
+    si: "\u0DC3\u0DCA\u0DC0\u0DBA\u0D82-\u0DC3\u0DC4\u0DC3\u0DB8\u0DCA\u0DB6\u0DB1\u0DCA\u0DB0\u0DAD\u0DCF \u0DC3\u0DC4 \u0DB6\u0DC4\u0DD4-\u0DC3\u0D82\u0DC3\u0DB1\u0DCA\u0DAF\u0DB1 \u0DB4\u0DBB\u0DD3\u0D9A\u0DCA\u0DC2\u0DAB\u0DC0\u0DBD\u0DD2\u0DB1\u0DCA \u0DB4\u0DC3\u0DD4\u0DC0\u0DAD\u0DCA \u0DC1\u0D9A\u0DCA\u0DAD\u0DD2\u0DB8\u0DAD\u0DCA \u0DC3\u0DB8\u0DCA\u0DB6\u0DB1\u0DCA\u0DB0\u0DAD\u0DCF\u0DC0\u0DBA\u0D9A\u0DCA \u0D89\u0DAD\u0DD2\u0DBB\u0DD2 \u0DC0\u0DD4\u0DC0\u0DC4\u0DDC\u0DAD\u0DCA \u0DB4\u0DB8\u0DAB\u0D9A\u0DCA \u0DC1\u0DD4\u0DB1\u0DCA\u200D\u0DBA \u0D8B\u0DB4\u0D9A\u0DBD\u0DCA\u0DB4\u0DB1\u0DBA \u0DB4\u0DCA\u200D\u0DBB\u0DAD\u0DD2\u0D9A\u0DCA\u0DC2\u0DDA\u0DB4 \u0D9A\u0DBB\u0DB1\u0DCA\u0DB1. \u0D91\u0DBA \u0DC1\u0DD4\u0DB1\u0DCA\u200D\u0DBA\u0DBA\u0DA7 \u0D91\u0DBB\u0DD9\u0DC4\u0DD2 \u0DC3\u0DCF\u0D9A\u0DCA\u0DC2\u0DD2\u0DBA\u0D9A\u0DD2, \u0DC0\u0DD2\u0D9A\u0DBD\u0DCA\u0DB4\u0DBA\u0DDA \u0DC3\u0DCF\u0DB0\u0DB1\u0DBA\u0D9A\u0DCA \u0DB1\u0DDC\u0DC0\u0DDA.",
+    ta: "\u0BA4\u0BA9\u0BCD-\u0BA4\u0BCA\u0B9F\u0BB0\u0BCD\u0BAA\u0BC1 \u0BAE\u0BB1\u0BCD\u0BB1\u0BC1\u0BAE\u0BCD \u0BAA\u0BB2\u0BCD-\u0B92\u0BAA\u0BCD\u0BAA\u0BC0\u0B9F\u0BCD\u0B9F\u0BC1\u0B9A\u0BCD \u0B9A\u0BCB\u0BA4\u0BA9\u0BC8\u0B95\u0BB3\u0BC1\u0B95\u0BCD\u0B95\u0BC1\u0BAA\u0BCD \u0BAA\u0BBF\u0BB1\u0B95\u0BC1\u0BAE\u0BCD \u0BB5\u0BB2\u0BC1\u0BB5\u0BBE\u0BA9 \u0BA4\u0BCA\u0B9F\u0BB0\u0BCD\u0BAA\u0BC1 \u0BA8\u0BBF\u0BB2\u0BC8\u0BA4\u0BCD\u0BA4\u0BBE\u0BB2\u0BCD \u0BAE\u0B9F\u0BCD\u0B9F\u0BC1\u0BAE\u0BC7 \u0BAA\u0BC2\u0B9C\u0BCD\u0BAF \u0B95\u0BB0\u0BC1\u0BA4\u0BC1\u0B95\u0BCB\u0BB3\u0BC8 \u0BA8\u0BBF\u0BB0\u0BBE\u0B95\u0BB0\u0BBF\u0B95\u0BCD\u0B95\u0BB5\u0BC1\u0BAE\u0BCD. \u0B85\u0BA4\u0BC1 \u0BAA\u0BC2\u0B9C\u0BCD\u0BAF\u0BA4\u0BCD\u0BA4\u0BBF\u0BB1\u0BCD\u0B95\u0BC1 \u0B8E\u0BA4\u0BBF\u0BB0\u0BBE\u0BA9 \u0B9A\u0BBE\u0BA9\u0BCD\u0BB1\u0BC1, \u0BAE\u0BBE\u0BB1\u0BCD\u0BB1\u0BBF\u0BA9\u0BCD \u0BA8\u0BBF\u0BB0\u0BC2\u0BAA\u0BA3\u0BAE\u0BCD \u0B85\u0BB2\u0BCD\u0BB2."
+  },
+  falsify_trend: {
+    en: "Reject if the slope\u2019s 95% interval includes zero or if the trend does not survive splitting the record in half.",
+    si: "\u0DB6\u0DD1\u0DC0\u0DD4\u0DB8\u0DDA 95% \u0DB4\u0DBB\u0DCF\u0DC3\u0DBA \u0DB6\u0DD2\u0DB3\u0DD4\u0DB1\u0DD4 \u0D85\u0D9C\u0DBA (\u0DC1\u0DD4\u0DB1\u0DCA\u200D\u0DBA\u0DBA) \u0D87\u0DAD\u0DD4\u0DC5\u0DAD\u0DCA \u0DB1\u0DB8\u0DCA, \u0DC4\u0DDD \u0DC0\u0DCF\u0DBB\u0DCA\u0DAD\u0DCF\u0DC0 \u0DAF\u0DD9\u0D9A\u0DA9 \u0D9A\u0DD2\u0DBB\u0DD3\u0DB8\u0DD9\u0DB1\u0DCA \u0DB4\u0DC3\u0DD4 \u0DB4\u0DCA\u200D\u0DBB\u0DC0\u0DAB\u0DAD\u0DCF\u0DC0\u0DBA \u0DB1\u0DDC\u0DB4\u0DC0\u0DAD\u0DD2\u0DB1\u0DB8\u0DCA \u0DB4\u0DCA\u200D\u0DBB\u0DAD\u0DD2\u0D9A\u0DCA\u0DC2\u0DDA\u0DB4 \u0D9A\u0DBB\u0DB1\u0DCA\u0DB1.",
+    ta: "\u0B9A\u0BBE\u0BAF\u0BCD\u0BB5\u0BBF\u0BA9\u0BCD 95% \u0B87\u0B9F\u0BC8\u0BB5\u0BC6\u0BB3\u0BBF \u0BAA\u0BC2\u0B9C\u0BCD\u0B9C\u0BBF\u0BAF\u0BA4\u0BCD\u0BA4\u0BC8 \u0B89\u0BB3\u0BCD\u0BB3\u0B9F\u0B95\u0BCD\u0B95\u0BBF\u0BA9\u0BBE\u0BB2\u0BCD, \u0B85\u0BB2\u0BCD\u0BB2\u0BA4\u0BC1 \u0BAA\u0BA4\u0BBF\u0BB5\u0BC8 \u0B87\u0BB0\u0BA3\u0BCD\u0B9F\u0BBE\u0B95\u0BAA\u0BCD \u0BAA\u0BBF\u0BB0\u0BBF\u0BA4\u0BCD\u0BA4 \u0BAA\u0BBF\u0BA9\u0BCD \u0BAA\u0BCB\u0B95\u0BCD\u0B95\u0BC1 \u0BA8\u0BBF\u0BB2\u0BC8\u0BA4\u0BCD\u0BA4\u0BBF\u0BB0\u0BC1\u0B95\u0BCD\u0B95\u0BBE\u0BB5\u0BBF\u0B9F\u0BCD\u0B9F\u0BBE\u0BB2\u0BCD \u0BA8\u0BBF\u0BB0\u0BBE\u0B95\u0BB0\u0BBF\u0B95\u0BCD\u0B95\u0BB5\u0BC1\u0BAE\u0BCD."
+  },
+  falsify_before_after: {
+    en: "Reject if the event-window mean lies inside the spread of the baseline windows.",
+    si: "\u0DC3\u0DD2\u0DAF\u0DD4\u0DC0\u0DD3\u0DB8\u0DCA \u0D9A\u0DC0\u0DD4\u0DC5\u0DD4\u0DC0\u0DDA \u0DC3\u0DCF\u0DB8\u0DCF\u0DB1\u0DCA\u200D\u0DBA\u0DBA \u0DB4\u0DCF\u0DAF\u0D9A \u0D9A\u0DC0\u0DD4\u0DC5\u0DD4\u0DC0\u0DBD \u0DC0\u0DD2\u0DC3\u0DD2\u0DBB\u0DD3\u0DB8 \u0DAD\u0DD4\u0DC5 \u0DB4\u0DD2\u0DC4\u0DD2\u0DA7\u0DBA\u0DD2 \u0DB1\u0DB8\u0DCA \u0DB4\u0DCA\u200D\u0DBB\u0DAD\u0DD2\u0D9A\u0DCA\u0DC2\u0DDA\u0DB4 \u0D9A\u0DBB\u0DB1\u0DCA\u0DB1.",
+    ta: "\u0BA8\u0BBF\u0B95\u0BB4\u0BCD\u0BB5\u0BC1\u0B9A\u0BCD \u0B9A\u0BBE\u0BB3\u0BB0 \u0B9A\u0BB0\u0BBE\u0B9A\u0BB0\u0BBF \u0B85\u0B9F\u0BBF\u0BAA\u0BCD\u0BAA\u0B9F\u0BC8 \u0B9A\u0BBE\u0BB3\u0BB0\u0B99\u0BCD\u0B95\u0BB3\u0BBF\u0BA9\u0BCD \u0BAA\u0BB0\u0BB5\u0BB2\u0BC1\u0B95\u0BCD\u0B95\u0BC1\u0BB3\u0BCD \u0B87\u0BB0\u0BC1\u0BA8\u0BCD\u0BA4\u0BBE\u0BB2\u0BCD \u0BA8\u0BBF\u0BB0\u0BBE\u0B95\u0BB0\u0BBF\u0B95\u0BCD\u0B95\u0BB5\u0BC1\u0BAE\u0BCD."
+  },
+  lim_global_index: {
+    en: "Kp is a planetary index and cannot be attributed to a country or a city.",
+    si: "Kp \u0DBA\u0DB1\u0DD4 \u0D9C\u0DCA\u200D\u0DBB\u0DC4\u0DBD\u0DDD\u0D9A \u0DB8\u0DA7\u0DCA\u0DA7\u0DB8\u0DDA \u0DAF\u0DBB\u0DCA\u0DC1\u0D9A\u0DBA\u0D9A\u0DCA \u0DC0\u0DB1 \u0D85\u0DAD\u0DBB \u0DBB\u0DA7\u0D9A\u0DA7 \u0DC4\u0DDD \u0DB1\u0D9C\u0DBB\u0DBA\u0D9A\u0DA7 \u0D86\u0DBB\u0DDD\u0DB4\u0DAB\u0DBA \u0D9A\u0DC5 \u0DB1\u0DDC\u0DC4\u0DD0\u0D9A.",
+    ta: "Kp \u0B92\u0BB0\u0BC1 \u0B95\u0BCB\u0BB3\u0BCD \u0B85\u0BB3\u0BB5\u0BBF\u0BB2\u0BBE\u0BA9 \u0B95\u0BC1\u0BB1\u0BBF\u0BAF\u0BC0\u0B9F\u0BC1; \u0B92\u0BB0\u0BC1 \u0BA8\u0BBE\u0B9F\u0BC1 \u0B85\u0BB2\u0BCD\u0BB2\u0BA4\u0BC1 \u0BA8\u0B95\u0BB0\u0BA4\u0BCD\u0BA4\u0BBF\u0BB1\u0BCD\u0B95\u0BC1\u0B95\u0BCD \u0B95\u0BBE\u0BB0\u0BA3\u0BAE\u0BBE\u0B95\u0B95\u0BCD \u0B95\u0BC2\u0BB1 \u0BAE\u0BC1\u0B9F\u0BBF\u0BAF\u0BBE\u0BA4\u0BC1."
+  },
+  lim_rolling: {
+    en: "The connected product is a rolling window, so the requested historical period may not be available.",
+    si: "\u0DC3\u0DB8\u0DCA\u0DB6\u0DB1\u0DCA\u0DB0\u0DD2\u0DAD \u0DB1\u0DD2\u0DC2\u0DCA\u0DB4\u0DCF\u0DAF\u0DB1\u0DBA \u0DA0\u0DBD\u0DB1\u0DBA \u0DC0\u0DB1 \u0D9A\u0DCF\u0DBD \u0D9A\u0DC0\u0DD4\u0DC5\u0DD4\u0DC0\u0D9A\u0DD2; \u0D91\u0DB6\u0DD0\u0DC0\u0DD2\u0DB1\u0DCA \u0D89\u0DBD\u0DCA\u0DBD\u0DCF \u0DC3\u0DD2\u0DA7\u0DD2 \u0D93\u0DAD\u0DD2\u0DC4\u0DCF\u0DC3\u0DD2\u0D9A \u0D9A\u0DCF\u0DBD\u0DBA \u0DBD\u0DB6\u0DCF \u0DB1\u0DDC\u0D9C\u0DAD \u0DC4\u0DD0\u0D9A\u0DD2 \u0DC0\u0DD2\u0DBA \u0DC4\u0DD0\u0D9A.",
+    ta: "\u0B87\u0BA3\u0BC8\u0B95\u0BCD\u0B95\u0BAA\u0BCD\u0BAA\u0B9F\u0BCD\u0B9F \u0BA4\u0BAF\u0BBE\u0BB0\u0BBF\u0BAA\u0BCD\u0BAA\u0BC1 \u0B92\u0BB0\u0BC1 \u0BA8\u0B95\u0BB0\u0BC1\u0BAE\u0BCD \u0B9A\u0BBE\u0BB3\u0BB0\u0BAE\u0BCD; \u0B95\u0BCB\u0BB0\u0BAA\u0BCD\u0BAA\u0B9F\u0BCD\u0B9F \u0BB5\u0BB0\u0BB2\u0BBE\u0BB1\u0BCD\u0BB1\u0BC1\u0B95\u0BCD \u0B95\u0BBE\u0BB2\u0BAE\u0BCD \u0B95\u0BBF\u0B9F\u0BC8\u0B95\u0BCD\u0B95\u0BBE\u0BAE\u0BB2\u0BCD \u0B87\u0BB0\u0BC1\u0B95\u0BCD\u0B95\u0BB2\u0BBE\u0BAE\u0BCD."
+  },
+  lim_monthly: {
+    en: "Monthly resolution cannot resolve storm-time or daily behaviour.",
+    si: "\u0DB8\u0DCF\u0DC3\u0DD2\u0D9A \u0DC0\u0DD2\u0DB7\u0DDA\u0DAF\u0DB1\u0DBA\u0DA7 \u0D9A\u0DD4\u0DAB\u0DCF\u0DA7\u0DD4 \u0D9A\u0DCF\u0DBD\u0DBA\u0DDA \u0DC4\u0DDD \u0DAF\u0DDB\u0DB1\u0DD2\u0D9A \u0DC4\u0DD0\u0DC3\u0DD2\u0DBB\u0DD3\u0DB8\u0DCA \u0DC0\u0DD2\u0DC3\u0DB3\u0DD2\u0DBA \u0DB1\u0DDC\u0DC4\u0DD0\u0D9A.",
+    ta: "\u0BAE\u0BBE\u0BA4\u0BBE\u0BA8\u0BCD\u0BA4\u0BBF\u0BB0 \u0BA4\u0BC0\u0BB0\u0BCD\u0BAE\u0BBE\u0BA9\u0BAE\u0BCD \u0BAA\u0BC1\u0BAF\u0BB2\u0BCD \u0B95\u0BBE\u0BB2 \u0B85\u0BB2\u0BCD\u0BB2\u0BA4\u0BC1 \u0BA4\u0BBF\u0BA9\u0B9A\u0BB0\u0BBF \u0BA8\u0B9F\u0BA4\u0BCD\u0BA4\u0BC8\u0BAF\u0BC8\u0BAA\u0BCD \u0BAA\u0BBF\u0BB0\u0BBF\u0B95\u0BCD\u0B95 \u0BAE\u0BC1\u0B9F\u0BBF\u0BAF\u0BBE\u0BA4\u0BC1."
+  },
+  lim_estimate: {
+    en: "Retrieved speeds and diameters are estimates, not direct measurements.",
+    si: "\u0DBD\u0DB6\u0DCF\u0D9C\u0DAD\u0DCA \u0DC0\u0DDA\u0D9C \u0DC3\u0DC4 \u0DC0\u0DD2\u0DC2\u0DCA\u0D9A\u0DB8\u0DCA\u0DB7 \u0D87\u0DC3\u0DCA\u0DAD\u0DB8\u0DDA\u0DB1\u0DCA\u0DAD\u0DD4 \u0DB8\u0DD2\u0DC3 \u0DC3\u0DD8\u0DA2\u0DD4 \u0DB8\u0DD2\u0DB1\u0DD4\u0DB8\u0DCA \u0DB1\u0DDC\u0DC0\u0DDA.",
+    ta: "\u0BAA\u0BC6\u0BB1\u0BAA\u0BCD\u0BAA\u0B9F\u0BCD\u0B9F \u0BB5\u0BC7\u0B95\u0B99\u0BCD\u0B95\u0BB3\u0BC1\u0BAE\u0BCD \u0BB5\u0BBF\u0B9F\u0BCD\u0B9F\u0B99\u0BCD\u0B95\u0BB3\u0BC1\u0BAE\u0BCD \u0BAE\u0BA4\u0BBF\u0BAA\u0BCD\u0BAA\u0BC0\u0B9F\u0BC1\u0B95\u0BB3\u0BCD, \u0BA8\u0BC7\u0BB0\u0B9F\u0BBF \u0B85\u0BB3\u0BB5\u0BC0\u0B9F\u0BC1\u0B95\u0BB3\u0BCD \u0B85\u0BB2\u0BCD\u0BB2."
+  },
+  lim_single_point: {
+    en: "L1 measurements describe one point upstream of Earth, not the whole system.",
+    si: "L1 \u0DB8\u0DD2\u0DB1\u0DD4\u0DB8\u0DCA \u0DB4\u0DD8\u0DAE\u0DD2\u0DC0\u0DD2\u0DBA\u0DA7 \u0D89\u0DC4\u0DC5\u0DD2\u0DB1\u0DCA \u0D87\u0DAD\u0DD2 \u0D91\u0D9A\u0DCA \u0DBD\u0D9A\u0DCA\u0DC2\u0DCA\u200D\u0DBA\u0DBA\u0D9A\u0DCA \u0DC0\u0DD2\u0DC3\u0DCA\u0DAD\u0DBB \u0D9A\u0DBB\u0DBA\u0DD2, \u0DC3\u0DB8\u0DCA\u0DB4\u0DD6\u0DBB\u0DCA\u0DAB \u0DB4\u0DAF\u0DCA\u0DB0\u0DAD\u0DD2\u0DBA \u0DB1\u0DDC\u0DC0\u0DDA.",
+    ta: "L1 \u0B85\u0BB3\u0BB5\u0BC0\u0B9F\u0BC1\u0B95\u0BB3\u0BCD \u0BAA\u0BC2\u0BAE\u0BBF\u0B95\u0BCD\u0B95\u0BC1 \u0BAE\u0BC7\u0BB2\u0BCD\u0BA8\u0BCB\u0B95\u0BCD\u0B95\u0BBF\u0BAF \u0B92\u0BB0\u0BC1 \u0BAA\u0BC1\u0BB3\u0BCD\u0BB3\u0BBF\u0BAF\u0BC8 \u0BAE\u0B9F\u0BCD\u0B9F\u0BC1\u0BAE\u0BC7 \u0BB5\u0BBF\u0BB5\u0BB0\u0BBF\u0B95\u0BCD\u0B95\u0BBF\u0BA9\u0BCD\u0BB1\u0BA9, \u0BAE\u0BC1\u0BB4\u0BC1 \u0B85\u0BAE\u0BC8\u0BAA\u0BCD\u0BAA\u0BC8\u0BAF\u0BC1\u0BAE\u0BCD \u0B85\u0BB2\u0BCD\u0BB2."
+  },
+  lim_correlation: {
+    en: "A statistical association is not a causal mechanism.",
+    si: "\u0DC3\u0D82\u0D9B\u0DCA\u200D\u0DBA\u0DCF\u0DB1\u0DB8\u0DBA \u0DC3\u0DB8\u0DCA\u0DB6\u0DB1\u0DCA\u0DB0\u0DAD\u0DCF\u0DC0\u0DBA\u0D9A\u0DCA \u0DC4\u0DDA\u0DAD\u0DD4\u0D9A\u0DCF\u0DBB\u0D9A \u0DBA\u0DCF\u0DB1\u0DCA\u0DAD\u0DCA\u200D\u0DBB\u0DAB\u0DBA\u0D9A\u0DCA \u0DB1\u0DDC\u0DC0\u0DDA.",
+    ta: "\u0BAA\u0BC1\u0BB3\u0BCD\u0BB3\u0BBF\u0BAF\u0BBF\u0BAF\u0BB2\u0BCD \u0BA4\u0BCA\u0B9F\u0BB0\u0BCD\u0BAA\u0BC1 \u0B92\u0BB0\u0BC1 \u0B95\u0BBE\u0BB0\u0BA3 \u0B87\u0BAF\u0B99\u0BCD\u0B95\u0BC1\u0BAE\u0BC1\u0BB1\u0BC8 \u0B85\u0BB2\u0BCD\u0BB2."
+  },
+  lim_no_numeric_domain: {
+    en: "This domain has no quantitative measurement in the connected datasets; only qualitative context can be retrieved.",
+    si: "\u0DB8\u0DD9\u0DB8 \u0D9A\u0DCA\u0DC2\u0DDA\u0DAD\u0DCA\u200D\u0DBB\u0DBA\u0DA7 \u0DC3\u0DB8\u0DCA\u0DB6\u0DB1\u0DCA\u0DB0\u0DD2\u0DAD \u0DAF\u0DAD\u0DCA\u0DAD \u0D9A\u0DA7\u0DCA\u0DA7\u0DBD\u0DC0\u0DBD \u0DB4\u0DCA\u200D\u0DBB\u0DB8\u0DCF\u0DAB\u0DCF\u0DAD\u0DCA\u0DB8\u0D9A \u0DB8\u0DD2\u0DB1\u0DD4\u0DB8\u0D9A\u0DCA \u0DB1\u0DDC\u0DB8\u0DD0\u0DAD; \u0DBD\u0DB6\u0DCF\u0D9C\u0DAD \u0DC4\u0DD0\u0D9A\u0DCA\u0D9A\u0DDA \u0D9C\u0DD4\u0DAB\u0DCF\u0DAD\u0DCA\u0DB8\u0D9A \u0DB4\u0DC3\u0DD4\u0DB6\u0DD2\u0DB8\u0D9A\u0DCA \u0DB4\u0DB8\u0DAB\u0DD2.",
+    ta: "\u0B87\u0BA8\u0BCD\u0BA4\u0BA4\u0BCD \u0BA4\u0BC1\u0BB1\u0BC8\u0B95\u0BCD\u0B95\u0BC1 \u0B87\u0BA3\u0BC8\u0B95\u0BCD\u0B95\u0BAA\u0BCD\u0BAA\u0B9F\u0BCD\u0B9F \u0BA4\u0BB0\u0BB5\u0BC1\u0BA4\u0BCD\u0BA4\u0BCA\u0B95\u0BC1\u0BAA\u0BCD\u0BAA\u0BC1\u0B95\u0BB3\u0BBF\u0BB2\u0BCD \u0B85\u0BB3\u0BB5\u0BC0\u0B9F\u0BCD\u0B9F\u0BC1 \u0BAE\u0BA4\u0BBF\u0BAA\u0BCD\u0BAA\u0BC1 \u0B87\u0BB2\u0BCD\u0BB2\u0BC8; \u0BA4\u0BB0\u0BAE\u0BBE\u0BA9 \u0BAA\u0BBF\u0BA9\u0BCD\u0BA9\u0BA3\u0BBF \u0BAE\u0B9F\u0BCD\u0B9F\u0BC1\u0BAE\u0BC7 \u0BAA\u0BC6\u0BB1 \u0BAE\u0BC1\u0B9F\u0BBF\u0BAF\u0BC1\u0BAE\u0BCD."
+  },
+  /* ------------------------------------------------------------- planner */
+  planWindow: {
+    en: "Retrieval window: {start} \u2192 {end} (UTC), {resolution} resolution.",
+    si: "\u0DBD\u0DB6\u0DCF\u0D9C\u0DD0\u0DB1\u0DD3\u0DB8\u0DDA \u0D9A\u0DC0\u0DD4\u0DC5\u0DD4\u0DC0: {start} \u2192 {end} (UTC), {resolution} \u0DC0\u0DD2\u0DB7\u0DDA\u0DAF\u0DB1\u0DBA.",
+    ta: "\u0BAA\u0BC6\u0BB1\u0BC1\u0BA4\u0BB2\u0BCD \u0B9A\u0BBE\u0BB3\u0BB0\u0BAE\u0BCD: {start} \u2192 {end} (UTC), {resolution} \u0BA4\u0BC0\u0BB0\u0BCD\u0BAE\u0BBE\u0BA9\u0BAE\u0BCD."
+  },
+  planVerifyProvenance: {
+    en: "Every retrieved record keeps its dataset id, source URL, retrieval timestamp and payload hash.",
+    si: "\u0DBD\u0DB6\u0DCF\u0D9C\u0DAD\u0DCA \u0DC3\u0DD1\u0DB8 \u0DC0\u0DCF\u0DBB\u0DCA\u0DAD\u0DCF\u0DC0\u0D9A\u0DCA\u0DB8 \u0D91\u0DC4\u0DD2 \u0DAF\u0DAD\u0DCA\u0DAD \u0D9A\u0DA7\u0DCA\u0DA7\u0DBD \u0DC4\u0DD0\u0DB3\u0DD4\u0DB1\u0DD4\u0DB8, \u0DB8\u0DD6\u0DBD\u0DCF\u0DC1\u0DCA\u200D\u0DBB URL, \u0DBD\u0DB6\u0DCF\u0D9C\u0DD0\u0DB1\u0DD3\u0DB8\u0DDA \u0DC0\u0DDA\u0DBD\u0DCF\u0DC0 \u0DC3\u0DC4 \u0DB0\u0DCF\u0DC0\u0D9A \u0DC4\u0DD1\u0DC2\u0DCA \u0DBB\u0DB3\u0DC0\u0DCF \u0D9C\u0DB1\u0DD3.",
+    ta: "\u0BAA\u0BC6\u0BB1\u0BAA\u0BCD\u0BAA\u0B9F\u0BCD\u0B9F \u0B92\u0BB5\u0BCD\u0BB5\u0BCA\u0BB0\u0BC1 \u0BAA\u0BA4\u0BBF\u0BB5\u0BC1\u0BAE\u0BCD \u0B85\u0BA4\u0BA9\u0BCD \u0BA4\u0BB0\u0BB5\u0BC1\u0BA4\u0BCD\u0BA4\u0BCA\u0B95\u0BC1\u0BAA\u0BCD\u0BAA\u0BC1 \u0B90\u0B9F\u0BBF, \u0BAE\u0BC2\u0BB2 URL, \u0BAA\u0BC6\u0BB1\u0BC1\u0BA4\u0BB2\u0BCD \u0BA8\u0BC7\u0BB0\u0BAE\u0BCD \u0BAE\u0BB1\u0BCD\u0BB1\u0BC1\u0BAE\u0BCD \u0BA4\u0BB0\u0BB5\u0BC1 \u0BB9\u0BBE\u0BB7\u0BC8 \u0BB5\u0BC8\u0BA4\u0BCD\u0BA4\u0BBF\u0BB0\u0BC1\u0B95\u0BCD\u0B95\u0BC1\u0BAE\u0BCD."
+  },
+  planVerifyMissing: {
+    en: "Source fill values are preserved as missing; no interpolation is performed.",
+    si: "\u0DB8\u0DD6\u0DBD\u0DCF\u0DC1\u0DCA\u200D\u0DBB \u0DB4\u0DD2\u0DBB\u0DC0\u0DD4\u0DB8\u0DCA \u0D85\u0D9C\u0DBA\u0DB1\u0DCA \u0D85\u0DAD\u0DD4\u0DBB\u0DD4\u0DAF\u0DB1\u0DCA \u0DBD\u0DD9\u0DC3 \u0DBB\u0DB3\u0DC0\u0DCF \u0D9C\u0DB1\u0DD3; \u0D85\u0DB1\u0DCA\u0DAD\u0DBB\u0DCA-\u0D85\u0D9C\u0DBA \u0D9C\u0DAB\u0DB1\u0DBA \u0DB1\u0DDC\u0D9A\u0DD9\u0DBB\u0DDA.",
+    ta: "\u0BAE\u0BC2\u0BB2 \u0BA8\u0BBF\u0BB0\u0BAA\u0BCD\u0BAA\u0BC1 \u0BAE\u0BA4\u0BBF\u0BAA\u0BCD\u0BAA\u0BC1\u0B95\u0BB3\u0BCD \u0BB5\u0BBF\u0B9F\u0BC1\u0BAA\u0B9F\u0BCD\u0B9F\u0BA4\u0BBE\u0B95\u0BB5\u0BC7 \u0BB5\u0BC8\u0B95\u0BCD\u0B95\u0BAA\u0BCD\u0BAA\u0B9F\u0BC1\u0BAE\u0BCD; \u0B87\u0B9F\u0BC8\u0B9A\u0BCD\u0B9A\u0BC6\u0BB0\u0BC1\u0B95\u0BB2\u0BCD \u0B9A\u0BC6\u0BAF\u0BCD\u0BAF\u0BAA\u0BCD\u0BAA\u0B9F\u0BC1\u0BB5\u0BA4\u0BBF\u0BB2\u0BCD\u0BB2\u0BC8."
+  },
+  planVerifyUnits: {
+    en: "Units are preserved exactly as published; incompatible units are never combined.",
+    si: "\u0D92\u0D9A\u0D9A \u0DB4\u0DCA\u200D\u0DBB\u0D9A\u0DCF\u0DC1\u0DD2\u0DAD \u0DB4\u0DBB\u0DD2\u0DAF\u0DD2\u0DB8 \u0DBB\u0DB3\u0DC0\u0DCF \u0D9C\u0DB1\u0DD3; \u0DB1\u0DDC\u0D9C\u0DD0\u0DBD\u0DB4\u0DD9\u0DB1 \u0D92\u0D9A\u0D9A \u0D9A\u0DD2\u0DC3\u0DD2\u0DC0\u0DD2\u0DA7\u0DD9\u0D9A\u0DAD\u0DCA \u0D91\u0D9A\u0DA7 \u0D91\u0B15\u0D9A\u0DBB \u0DB1\u0DDC\u0D9A\u0DD9\u0DBB\u0DDA.",
+    ta: "\u0B85\u0BB2\u0B95\u0BC1\u0B95\u0BB3\u0BCD \u0BB5\u0BC6\u0BB3\u0BBF\u0BAF\u0BBF\u0B9F\u0BAA\u0BCD\u0BAA\u0B9F\u0BCD\u0B9F\u0BAA\u0B9F\u0BBF\u0BAF\u0BC7 \u0BAA\u0BBE\u0BA4\u0BC1\u0B95\u0BBE\u0B95\u0BCD\u0B95\u0BAA\u0BCD\u0BAA\u0B9F\u0BC1\u0BAE\u0BCD; \u0BAA\u0BCA\u0BB0\u0BC1\u0BA8\u0BCD\u0BA4\u0BBE\u0BA4 \u0B85\u0BB2\u0B95\u0BC1\u0B95\u0BB3\u0BCD \u0B92\u0BB0\u0BC1\u0BAA\u0BCB\u0BA4\u0BC1\u0BAE\u0BCD \u0B87\u0BA3\u0BC8\u0B95\u0BCD\u0B95\u0BAA\u0BCD\u0BAA\u0B9F\u0BC1\u0BB5\u0BA4\u0BBF\u0BB2\u0BCD\u0BB2\u0BC8."
+  },
+  coverageInRange: {
+    en: "The requested period falls inside this dataset\u2019s published coverage.",
+    si: "\u0D89\u0DBD\u0DCA\u0DBD\u0DCF \u0DC3\u0DD2\u0DA7\u0DD2 \u0D9A\u0DCF\u0DBD\u0DBA \u0DB8\u0DD9\u0DB8 \u0DAF\u0DAD\u0DCA\u0DAD \u0D9A\u0DA7\u0DCA\u0DA7\u0DBD\u0DBA\u0DDA \u0DB4\u0DCA\u200D\u0DBB\u0D9A\u0DCF\u0DC1\u0DD2\u0DAD \u0D86\u0DC0\u0DBB\u0DAB\u0DBA \u0DAD\u0DD4\u0DC5 \u0DB4\u0DD2\u0DC4\u0DD2\u0DA7\u0DBA\u0DD2.",
+    ta: "\u0B95\u0BCB\u0BB0\u0BAA\u0BCD\u0BAA\u0B9F\u0BCD\u0B9F \u0B95\u0BBE\u0BB2\u0BAE\u0BCD \u0B87\u0BA8\u0BCD\u0BA4\u0BA4\u0BCD \u0BA4\u0BB0\u0BB5\u0BC1\u0BA4\u0BCD\u0BA4\u0BCA\u0B95\u0BC1\u0BAA\u0BCD\u0BAA\u0BBF\u0BA9\u0BCD \u0BB5\u0BC6\u0BB3\u0BBF\u0BAF\u0BBF\u0B9F\u0BAA\u0BCD\u0BAA\u0B9F\u0BCD\u0B9F \u0BAA\u0BB0\u0BAA\u0BCD\u0BAA\u0BC1\u0B95\u0BCD\u0B95\u0BC1\u0BB3\u0BCD \u0B85\u0BAE\u0BC8\u0B95\u0BBF\u0BB1\u0BA4\u0BC1."
+  },
+  coveragePartial: {
+    en: "Only part of the requested period is inside this dataset\u2019s published coverage.",
+    si: "\u0D89\u0DBD\u0DCA\u0DBD\u0DCF \u0DC3\u0DD2\u0DA7\u0DD2 \u0D9A\u0DCF\u0DBD\u0DBA\u0DD9\u0DB1\u0DCA \u0D9A\u0DDC\u0DA7\u0DC3\u0D9A\u0DCA \u0DB4\u0DB8\u0DAB\u0D9A\u0DCA \u0DB8\u0DD9\u0DB8 \u0DAF\u0DAD\u0DCA\u0DAD \u0D9A\u0DA7\u0DCA\u0DA7\u0DBD\u0DBA\u0DDA \u0DB4\u0DCA\u200D\u0DBB\u0D9A\u0DCF\u0DC1\u0DD2\u0DAD \u0D86\u0DC0\u0DBB\u0DAB\u0DBA \u0DAD\u0DD4\u0DC5 \u0D87\u0DAD.",
+    ta: "\u0B95\u0BCB\u0BB0\u0BAA\u0BCD\u0BAA\u0B9F\u0BCD\u0B9F \u0B95\u0BBE\u0BB2\u0BA4\u0BCD\u0BA4\u0BBF\u0BA9\u0BCD \u0B92\u0BB0\u0BC1 \u0BAA\u0B95\u0BC1\u0BA4\u0BBF \u0BAE\u0B9F\u0BCD\u0B9F\u0BC1\u0BAE\u0BC7 \u0B87\u0BA8\u0BCD\u0BA4\u0BA4\u0BCD \u0BA4\u0BB0\u0BB5\u0BC1\u0BA4\u0BCD\u0BA4\u0BCA\u0B95\u0BC1\u0BAA\u0BCD\u0BAA\u0BBF\u0BA9\u0BCD \u0BAA\u0BB0\u0BAA\u0BCD\u0BAA\u0BC1\u0B95\u0BCD\u0B95\u0BC1\u0BB3\u0BCD \u0B89\u0BB3\u0BCD\u0BB3\u0BA4\u0BC1."
+  },
+  coverageOut: {
+    en: "The requested period is outside this dataset\u2019s published coverage ({coverage}). It will not be padded with another period.",
+    si: "\u0D89\u0DBD\u0DCA\u0DBD\u0DCF \u0DC3\u0DD2\u0DA7\u0DD2 \u0D9A\u0DCF\u0DBD\u0DBA \u0DB8\u0DD9\u0DB8 \u0DAF\u0DAD\u0DCA\u0DAD \u0D9A\u0DA7\u0DCA\u0DA7\u0DBD\u0DBA\u0DDA \u0DB4\u0DCA\u200D\u0DBB\u0D9A\u0DCF\u0DC1\u0DD2\u0DAD \u0D86\u0DC0\u0DBB\u0DAB\u0DBA\u0DD9\u0DB1\u0DCA ({coverage}) \u0DB4\u0DD2\u0DA7\u0DAD\u0DBA. \u0DC0\u0DD9\u0DB1\u0DAD\u0DCA \u0D9A\u0DCF\u0DBD\u0DBA\u0D9A\u0DD2\u0DB1\u0DCA \u0D91\u0DBA \u0DB4\u0DD2\u0DBB\u0DC0\u0DD3\u0DB8 \u0DC3\u0DD2\u0DAF\u0DD4 \u0DB1\u0DDC\u0DC0\u0DDA.",
+    ta: "\u0B95\u0BCB\u0BB0\u0BAA\u0BCD\u0BAA\u0B9F\u0BCD\u0B9F \u0B95\u0BBE\u0BB2\u0BAE\u0BCD \u0B87\u0BA8\u0BCD\u0BA4\u0BA4\u0BCD \u0BA4\u0BB0\u0BB5\u0BC1\u0BA4\u0BCD\u0BA4\u0BCA\u0B95\u0BC1\u0BAA\u0BCD\u0BAA\u0BBF\u0BA9\u0BCD \u0BB5\u0BC6\u0BB3\u0BBF\u0BAF\u0BBF\u0B9F\u0BAA\u0BCD\u0BAA\u0B9F\u0BCD\u0B9F \u0BAA\u0BB0\u0BAA\u0BCD\u0BAA\u0BC1\u0B95\u0BCD\u0B95\u0BC1 ({coverage}) \u0BB5\u0BC6\u0BB3\u0BBF\u0BAF\u0BC7 \u0B89\u0BB3\u0BCD\u0BB3\u0BA4\u0BC1. \u0BB5\u0BC7\u0BB1\u0BC1 \u0B95\u0BBE\u0BB2\u0BA4\u0BCD\u0BA4\u0BBE\u0BB2\u0BCD \u0BA8\u0BBF\u0BB0\u0BAA\u0BCD\u0BAA\u0BAA\u0BCD\u0BAA\u0B9F\u0BBE\u0BA4\u0BC1."
+  },
+  coverageUnknown: {
+    en: "Coverage for this dataset could not be determined before retrieval.",
+    si: "\u0DBD\u0DB6\u0DCF\u0D9C\u0DD0\u0DB1\u0DD3\u0DB8\u0DA7 \u0DB4\u0DD9\u0DBB \u0DB8\u0DD9\u0DB8 \u0DAF\u0DAD\u0DCA\u0DAD \u0D9A\u0DA7\u0DCA\u0DA7\u0DBD\u0DBA\u0DDA \u0D86\u0DC0\u0DBB\u0DAB\u0DBA \u0DAD\u0DD3\u0DBB\u0DAB\u0DBA \u0D9A\u0DC5 \u0DB1\u0DDC\u0DC4\u0DD0\u0D9A.",
+    ta: "\u0BAA\u0BC6\u0BB1\u0BC1\u0BB5\u0BA4\u0BB1\u0BCD\u0B95\u0BC1 \u0BAE\u0BC1\u0BA9\u0BCD \u0B87\u0BA8\u0BCD\u0BA4\u0BA4\u0BCD \u0BA4\u0BB0\u0BB5\u0BC1\u0BA4\u0BCD\u0BA4\u0BCA\u0B95\u0BC1\u0BAA\u0BCD\u0BAA\u0BBF\u0BA9\u0BCD \u0BAA\u0BB0\u0BAA\u0BCD\u0BAA\u0BC1 \u0BA4\u0BC0\u0BB0\u0BCD\u0BAE\u0BBE\u0BA9\u0BBF\u0B95\u0BCD\u0B95 \u0BAE\u0BC1\u0B9F\u0BBF\u0BAF\u0BB5\u0BBF\u0BB2\u0BCD\u0BB2\u0BC8."
+  },
+  compatDomain: {
+    en: "Compatible with the detected scientific domain.",
+    si: "\u0DC4\u0DB3\u0DD4\u0DB1\u0DCF\u0D9C\u0DAD\u0DCA \u0DC0\u0DD2\u0DAF\u0DCA\u200D\u0DBA\u0DCF\u0DAD\u0DCA\u0DB8\u0D9A \u0D9A\u0DCA\u0DC2\u0DDA\u0DAD\u0DCA\u200D\u0DBB\u0DBA\u0DA7 \u0D9C\u0DD0\u0DBD\u0DB4\u0DDA.",
+    ta: "\u0B95\u0BA3\u0BCD\u0B9F\u0BB1\u0BBF\u0BAF\u0BAA\u0BCD\u0BAA\u0B9F\u0BCD\u0B9F \u0B85\u0BB1\u0BBF\u0BB5\u0BBF\u0BAF\u0BB2\u0BCD \u0BA4\u0BC1\u0BB1\u0BC8\u0BAF\u0BC1\u0B9F\u0BA9\u0BCD \u0BAA\u0BCA\u0BB0\u0BC1\u0BA8\u0BCD\u0BA4\u0BC1\u0B95\u0BBF\u0BB1\u0BA4\u0BC1."
+  },
+  compatContext: {
+    en: "Relevant context for this domain: it does not publish the named measured variable, so it is used for context only.",
+    si: "\u0DB8\u0DD9\u0DB8 \u0D9A\u0DCA\u0DC2\u0DDA\u0DAD\u0DCA\u200D\u0DBB\u0DBA\u0DA7 \u0D85\u0DAF\u0DCF\u0DC5 \u0DB4\u0DC3\u0DD4\u0DB6\u0DD2\u0DB8\u0D9A\u0DD2: \u0D91\u0DBA \u0DB1\u0DB8\u0DCA \u0D9A\u0DC5 \u0DB8\u0DD2\u0DB1\u0DD4\u0DB8\u0DCA \u0DC0\u0DD2\u0DA0\u0DBD\u0DCA\u200D\u0DBA\u0DBA \u0DB4\u0DCA\u200D\u0DBB\u0D9A\u0DCF\u0DC1 \u0DB1\u0DDC\u0D9A\u0DBB\u0DBA\u0DD2, \u0D91\u0DB6\u0DD0\u0DC0\u0DD2\u0DB1\u0DCA \u0DB7\u0DCF\u0DC0\u0DD2\u0DAD\u0DCF \u0DC0\u0DB1\u0DCA\u0DB1\u0DDA \u0DB4\u0DC3\u0DD4\u0DB6\u0DD2\u0DB8 \u0DC3\u0DB3\u0DC4\u0DCF \u0DB4\u0DB8\u0DAB\u0DD2.",
+    ta: "\u0B87\u0BA8\u0BCD\u0BA4\u0BA4\u0BCD \u0BA4\u0BC1\u0BB1\u0BC8\u0B95\u0BCD\u0B95\u0BC1\u0BAA\u0BCD \u0BAA\u0BCA\u0BB0\u0BC1\u0BA4\u0BCD\u0BA4\u0BAE\u0BBE\u0BA9 \u0BAA\u0BBF\u0BA9\u0BCD\u0BA9\u0BA3\u0BBF: \u0B87\u0BA4\u0BC1 \u0B95\u0BC1\u0BB1\u0BBF\u0BAA\u0BCD\u0BAA\u0BBF\u0B9F\u0BCD\u0B9F \u0B85\u0BB3\u0BB5\u0BC0\u0B9F\u0BCD\u0B9F\u0BC1 \u0BAE\u0BBE\u0BB1\u0BBF\u0BAF\u0BC8 \u0BB5\u0BC6\u0BB3\u0BBF\u0BAF\u0BBF\u0B9F\u0BB5\u0BBF\u0BB2\u0BCD\u0BB2\u0BC8, \u0B8E\u0BA9\u0BB5\u0BC7 \u0BAA\u0BBF\u0BA9\u0BCD\u0BA9\u0BA3\u0BBF\u0B95\u0BCD\u0B95\u0BC1 \u0BAE\u0B9F\u0BCD\u0B9F\u0BC1\u0BAE\u0BC7 \u0BAA\u0BAF\u0BA9\u0BCD\u0BAA\u0B9F\u0BC1\u0BA4\u0BCD\u0BA4\u0BAA\u0BCD\u0BAA\u0B9F\u0BC1\u0B95\u0BBF\u0BB1\u0BA4\u0BC1."
+  },
+  compatDomainMismatch: {
+    en: "Not compatible: this dataset does not address the detected domain.",
+    si: "\u0DB1\u0DDC\u0D9C\u0DD0\u0DBD\u0DB4\u0DDA: \u0DB8\u0DD9\u0DB8 \u0DAF\u0DAD\u0DCA\u0DAD \u0D9A\u0DA7\u0DCA\u0DA7\u0DBD\u0DBA \u0DC4\u0DB3\u0DD4\u0DB1\u0DCF\u0D9C\u0DAD\u0DCA \u0D9A\u0DCA\u0DC2\u0DDA\u0DAD\u0DCA\u200D\u0DBB\u0DBA\u0DA7 \u0D85\u0DAF\u0DCF\u0DC5 \u0DB1\u0DDC\u0DC0\u0DDA.",
+    ta: "\u0BAA\u0BCA\u0BB0\u0BC1\u0BA8\u0BCD\u0BA4\u0BBE\u0BA4\u0BC1: \u0B87\u0BA8\u0BCD\u0BA4\u0BA4\u0BCD \u0BA4\u0BB0\u0BB5\u0BC1\u0BA4\u0BCD\u0BA4\u0BCA\u0B95\u0BC1\u0BAA\u0BCD\u0BAA\u0BC1 \u0B95\u0BA3\u0BCD\u0B9F\u0BB1\u0BBF\u0BAF\u0BAA\u0BCD\u0BAA\u0B9F\u0BCD\u0B9F \u0BA4\u0BC1\u0BB1\u0BC8\u0B95\u0BCD\u0B95\u0BC1\u0BAA\u0BCD \u0BAA\u0BCA\u0BB0\u0BC1\u0BA8\u0BCD\u0BA4\u0BBE\u0BA4\u0BC1."
+  },
+  compatVariableMismatch: {
+    en: "Not compatible: the dataset does not publish the requested variables.",
+    si: "\u0DB1\u0DDC\u0D9C\u0DD0\u0DBD\u0DB4\u0DDA: \u0DAF\u0DAD\u0DCA\u0DAD \u0D9A\u0DA7\u0DCA\u0DA7\u0DBD\u0DBA \u0D89\u0DBD\u0DCA\u0DBD\u0DCF \u0DC3\u0DD2\u0DA7\u0DD2 \u0DC0\u0DD2\u0DA0\u0DBD\u0DCA\u200D\u0DBA \u0DB4\u0DCA\u200D\u0DBB\u0D9A\u0DCF\u0DC1 \u0DB1\u0DDC\u0D9A\u0DBB\u0DBA\u0DD2.",
+    ta: "\u0BAA\u0BCA\u0BB0\u0BC1\u0BA8\u0BCD\u0BA4\u0BBE\u0BA4\u0BC1: \u0BA4\u0BB0\u0BB5\u0BC1\u0BA4\u0BCD\u0BA4\u0BCA\u0B95\u0BC1\u0BAA\u0BCD\u0BAA\u0BC1 \u0B95\u0BCB\u0BB0\u0BAA\u0BCD\u0BAA\u0B9F\u0BCD\u0B9F \u0BAE\u0BBE\u0BB1\u0BBF\u0B95\u0BB3\u0BC8 \u0BB5\u0BC6\u0BB3\u0BBF\u0BAF\u0BBF\u0B9F\u0BB5\u0BBF\u0BB2\u0BCD\u0BB2\u0BC8."
+  },
+  planMissingTime: {
+    en: "The question did not specify a period explicitly; the planned window is an assumption.",
+    si: "\u0DB4\u0DCA\u200D\u0DBB\u0DC1\u0DCA\u0DB1\u0DBA \u0D9A\u0DCF\u0DBD \u0DB4\u0DBB\u0DCF\u0DC3\u0DBA\u0D9A\u0DCA \u0DB4\u0DD0\u0DC4\u0DD0\u0DAF\u0DD2\u0DBD\u0DD2\u0DC0 \u0DC3\u0DB3\u0DC4\u0DB1\u0DCA \u0DB1\u0DDC\u0D9A\u0DC5\u0DDA\u0DBA; \u0DC3\u0DD0\u0DBD\u0DC3\u0DD4\u0DB8\u0DCA \u0D9A\u0DC5 \u0D9A\u0DC0\u0DD4\u0DC5\u0DD4\u0DC0 \u0D8B\u0DB4\u0D9A\u0DBD\u0DCA\u0DB4\u0DB1\u0DBA\u0D9A\u0DD2.",
+    ta: "\u0B95\u0BC7\u0BB3\u0BCD\u0BB5\u0BBF \u0B95\u0BBE\u0BB2 \u0B8E\u0BB2\u0BCD\u0BB2\u0BC8\u0BAF\u0BC8 \u0BB5\u0BC6\u0BB3\u0BBF\u0BAA\u0BCD\u0BAA\u0B9F\u0BC8\u0BAF\u0BBE\u0B95\u0B95\u0BCD \u0B95\u0BC1\u0BB1\u0BBF\u0BAA\u0BCD\u0BAA\u0BBF\u0B9F\u0BB5\u0BBF\u0BB2\u0BCD\u0BB2\u0BC8; \u0BA4\u0BBF\u0B9F\u0BCD\u0B9F\u0BAE\u0BBF\u0B9F\u0BAA\u0BCD\u0BAA\u0B9F\u0BCD\u0B9F \u0B9A\u0BBE\u0BB3\u0BB0\u0BAE\u0BCD \u0B92\u0BB0\u0BC1 \u0B85\u0BA9\u0BC1\u0BAE\u0BBE\u0BA9\u0BAE\u0BCD."
+  },
+  planMissingResolution: {
+    en: "A monthly dataset cannot answer an hourly question; the resolution mismatch is recorded as a limitation.",
+    si: "\u0DB8\u0DCF\u0DC3\u0DD2\u0D9A \u0DAF\u0DAD\u0DCA\u0DAD \u0D9A\u0DA7\u0DCA\u0DA7\u0DBD\u0DBA\u0D9A\u0DA7 \u0DB4\u0DD0\u0DBA\u0D9A \u0DB4\u0DCA\u200D\u0DBB\u0DC1\u0DCA\u0DB1\u0DBA\u0D9A\u0DA7 \u0DB4\u0DD2\u0DC5\u0DD2\u0DAD\u0DD4\u0DBB\u0DD4 \u0DAF\u0DD2\u0DBA \u0DB1\u0DDC\u0DC4\u0DD0\u0D9A; \u0DC0\u0DD2\u0DB7\u0DDA\u0DAF\u0DB1 \u0DB1\u0DDC\u0D9C\u0DD0\u0DBD\u0DB4\u0DD3\u0DB8 \u0DC3\u0DD3\u0DB8\u0DCF\u0DC0\u0D9A\u0DCA \u0DBD\u0DD9\u0DC3 \u0DC3\u0DA7\u0DC4\u0DB1\u0DCA \u0DC0\u0DDA.",
+    ta: "\u0BAE\u0BBE\u0BA4\u0BBE\u0BA8\u0BCD\u0BA4\u0BBF\u0BB0 \u0BA4\u0BB0\u0BB5\u0BC1\u0BA4\u0BCD\u0BA4\u0BCA\u0B95\u0BC1\u0BAA\u0BCD\u0BAA\u0BC1 \u0BAE\u0BA3\u0BBF\u0BA8\u0BC7\u0BB0\u0B95\u0BCD \u0B95\u0BC7\u0BB3\u0BCD\u0BB5\u0BBF\u0B95\u0BCD\u0B95\u0BC1\u0BAA\u0BCD \u0BAA\u0BA4\u0BBF\u0BB2\u0BB3\u0BBF\u0B95\u0BCD\u0B95 \u0BAE\u0BC1\u0B9F\u0BBF\u0BAF\u0BBE\u0BA4\u0BC1; \u0BA4\u0BC0\u0BB0\u0BCD\u0BAE\u0BBE\u0BA9\u0BAA\u0BCD \u0BAA\u0BCA\u0BB0\u0BC1\u0BA8\u0BCD\u0BA4\u0BBE\u0BAE\u0BC8 \u0BB5\u0BB0\u0BAE\u0BCD\u0BAA\u0BBE\u0B95\u0BAA\u0BCD \u0BAA\u0BA4\u0BBF\u0BB5\u0BBE\u0B95\u0BC1\u0BAE\u0BCD."
+  },
+  planDemoKey: {
+    en: "The server has no NASA API key configured, so the shared DEMO_KEY will be used. It is heavily rate-limited and may return 429; that will be reported, not hidden.",
+    si: "\u0DC3\u0DDA\u0DC0\u0DCF\u0DAF\u0DCF\u0DBA\u0D9A\u0DBA\u0DA7 NASA API \u0DBA\u0DAD\u0DD4\u0DBB\u0D9A\u0DCA \u0DC0\u0DD2\u0DB1\u0DCA\u200D\u0DBA\u0DCF\u0DC3 \u0D9A\u0DBB \u0DB1\u0DD0\u0DAD\u0DD2 \u0DB6\u0DD0\u0DC0\u0DD2\u0DB1\u0DCA \u0DC4\u0DC0\u0DD4\u0DBD\u0DCA DEMO_KEY \u0DB7\u0DCF\u0DC0\u0DD2\u0DAD\u0DCF \u0DC0\u0DDA. \u0D91\u0DBA \u0DAF\u0DD0\u0DA9\u0DD2 \u0DBD\u0DD9\u0DC3 \u0D85\u0DB1\u0DD4\u0DB4\u0DCF\u0DAD-\u0DC3\u0DD3\u0DB8\u0DD2\u0DAD \u0DC0\u0DB1 \u0D85\u0DAD\u0DBB 429 \u0DBD\u0DB6\u0DCF \u0DAF\u0DD2\u0DBA \u0DC4\u0DD0\u0D9A; \u0D91\u0DBA \u0DC3\u0D9F\u0DC0\u0DCF \u0DB1\u0DDC\u0D9C\u0DD9\u0DB1 \u0DC0\u0DCF\u0DBB\u0DCA\u0DAD\u0DCF \u0D9A\u0DD9\u0DBB\u0DDA.",
+    ta: "\u0B9A\u0BC7\u0BB5\u0BC8\u0BAF\u0B95\u0BA4\u0BCD\u0BA4\u0BBF\u0BB2\u0BCD NASA API \u0BB5\u0BBF\u0B9A\u0BC8 \u0B85\u0BAE\u0BC8\u0B95\u0BCD\u0B95\u0BAA\u0BCD\u0BAA\u0B9F\u0BBE\u0BA4\u0BA4\u0BBE\u0BB2\u0BCD \u0BAA\u0B95\u0BBF\u0BB0\u0BAA\u0BCD\u0BAA\u0B9F\u0BCD\u0B9F DEMO_KEY \u0BAA\u0BAF\u0BA9\u0BCD\u0BAA\u0B9F\u0BC1\u0BA4\u0BCD\u0BA4\u0BAA\u0BCD\u0BAA\u0B9F\u0BC1\u0BAE\u0BCD. \u0B85\u0BA4\u0BC1 \u0B95\u0B9F\u0BC1\u0BAE\u0BC8\u0BAF\u0BBE\u0B95 \u0BB5\u0BBF\u0B95\u0BBF\u0BA4-\u0BB5\u0BB0\u0BAE\u0BCD\u0BAA\u0BC1\u0B95\u0BCD\u0B95\u0BC1\u0B9F\u0BCD\u0BAA\u0B9F\u0BCD\u0B9F\u0BA4\u0BC1; 429 \u0BB5\u0BB0\u0BB2\u0BBE\u0BAE\u0BCD, \u0B85\u0BA4\u0BC1 \u0BAE\u0BB1\u0BC8\u0B95\u0BCD\u0B95\u0BAA\u0BCD\u0BAA\u0B9F\u0BBE\u0BAE\u0BB2\u0BCD \u0B85\u0BB1\u0BBF\u0BB5\u0BBF\u0B95\u0BCD\u0B95\u0BAA\u0BCD\u0BAA\u0B9F\u0BC1\u0BAE\u0BCD."
+  },
+  planVerifySample: {
+    en: "No correlation is classified with fewer than {min} paired observations.",
+    si: "\u0DBA\u0DD4\u0D9C\u0DBD \u0DB1\u0DD2\u0DBB\u0DD3\u0D9A\u0DCA\u0DC2\u0DAB {min} \u0DA7 \u0D85\u0DA9\u0DD4\u0DC0\u0DD9\u0DB1\u0DCA \u0D9A\u0DD2\u0DC3\u0DD2\u0DAF\u0DD4 \u0DC3\u0DC4\u0DC3\u0DB8\u0DCA\u0DB6\u0DB1\u0DCA\u0DB0\u0DBA\u0D9A\u0DCA \u0DC0\u0DBB\u0DCA\u0D9C\u0DD3\u0D9A\u0DBB\u0DAB\u0DBA \u0DB1\u0DDC\u0D9A\u0DD9\u0DBB\u0DDA.",
+    ta: "{min} \u0B95\u0BCD\u0B95\u0BC1\u0BAE\u0BCD \u0B95\u0BC1\u0BB1\u0BC8\u0BB5\u0BBE\u0BA9 \u0B87\u0BA3\u0BC8\u0B95\u0BCD \u0B95\u0BA3\u0BCD\u0B95\u0BBE\u0BA3\u0BBF\u0BAA\u0BCD\u0BAA\u0BC1\u0B95\u0BB3\u0BC1\u0B9F\u0BA9\u0BCD \u0B8E\u0BA8\u0BCD\u0BA4\u0BA4\u0BCD \u0BA4\u0BCA\u0B9F\u0BB0\u0BCD\u0BAA\u0BC1\u0BAE\u0BCD \u0BB5\u0B95\u0BC8\u0BAA\u0BCD\u0BAA\u0B9F\u0BC1\u0BA4\u0BCD\u0BA4\u0BAA\u0BCD\u0BAA\u0B9F\u0BBE\u0BA4\u0BC1."
+  },
+  planMissingKey: {
+    en: "A required API key is not configured on this server, so this source may be unavailable.",
+    si: "\u0D85\u0DC0\u0DC1\u0DCA\u200D\u0DBA API \u0DBA\u0DAD\u0DD4\u0DBB \u0DB8\u0DD9\u0DB8 \u0DC3\u0DDA\u0DC0\u0DCF\u0DAF\u0DCF\u0DBA\u0D9A\u0DBA\u0DDA \u0DC0\u0DD2\u0DB1\u0DCA\u200D\u0DBA\u0DCF\u0DC3 \u0D9A\u0DBB \u0DB1\u0DD0\u0DAD, \u0D91\u0DB6\u0DD0\u0DC0\u0DD2\u0DB1\u0DCA \u0DB8\u0DD9\u0DB8 \u0DB8\u0DD6\u0DBD\u0DCF\u0DC1\u0DCA\u200D\u0DBB\u0DBA \u0DB1\u0DDC\u0DB8\u0DD0\u0DAD\u0DD2 \u0DC0\u0DD2\u0DBA \u0DC4\u0DD0\u0D9A.",
+    ta: "\u0BA4\u0BC7\u0BB5\u0BC8\u0BAF\u0BBE\u0BA9 API \u0BB5\u0BBF\u0B9A\u0BC8 \u0B87\u0BA8\u0BCD\u0BA4\u0B9A\u0BCD \u0B9A\u0BC7\u0BB5\u0BC8\u0BAF\u0B95\u0BA4\u0BCD\u0BA4\u0BBF\u0BB2\u0BCD \u0B85\u0BAE\u0BC8\u0B95\u0BCD\u0B95\u0BAA\u0BCD\u0BAA\u0B9F\u0BB5\u0BBF\u0BB2\u0BCD\u0BB2\u0BC8, \u0B8E\u0BA9\u0BB5\u0BC7 \u0B87\u0BA8\u0BCD\u0BA4 \u0BAE\u0BC2\u0BB2\u0BAE\u0BCD \u0B95\u0BBF\u0B9F\u0BC8\u0B95\u0BCD\u0B95\u0BBE\u0BAE\u0BB2\u0BCD \u0B87\u0BB0\u0BC1\u0B95\u0BCD\u0B95\u0BB2\u0BBE\u0BAE\u0BCD."
+  },
+  /* ------------------------------------------------------------ analysis */
+  method_descriptive: { en: "Descriptive statistics", si: "\u0DC0\u0DD2\u0DC3\u0DCA\u0DAD\u0DBB\u0DCF\u0DAD\u0DCA\u0DB8\u0D9A \u0DC3\u0D82\u0D9B\u0DCA\u200D\u0DBA\u0DCF\u0DBD\u0DDA\u0D9B\u0DB1", ta: "\u0BB5\u0BBF\u0BB5\u0BB0\u0BA3\u0BAA\u0BCD \u0BAA\u0BC1\u0BB3\u0BCD\u0BB3\u0BBF\u0BAF\u0BBF\u0BAF\u0BB2\u0BCD" },
+  method_correlation: { en: "Pearson correlation", si: "Pearson \u0DC3\u0DC4\u0DC3\u0DB8\u0DCA\u0DB6\u0DB1\u0DCA\u0DB0\u0DBA", ta: "Pearson \u0BA4\u0BCA\u0B9F\u0BB0\u0BCD\u0BAA\u0BC1" },
+  method_crossCorrelation: {
+    en: "Lagged cross-correlation",
+    si: "\u0DB4\u0DCA\u200D\u0DBB\u0DB8\u0DCF\u0DAF\u0DD2\u0DAD \u0DC4\u0DBB\u0DC3\u0DCA-\u0DC3\u0DC4\u0DC3\u0DB8\u0DCA\u0DB6\u0DB1\u0DCA\u0DB0\u0DBA",
+    ta: "\u0BA4\u0BBE\u0BAE\u0BA4\u0B95\u0BCD \u0B95\u0BC1\u0BB1\u0BC1\u0B95\u0BCD\u0B95\u0BC1\u0BA4\u0BCD \u0BA4\u0BCA\u0B9F\u0BB0\u0BCD\u0BAA\u0BC1"
+  },
+  method_beforeAfter: { en: "Before/after comparison", si: "\u0DB4\u0DD9\u0DBB/\u0DB4\u0DC3\u0DD4 \u0DC3\u0D82\u0DC3\u0DB1\u0DCA\u0DAF\u0DB1\u0DBA", ta: "\u0BAE\u0BC1\u0BA9\u0BCD/\u0BAA\u0BBF\u0BA9\u0BCD \u0B92\u0BAA\u0BCD\u0BAA\u0BC0\u0B9F\u0BC1" },
+  method_threshold: {
+    en: "Threshold exceedance table",
+    si: "\u0DC3\u0DD3\u0DB8\u0DCF \u0D89\u0D9A\u0DCA\u0DB8\u0DC0\u0DD3\u0DB8\u0DCA \u0DC0\u0D9C\u0DD4\u0DC0",
+    ta: "\u0BB5\u0BB0\u0BAE\u0BCD\u0BAA\u0BC1 \u0BAE\u0BC0\u0BB1\u0BB2\u0BCD \u0B85\u0B9F\u0BCD\u0B9F\u0BB5\u0BA3\u0BC8"
+  },
+  method_trend: { en: "Linear trend", si: "\u0DBB\u0DDA\u0D9B\u0DD3\u0DBA \u0DB4\u0DCA\u200D\u0DBB\u0DC0\u0DAB\u0DAD\u0DCF\u0DC0\u0DBA", ta: "\u0BA8\u0BC7\u0BB0\u0BCD\u0B95\u0BCB\u0B9F\u0BCD\u0B9F\u0BC1\u0BAA\u0BCD \u0BAA\u0BCB\u0B95\u0BCD\u0B95\u0BC1" },
+  method_anomaly: { en: "Anomaly detection", si: "\u0DC0\u0DD2\u0DC2\u0DB8\u0DAD\u0DCF \u0DC4\u0DB3\u0DD4\u0DB1\u0DCF\u0D9C\u0DD0\u0DB1\u0DD3\u0DB8", ta: "\u0BAE\u0BC1\u0BB0\u0BA3\u0BCD\u0BAA\u0BBE\u0B9F\u0BC1 \u0B95\u0BA3\u0BCD\u0B9F\u0BB1\u0BBF\u0BA4\u0BB2\u0BCD" },
+  method_missing: { en: "Missing-data analysis", si: "\u0D85\u0DAD\u0DD4\u0DBB\u0DD4\u0DAF\u0DB1\u0DCA \u0DAF\u0DAD\u0DCA\u0DAD \u0DC0\u0DD2\u0DC1\u0DCA\u0DBD\u0DDA\u0DC2\u0DAB\u0DBA", ta: "\u0BB5\u0BBF\u0B9F\u0BC1\u0BAA\u0B9F\u0BCD\u0B9F \u0BA4\u0BB0\u0BB5\u0BC1\u0BAA\u0BCD \u0BAA\u0B95\u0BC1\u0BAA\u0BCD\u0BAA\u0BBE\u0BAF\u0BCD\u0BB5\u0BC1" },
+  stat_mean: { en: "Mean", si: "\u0DB8\u0DB0\u0DCA\u200D\u0DBA\u0DBA", ta: "\u0B9A\u0BB0\u0BBE\u0B9A\u0BB0\u0BBF" },
+  stat_median: { en: "Median", si: "\u0DB8\u0DB0\u0DCA\u200D\u0DBA\u0DC3\u0DCA\u0DAE\u0DBA", ta: "\u0B87\u0B9F\u0BC8\u0BA8\u0BBF\u0BB2\u0BC8" },
+  stat_sd: { en: "Sample standard deviation", si: "\u0DB1\u0DD2\u0DBA\u0DD0\u0DAF\u0DD2 \u0DC3\u0DB8\u0DCA\u0DB8\u0DAD \u0D85\u0DB4\u0D9C\u0DB8\u0DB1\u0DBA", ta: "\u0BAE\u0BBE\u0BA4\u0BBF\u0BB0\u0BBF \u0BA8\u0BBF\u0BB2\u0BC8\u0BAF\u0BBE\u0BA9 \u0BB5\u0BBF\u0BB2\u0B95\u0BB2\u0BCD" },
+  stat_min: { en: "Minimum", si: "\u0D85\u0DC0\u0DB8", ta: "\u0B95\u0BC1\u0BB1\u0BC8\u0BA8\u0BCD\u0BA4\u0BAA\u0B9F\u0BCD\u0B9A\u0BAE\u0BCD" },
+  stat_max: { en: "Maximum", si: "\u0D8B\u0DB4\u0DBB\u0DD2\u0DB8", ta: "\u0B85\u0BA4\u0BBF\u0B95\u0BAA\u0B9F\u0BCD\u0B9A\u0BAE\u0BCD" },
+  stat_n: { en: "Valid observations", si: "\u0DC0\u0DBD\u0D82\u0D9C\u0DD4 \u0DB1\u0DD2\u0DBB\u0DD3\u0D9A\u0DCA\u0DC2\u0DAB", ta: "\u0B9A\u0BC6\u0BB2\u0BCD\u0BB2\u0BC1\u0BAA\u0B9F\u0BBF\u0BAF\u0BBE\u0BA9 \u0B95\u0BA3\u0BCD\u0B95\u0BBE\u0BA3\u0BBF\u0BAA\u0BCD\u0BAA\u0BC1\u0B95\u0BB3\u0BCD" },
+  stat_r: { en: "Correlation coefficient r", si: "\u0DC3\u0DC4\u0DC3\u0DB8\u0DCA\u0DB6\u0DB1\u0DCA\u0DB0 \u0DC3\u0D82\u0D9C\u0DD4\u0DAB\u0D9A\u0DBA r", ta: "\u0BA4\u0BCA\u0B9F\u0BB0\u0BCD\u0BAA\u0BC1\u0B95\u0BCD \u0B95\u0BC1\u0BA3\u0B95\u0BAE\u0BCD r" },
+  stat_p: { en: "Two-sided p-value", si: "\u0DAF\u0DCA\u0DC0\u0DD2-\u0DB4\u0DCF\u0DBB\u0DCA\u0DC1\u0DCA\u0DC0\u0DD2\u0D9A p \u0D85\u0D9C\u0DBA", ta: "\u0B87\u0BB0\u0BC1 \u0BAA\u0B95\u0BCD\u0B95 p \u0BAE\u0BA4\u0BBF\u0BAA\u0BCD\u0BAA\u0BC1" },
+  stat_lag: { en: "Best lag (hours)", si: "\u0DC4\u0DDC\u0DB3\u0DB8 \u0DB4\u0DCA\u200D\u0DBB\u0DB8\u0DCF\u0DAF\u0DBA (\u0DB4\u0DD0\u0DBA)", ta: "\u0B9A\u0BBF\u0BB1\u0BA8\u0BCD\u0BA4 \u0BA4\u0BBE\u0BAE\u0BA4\u0BAE\u0BCD (\u0BAE\u0BA3\u0BBF)" },
+  stat_slope: { en: "Slope", si: "\u0DB6\u0DD1\u0DC0\u0DD4\u0DB8", ta: "\u0B9A\u0BBE\u0BAF\u0BCD\u0BB5\u0BC1" },
+  stat_intercept: { en: "Intercept", si: "\u0D85\u0DB1\u0DCA\u0DAD\u0DBB\u0DCA\u0DA1\u0DDA\u0DAF\u0DB1\u0DBA", ta: "\u0BB5\u0BC6\u0B9F\u0BCD\u0B9F\u0BC1\u0BA4\u0BCD\u0BA4\u0BC1\u0BA3\u0BCD\u0B9F\u0BC1" },
+  stat_r2: { en: "Coefficient of determination r\xB2", si: "\u0DB1\u0DD2\u0DBB\u0DCA\u0DAB\u0DCF\u0DBA\u0D9A \u0DC3\u0D82\u0D9C\u0DD4\u0DAB\u0D9A\u0DBA r\xB2", ta: "\u0BA4\u0BC0\u0BB0\u0BCD\u0BAE\u0BBE\u0BA9\u0B95\u0BCD \u0B95\u0BC1\u0BA3\u0B95\u0BAE\u0BCD r\xB2" },
+  stat_change: { en: "Relative change (%)", si: "\u0DC3\u0DCF\u0DB4\u0DDA\u0D9A\u0DCA\u0DC2 \u0DC0\u0DD9\u0DB1\u0DC3 (%)", ta: "\u0B9A\u0BBE\u0BB0\u0BCD\u0BAA\u0BC1 \u0BAE\u0BBE\u0BB1\u0BCD\u0BB1\u0BAE\u0BCD (%)" },
+  stat_before: { en: "Baseline mean", si: "\u0DB4\u0DCF\u0DAF\u0D9A \u0DB8\u0DB0\u0DCA\u200D\u0DBA\u0DBA", ta: "\u0B85\u0B9F\u0BBF\u0BAA\u0BCD\u0BAA\u0B9F\u0BC8 \u0B9A\u0BB0\u0BBE\u0B9A\u0BB0\u0BBF" },
+  stat_after: { en: "Event-window mean", si: "\u0DC3\u0DD2\u0DAF\u0DD4\u0DC0\u0DD3\u0DB8\u0DCA \u0D9A\u0DC0\u0DD4\u0DC5\u0DD4 \u0DB8\u0DB0\u0DCA\u200D\u0DBA\u0DBA", ta: "\u0BA8\u0BBF\u0B95\u0BB4\u0BCD\u0BB5\u0BC1\u0B9A\u0BCD \u0B9A\u0BBE\u0BB3\u0BB0 \u0B9A\u0BB0\u0BBE\u0B9A\u0BB0\u0BBF" },
+  stat_anomalies: { en: "Anomalies beyond 3\u03C3", si: "3\u03C3 \u0D89\u0D9A\u0DCA\u0DB8\u0DC0\u0DB1 \u0DC0\u0DD2\u0DC2\u0DB8\u0DAD\u0DCF", ta: "3\u03C3 \u0BA4\u0BBE\u0BA3\u0BCD\u0B9F\u0BBF\u0BAF \u0BAE\u0BC1\u0BB0\u0BA3\u0BCD\u0BAA\u0BBE\u0B9F\u0BC1\u0B95\u0BB3\u0BCD" },
+  stat_missingFraction: { en: "Missing fraction", si: "\u0D85\u0DAD\u0DD4\u0DBB\u0DD4\u0DAF\u0DB1\u0DCA \u0DB7\u0DCF\u0D9C\u0DBA", ta: "\u0BB5\u0BBF\u0B9F\u0BC1\u0BAA\u0B9F\u0BCD\u0B9F \u0BB5\u0BBF\u0B95\u0BBF\u0BA4\u0BAE\u0BCD" },
+  stat_coverage: { en: "Temporal coverage", si: "\u0D9A\u0DCF\u0DBD\u0DD3\u0DB1 \u0D86\u0DC0\u0DBB\u0DAB\u0DBA", ta: "\u0B95\u0BBE\u0BB2\u0BAA\u0BCD \u0BAA\u0BB0\u0BAA\u0BCD\u0BAA\u0BC1" },
+  stat_pairs: { en: "Paired samples", si: "\u0DBA\u0DD4\u0D9C\u0DBD \u0DB1\u0DD2\u0DBA\u0DD0\u0DAF\u0DD2", ta: "\u0B87\u0BA3\u0BC8 \u0BAE\u0BBE\u0BA4\u0BBF\u0BB0\u0BBF\u0B95\u0BB3\u0BCD" },
+  stat_seasonalDiff: {
+    en: "Seasonal difference is not tested here",
+    si: "\u0D8D\u0DAD\u0DD4\u0DB8\u0DBA \u0DC0\u0DD9\u0DB1\u0DC3 \u0DB8\u0DD9\u0DC4\u0DD2 \u0DB4\u0DBB\u0DD3\u0D9A\u0DCA\u0DC2\u0DCF \u0DB1\u0DDC\u0D9A\u0DD9\u0DBB\u0DDA",
+    ta: "\u0BAA\u0BB0\u0BC1\u0BB5 \u0BB5\u0BC7\u0BB1\u0BC1\u0BAA\u0BBE\u0B9F\u0BC1 \u0B87\u0B99\u0BCD\u0B95\u0BC1 \u0B9A\u0BCB\u0BA4\u0BBF\u0B95\u0BCD\u0B95\u0BAA\u0BCD\u0BAA\u0B9F\u0BB5\u0BBF\u0BB2\u0BCD\u0BB2\u0BC8"
+  },
+  assumption_linear: {
+    en: "Pearson r measures linear, monotonic association only.",
+    si: "Pearson r \u0DB8\u0DB1\u0DD2\u0DB1\u0DCA\u0DB1\u0DDA \u0DBB\u0DDA\u0D9B\u0DD3\u0DBA, \u0D92\u0D9A\u0DCF\u0D9A\u0DCF\u0DBB\u0DD3 \u0DC3\u0DB8\u0DCA\u0DB6\u0DB1\u0DCA\u0DB0\u0DAD\u0DCF\u0DC0\u0DBA \u0DB4\u0DB8\u0DAB\u0DD2.",
+    ta: "Pearson r \u0BA8\u0BC7\u0BB0\u0BCD\u0B95\u0BCB\u0B9F\u0BCD\u0B9F\u0BC1, \u0B92\u0BB0\u0BC7 \u0BA4\u0BBF\u0B9A\u0BC8\u0BA4\u0BCD \u0BA4\u0BCA\u0B9F\u0BB0\u0BCD\u0BAA\u0BC8 \u0BAE\u0B9F\u0BCD\u0B9F\u0BC1\u0BAE\u0BC7 \u0B85\u0BB3\u0BB5\u0BBF\u0B9F\u0BC1\u0B95\u0BBF\u0BB1\u0BA4\u0BC1."
+  },
+  assumption_independence: {
+    en: "Samples are treated as independent; consecutive geophysical samples usually are not.",
+    si: "\u0DB1\u0DD2\u0DBA\u0DD0\u0DAF\u0DD2 \u0DC3\u0DCA\u0DC0\u0DCF\u0DB0\u0DD3\u0DB1 \u0DBD\u0DD9\u0DC3 \u0DC3\u0DBD\u0D9A\u0DB1\u0DD4 \u0DBD\u0DD0\u0DB6\u0DDA; \u0D85\u0DB1\u0DD4\u0D9A\u0DCA\u200D\u0DBB\u0DB8\u0DD2\u0D9A \u0DB7\u0DD6-\u0DB7\u0DDE\u0DAD\u0DD2\u0D9A \u0DB1\u0DD2\u0DBA\u0DD0\u0DAF\u0DD2 \u0DC3\u0DCF\u0DB8\u0DCF\u0DB1\u0DCA\u200D\u0DBA\u0DBA\u0DD9\u0DB1\u0DCA \u0DC3\u0DCA\u0DC0\u0DCF\u0DB0\u0DD3\u0DB1 \u0DB1\u0DDC\u0DC0\u0DDA.",
+    ta: "\u0BAE\u0BBE\u0BA4\u0BBF\u0BB0\u0BBF\u0B95\u0BB3\u0BCD \u0B9A\u0BC1\u0BAF\u0BBE\u0BA4\u0BC0\u0BA9\u0BAE\u0BBE\u0B95\u0B95\u0BCD \u0B95\u0BB0\u0BC1\u0BA4\u0BAA\u0BCD\u0BAA\u0B9F\u0BC1\u0B95\u0BBF\u0BA9\u0BCD\u0BB1\u0BA9; \u0BA4\u0BCA\u0B9F\u0BB0\u0BCD\u0B9A\u0BCD\u0B9A\u0BBF\u0BAF\u0BBE\u0BA9 \u0BAA\u0BC1\u0BB5\u0BBF-\u0B87\u0BAF\u0BB1\u0BCD\u0BAA\u0BBF\u0BAF\u0BB2\u0BCD \u0BAE\u0BBE\u0BA4\u0BBF\u0BB0\u0BBF\u0B95\u0BB3\u0BCD \u0BAA\u0BCA\u0BA4\u0BC1\u0BB5\u0BBE\u0B95 \u0B9A\u0BC1\u0BAF\u0BBE\u0BA4\u0BC0\u0BA9\u0BAE\u0BB2\u0BCD\u0BB2."
+  },
+  assumption_normal: {
+    en: "The p-value assumes approximately normal residuals; this is not verified here.",
+    si: "p \u0D85\u0D9C\u0DBA \u0DAF\u0DC5 \u0DC0\u0DC1\u0DBA\u0DD9\u0DB1\u0DCA \u0DC3\u0DCF\u0DB8\u0DCF\u0DB1\u0DCA\u200D\u0DBA \u0D85\u0DC0\u0DC1\u0DDA\u0DC2 \u0D8B\u0DB4\u0D9A\u0DBD\u0DCA\u0DB4\u0DB1\u0DBA \u0D9A\u0DBB\u0DBA\u0DD2; \u0D91\u0DBA \u0DB8\u0DD9\u0DC4\u0DD2 \u0DAD\u0DC4\u0DC0\u0DD4\u0DBB\u0DD4 \u0DB1\u0DDC\u0D9A\u0DD9\u0DBB\u0DDA.",
+    ta: "p \u0BAE\u0BA4\u0BBF\u0BAA\u0BCD\u0BAA\u0BC1 \u0BA4\u0BCB\u0BB0\u0BBE\u0BAF\u0BAE\u0BBE\u0B95 \u0B87\u0BAF\u0BB2\u0BCD\u0BAA\u0BBE\u0BA9 \u0BAE\u0BC0\u0BA4\u0BBF\u0B95\u0BB3\u0BC8\u0B95\u0BCD \u0B95\u0BB0\u0BC1\u0BA4\u0BC1\u0B95\u0BBF\u0BB1\u0BA4\u0BC1; \u0B87\u0BA4\u0BC1 \u0B87\u0B99\u0BCD\u0B95\u0BC1 \u0B9A\u0BB0\u0BBF\u0BAA\u0BBE\u0BB0\u0BCD\u0B95\u0BCD\u0B95\u0BAA\u0BCD\u0BAA\u0B9F\u0BB5\u0BBF\u0BB2\u0BCD\u0BB2\u0BC8."
+  },
+  assumption_units: {
+    en: "Both variables are analysed in the units published by their sources.",
+    si: "\u0DC0\u0DD2\u0DA0\u0DBD\u0DCA\u200D\u0DBA \u0DAF\u0DD9\u0D9A\u0DB8 \u0D92\u0DC0\u0DCF\u0DBA\u0DDA \u0DB8\u0DD6\u0DBD\u0DCF\u0DC1\u0DCA\u200D\u0DBB\u0DC0\u0DBD \u0DB4\u0DCA\u200D\u0DBB\u0D9A\u0DCF\u0DC1\u0DD2\u0DAD \u0D92\u0D9A\u0D9A\u0DC0\u0DBD\u0DD2\u0DB1\u0DCA \u0DC0\u0DD2\u0DC1\u0DCA\u0DBD\u0DDA\u0DC2\u0DAB\u0DBA \u0D9A\u0DD9\u0DBB\u0DDA.",
+    ta: "\u0B87\u0BB0\u0BC1 \u0BAE\u0BBE\u0BB1\u0BBF\u0B95\u0BB3\u0BC1\u0BAE\u0BCD \u0B85\u0BB5\u0BB1\u0BCD\u0BB1\u0BBF\u0BA9\u0BCD \u0BAE\u0BC2\u0BB2\u0B99\u0BCD\u0B95\u0BB3\u0BCD \u0BB5\u0BC6\u0BB3\u0BBF\u0BAF\u0BBF\u0B9F\u0BCD\u0B9F \u0B85\u0BB2\u0B95\u0BC1\u0B95\u0BB3\u0BBF\u0BB2\u0BC7\u0BAF\u0BC7 \u0BAA\u0B95\u0BC1\u0BAA\u0BCD\u0BAA\u0BBE\u0BAF\u0BCD\u0BB5\u0BC1 \u0B9A\u0BC6\u0BAF\u0BCD\u0BAF\u0BAA\u0BCD\u0BAA\u0B9F\u0BC1\u0B95\u0BBF\u0BA9\u0BCD\u0BB1\u0BA9."
+  },
+  assumption_alignment: {
+    en: "Series are paired by nearest timestamp within a stated tolerance; unpaired samples are dropped and counted.",
+    si: "\u0DC1\u0DCA\u200D\u0DBB\u0DDA\u0DAB\u0DD2 \u0DB4\u0DCA\u200D\u0DBB\u0D9A\u0DCF\u0DC1\u0DD2\u0DAD \u0D89\u0DC0\u0DC3\u0DD3\u0DB8 \u0DAD\u0DD4\u0DC5 \u0DC5\u0D9F\u0DB8 \u0D9A\u0DCF\u0DBD \u0DB8\u0DD4\u0DAF\u0DCA\u200D\u0DBB\u0DCF\u0DC0\u0DD9\u0DB1\u0DCA \u0DBA\u0DD4\u0D9C\u0DBD\u0DB1\u0DBA \u0D9A\u0DD9\u0DBB\u0DDA; \u0DBA\u0DD4\u0D9C\u0DBD \u0DB1\u0DDC\u0DC0\u0DD6 \u0DB1\u0DD2\u0DBA\u0DD0\u0DAF\u0DD2 \u0D89\u0DC0\u0DAD\u0DCA \u0D9A\u0DBB \u0D9C\u0DAB\u0DB1\u0DCA \u0D9A\u0DD9\u0DBB\u0DDA.",
+    ta: "\u0BA4\u0BCA\u0B9F\u0BB0\u0BCD\u0B95\u0BB3\u0BCD \u0B95\u0BC2\u0BB1\u0BAA\u0BCD\u0BAA\u0B9F\u0BCD\u0B9F \u0B9A\u0B95\u0BBF\u0BAA\u0BCD\u0BAA\u0BC1\u0BA4\u0BCD\u0BA4\u0BA9\u0BCD\u0BAE\u0BC8\u0B95\u0BCD\u0B95\u0BC1\u0BB3\u0BCD \u0B85\u0BB0\u0BC1\u0B95\u0BBF\u0BB2\u0BC1\u0BB3\u0BCD\u0BB3 \u0BA8\u0BC7\u0BB0 \u0BAE\u0BC1\u0BA4\u0BCD\u0BA4\u0BBF\u0BB0\u0BC8\u0BAF\u0BBE\u0BB2\u0BCD \u0B87\u0BA3\u0BC8\u0B95\u0BCD\u0B95\u0BAA\u0BCD\u0BAA\u0B9F\u0BC1\u0B95\u0BBF\u0BA9\u0BCD\u0BB1\u0BA9; \u0B87\u0BA3\u0BC8\u0B95\u0BCD\u0B95\u0BAA\u0BCD\u0BAA\u0B9F\u0BBE\u0BA4 \u0BAE\u0BBE\u0BA4\u0BBF\u0BB0\u0BBF\u0B95\u0BB3\u0BCD \u0BA8\u0BC0\u0B95\u0BCD\u0B95\u0BAA\u0BCD\u0BAA\u0B9F\u0BCD\u0B9F\u0BC1 \u0B8E\u0BA3\u0BCD\u0BA3\u0BAA\u0BCD\u0BAA\u0B9F\u0BC1\u0B95\u0BBF\u0BA9\u0BCD\u0BB1\u0BA9."
+  },
+  limitation_autocorr: {
+    en: "Geophysical series are autocorrelated, so the nominal p-value overstates significance.",
+    si: "\u0DB7\u0DD6-\u0DB7\u0DDE\u0DAD\u0DD2\u0D9A \u0DC1\u0DCA\u200D\u0DBB\u0DDA\u0DAB\u0DD2 \u0DC3\u0DCA\u0DC0\u0DBA\u0D82-\u0DC3\u0DC4\u0DC3\u0DB8\u0DCA\u0DB6\u0DB1\u0DCA\u0DB0\u0DD2\u0DAD \u0DB6\u0DD0\u0DC0\u0DD2\u0DB1\u0DCA \u0DB1\u0DCF\u0DB8\u0DD2\u0D9A p \u0D85\u0D9C\u0DBA \u0DC0\u0DD0\u0DAF\u0D9C\u0DAD\u0DCA\u0D9A\u0DB8 \u0D89\u0DAD\u0DD2\u0DBB\u0DD2 \u0D9A\u0DBB\u0DBA\u0DD2.",
+    ta: "\u0BAA\u0BC1\u0BB5\u0BBF-\u0B87\u0BAF\u0BB1\u0BCD\u0BAA\u0BBF\u0BAF\u0BB2\u0BCD \u0BA4\u0BCA\u0B9F\u0BB0\u0BCD\u0B95\u0BB3\u0BCD \u0BA4\u0BA9\u0BCD-\u0BA4\u0BCA\u0B9F\u0BB0\u0BCD\u0BAA\u0BC1\u0B9F\u0BC8\u0BAF\u0BB5\u0BC8, \u0B8E\u0BA9\u0BB5\u0BC7 \u0BAA\u0BC6\u0BAF\u0BB0\u0BB3\u0BB5\u0BC1 p \u0BAE\u0BA4\u0BBF\u0BAA\u0BCD\u0BAA\u0BC1 \u0B85\u0BB0\u0BCD\u0BA4\u0BCD\u0BA4\u0BA4\u0BCD\u0BA4\u0BC8 \u0BAE\u0BBF\u0B95\u0BC8\u0BAA\u0BCD\u0BAA\u0B9F\u0BC1\u0BA4\u0BCD\u0BA4\u0BC1\u0BAE\u0BCD."
+  },
+  limitation_smallN: {
+    en: "The sample is small; a coefficient with a wide interval is weak evidence either way.",
+    si: "\u0DB1\u0DD2\u0DBA\u0DD0\u0DAF\u0DD2\u0DBA \u0D9A\u0DD4\u0DA9\u0DCF\u0DBA; \u0DB4\u0DD4\u0DC5\u0DD4\u0DBD\u0DCA \u0DB4\u0DBB\u0DCF\u0DC3\u0DBA\u0D9A\u0DCA \u0DC3\u0DC4\u0DD2\u0DAD \u0DC3\u0D82\u0D9C\u0DD4\u0DAB\u0D9A\u0DBA\u0D9A\u0DCA \u0DAF\u0DD9\u0DB4\u0DD0\u0DAD\u0DCA\u0DAD\u0DA7\u0DB8 \u0DAF\u0DD4\u0DBB\u0DCA\u0DC0\u0DBD \u0DC3\u0DCF\u0D9A\u0DCA\u0DC2\u0DD2\u0DBA\u0D9A\u0DD2.",
+    ta: "\u0BAE\u0BBE\u0BA4\u0BBF\u0BB0\u0BBF \u0B9A\u0BBF\u0BB1\u0BBF\u0BAF\u0BA4\u0BC1; \u0B85\u0B95\u0BA9\u0BCD\u0BB1 \u0B87\u0B9F\u0BC8\u0BB5\u0BC6\u0BB3\u0BBF\u0BAF\u0BC1\u0B9F\u0BC8\u0BAF \u0B95\u0BC1\u0BA3\u0B95\u0BAE\u0BCD \u0B8E\u0BA8\u0BCD\u0BA4\u0BAA\u0BCD \u0BAA\u0B95\u0BCD\u0B95\u0BAE\u0BC1\u0BAE\u0BCD \u0BAA\u0BB2\u0BB5\u0BC0\u0BA9\u0BAE\u0BBE\u0BA9 \u0B9A\u0BBE\u0BA9\u0BCD\u0BB1\u0BC1."
+  },
+  limitation_missing: {
+    en: "Missing values reduce the paired sample; they are never replaced with estimates.",
+    si: "\u0D85\u0DAD\u0DD4\u0DBB\u0DD4\u0DAF\u0DB1\u0DCA \u0D85\u0D9C\u0DBA\u0DB1\u0DCA \u0DBA\u0DD4\u0D9C\u0DBD \u0DB1\u0DD2\u0DBA\u0DD0\u0DAF\u0DD2\u0DBA \u0D85\u0DA9\u0DD4 \u0D9A\u0DBB\u0DBA\u0DD2; \u0D92\u0DC0\u0DCF \u0D9A\u0DD2\u0DC3\u0DD2\u0DC0\u0DD2\u0DA7\u0DD9\u0D9A\u0DAD\u0DCA \u0D87\u0DC3\u0DCA\u0DAD\u0DB8\u0DDA\u0DB1\u0DCA\u0DAD\u0DD4\u0DC0\u0DBD\u0DD2\u0DB1\u0DCA \u0DB4\u0DCA\u200D\u0DBB\u0DAD\u0DD2\u0DC3\u0DCA\u0DAE\u0DCF\u0DB4\u0DB1\u0DBA \u0DB1\u0DDC\u0D9A\u0DD9\u0DBB\u0DDA.",
+    ta: "\u0BB5\u0BBF\u0B9F\u0BC1\u0BAA\u0B9F\u0BCD\u0B9F \u0BAE\u0BA4\u0BBF\u0BAA\u0BCD\u0BAA\u0BC1\u0B95\u0BB3\u0BCD \u0B87\u0BA3\u0BC8 \u0BAE\u0BBE\u0BA4\u0BBF\u0BB0\u0BBF\u0BAF\u0BC8\u0B95\u0BCD \u0B95\u0BC1\u0BB1\u0BC8\u0B95\u0BCD\u0B95\u0BBF\u0BA9\u0BCD\u0BB1\u0BA9; \u0B85\u0BB5\u0BC8 \u0B92\u0BB0\u0BC1\u0BAA\u0BCB\u0BA4\u0BC1\u0BAE\u0BCD \u0BAE\u0BA4\u0BBF\u0BAA\u0BCD\u0BAA\u0BC0\u0B9F\u0BC1\u0B95\u0BB3\u0BBE\u0BB2\u0BCD \u0BAE\u0BBE\u0BB1\u0BCD\u0BB1\u0BAA\u0BCD\u0BAA\u0B9F\u0BC1\u0BB5\u0BA4\u0BBF\u0BB2\u0BCD\u0BB2\u0BC8."
+  },
+  limitation_causality: {
+    en: "Association in observational data cannot establish causation.",
+    si: "\u0DB1\u0DD2\u0DBB\u0DD3\u0D9A\u0DCA\u0DC2\u0DAB \u0DAF\u0DAD\u0DCA\u0DAD\u0DC0\u0DBD \u0DC3\u0DB8\u0DCA\u0DB6\u0DB1\u0DCA\u0DB0\u0DAD\u0DCF\u0DC0\u0DBA\u0D9A\u0DD2\u0DB1\u0DCA \u0DC4\u0DDA\u0DAD\u0DD4\u0D9A\u0DCF\u0DBB\u0D9A\u0DAD\u0DCA\u0DC0\u0DBA \u0DAD\u0DC4\u0DC0\u0DD4\u0DBB\u0DD4 \u0D9A\u0DC5 \u0DB1\u0DDC\u0DC4\u0DD0\u0D9A.",
+    ta: "\u0B95\u0BA3\u0BCD\u0B95\u0BBE\u0BA3\u0BBF\u0BAA\u0BCD\u0BAA\u0BC1\u0BA4\u0BCD \u0BA4\u0BB0\u0BB5\u0BBF\u0BB2\u0BCD \u0B89\u0BB3\u0BCD\u0BB3 \u0BA4\u0BCA\u0B9F\u0BB0\u0BCD\u0BAA\u0BC1 \u0B95\u0BBE\u0BB0\u0BA3\u0BA4\u0BCD\u0BA4\u0BC8 \u0BA8\u0BBF\u0BB1\u0BC1\u0BB5 \u0BAE\u0BC1\u0B9F\u0BBF\u0BAF\u0BBE\u0BA4\u0BC1."
+  },
+  limitation_insufficient: {
+    en: "Too few valid observations to run this test, so none is reported.",
+    si: "\u0DB8\u0DD9\u0DB8 \u0DB4\u0DBB\u0DD3\u0D9A\u0DCA\u0DC2\u0DAB\u0DBA \u0DC3\u0DB3\u0DC4\u0DCF \u0DC0\u0DBD\u0D82\u0D9C\u0DD4 \u0DB1\u0DD2\u0DBB\u0DD3\u0D9A\u0DCA\u0DC2\u0DAB \u0DB4\u0DCA\u200D\u0DBB\u0DB8\u0DCF\u0DAB\u0DC0\u0DAD\u0DCA \u0DB1\u0DDC\u0DC0\u0DB1 \u0DB6\u0DD0\u0DC0\u0DD2\u0DB1\u0DCA \u0D9A\u0DD2\u0DC3\u0DD2\u0DC0\u0D9A\u0DCA \u0DC0\u0DCF\u0DBB\u0DCA\u0DAD\u0DCF \u0DB1\u0DDC\u0D9A\u0DD9\u0DBB\u0DDA.",
+    ta: "\u0B87\u0BA8\u0BCD\u0BA4\u0B9A\u0BCD \u0B9A\u0BCB\u0BA4\u0BA9\u0BC8\u0B95\u0BCD\u0B95\u0BC1\u0BA4\u0BCD \u0BA4\u0BC7\u0BB5\u0BC8\u0BAF\u0BBE\u0BA9 \u0B9A\u0BC6\u0BB2\u0BCD\u0BB2\u0BC1\u0BAA\u0B9F\u0BBF\u0BAF\u0BBE\u0BA9 \u0B95\u0BA3\u0BCD\u0B95\u0BBE\u0BA3\u0BBF\u0BAA\u0BCD\u0BAA\u0BC1\u0B95\u0BB3\u0BCD \u0BAA\u0BCB\u0BA4\u0BBE\u0BA4\u0BA4\u0BBE\u0BB2\u0BCD \u0B8E\u0BA4\u0BC1\u0BB5\u0BC1\u0BAE\u0BCD \u0B85\u0BB1\u0BBF\u0BB5\u0BBF\u0B95\u0BCD\u0B95\u0BAA\u0BCD\u0BAA\u0B9F\u0BB5\u0BBF\u0BB2\u0BCD\u0BB2\u0BC8."
+  },
+  skip_reason: {
+    en: "Skipped: {reason}",
+    si: "\u0DB8\u0D9F \u0DC4\u0DBB\u0DD2\u0DB1 \u0DBD\u0DAF\u0DD3: {reason}",
+    ta: "\u0BA4\u0BB5\u0BBF\u0BB0\u0BCD\u0B95\u0BCD\u0B95\u0BAA\u0BCD\u0BAA\u0B9F\u0BCD\u0B9F\u0BA4\u0BC1: {reason}"
+  },
+  /* ------------------------------------------------------------- evidence */
+  evidence_supporting: { en: "Supporting", si: "\u0DC3\u0DC4\u0DCF\u0DBA\u0D9A", ta: "\u0B86\u0BA4\u0BB0\u0BB5\u0BC1" },
+  evidence_contradicting: { en: "Contradicting", si: "\u0DB4\u0DBB\u0DC3\u0DCA\u0DB4\u0DBB", ta: "\u0BAE\u0BC1\u0BB0\u0BA3\u0BCD\u0BAA\u0BBE\u0B9F\u0BC1" },
+  evidence_neutral: { en: "Neutral", si: "\u0DB8\u0DB0\u0DCA\u200D\u0DBA\u0DC3\u0DCA\u0DAE", ta: "\u0BA8\u0B9F\u0BC1\u0BA8\u0BBF\u0BB2\u0BC8" },
+  evidence_insufficient: { en: "Insufficient", si: "\u0DB4\u0DCA\u200D\u0DBB\u0DB8\u0DCF\u0DAB\u0DC0\u0DAD\u0DCA \u0DB1\u0DDC\u0DC0\u0DDA", ta: "\u0BAA\u0BCB\u0BA4\u0BC1\u0BAE\u0BBE\u0BA9\u0BA4\u0BB2\u0BCD\u0BB2" },
+  strength_none: { en: "no evidence", si: "\u0DC3\u0DCF\u0D9A\u0DCA\u0DC2\u0DD2 \u0DB1\u0DDC\u0DB8\u0DD0\u0DAD", ta: "\u0B9A\u0BBE\u0BA9\u0BCD\u0BB1\u0BC1 \u0B87\u0BB2\u0BCD\u0BB2\u0BC8" },
+  strength_weak: { en: "weak", si: "\u0DAF\u0DD4\u0DBB\u0DCA\u0DC0\u0DBD", ta: "\u0BAA\u0BB2\u0BB5\u0BC0\u0BA9\u0BAE\u0BCD" },
+  strength_moderate: { en: "moderate", si: "\u0DB8\u0DB0\u0DCA\u200D\u0DBA\u0DB8", ta: "\u0BAE\u0BBF\u0BA4\u0BAE\u0BBE\u0BA9\u0BA4\u0BC1" },
+  strength_strong: { en: "strong", si: "\u0DC1\u0D9A\u0DCA\u0DAD\u0DD2\u0DB8\u0DAD\u0DCA", ta: "\u0BB5\u0BB2\u0BC1\u0BB5\u0BBE\u0BA9\u0BA4\u0BC1" },
+  rule_insufficient_n: {
+    en: "n = {n} paired observations is below the tested minimum of {min}; no classification is attempted.",
+    si: "n = {n} \u0DBA\u0DD4\u0D9C\u0DBD \u0DB1\u0DD2\u0DBB\u0DD3\u0D9A\u0DCA\u0DC2\u0DAB \u0DB4\u0DBB\u0DD3\u0D9A\u0DCA\u0DC2\u0DD2\u0DAD \u0D85\u0DC0\u0DB8\u0DBA {min} \u0DA7 \u0DC0\u0DA9\u0DCF \u0D85\u0DA9\u0DD4\u0DBA; \u0DC0\u0DBB\u0DCA\u0D9C\u0DD3\u0D9A\u0DBB\u0DAB\u0DBA\u0D9A\u0DCA \u0DC3\u0DD2\u0DAF\u0DD4 \u0DB1\u0DDC\u0D9A\u0DD9\u0DBB\u0DDA.",
+    ta: "n = {n} \u0B87\u0BA3\u0BC8\u0B95\u0BCD \u0B95\u0BA3\u0BCD\u0B95\u0BBE\u0BA3\u0BBF\u0BAA\u0BCD\u0BAA\u0BC1\u0B95\u0BB3\u0BCD \u0B9A\u0BCB\u0BA4\u0BBF\u0B95\u0BCD\u0B95\u0BAA\u0BCD\u0BAA\u0B9F\u0BCD\u0B9F \u0B95\u0BC1\u0BB1\u0BC8\u0BA8\u0BCD\u0BA4\u0BAA\u0B9F\u0BCD\u0B9A\u0BAE\u0BCD {min} \u0B90 \u0BB5\u0BBF\u0B9F\u0B95\u0BCD \u0B95\u0BC1\u0BB1\u0BC8\u0BB5\u0BC1; \u0BB5\u0B95\u0BC8\u0BAA\u0BCD\u0BAA\u0B9F\u0BC1\u0BA4\u0BCD\u0BA4\u0BB2\u0BCD \u0B9A\u0BC6\u0BAF\u0BCD\u0BAF\u0BAA\u0BCD\u0BAA\u0B9F\u0BB5\u0BBF\u0BB2\u0BCD\u0BB2\u0BC8."
+  },
+  rule_no_data: {
+    en: "No usable observations were retrieved for this dataset, so no evidence is classified.",
+    si: "\u0DB8\u0DD9\u0DB8 \u0DAF\u0DAD\u0DCA\u0DAD \u0D9A\u0DA7\u0DCA\u0DBD\u0DBD\u0DBA \u0DC3\u0DB3\u0DC4\u0DCF \u0DB7\u0DCF\u0DC0\u0DD2\u0DAD\u0DCF \u0D9A\u0DC5 \u0DC4\u0DD0\u0D9A\u0DD2 \u0DB1\u0DD2\u0DBB\u0DD3\u0D9A\u0DCA\u0DC2\u0DAB \u0DBD\u0DB6\u0DCF\u0D9C\u0DD9\u0DB1 \u0DB1\u0DD0\u0DAD, \u0D91\u0DB6\u0DD0\u0DC0\u0DD2\u0DB1\u0DCA \u0DC3\u0DCF\u0D9A\u0DCA\u0DC2\u0DD2 \u0DC0\u0DBB\u0DCA\u0D9C\u0DD3\u0D9A\u0DBB\u0DAB\u0DBA \u0DB1\u0DDC\u0D9A\u0DD9\u0DBB\u0DDA.",
+    ta: "\u0B87\u0BA8\u0BCD\u0BA4\u0BA4\u0BCD \u0BA4\u0BB0\u0BB5\u0BC1\u0BA4\u0BCD\u0BA4\u0BCA\u0B95\u0BC1\u0BAA\u0BCD\u0BAA\u0BBF\u0BB1\u0BCD\u0B95\u0BC1\u0BAA\u0BCD \u0BAA\u0BAF\u0BA9\u0BCD\u0BAA\u0B9F\u0BC1\u0BA4\u0BCD\u0BA4\u0B95\u0BCD\u0B95\u0BC2\u0B9F\u0BBF\u0BAF \u0B95\u0BA3\u0BCD\u0B95\u0BBE\u0BA3\u0BBF\u0BAA\u0BCD\u0BAA\u0BC1\u0B95\u0BB3\u0BCD \u0BAA\u0BC6\u0BB1\u0BAA\u0BCD\u0BAA\u0B9F\u0BB5\u0BBF\u0BB2\u0BCD\u0BB2\u0BC8, \u0B8E\u0BA9\u0BB5\u0BC7 \u0B9A\u0BBE\u0BA9\u0BCD\u0BB1\u0BC1 \u0BB5\u0B95\u0BC8\u0BAA\u0BCD\u0BAA\u0B9F\u0BC1\u0BA4\u0BCD\u0BA4\u0BAA\u0BCD\u0BAA\u0B9F\u0BB5\u0BBF\u0BB2\u0BCD\u0BB2\u0BC8."
+  },
+  rule_correlation_support: {
+    en: "r = {r} (n = {n}, p = {p}) is significant at \u03B1 = 0.05, |r| \u2265 {minR}, and its sign matches the hypothesis.",
+    si: "r = {r} (n = {n}, p = {p}) \u03B1 = 0.05 \u0DC4\u0DD2\u0DAF\u0DD3 \u0DC0\u0DD0\u0DAF\u0D9C\u0DAD\u0DCA \u0DC0\u0DB1 \u0D85\u0DAD\u0DBB |r| \u2265 {minR} \u0DC3\u0DC4 \u0D91\u0DC4\u0DD2 \u0DBD\u0D9A\u0DD4\u0DAB \u0D8B\u0DB4\u0D9A\u0DBD\u0DCA\u0DB4\u0DB1\u0DBA\u0DA7 \u0D9C\u0DD0\u0DBD\u0DB4\u0DDA.",
+    ta: "r = {r} (n = {n}, p = {p}) \u03B1 = 0.05 \u0B87\u0BB2\u0BCD \u0BAA\u0BCA\u0BB0\u0BC1\u0BB3\u0BC1\u0B9F\u0BC8\u0BAF\u0BA4\u0BC1, |r| \u2265 {minR}, \u0B85\u0BA4\u0BA9\u0BCD \u0B95\u0BC1\u0BB1\u0BBF \u0B95\u0BB0\u0BC1\u0BA4\u0BC1\u0B95\u0BCB\u0BB3\u0BC1\u0B9F\u0BA9\u0BCD \u0BAA\u0BCA\u0BB0\u0BC1\u0BA8\u0BCD\u0BA4\u0BC1\u0B95\u0BBF\u0BB1\u0BA4\u0BC1."
+  },
+  rule_correlation_contradict: {
+    en: "r = {r} (n = {n}, p = {p}) is significant, but the sign is opposite to the hypothesis.",
+    si: "r = {r} (n = {n}, p = {p}) \u0DC0\u0DD0\u0DAF\u0D9C\u0DAD\u0DCA \u0DC0\u0DDA, \u0DB1\u0DB8\u0DD4\u0DAD\u0DCA \u0DBD\u0D9A\u0DD4\u0DAB \u0D8B\u0DB4\u0D9A\u0DBD\u0DCA\u0DB4\u0DB1\u0DBA\u0DA7 \u0DB4\u0DCA\u200D\u0DBB\u0DAD\u0DD2\u0DC0\u0DD2\u0DBB\u0DD4\u0DAF\u0DCA\u0DB0\u0DBA.",
+    ta: "r = {r} (n = {n}, p = {p}) \u0BAA\u0BCA\u0BB0\u0BC1\u0BB3\u0BC1\u0B9F\u0BC8\u0BAF\u0BA4\u0BC1, \u0B86\u0BA9\u0BBE\u0BB2\u0BCD \u0B95\u0BC1\u0BB1\u0BBF \u0B95\u0BB0\u0BC1\u0BA4\u0BC1\u0B95\u0BCB\u0BB3\u0BC1\u0B95\u0BCD\u0B95\u0BC1 \u0B8E\u0BA4\u0BBF\u0BB0\u0BBE\u0BA9\u0BA4\u0BC1."
+  },
+  rule_correlation_neutral: {
+    en: "r = {r} (n = {n}, p = {p}) is not significant at \u03B1 = 0.05: no detectable relationship in this window.",
+    si: "r = {r} (n = {n}, p = {p}) \u03B1 = 0.05 \u0DC4\u0DD2\u0DAF\u0DD3 \u0DC0\u0DD0\u0DAF\u0D9C\u0DAD\u0DCA \u0DB1\u0DDC\u0DC0\u0DDA: \u0DB8\u0DD9\u0DB8 \u0D9A\u0DC0\u0DD4\u0DC5\u0DD4\u0DC0 \u0DAD\u0DD4\u0DC5 \u0DC4\u0DB3\u0DD4\u0DB1\u0DCF\u0D9C\u0DAD \u0DC4\u0DD0\u0D9A\u0DD2 \u0DC3\u0DB8\u0DCA\u0DB6\u0DB1\u0DCA\u0DB0\u0DAD\u0DCF\u0DC0\u0DBA\u0D9A\u0DCA \u0DB1\u0DD0\u0DAD.",
+    ta: "r = {r} (n = {n}, p = {p}) \u03B1 = 0.05 \u0B87\u0BB2\u0BCD \u0BAA\u0BCA\u0BB0\u0BC1\u0BB3\u0BC1\u0B9F\u0BC8\u0BAF\u0BA4\u0BB2\u0BCD\u0BB2: \u0B87\u0BA8\u0BCD\u0BA4\u0B9A\u0BCD \u0B9A\u0BBE\u0BB3\u0BB0\u0BA4\u0BCD\u0BA4\u0BBF\u0BB2\u0BCD \u0B95\u0BA3\u0BCD\u0B9F\u0BB1\u0BBF\u0BAF\u0B95\u0BCD\u0B95\u0BC2\u0B9F\u0BBF\u0BAF \u0BA4\u0BCA\u0B9F\u0BB0\u0BCD\u0BAA\u0BC1 \u0B87\u0BB2\u0BCD\u0BB2\u0BC8."
+  },
+  rule_lead_lag: {
+    en: "Peak lagged correlation occurs at {lag} h (r = {r}); the hypothesis expected the driver to lead by {expected} h.",
+    si: "\u0D8B\u0DB4\u0DBB\u0DD2\u0DB8 \u0DB4\u0DCA\u200D\u0DBB\u0DB8\u0DCF\u0DAF\u0DD2\u0DAD \u0DC3\u0DC4\u0DC3\u0DB8\u0DCA\u0DB6\u0DB1\u0DCA\u0DB0\u0DBA {lag} \u0DB4\u0DD0\u0DBA\u0DDA\u0DAF\u0DD3 \u0DC3\u0DD2\u0DAF\u0DD4 \u0DC0\u0DDA (r = {r}); \u0D8B\u0DB4\u0D9A\u0DBD\u0DCA\u0DB4\u0DB1\u0DBA \u0D85\u0DB4\u0DDA\u0D9A\u0DCA\u0DC2\u0DCF \u0D9A\u0DC5\u0DDA \u0DC3\u0DCF\u0DB0\u0D9A\u0DBA \u0DB4\u0DD0\u0DBA {expected} \u0D9A\u0DD2\u0DB1\u0DCA \u0DB4\u0DD9\u0DBB\u0DB8\u0DD4\u0DAB \u0D9C\u0DB1\u0DD3 \u0DBA\u0DD0\u0DBA\u0DD2 \u0DBA.",
+    ta: "\u0B89\u0B9A\u0BCD\u0B9A\u0BA4\u0BCD \u0BA4\u0BBE\u0BAE\u0BA4\u0BA4\u0BCD \u0BA4\u0BCA\u0B9F\u0BB0\u0BCD\u0BAA\u0BC1 {lag} \u0BAE\u0BA3\u0BBF\u0BAF\u0BBF\u0BB2\u0BCD \u0BA8\u0BBF\u0B95\u0BB4\u0BCD\u0B95\u0BBF\u0BB1\u0BA4\u0BC1 (r = {r}); \u0B95\u0BBE\u0BB0\u0BA3\u0BBF {expected} \u0BAE\u0BA3\u0BBF \u0BAE\u0BC1\u0BA9\u0BCD\u0BA9\u0BBF\u0BB2\u0BC8 \u0BAA\u0BC6\u0BB1\u0BC1\u0BAE\u0BCD \u0B8E\u0BA9\u0B95\u0BCD \u0B95\u0BB0\u0BC1\u0BA4\u0BC1\u0B95\u0BCB\u0BB3\u0BCD \u0B8E\u0BA4\u0BBF\u0BB0\u0BCD\u0BAA\u0BBE\u0BB0\u0BCD\u0BA4\u0BCD\u0BA4\u0BA4\u0BC1."
+  },
+  rule_threshold_absent: {
+    en: "No interval in the retrieved record reaches the event threshold, so the threshold claim could not be tested.",
+    si: "\u0DBD\u0DB6\u0DCF\u0D9C\u0DAD\u0DCA \u0DC0\u0DCF\u0DBB\u0DCA\u0DAD\u0DCF\u0DC0\u0DDA \u0D9A\u0DD2\u0DC3\u0DD2\u0DAF\u0DD4 \u0D9A\u0DCF\u0DBD \u0DB4\u0DBB\u0DAD\u0DBB\u0DBA\u0D9A\u0DCA \u0DC3\u0DD2\u0DAF\u0DD4\u0DC0\u0DD3\u0DB8\u0DCA \u0DC3\u0DD3\u0DB8\u0DCF\u0DC0\u0DA7 \u0DC5\u0D9F\u0DCF \u0DB1\u0DDC\u0DC0\u0DDA, \u0D91\u0DB6\u0DD0\u0DC0\u0DD2\u0DB1\u0DCA \u0DC3\u0DD3\u0DB8\u0DCF \u0DB4\u0DCA\u200D\u0DBB\u0D9A\u0DCF\u0DC1\u0DBA \u0DB4\u0DBB\u0DD3\u0D9A\u0DCA\u0DC2\u0DCF \u0D9A\u0DC5 \u0DB1\u0DDC\u0DC4\u0DD0\u0D9A\u0DD2 \u0DC0\u0DD2\u0DBA.",
+    ta: "\u0BAA\u0BC6\u0BB1\u0BAA\u0BCD\u0BAA\u0B9F\u0BCD\u0B9F \u0BAA\u0BA4\u0BBF\u0BB5\u0BBF\u0BB2\u0BCD \u0B8E\u0BA8\u0BCD\u0BA4 \u0B87\u0B9F\u0BC8\u0BB5\u0BC6\u0BB3\u0BBF\u0BAF\u0BC1\u0BAE\u0BCD \u0BA8\u0BBF\u0B95\u0BB4\u0BCD\u0BB5\u0BC1 \u0BB5\u0BB0\u0BAE\u0BCD\u0BAA\u0BC8 \u0B8E\u0B9F\u0BCD\u0B9F\u0BB5\u0BBF\u0BB2\u0BCD\u0BB2\u0BC8, \u0B8E\u0BA9\u0BB5\u0BC7 \u0BB5\u0BB0\u0BAE\u0BCD\u0BAA\u0BC1\u0B95\u0BCD \u0B95\u0BC2\u0BB1\u0BCD\u0BB1\u0BC8\u0B9A\u0BCD \u0B9A\u0BCB\u0BA4\u0BBF\u0B95\u0BCD\u0B95 \u0BAE\u0BC1\u0B9F\u0BBF\u0BAF\u0BB5\u0BBF\u0BB2\u0BCD\u0BB2\u0BC8."
+  },
+  rule_missing_coverage: {
+    en: "Coverage is {coverage}% of the expected samples; this is reported as a data-quality limitation, not corrected.",
+    si: "\u0D86\u0DC0\u0DBB\u0DAB\u0DBA \u0D85\u0DB4\u0DDA\u0D9A\u0DCA\u0DC2\u0DD2\u0DAD \u0DB1\u0DD2\u0DBA\u0DD0\u0DAF\u0DD2\u0DC0\u0DBD\u0DD2\u0DB1\u0DCA {coverage}% \u0D9A\u0DD2; \u0DB8\u0DD9\u0DBA \u0DAF\u0DAD\u0DCA\u0DAD \u0D9C\u0DD4\u0DAB\u0DCF\u0DAD\u0DCA\u0DB8\u0D9A \u0DC3\u0DD3\u0DB8\u0DCF\u0DC0\u0D9A\u0DCA \u0DBD\u0DD9\u0DC3 \u0DC0\u0DCF\u0DBB\u0DCA\u0DAD\u0DCF \u0DC0\u0DDA, \u0DB1\u0DD2\u0DC0\u0DD0\u0DBB\u0DAF\u0DD2 \u0DB1\u0DDC\u0D9A\u0DD9\u0DBB\u0DDA.",
+    ta: "\u0BAA\u0BB0\u0BAA\u0BCD\u0BAA\u0BC1 \u0B8E\u0BA4\u0BBF\u0BB0\u0BCD\u0BAA\u0BBE\u0BB0\u0BCD\u0B95\u0BCD\u0B95\u0BAA\u0BCD\u0BAA\u0B9F\u0BCD\u0B9F \u0BAE\u0BBE\u0BA4\u0BBF\u0BB0\u0BBF\u0B95\u0BB3\u0BBF\u0BB2\u0BCD {coverage}%; \u0B87\u0BA4\u0BC1 \u0BA4\u0BB0\u0BB5\u0BC1\u0BA4\u0BCD \u0BA4\u0BB0 \u0BB5\u0BB0\u0BAE\u0BCD\u0BAA\u0BBE\u0B95 \u0B85\u0BB1\u0BBF\u0BB5\u0BBF\u0B95\u0BCD\u0B95\u0BAA\u0BCD\u0BAA\u0B9F\u0BC1\u0B95\u0BBF\u0BB1\u0BA4\u0BC1, \u0B9A\u0BB0\u0BBF\u0B9A\u0BC6\u0BAF\u0BCD\u0BAF\u0BAA\u0BCD\u0BAA\u0B9F\u0BB5\u0BBF\u0BB2\u0BCD\u0BB2\u0BC8."
+  },
+  quality_complete: {
+    en: "No fill or null values were found in the retrieved records.",
+    si: "\u0DBD\u0DB6\u0DCF\u0D9C\u0DAD\u0DCA \u0DC0\u0DCF\u0DBB\u0DCA\u0DAD\u0DCF\u0DC0\u0DBD \u0DB4\u0DD2\u0DBB\u0DC0\u0DD4\u0DB8\u0DCA \u0DC4\u0DDD \u0DC1\u0DD4\u0DB1\u0DCA\u200D\u0DBA \u0D85\u0D9C\u0DBA\u0DB1\u0DCA \u0DC4\u0DB8\u0DD4 \u0DB1\u0DDC\u0DC0\u0DD3\u0DBA.",
+    ta: "\u0BAA\u0BC6\u0BB1\u0BAA\u0BCD\u0BAA\u0B9F\u0BCD\u0B9F \u0BAA\u0BA4\u0BBF\u0BB5\u0BC1\u0B95\u0BB3\u0BBF\u0BB2\u0BCD \u0BA8\u0BBF\u0BB0\u0BAA\u0BCD\u0BAA\u0BC1 \u0B85\u0BB2\u0BCD\u0BB2\u0BA4\u0BC1 \u0BB5\u0BC6\u0BB1\u0BCD\u0BB1\u0BC1 \u0BAE\u0BA4\u0BBF\u0BAA\u0BCD\u0BAA\u0BC1\u0B95\u0BB3\u0BCD \u0B87\u0BB2\u0BCD\u0BB2\u0BC8."
+  },
+  quality_fill: {
+    en: "{missing} of {total} source rows were missing/fill values and were excluded from the paired sample.",
+    si: "\u0DB8\u0DD6\u0DBD\u0DCF\u0DC1\u0DCA\u200D\u0DBB \u0DB4\u0DDA\u0DC5\u0DD2 {total} \u0DB1\u0DCA {missing} \u0D9A\u0DCA \u0D85\u0DAD\u0DD4\u0DBB\u0DD4\u0DAF\u0DB1\u0DCA/\u0DB4\u0DD2\u0DBB\u0DC0\u0DD4\u0DB8\u0DCA \u0D85\u0D9C\u0DBA\u0DB1\u0DCA \u0DC0\u0DD6 \u0D85\u0DAD\u0DBB \u0DBA\u0DD4\u0D9C\u0DBD \u0DB1\u0DD2\u0DBA\u0DD0\u0DAF\u0DD2\u0DBA\u0DD9\u0DB1\u0DCA \u0DB6\u0DD0\u0DC4\u0DD0\u0DBB \u0D9A\u0DBB\u0DB1 \u0DBD\u0DAF\u0DD3.",
+    ta: "{total} \u0BAE\u0BC2\u0BB2 \u0BB5\u0BB0\u0BBF\u0B95\u0BB3\u0BBF\u0BB2\u0BCD {missing} \u0BB5\u0BBF\u0B9F\u0BC1\u0BAA\u0B9F\u0BCD\u0B9F/\u0BA8\u0BBF\u0BB0\u0BAA\u0BCD\u0BAA\u0BC1 \u0BAE\u0BA4\u0BBF\u0BAA\u0BCD\u0BAA\u0BC1\u0B95\u0BB3\u0BCD; \u0B87\u0BA3\u0BC8 \u0BAE\u0BBE\u0BA4\u0BBF\u0BB0\u0BBF\u0BAF\u0BBF\u0BB2\u0BBF\u0BB0\u0BC1\u0BA8\u0BCD\u0BA4\u0BC1 \u0BB5\u0BBF\u0BB2\u0B95\u0BCD\u0B95\u0BAA\u0BCD\u0BAA\u0B9F\u0BCD\u0B9F\u0BA9."
+  },
+  processing_parse: {
+    en: "Parsed {rows} source rows, normalised timestamps to UTC, preserved published units, and paired series by nearest sample within \xB1{tolerance} minutes.",
+    si: "\u0DB8\u0DD6\u0DBD\u0DCF\u0DC1\u0DCA\u200D\u0DBB \u0DB4\u0DDA\u0DC5\u0DD2 {rows} \u0D9A\u0DCA \u0DC0\u0DD2\u0D9C\u0DCA\u200D\u0DBB\u0DC4 \u0D9A\u0DBB, \u0D9A\u0DCF\u0DBD \u0DB8\u0DD4\u0DAF\u0DCA\u200D\u0DBB\u0DCF UTC \u0DB6\u0DC0\u0DA7 \u0DC3\u0DCF\u0DB8\u0DCF\u0DB1\u0DCA\u200D\u0DBA\u0D9A\u0DBB\u0DAB\u0DBA \u0D9A\u0DBB, \u0DB4\u0DCA\u200D\u0DBB\u0D9A\u0DCF\u0DC1\u0DD2\u0DAD \u0D92\u0D9A\u0D9A \u0DBB\u0DB3\u0DC0\u0DCF, \xB1{tolerance} \u0DB8\u0DD2\u0DB1\u0DD2\u0DAD\u0DCA\u0DAD\u0DD4 \u0DAD\u0DD4\u0DC5 \u0DC5\u0D9F\u0DB8 \u0DB1\u0DD2\u0DBA\u0DD0\u0DAF\u0DD2\u0DBA\u0DD9\u0DB1\u0DCA \u0DC1\u0DCA\u200D\u0DBB\u0DDA\u0DAB\u0DD2 \u0DBA\u0DD4\u0D9C\u0DBD\u0DB1\u0DBA \u0D9A\u0DBB\u0DB1 \u0DBD\u0DAF\u0DD3.",
+    ta: "{rows} \u0BAE\u0BC2\u0BB2 \u0BB5\u0BB0\u0BBF\u0B95\u0BB3\u0BCD \u0BAA\u0BBE\u0B95\u0BC1\u0BAA\u0B9F\u0BC1\u0BA4\u0BCD\u0BA4\u0BAA\u0BCD\u0BAA\u0B9F\u0BCD\u0B9F\u0BC1, \u0BA8\u0BC7\u0BB0 \u0BAE\u0BC1\u0BA4\u0BCD\u0BA4\u0BBF\u0BB0\u0BC8\u0B95\u0BB3\u0BCD UTC \u0B86\u0B95 \u0B87\u0BAF\u0BB2\u0BCD\u0BAA\u0BBE\u0B95\u0BCD\u0B95\u0BAA\u0BCD\u0BAA\u0B9F\u0BCD\u0B9F\u0BC1, \u0BB5\u0BC6\u0BB3\u0BBF\u0BAF\u0BBF\u0B9F\u0BAA\u0BCD\u0BAA\u0B9F\u0BCD\u0B9F \u0B85\u0BB2\u0B95\u0BC1\u0B95\u0BB3\u0BCD \u0BAA\u0BBE\u0BA4\u0BC1\u0B95\u0BBE\u0B95\u0BCD\u0B95\u0BAA\u0BCD\u0BAA\u0B9F\u0BCD\u0B9F\u0BC1, \xB1{tolerance} \u0BA8\u0BBF\u0BAE\u0BBF\u0B9F\u0B99\u0BCD\u0B95\u0BB3\u0BC1\u0B95\u0BCD\u0B95\u0BC1\u0BB3\u0BCD \u0B85\u0BB0\u0BC1\u0B95\u0BBF\u0BB2\u0BC1\u0BB3\u0BCD\u0BB3 \u0BAE\u0BBE\u0BA4\u0BBF\u0BB0\u0BBF\u0BAF\u0BBE\u0BB2\u0BCD \u0BA4\u0BCA\u0B9F\u0BB0\u0BCD\u0B95\u0BB3\u0BCD \u0B87\u0BA3\u0BC8\u0B95\u0BCD\u0B95\u0BAA\u0BCD\u0BAA\u0B9F\u0BCD\u0B9F\u0BA9."
+  },
+  evidence_measurements: {
+    en: "{variable} observations used in {method} against {dataset}.",
+    si: "{method} \u0DC4\u0DD2\u0DAF\u0DD3 {dataset} \u0DC3\u0DB8\u0D9F \u0DB7\u0DCF\u0DC0\u0DD2\u0DAD\u0DCF \u0D9A\u0DC5 {variable} \u0DB1\u0DD2\u0DBB\u0DD3\u0D9A\u0DCA\u0DC2\u0DAB.",
+    ta: "{method} \u0B87\u0BB2\u0BCD {dataset} \u0B89\u0B9F\u0BA9\u0BCD \u0BAA\u0BAF\u0BA9\u0BCD\u0BAA\u0B9F\u0BC1\u0BA4\u0BCD\u0BA4\u0BAA\u0BCD\u0BAA\u0B9F\u0BCD\u0B9F {variable} \u0B95\u0BA3\u0BCD\u0B95\u0BBE\u0BA3\u0BBF\u0BAA\u0BCD\u0BAA\u0BC1\u0B95\u0BB3\u0BCD."
+  },
+  /* ------------------------------------------------------ counter evidence */
+  ce_assumption_title: { en: "Unverified assumption", si: "\u0DC3\u0DAD\u0DCA\u200D\u0DBA\u0DCF\u0DB4\u0DB1\u0DBA \u0DB1\u0DDC\u0D9A\u0DC5 \u0D8B\u0DB4\u0D9A\u0DBD\u0DCA\u0DB4\u0DB1\u0DBA", ta: "\u0B9A\u0BB0\u0BBF\u0BAA\u0BBE\u0BB0\u0BCD\u0B95\u0BCD\u0B95\u0BAA\u0BCD\u0BAA\u0B9F\u0BBE\u0BA4 \u0B85\u0BA9\u0BC1\u0BAE\u0BBE\u0BA9\u0BAE\u0BCD" },
+  ce_assumption_detail: {
+    en: "The method assumes {assumption} That assumption was not tested in this investigation.",
+    si: "\u0D9A\u0DCA\u200D\u0DBB\u0DB8\u0DBA {assumption} \u0DBA\u0DB1 \u0D8B\u0DB4\u0D9A\u0DBD\u0DCA\u0DB4\u0DB1\u0DBA \u0D9A\u0DBB\u0DBA\u0DD2. \u0D91\u0DB8 \u0D8B\u0DB4\u0D9A\u0DBD\u0DCA\u0DB4\u0DB1\u0DBA \u0DB8\u0DD9\u0DB8 \u0DC0\u0DD2\u0DB8\u0DBB\u0DCA\u0DC1\u0DB1\u0DBA\u0DDA\u0DAF\u0DD3 \u0DB4\u0DBB\u0DD3\u0D9A\u0DCA\u0DC2\u0DCF \u0DB1\u0DDC\u0D9A\u0DBB\u0DB1 \u0DBD\u0DAF\u0DD3.",
+    ta: "\u0B87\u0BA8\u0BCD\u0BA4 \u0BAE\u0BC1\u0BB1\u0BC8 {assumption} \u0B8E\u0BA9\u0B95\u0BCD \u0B95\u0BB0\u0BC1\u0BA4\u0BC1\u0B95\u0BBF\u0BB1\u0BA4\u0BC1. \u0B85\u0BA8\u0BCD\u0BA4 \u0B85\u0BA9\u0BC1\u0BAE\u0BBE\u0BA9\u0BAE\u0BCD \u0B87\u0BA8\u0BCD\u0BA4 \u0B86\u0BAF\u0BCD\u0BB5\u0BBF\u0BB2\u0BCD \u0B9A\u0BCB\u0BA4\u0BBF\u0B95\u0BCD\u0B95\u0BAA\u0BCD\u0BAA\u0B9F\u0BB5\u0BBF\u0BB2\u0BCD\u0BB2\u0BC8."
+  },
+  ce_alternative_title: { en: "Alternative explanation", si: "\u0DC0\u0DD2\u0D9A\u0DBD\u0DCA\u0DB4 \u0DB4\u0DD0\u0DC4\u0DD0\u0DAF\u0DD2\u0DBD\u0DD2 \u0D9A\u0DD2\u0DBB\u0DD3\u0DB8", ta: "\u0BAE\u0BBE\u0BB1\u0BCD\u0BB1\u0BC1 \u0BB5\u0BBF\u0BB3\u0B95\u0BCD\u0B95\u0BAE\u0BCD" },
+  ce_temporal_title: { en: "Temporal alignment", si: "\u0D9A\u0DCF\u0DBD\u0DD3\u0DB1 \u0D91\u0D9A\u0D9F\u0DAD\u0DCF\u0DC0", ta: "\u0B95\u0BBE\u0BB2 \u0B87\u0BA3\u0BC8\u0BB5\u0BC1" },
+  ce_temporal_detail: {
+    en: "The two series use different cadences ({left} vs {right}); pairing by nearest sample can shift events by up to half a cadence.",
+    si: "\u0DC1\u0DCA\u200D\u0DBB\u0DDA\u0DAB\u0DD2 \u0DAF\u0DD9\u0D9A \u0DC0\u0DD9\u0DB1\u0DC3\u0DCA \u0DC0\u0DD2\u0DB7\u0DDA\u0DAF\u0DB1 ({left} \u0DC3\u0DC4 {right}) \u0DB7\u0DCF\u0DC0\u0DD2\u0DAD\u0DCF \u0D9A\u0DBB\u0DBA\u0DD2; \u0DC5\u0D9F\u0DB8 \u0DB1\u0DD2\u0DBA\u0DD0\u0DAF\u0DD2\u0DBA\u0DD9\u0DB1\u0DCA \u0DBA\u0DD4\u0D9C\u0DBD\u0DB1\u0DBA \u0D9A\u0DD2\u0DBB\u0DD3\u0DB8\u0DD9\u0DB1\u0DCA \u0DC3\u0DD2\u0DAF\u0DD4\u0DC0\u0DD3\u0DB8\u0DCA \u0D85\u0DA9-\u0DC0\u0DD2\u0DB7\u0DDA\u0DAF\u0DB1\u0DBA\u0D9A\u0DCA \u0DAF\u0D9A\u0DCA\u0DC0\u0DCF \u0DB8\u0DCF\u0DBB\u0DD4 \u0DC0\u0DD2\u0DBA \u0DC4\u0DD0\u0D9A.",
+    ta: "\u0B87\u0BB0\u0BC1 \u0BA4\u0BCA\u0B9F\u0BB0\u0BCD\u0B95\u0BB3\u0BC1\u0BAE\u0BCD \u0BB5\u0BC6\u0BB5\u0BCD\u0BB5\u0BC7\u0BB1\u0BC1 \u0BA4\u0BC0\u0BB0\u0BCD\u0BAE\u0BBE\u0BA9\u0B99\u0BCD\u0B95\u0BB3\u0BC8\u0BAA\u0BCD ({left} \u0BAE\u0BB1\u0BCD\u0BB1\u0BC1\u0BAE\u0BCD {right}) \u0BAA\u0BAF\u0BA9\u0BCD\u0BAA\u0B9F\u0BC1\u0BA4\u0BCD\u0BA4\u0BC1\u0B95\u0BBF\u0BA9\u0BCD\u0BB1\u0BA9; \u0B85\u0BB0\u0BC1\u0B95\u0BBF\u0BB2\u0BC1\u0BB3\u0BCD\u0BB3 \u0BAE\u0BBE\u0BA4\u0BBF\u0BB0\u0BBF\u0BAF\u0BBE\u0BB2\u0BCD \u0B87\u0BA3\u0BC8\u0BAA\u0BCD\u0BAA\u0BA4\u0BC1 \u0BA8\u0BBF\u0B95\u0BB4\u0BCD\u0BB5\u0BC1\u0B95\u0BB3\u0BC8 \u0B85\u0BB0\u0BC8 \u0BA4\u0BC0\u0BB0\u0BCD\u0BAE\u0BBE\u0BA9\u0BAE\u0BCD \u0BB5\u0BB0\u0BC8 \u0BA8\u0B95\u0BB0\u0BCD\u0BA4\u0BCD\u0BA4\u0BB2\u0BBE\u0BAE\u0BCD."
+  },
+  ce_uncertainty_title: { en: "Measurement uncertainty", si: "\u0DB8\u0DD2\u0DB1\u0DD4\u0DB8\u0DCA \u0D85\u0DB1\u0DD2\u0DC1\u0DCA\u0DA0\u0DD2\u0DAD\u0DAD\u0DCF\u0DC0", ta: "\u0B85\u0BB3\u0BB5\u0BC0\u0B9F\u0BCD\u0B9F\u0BC1 \u0BA8\u0BBF\u0B9A\u0BCD\u0B9A\u0BAF\u0BAE\u0BB1\u0BCD\u0BB1 \u0BA4\u0BA9\u0BCD\u0BAE\u0BC8" },
+  ce_uncertainty_detail: {
+    en: "The retrieved products do not all publish uncertainty estimates. {detail}",
+    si: "\u0DBD\u0DB6\u0DCF\u0D9C\u0DAD\u0DCA \u0DB1\u0DD2\u0DC2\u0DCA\u0DB4\u0DCF\u0DAF\u0DB1 \u0DC3\u0DD2\u0DBA\u0DBD\u0DCA\u0DBD\u0DB8 \u0D85\u0DB1\u0DD2\u0DC1\u0DCA\u0DA0\u0DD2\u0DAD\u0DAD\u0DCF \u0D87\u0DC3\u0DCA\u0DAD\u0DB8\u0DDA\u0DB1\u0DCA\u0DAD\u0DD4 \u0DB4\u0DCA\u200D\u0DBB\u0D9A\u0DCF\u0DC1 \u0DB1\u0DDC\u0D9A\u0DBB\u0DBA\u0DD2. {detail}",
+    ta: "\u0BAA\u0BC6\u0BB1\u0BAA\u0BCD\u0BAA\u0B9F\u0BCD\u0B9F \u0BA4\u0BAF\u0BBE\u0BB0\u0BBF\u0BAA\u0BCD\u0BAA\u0BC1\u0B95\u0BB3\u0BCD \u0B85\u0BA9\u0BC8\u0BA4\u0BCD\u0BA4\u0BC1\u0BAE\u0BCD \u0BA8\u0BBF\u0B9A\u0BCD\u0B9A\u0BAF\u0BAE\u0BB1\u0BCD\u0BB1 \u0BAE\u0BA4\u0BBF\u0BAA\u0BCD\u0BAA\u0BC0\u0B9F\u0BC1\u0B95\u0BB3\u0BC8 \u0BB5\u0BC6\u0BB3\u0BBF\u0BAF\u0BBF\u0B9F\u0BB5\u0BBF\u0BB2\u0BCD\u0BB2\u0BC8. {detail}"
+  },
+  ce_selection_title: { en: "Selection bias", si: "\u0DAD\u0DDA\u0DBB\u0DD3\u0DB8\u0DCA \u0DB1\u0DD0\u0DB9\u0DD4\u0DBB\u0DD4\u0DAD\u0DCF\u0DC0", ta: "\u0BA4\u0BC7\u0BB0\u0BCD\u0BB5\u0BC1\u0B9A\u0BCD \u0B9A\u0BBE\u0BB0\u0BCD\u0BAA\u0BC1" },
+  ce_missing_variable_title: { en: "Missing variable", si: "\u0D85\u0DAD\u0DD4\u0DBB\u0DD4\u0DAF\u0DB1\u0DCA \u0DC0\u0DD2\u0DA0\u0DBD\u0DCA\u200D\u0DBA\u0DBA", ta: "\u0BB5\u0BBF\u0B9F\u0BC1\u0BAA\u0B9F\u0BCD\u0B9F \u0BAE\u0BBE\u0BB1\u0BBF" },
+  ce_data_gap_title: { en: "Data gap", si: "\u0DAF\u0DAD\u0DCA\u0DAD \u0DC4\u0DD2\u0DB3", ta: "\u0BA4\u0BB0\u0BB5\u0BC1 \u0B87\u0B9F\u0BC8\u0BB5\u0BC6\u0BB3\u0BBF" },
+  ce_data_gap_detail: {
+    en: "{dataset} returned no usable observations for the requested window. The investigation therefore cannot test the hypothesis for this source.",
+    si: "{dataset} \u0D89\u0DBD\u0DCA\u0DBD\u0DCF \u0DC3\u0DD2\u0DA7\u0DD2 \u0D9A\u0DC0\u0DD4\u0DC5\u0DD4\u0DC0 \u0DC3\u0DB3\u0DC4\u0DCF \u0DB7\u0DCF\u0DC0\u0DD2\u0DAD\u0DCF \u0D9A\u0DC5 \u0DC4\u0DD0\u0D9A\u0DD2 \u0DB1\u0DD2\u0DBB\u0DD3\u0D9A\u0DCA\u0DC2\u0DAB \u0DBD\u0DB6\u0DCF \u0DAF\u0DD4\u0DB1\u0DCA\u0DB1\u0DDA \u0DB1\u0DD0\u0DAD. \u0D91\u0DB6\u0DD0\u0DC0\u0DD2\u0DB1\u0DCA \u0DB8\u0DD9\u0DB8 \u0DB8\u0DD6\u0DBD\u0DCF\u0DC1\u0DCA\u200D\u0DBB\u0DBA \u0DC3\u0DB3\u0DC4\u0DCF \u0D8B\u0DB4\u0D9A\u0DBD\u0DCA\u0DB4\u0DB1\u0DBA \u0DB4\u0DBB\u0DD3\u0D9A\u0DCA\u0DC2\u0DCF \u0D9A\u0DC5 \u0DB1\u0DDC\u0DC4\u0DD0\u0D9A.",
+    ta: "{dataset} \u0B95\u0BCB\u0BB0\u0BAA\u0BCD\u0BAA\u0B9F\u0BCD\u0B9F \u0B9A\u0BBE\u0BB3\u0BB0\u0BA4\u0BCD\u0BA4\u0BBF\u0BB1\u0BCD\u0B95\u0BC1\u0BAA\u0BCD \u0BAA\u0BAF\u0BA9\u0BCD\u0BAA\u0B9F\u0BC1\u0BA4\u0BCD\u0BA4\u0B95\u0BCD\u0B95\u0BC2\u0B9F\u0BBF\u0BAF \u0B95\u0BA3\u0BCD\u0B95\u0BBE\u0BA3\u0BBF\u0BAA\u0BCD\u0BAA\u0BC1\u0B95\u0BB3\u0BC8 \u0BB5\u0BB4\u0B99\u0BCD\u0B95\u0BB5\u0BBF\u0BB2\u0BCD\u0BB2\u0BC8. \u0B8E\u0BA9\u0BB5\u0BC7 \u0B87\u0BA8\u0BCD\u0BA4 \u0BAE\u0BC2\u0BB2\u0BA4\u0BCD\u0BA4\u0BBF\u0BB1\u0BCD\u0B95\u0BBE\u0BA9 \u0B95\u0BB0\u0BC1\u0BA4\u0BC1\u0B95\u0BCB\u0BB3\u0BC8\u0B9A\u0BCD \u0B9A\u0BCB\u0BA4\u0BBF\u0B95\u0BCD\u0B95 \u0BAE\u0BC1\u0B9F\u0BBF\u0BAF\u0BBE\u0BA4\u0BC1."
+  },
+  ce_falsification_title: { en: "How this hypothesis could fail", si: "\u0DB8\u0DD9\u0DB8 \u0D8B\u0DB4\u0D9A\u0DBD\u0DCA\u0DB4\u0DB1\u0DBA \u0D85\u0DC3\u0DCF\u0DBB\u0DCA\u0DAE\u0D9A \u0DC0\u0DD2\u0DBA \u0DC4\u0DD0\u0D9A\u0DD2 \u0D86\u0D9A\u0DCF\u0DBB\u0DBA", ta: "\u0B87\u0BA8\u0BCD\u0BA4\u0B95\u0BCD \u0B95\u0BB0\u0BC1\u0BA4\u0BC1\u0B95\u0BCB\u0BB3\u0BCD \u0BA4\u0BCB\u0BB2\u0BCD\u0BB5\u0BBF\u0BAF\u0B9F\u0BC8\u0BAF\u0BC1\u0BAE\u0BCD \u0BB5\u0BBF\u0BA4\u0BAE\u0BCD" },
+  ce_out_of_coverage_title: { en: "Requested period not covered", si: "\u0D89\u0DBD\u0DCA\u0DBD\u0DCF \u0DC3\u0DD2\u0DA7\u0DD2 \u0D9A\u0DCF\u0DBD\u0DBA \u0D86\u0DC0\u0DBB\u0DAB\u0DBA \u0DB1\u0DDC\u0DC0\u0DDA", ta: "\u0B95\u0BCB\u0BB0\u0BAA\u0BCD\u0BAA\u0B9F\u0BCD\u0B9F \u0B95\u0BBE\u0BB2\u0BAE\u0BCD \u0B89\u0BB3\u0BCD\u0BB3\u0B9F\u0B95\u0BCD\u0B95\u0BAA\u0BCD\u0BAA\u0B9F\u0BB5\u0BBF\u0BB2\u0BCD\u0BB2\u0BC8" },
+  ce_out_of_coverage_detail: {
+    en: "{dataset} publishes a {coverage} window; the requested period is outside it. No alternative period was substituted.",
+    si: "{dataset} \u0DB4\u0DCA\u200D\u0DBB\u0D9A\u0DCF\u0DC1 \u0D9A\u0DBB\u0DB1\u0DCA\u0DB1\u0DDA {coverage} \u0D9A\u0DC0\u0DD4\u0DC5\u0DD4\u0DC0\u0D9A\u0DD2; \u0D89\u0DBD\u0DCA\u0DBD\u0DCF \u0DC3\u0DD2\u0DA7\u0DD2 \u0D9A\u0DCF\u0DBD\u0DBA \u0D89\u0DB1\u0DCA \u0DB4\u0DD2\u0DA7\u0DAD\u0DBA. \u0DC0\u0DD9\u0DB1\u0DAD\u0DCA \u0D9A\u0DCF\u0DBD\u0DBA\u0D9A\u0DCA \u0D86\u0DAF\u0DDA\u0DC1 \u0DB1\u0DDC\u0D9A\u0DBB\u0DB1 \u0DBD\u0DAF\u0DD3.",
+    ta: "{dataset} {coverage} \u0B9A\u0BBE\u0BB3\u0BB0\u0BA4\u0BCD\u0BA4\u0BC8 \u0BB5\u0BC6\u0BB3\u0BBF\u0BAF\u0BBF\u0B9F\u0BC1\u0B95\u0BBF\u0BB1\u0BA4\u0BC1; \u0B95\u0BCB\u0BB0\u0BAA\u0BCD\u0BAA\u0B9F\u0BCD\u0B9F \u0B95\u0BBE\u0BB2\u0BAE\u0BCD \u0B85\u0BA4\u0BB1\u0BCD\u0B95\u0BC1 \u0BB5\u0BC6\u0BB3\u0BBF\u0BAF\u0BC7 \u0B89\u0BB3\u0BCD\u0BB3\u0BA4\u0BC1. \u0BB5\u0BC7\u0BB1\u0BC1 \u0B95\u0BBE\u0BB2\u0BAE\u0BCD \u0BAA\u0BA4\u0BBF\u0BB2\u0BBE\u0B95\u0BAA\u0BCD \u0BAA\u0BAF\u0BA9\u0BCD\u0BAA\u0B9F\u0BC1\u0BA4\u0BCD\u0BA4\u0BAA\u0BCD\u0BAA\u0B9F\u0BB5\u0BBF\u0BB2\u0BCD\u0BB2\u0BC8."
+  },
+  /* ----------------------------------------------------------- conclusion */
+  verdict_insufficient_title: {
+    en: "Insufficient evidence",
+    si: "\u0DB4\u0DCA\u200D\u0DBB\u0DB8\u0DCF\u0DAB\u0DC0\u0DAD\u0DCA \u0DC3\u0DCF\u0D9A\u0DCA\u0DC2\u0DD2 \u0DB1\u0DDC\u0DB8\u0DD0\u0DAD",
+    ta: "\u0BAA\u0BCB\u0BA4\u0BC1\u0BAE\u0BBE\u0BA9 \u0B9A\u0BBE\u0BA9\u0BCD\u0BB1\u0BC1 \u0B87\u0BB2\u0BCD\u0BB2\u0BC8"
+  },
+  verdict_insufficient_summary: {
+    en: "No connected source returned data that could test the hypothesis over the requested period. NOVA will not substitute a different period, a different variable, or simulated values.",
+    si: "\u0D89\u0DBD\u0DCA\u0DBD\u0DCF \u0DC3\u0DD2\u0DA7\u0DD2 \u0D9A\u0DCF\u0DBD\u0DBA \u0DAD\u0DD4\u0DC5 \u0D8B\u0DB4\u0D9A\u0DBD\u0DCA\u0DB4\u0DB1\u0DBA \u0DB4\u0DBB\u0DD3\u0D9A\u0DCA\u0DC2\u0DCF \u0D9A\u0DC5 \u0DC4\u0DD0\u0D9A\u0DD2 \u0DAF\u0DAD\u0DCA\u0DAD \u0DC3\u0DB8\u0DCA\u0DB6\u0DB1\u0DCA\u0DB0\u0DD2\u0DAD \u0DB8\u0DD6\u0DBD\u0DCF\u0DC1\u0DCA\u200D\u0DBB\u0DBA\u0D9A\u0DD2\u0DB1\u0DCA \u0DBD\u0DD0\u0DB6\u0DD4\u0DAB\u0DDA \u0DB1\u0DD0\u0DAD. NOVA \u0DC0\u0DD9\u0DB1\u0DAD\u0DCA \u0D9A\u0DCF\u0DBD\u0DBA\u0D9A\u0DCA, \u0DC0\u0DD9\u0DB1\u0DAD\u0DCA \u0DC0\u0DD2\u0DA0\u0DBD\u0DCA\u200D\u0DBA\u0DBA\u0D9A\u0DCA \u0DC4\u0DDD \u0D85\u0DB1\u0DD4\u0D9A\u0DBB\u0DAB \u0D85\u0D9C\u0DBA\u0DB1\u0DCA \u0D86\u0DAF\u0DDA\u0DC1 \u0DB1\u0DDC\u0D9A\u0DBB\u0DBA\u0DD2.",
+    ta: "\u0B95\u0BCB\u0BB0\u0BAA\u0BCD\u0BAA\u0B9F\u0BCD\u0B9F \u0B95\u0BBE\u0BB2\u0BA4\u0BCD\u0BA4\u0BBF\u0BB2\u0BCD \u0B95\u0BB0\u0BC1\u0BA4\u0BC1\u0B95\u0BCB\u0BB3\u0BC8\u0B9A\u0BCD \u0B9A\u0BCB\u0BA4\u0BBF\u0B95\u0BCD\u0B95\u0B95\u0BCD\u0B95\u0BC2\u0B9F\u0BBF\u0BAF \u0BA4\u0BB0\u0BB5\u0BC1 \u0B87\u0BA3\u0BC8\u0B95\u0BCD\u0B95\u0BAA\u0BCD\u0BAA\u0B9F\u0BCD\u0B9F \u0BAE\u0BC2\u0BB2\u0BA4\u0BCD\u0BA4\u0BBF\u0BB2\u0BBF\u0BB0\u0BC1\u0BA8\u0BCD\u0BA4\u0BC1 \u0BB5\u0BB0\u0BB5\u0BBF\u0BB2\u0BCD\u0BB2\u0BC8. NOVA \u0BB5\u0BC7\u0BB1\u0BC1 \u0B95\u0BBE\u0BB2\u0BAE\u0BCD, \u0BB5\u0BC7\u0BB1\u0BC1 \u0BAE\u0BBE\u0BB1\u0BBF \u0B85\u0BB2\u0BCD\u0BB2\u0BA4\u0BC1 \u0B89\u0BB0\u0BC1\u0BB5\u0B95\u0BAA\u0BCD\u0BAA\u0B9F\u0BC1\u0BA4\u0BCD\u0BA4\u0BAA\u0BCD\u0BAA\u0B9F\u0BCD\u0B9F \u0BAE\u0BA4\u0BBF\u0BAA\u0BCD\u0BAA\u0BC1\u0B95\u0BB3\u0BC8\u0BAA\u0BCD \u0BAA\u0BA4\u0BBF\u0BB2\u0BBE\u0B95\u0BAA\u0BCD \u0BAA\u0BAF\u0BA9\u0BCD\u0BAA\u0B9F\u0BC1\u0BA4\u0BCD\u0BA4\u0BBE\u0BA4\u0BC1."
+  },
+  verdict_not_supported_title: {
+    en: "Evidence does not support the hypothesis",
+    si: "\u0DC3\u0DCF\u0D9A\u0DCA\u0DC2\u0DD2 \u0D8B\u0DB4\u0D9A\u0DBD\u0DCA\u0DB4\u0DB1\u0DBA\u0DA7 \u0DC3\u0DC4\u0DCF\u0DBA \u0DB1\u0DDC\u0DAF\u0D9A\u0DCA\u0DC0\u0DBA\u0DD2",
+    ta: "\u0B9A\u0BBE\u0BA9\u0BCD\u0BB1\u0BC1 \u0B95\u0BB0\u0BC1\u0BA4\u0BC1\u0B95\u0BCB\u0BB3\u0BC8 \u0B86\u0BA4\u0BB0\u0BBF\u0B95\u0BCD\u0B95\u0BB5\u0BBF\u0BB2\u0BCD\u0BB2\u0BC8"
+  },
+  verdict_not_supported_summary: {
+    en: "Contradicting evidence outweighs supporting evidence ({contradicting} contradicting vs {supporting} supporting). The hypothesis may still be true \u2014 this window and these datasets simply do not support it.",
+    si: "\u0DB4\u0DBB\u0DC3\u0DCA\u0DB4\u0DBB \u0DC3\u0DCF\u0D9A\u0DCA\u0DC2\u0DD2 \u0DC3\u0DC4\u0DCF\u0DBA\u0D9A \u0DC3\u0DCF\u0D9A\u0DCA\u0DC2\u0DD2 \u0D89\u0D9A\u0DCA\u0DB8\u0DC0\u0DBA\u0DD2 (\u0DB4\u0DBB\u0DC3\u0DCA\u0DB4\u0DBB {contradicting}, \u0DC3\u0DC4\u0DCF\u0DBA\u0D9A {supporting}). \u0D8B\u0DB4\u0D9A\u0DBD\u0DCA\u0DB4\u0DB1\u0DBA \u0DC3\u0DAD\u0DCA\u200D\u0DBA \u0DC0\u0DD2\u0DBA \u0DC4\u0DD0\u0D9A; \u0DB8\u0DD9\u0DB8 \u0D9A\u0DC0\u0DD4\u0DC5\u0DD4\u0DC0 \u0DC3\u0DC4 \u0DB8\u0DD9\u0DB8 \u0DAF\u0DAD\u0DCA\u0DAD \u0D9A\u0DA7\u0DCA\u0DA7\u0DBD \u0DB4\u0DB8\u0DAB\u0D9A\u0DCA \u0D91\u0DBA\u0DA7 \u0DC3\u0DC4\u0DCF\u0DBA \u0DB1\u0DDC\u0DAF\u0D9A\u0DCA\u0DC0\u0DBA\u0DD2.",
+    ta: "\u0BAE\u0BC1\u0BB0\u0BA3\u0BBE\u0BA9 \u0B9A\u0BBE\u0BA9\u0BCD\u0BB1\u0BC1 \u0B86\u0BA4\u0BB0\u0BB5\u0BC1\u0B9A\u0BCD \u0B9A\u0BBE\u0BA9\u0BCD\u0BB1\u0BC8 \u0BB5\u0BBF\u0B9F \u0B85\u0BA4\u0BBF\u0B95\u0BAE\u0BCD (\u0BAE\u0BC1\u0BB0\u0BA3\u0BCD {contradicting}, \u0B86\u0BA4\u0BB0\u0BB5\u0BC1 {supporting}). \u0B95\u0BB0\u0BC1\u0BA4\u0BC1\u0B95\u0BCB\u0BB3\u0BCD \u0B89\u0BA3\u0BCD\u0BAE\u0BC8\u0BAF\u0BBE\u0B95 \u0B87\u0BB0\u0BC1\u0B95\u0BCD\u0B95\u0BB2\u0BBE\u0BAE\u0BCD; \u0B87\u0BA8\u0BCD\u0BA4\u0B9A\u0BCD \u0B9A\u0BBE\u0BB3\u0BB0\u0BAE\u0BC1\u0BAE\u0BCD \u0B87\u0BA8\u0BCD\u0BA4\u0BA4\u0BCD \u0BA4\u0BB0\u0BB5\u0BC1\u0BA4\u0BCD\u0BA4\u0BCA\u0B95\u0BC1\u0BAA\u0BCD\u0BAA\u0BC1\u0B95\u0BB3\u0BC1\u0BAE\u0BCD \u0BAE\u0B9F\u0BCD\u0B9F\u0BC1\u0BAE\u0BCD \u0B85\u0BA4\u0BC8 \u0B86\u0BA4\u0BB0\u0BBF\u0B95\u0BCD\u0B95\u0BB5\u0BBF\u0BB2\u0BCD\u0BB2\u0BC8."
+  },
+  verdict_mixed_title: {
+    en: "Mixed evidence",
+    si: "\u0DB8\u0DD2\u0DC1\u0DCA\u200D\u0DBB \u0DC3\u0DCF\u0D9A\u0DCA\u0DC2\u0DD2",
+    ta: "\u0B95\u0BB2\u0BAA\u0BCD\u0BAA\u0BBE\u0BA9 \u0B9A\u0BBE\u0BA9\u0BCD\u0BB1\u0BC1"
+  },
+  verdict_mixed_summary: {
+    en: "Supporting and contradicting evidence both appear ({supporting} supporting, {contradicting} contradicting). The hypothesis is not resolved by this investigation.",
+    si: "\u0DC3\u0DC4\u0DCF\u0DBA\u0D9A \u0DC3\u0DC4 \u0DB4\u0DBB\u0DC3\u0DCA\u0DB4\u0DBB \u0DC3\u0DCF\u0D9A\u0DCA\u0DC2\u0DD2 \u0DAF\u0DD9\u0D9A\u0DB8 \u0DB4\u0DD9\u0DB1\u0DDA (\u0DC3\u0DC4\u0DCF\u0DBA\u0D9A {supporting}, \u0DB4\u0DBB\u0DC3\u0DCA\u0DB4\u0DBB {contradicting}). \u0DB8\u0DD9\u0DB8 \u0DC0\u0DD2\u0DB8\u0DBB\u0DCA\u0DC1\u0DB1\u0DBA\u0DD9\u0DB1\u0DCA \u0D8B\u0DB4\u0D9A\u0DBD\u0DCA\u0DB4\u0DB1\u0DBA \u0DC0\u0DD2\u0DC3\u0DB3\u0DCF \u0DB1\u0DD0\u0DAD.",
+    ta: "\u0B86\u0BA4\u0BB0\u0BB5\u0BC1 \u0BAE\u0BB1\u0BCD\u0BB1\u0BC1\u0BAE\u0BCD \u0BAE\u0BC1\u0BB0\u0BA3\u0BBE\u0BA9 \u0B9A\u0BBE\u0BA9\u0BCD\u0BB1\u0BC1\u0B95\u0BB3\u0BCD \u0B87\u0BB0\u0BA3\u0BCD\u0B9F\u0BC1\u0BAE\u0BCD \u0B89\u0BB3\u0BCD\u0BB3\u0BA9 (\u0B86\u0BA4\u0BB0\u0BB5\u0BC1 {supporting}, \u0BAE\u0BC1\u0BB0\u0BA3\u0BCD {contradicting}). \u0B87\u0BA8\u0BCD\u0BA4 \u0B86\u0BAF\u0BCD\u0BB5\u0BC1 \u0B95\u0BB0\u0BC1\u0BA4\u0BC1\u0B95\u0BCB\u0BB3\u0BC8\u0BA4\u0BCD \u0BA4\u0BC0\u0BB0\u0BCD\u0B95\u0BCD\u0B95\u0BB5\u0BBF\u0BB2\u0BCD\u0BB2\u0BC8."
+  },
+  verdict_weak_title: {
+    en: "Weakly supported within limits",
+    si: "\u0DC3\u0DD3\u0DB8\u0DCF \u0DAD\u0DD4\u0DC5 \u0DAF\u0DD4\u0DBB\u0DCA\u0DC0\u0DBD \u0DBD\u0DD9\u0DC3 \u0DC3\u0DC4\u0DCF\u0DBA \u0DAF\u0D9A\u0DCA\u0DC0\u0DBA\u0DD2",
+    ta: "\u0BB5\u0BB0\u0BAE\u0BCD\u0BAA\u0BC1\u0B95\u0BB3\u0BC1\u0B95\u0BCD\u0B95\u0BC1\u0BB3\u0BCD \u0BAA\u0BB2\u0BB5\u0BC0\u0BA9\u0BAE\u0BBE\u0B95 \u0B86\u0BA4\u0BB0\u0BBF\u0B95\u0BCD\u0B95\u0BAA\u0BCD\u0BAA\u0B9F\u0BC1\u0B95\u0BBF\u0BB1\u0BA4\u0BC1"
+  },
+  verdict_weak_summary: {
+    en: "A statistically significant association consistent with the hypothesis was found ({supporting} supporting, {contradicting} contradicting), with the limitations listed below. This is an observational association \u2014 not proof, and not a discovery.",
+    si: "\u0D8B\u0DB4\u0D9A\u0DBD\u0DCA\u0DB4\u0DB1\u0DBA\u0DA7 \u0D85\u0DB1\u0DD4\u0D9A\u0DD6\u0DBD \u0DC3\u0D82\u0D9B\u0DCA\u200D\u0DBA\u0DCF\u0DB1\u0DB8\u0DBA \u0DC0\u0DC1\u0DBA\u0DD9\u0DB1\u0DCA \u0DC0\u0DD0\u0DAF\u0D9C\u0DAD\u0DCA \u0DC3\u0DB8\u0DCA\u0DB6\u0DB1\u0DCA\u0DB0\u0DAD\u0DCF\u0DC0\u0DBA\u0D9A\u0DCA \u0DC4\u0DB8\u0DD4 \u0DC0\u0DD2\u0DBA (\u0DC3\u0DC4\u0DCF\u0DBA\u0D9A {supporting}, \u0DB4\u0DBB\u0DC3\u0DCA\u0DB4\u0DBB {contradicting}), \u0DB4\u0DC4\u0DAD \u0DC3\u0DD3\u0DB8\u0DCF \u0DC3\u0DB8\u0D9F. \u0DB8\u0DD9\u0DBA \u0DB1\u0DD2\u0DBB\u0DD3\u0D9A\u0DCA\u0DC2\u0DAB \u0DC3\u0DB8\u0DCA\u0DB6\u0DB1\u0DCA\u0DB0\u0DAD\u0DCF\u0DC0\u0DBA\u0D9A\u0DCA \u0DB8\u0DD2\u0DC3 \u0DC3\u0DCF\u0DB0\u0DB1\u0DBA\u0D9A\u0DCA \u0DC4\u0DDD \u0DC3\u0DDC\u0DBA\u0DCF\u0D9C\u0DD0\u0DB1\u0DD3\u0DB8\u0D9A\u0DCA \u0DB1\u0DDC\u0DC0\u0DDA.",
+    ta: "\u0B95\u0BB0\u0BC1\u0BA4\u0BC1\u0B95\u0BCB\u0BB3\u0BC1\u0B9F\u0BA9\u0BCD \u0BAA\u0BCA\u0BB0\u0BC1\u0BA8\u0BCD\u0BA4\u0BC1\u0BAE\u0BCD \u0BAA\u0BC1\u0BB3\u0BCD\u0BB3\u0BBF\u0BAF\u0BBF\u0BAF\u0BB2\u0BCD \u0BAA\u0BCA\u0BB0\u0BC1\u0BB3\u0BC1\u0B9F\u0BC8\u0BAF \u0BA4\u0BCA\u0B9F\u0BB0\u0BCD\u0BAA\u0BC1 \u0B95\u0BA3\u0BCD\u0B9F\u0BB1\u0BBF\u0BAF\u0BAA\u0BCD\u0BAA\u0B9F\u0BCD\u0B9F\u0BA4\u0BC1 (\u0B86\u0BA4\u0BB0\u0BB5\u0BC1 {supporting}, \u0BAE\u0BC1\u0BB0\u0BA3\u0BCD {contradicting}), \u0B95\u0BC0\u0BB4\u0BC7 \u0B89\u0BB3\u0BCD\u0BB3 \u0BB5\u0BB0\u0BAE\u0BCD\u0BAA\u0BC1\u0B95\u0BB3\u0BC1\u0B9F\u0BA9\u0BCD. \u0B87\u0BA4\u0BC1 \u0B95\u0BA3\u0BCD\u0B95\u0BBE\u0BA3\u0BBF\u0BAA\u0BCD\u0BAA\u0BC1\u0BA4\u0BCD \u0BA4\u0BCA\u0B9F\u0BB0\u0BCD\u0BAA\u0BC7 \u0BA4\u0BB5\u0BBF\u0BB0 \u0BA8\u0BBF\u0BB0\u0BC2\u0BAA\u0BA3\u0BAE\u0BCB \u0B95\u0BA3\u0BCD\u0B9F\u0BC1\u0BAA\u0BBF\u0B9F\u0BBF\u0BAA\u0BCD\u0BAA\u0BCB \u0B85\u0BB2\u0BCD\u0BB2."
+  },
+  passport_title: { en: "NOVA Evidence Passport", si: "NOVA \u0DC3\u0DCF\u0D9A\u0DCA\u0DC2\u0DD2 \u0DC0\u0DD2\u0DAF\u0DDA\u0DC1 \u0D9C\u0DB8\u0DB1\u0DCA \u0DB6\u0DBD\u0DB4\u0DAD\u0DCA\u200D\u0DBB\u0DBA", ta: "NOVA \u0B9A\u0BBE\u0BA9\u0BCD\u0BB1\u0BC1 \u0B85\u0BA9\u0BC1\u0BAE\u0BA4\u0BBF\u0B9A\u0BCD \u0B9A\u0BC0\u0B9F\u0BCD\u0B9F\u0BC1" },
+  passport_section_question: { en: "Research question", si: "\u0DB4\u0DBB\u0DCA\u0DBA\u0DDA\u0DC2\u0DAB \u0DB4\u0DCA\u200D\u0DBB\u0DC1\u0DCA\u0DB1\u0DBA", ta: "\u0B86\u0BAF\u0BCD\u0BB5\u0BC1\u0B95\u0BCD \u0B95\u0BC7\u0BB3\u0BCD\u0BB5\u0BBF" },
+  passport_section_hypothesis: { en: "Selected hypothesis", si: "\u0DAD\u0DDD\u0DBB\u0DCF\u0D9C\u0DAD\u0DCA \u0D8B\u0DB4\u0D9A\u0DBD\u0DCA\u0DB4\u0DB1\u0DBA", ta: "\u0BA4\u0BC7\u0BB0\u0BCD\u0BA8\u0BCD\u0BA4\u0BC6\u0B9F\u0BC1\u0B95\u0BCD\u0B95\u0BAA\u0BCD\u0BAA\u0B9F\u0BCD\u0B9F \u0B95\u0BB0\u0BC1\u0BA4\u0BC1\u0B95\u0BCB\u0BB3\u0BCD" },
+  passport_section_sources: { en: "Data sources and provenance", si: "\u0DAF\u0DAD\u0DCA\u0DAD \u0DB8\u0DD6\u0DBD\u0DCF\u0DC1\u0DCA\u200D\u0DBB \u0DC3\u0DC4 \u0DC3\u0DB8\u0DCA\u0DB7\u0DC0\u0DBA", ta: "\u0BA4\u0BB0\u0BB5\u0BC1 \u0BAE\u0BC2\u0BB2\u0B99\u0BCD\u0B95\u0BB3\u0BC1\u0BAE\u0BCD \u0BAE\u0BC2\u0BB2\u0BA4\u0BCD\u0BA4\u0BA9\u0BCD\u0BAE\u0BC8\u0BAF\u0BC1\u0BAE\u0BCD" },
+  passport_section_methods: { en: "Analysis methods and results", si: "\u0DC0\u0DD2\u0DC1\u0DCA\u0DBD\u0DDA\u0DC2\u0DAB \u0D9A\u0DCA\u200D\u0DBB\u0DB8 \u0DC3\u0DC4 \u0DB4\u0DCA\u200D\u0DBB\u0DAD\u0DD2\u0DB5\u0DBD", ta: "\u0BAA\u0B95\u0BC1\u0BAA\u0BCD\u0BAA\u0BBE\u0BAF\u0BCD\u0BB5\u0BC1 \u0BAE\u0BC1\u0BB1\u0BC8\u0B95\u0BB3\u0BC1\u0BAE\u0BCD \u0BAE\u0BC1\u0B9F\u0BBF\u0BB5\u0BC1\u0B95\u0BB3\u0BC1\u0BAE\u0BCD" },
+  passport_section_supporting: { en: "Supporting evidence", si: "\u0DC3\u0DC4\u0DCF\u0DBA\u0D9A \u0DC3\u0DCF\u0D9A\u0DCA\u0DC2\u0DD2", ta: "\u0B86\u0BA4\u0BB0\u0BB5\u0BC1\u0B9A\u0BCD \u0B9A\u0BBE\u0BA9\u0BCD\u0BB1\u0BC1" },
+  passport_section_contradicting: { en: "Contradicting evidence", si: "\u0DB4\u0DBB\u0DC3\u0DCA\u0DB4\u0DBB \u0DC3\u0DCF\u0D9A\u0DCA\u0DC2\u0DD2", ta: "\u0BAE\u0BC1\u0BB0\u0BA3\u0BBE\u0BA9 \u0B9A\u0BBE\u0BA9\u0BCD\u0BB1\u0BC1" },
+  passport_section_uncertainty: { en: "Uncertainty and alternative explanations", si: "\u0D85\u0DB1\u0DD2\u0DC1\u0DCA\u0DA0\u0DD2\u0DAD\u0DAD\u0DCF \u0DC3\u0DC4 \u0DC0\u0DD2\u0D9A\u0DBD\u0DCA\u0DB4 \u0DB4\u0DD0\u0DC4\u0DD0\u0DAF\u0DD2\u0DBD\u0DD2 \u0D9A\u0DD2\u0DBB\u0DD3\u0DB8\u0DCA", ta: "\u0BA8\u0BBF\u0B9A\u0BCD\u0B9A\u0BAF\u0BAE\u0BB1\u0BCD\u0BB1 \u0BA4\u0BA9\u0BCD\u0BAE\u0BC8\u0BAF\u0BC1\u0BAE\u0BCD \u0BAE\u0BBE\u0BB1\u0BCD\u0BB1\u0BC1 \u0BB5\u0BBF\u0BB3\u0B95\u0BCD\u0B95\u0B99\u0BCD\u0B95\u0BB3\u0BC1\u0BAE\u0BCD" },
+  passport_section_limitations: { en: "Scientific limitations", si: "\u0DC0\u0DD2\u0DAF\u0DCA\u200D\u0DBA\u0DCF\u0DAD\u0DCA\u0DB8\u0D9A \u0DC3\u0DD3\u0DB8\u0DCF", ta: "\u0B85\u0BB1\u0BBF\u0BB5\u0BBF\u0BAF\u0BB2\u0BCD \u0BB5\u0BB0\u0BAE\u0BCD\u0BAA\u0BC1\u0B95\u0BB3\u0BCD" },
+  passport_section_conclusion: { en: "Conclusion", si: "\u0DB1\u0DD2\u0D9C\u0DB8\u0DB1\u0DBA", ta: "\u0BAE\u0BC1\u0B9F\u0BBF\u0BB5\u0BC1" },
+  passport_section_reproducibility: { en: "Reproducibility", si: "\u0DB1\u0DD0\u0DC0\u0DAD \u0DBD\u0DB6\u0DCF \u0D9C\u0DAD \u0DC4\u0DD0\u0D9A\u0DD2 \u0DB6\u0DC0", ta: "\u0BAE\u0BC0\u0BB3\u0BCD \u0B89\u0BB0\u0BC1\u0BB5\u0BBE\u0B95\u0BCD\u0B95\u0BAE\u0BCD" },
+  passport_disclaimer: {
+    en: "Generated by NOVA Hypothesis Forge. This is an AI-assisted analytical report, not a peer-reviewed publication and not an official NASA or NOAA finding.",
+    si: "NOVA Hypothesis Forge \u0DB8\u0D9C\u0DD2\u0DB1\u0DCA \u0D8B\u0DAD\u0DCA\u0DB4\u0DCF\u0DAF\u0DB1\u0DBA \u0D9A\u0DBB\u0DB1 \u0DBD\u0DAF\u0DD3. \u0DB8\u0DD9\u0DBA AI \u0DC3\u0DC4\u0DCF\u0DBA\u0D9A \u0DC0\u0DD2\u0DC1\u0DCA\u0DBD\u0DDA\u0DC2\u0DAB\u0DCF\u0DAD\u0DCA\u0DB8\u0D9A \u0DC0\u0DCF\u0DBB\u0DCA\u0DAD\u0DCF\u0DC0\u0D9A\u0DCA \u0DB8\u0DD2\u0DC3 \u0DC3\u0DB8\u0DCF\u0DBD\u0DDD\u0DA0\u0DD2\u0DAD \u0DB4\u0DCA\u200D\u0DBB\u0D9A\u0DCF\u0DC1\u0DB1\u0DBA\u0D9A\u0DCA \u0DC4\u0DDD \u0DB1\u0DD2\u0DBD NASA/NOAA \u0DC3\u0DDC\u0DBA\u0DCF\u0D9C\u0DD0\u0DB1\u0DD3\u0DB8\u0D9A\u0DCA \u0DB1\u0DDC\u0DC0\u0DDA.",
+    ta: "NOVA Hypothesis Forge \u0B86\u0BB2\u0BCD \u0B89\u0BB0\u0BC1\u0BB5\u0BBE\u0B95\u0BCD\u0B95\u0BAA\u0BCD\u0BAA\u0B9F\u0BCD\u0B9F\u0BA4\u0BC1. \u0B87\u0BA4\u0BC1 AI \u0B89\u0BA4\u0BB5\u0BBF\u0BAF\u0BC1\u0B9F\u0BA9\u0BBE\u0BA9 \u0BAA\u0B95\u0BC1\u0BAA\u0BCD\u0BAA\u0BBE\u0BAF\u0BCD\u0BB5\u0BC1 \u0B85\u0BB1\u0BBF\u0B95\u0BCD\u0B95\u0BC8; \u0B9A\u0B95 \u0BAE\u0BA4\u0BBF\u0BAA\u0BCD\u0BAA\u0BBE\u0BAF\u0BCD\u0BB5\u0BC1 \u0B9A\u0BC6\u0BAF\u0BCD\u0BAF\u0BAA\u0BCD\u0BAA\u0B9F\u0BCD\u0B9F \u0BB5\u0BC6\u0BB3\u0BBF\u0BAF\u0BC0\u0B9F\u0BC1 \u0B85\u0BB2\u0BCD\u0BB2, \u0B85\u0BA4\u0BBF\u0B95\u0BBE\u0BB0\u0BAA\u0BCD\u0BAA\u0BC2\u0BB0\u0BCD\u0BB5 NASA/NOAA \u0B95\u0BA3\u0BCD\u0B9F\u0BC1\u0BAA\u0BBF\u0B9F\u0BBF\u0BAA\u0BCD\u0BAA\u0BC1\u0BAE\u0BCD \u0B85\u0BB2\u0BCD\u0BB2."
+  },
+  passport_generated_notice: {
+    en: "Measured values, timestamps and source URLs below come from the cited datasets. Hypothesis text, classifications and the conclusion are generated by deterministic rules in this codebase.",
+    si: "\u0DB4\u0DC4\u0DAD \u0DB8\u0DD2\u0DB1\u0DD4\u0DB8\u0DCA \u0D85\u0D9C\u0DBA\u0DB1\u0DCA, \u0D9A\u0DCF\u0DBD \u0DB8\u0DD4\u0DAF\u0DCA\u200D\u0DBB\u0DCF \u0DC3\u0DC4 \u0DB8\u0DD6\u0DBD\u0DCF\u0DC1\u0DCA\u200D\u0DBB URL \u0D8B\u0DB4\u0DD4\u0DA7\u0DCF \u0DAF\u0DD0\u0D9A\u0DCA\u0DC0\u0DD6 \u0DAF\u0DAD\u0DCA\u0DAD \u0D9A\u0DA7\u0DCA\u0DA7\u0DBD\u0DC0\u0DBD\u0DD2\u0DB1\u0DCA \u0DBD\u0DD0\u0DB6\u0DDA. \u0D8B\u0DB4\u0D9A\u0DBD\u0DCA\u0DB4\u0DB1 \u0DB4\u0DD9\u0DC5, \u0DC0\u0DBB\u0DCA\u0D9C\u0DD3\u0D9A\u0DBB\u0DAB \u0DC3\u0DC4 \u0DB1\u0DD2\u0D9C\u0DB8\u0DB1\u0DBA \u0DB8\u0DD9\u0DB8 \u0D9A\u0DDA\u0DAD \u0DB4\u0DAF\u0DB1\u0DB8\u0DDA \u0DB1\u0DD2\u0DBB\u0DCA\u0DAB\u0DCF\u0DBA\u0D9A \u0DB1\u0DD3\u0DAD\u0DD2 \u0DB8\u0D9C\u0DD2\u0DB1\u0DCA \u0D8B\u0DAD\u0DCA\u0DB4\u0DCF\u0DAF\u0DB1\u0DBA \u0DC0\u0DDA.",
+    ta: "\u0B95\u0BC0\u0BB4\u0BC7 \u0B89\u0BB3\u0BCD\u0BB3 \u0B85\u0BB3\u0BB5\u0BC0\u0B9F\u0BC1\u0B95\u0BB3\u0BCD, \u0BA8\u0BC7\u0BB0 \u0BAE\u0BC1\u0BA4\u0BCD\u0BA4\u0BBF\u0BB0\u0BC8\u0B95\u0BB3\u0BCD, \u0BAE\u0BC2\u0BB2 URL \u0B95\u0BB3\u0BCD \u0BAE\u0BC7\u0BB1\u0BCD\u0B95\u0BCB\u0BB3\u0BCD \u0B95\u0BBE\u0B9F\u0BCD\u0B9F\u0BAA\u0BCD\u0BAA\u0B9F\u0BCD\u0B9F \u0BA4\u0BB0\u0BB5\u0BC1\u0BA4\u0BCD\u0BA4\u0BCA\u0B95\u0BC1\u0BAA\u0BCD\u0BAA\u0BC1\u0B95\u0BB3\u0BBF\u0BB2\u0BBF\u0BB0\u0BC1\u0BA8\u0BCD\u0BA4\u0BC1 \u0BB5\u0BB0\u0BC1\u0B95\u0BBF\u0BA9\u0BCD\u0BB1\u0BA9. \u0B95\u0BB0\u0BC1\u0BA4\u0BC1\u0B95\u0BCB\u0BB3\u0BCD \u0B89\u0BB0\u0BC8, \u0BB5\u0B95\u0BC8\u0BAA\u0BCD\u0BAA\u0B9F\u0BC1\u0BA4\u0BCD\u0BA4\u0BB2\u0BCD\u0B95\u0BB3\u0BCD, \u0BAE\u0BC1\u0B9F\u0BBF\u0BB5\u0BC1 \u0B86\u0B95\u0BBF\u0BAF\u0BB5\u0BC8 \u0B87\u0BA8\u0BCD\u0BA4\u0B95\u0BCD \u0B95\u0BC1\u0BB1\u0BBF\u0BAF\u0BC0\u0B9F\u0BCD\u0B9F\u0BC1\u0BA4\u0BCD \u0BA4\u0BB3\u0BA4\u0BCD\u0BA4\u0BBF\u0BA9\u0BCD \u0BA8\u0BBF\u0BB0\u0BCD\u0BA3\u0BAF \u0BB5\u0BBF\u0BA4\u0BBF\u0B95\u0BB3\u0BBE\u0BB2\u0BCD \u0B89\u0BB0\u0BC1\u0BB5\u0BBE\u0B95\u0BCD\u0B95\u0BAA\u0BCD\u0BAA\u0B9F\u0BC1\u0B95\u0BBF\u0BA9\u0BCD\u0BB1\u0BA9."
+  },
+  passport_reproduce: {
+    en: "Re-run the investigation with the same question, language and period. The engine is deterministic: identical payloads produce identical statistics. Every request/parameter used is listed in this passport.",
+    si: "\u0D91\u0D9A\u0DB8 \u0DB4\u0DCA\u200D\u0DBB\u0DC1\u0DCA\u0DB1\u0DBA, \u0DB7\u0DCF\u0DC2\u0DCF\u0DC0 \u0DC3\u0DC4 \u0D9A\u0DCF\u0DBD\u0DBA \u0DC3\u0DB8\u0D9F \u0DC0\u0DD2\u0DB8\u0DBB\u0DCA\u0DC1\u0DB1\u0DBA \u0DB1\u0DD0\u0DC0\u0DAD \u0DB0\u0DCF\u0DC0\u0DB1\u0DBA \u0D9A\u0DBB\u0DB1\u0DCA\u0DB1. \u0D91\u0DB1\u0DCA\u0DA2\u0DD2\u0DB8 \u0DB1\u0DD2\u0DBB\u0DCA\u0DAB\u0DCF\u0DBA\u0D9A\u0DBA: \u0DC3\u0DB8\u0DCF\u0DB1 \u0DB0\u0DCF\u0DC0\u0D9A \u0DC3\u0DB8\u0DCF\u0DB1 \u0DC3\u0D82\u0D9B\u0DCA\u200D\u0DBA\u0DCF\u0DBD\u0DDA\u0D9B\u0DB1 \u0DBD\u0DB6\u0DCF \u0DAF\u0DD9\u0DBA\u0DD2. \u0DB7\u0DCF\u0DC0\u0DD2\u0DAD\u0DCF \u0D9A\u0DC5 \u0DC3\u0DD1\u0DB8 \u0D89\u0DBD\u0DCA\u0DBD\u0DD3\u0DB8\u0D9A\u0DCA/\u0DB4\u0DBB\u0DCF\u0DB8\u0DD2\u0DAD\u0DD2\u0DBA\u0D9A\u0DCA \u0DB8\u0DD9\u0DB8 \u0DB6\u0DBD\u0DB4\u0DAD\u0DCA\u200D\u0DBB\u0DBA\u0DDA \u0DBD\u0DD0\u0DBA\u0DD2\u0DC3\u0DCA\u0DAD\u0DD4\u0D9C\u0DAD \u0D9A\u0DBB \u0D87\u0DAD.",
+    ta: "\u0B85\u0BA4\u0BC7 \u0B95\u0BC7\u0BB3\u0BCD\u0BB5\u0BBF, \u0BAE\u0BCA\u0BB4\u0BBF, \u0B95\u0BBE\u0BB2\u0BA4\u0BCD\u0BA4\u0BC1\u0B9F\u0BA9\u0BCD \u0B86\u0BAF\u0BCD\u0BB5\u0BC8 \u0BAE\u0BC0\u0BA3\u0BCD\u0B9F\u0BC1\u0BAE\u0BCD \u0B87\u0BAF\u0B95\u0BCD\u0B95\u0BB5\u0BC1\u0BAE\u0BCD. \u0B87\u0BAF\u0BA8\u0BCD\u0BA4\u0BBF\u0BB0\u0BAE\u0BCD \u0BA8\u0BBF\u0BB0\u0BCD\u0BA3\u0BAF\u0BAE\u0BBE\u0BA9\u0BA4\u0BC1: \u0B92\u0BA4\u0BCD\u0BA4 \u0BA4\u0BB0\u0BB5\u0BC1\u0B95\u0BB3\u0BCD \u0B92\u0BA4\u0BCD\u0BA4 \u0BAA\u0BC1\u0BB3\u0BCD\u0BB3\u0BBF\u0BAF\u0BBF\u0BAF\u0BB2\u0BC8\u0BA4\u0BCD \u0BA4\u0BB0\u0BC1\u0BAE\u0BCD. \u0BAA\u0BAF\u0BA9\u0BCD\u0BAA\u0B9F\u0BC1\u0BA4\u0BCD\u0BA4\u0BBF\u0BAF \u0B92\u0BB5\u0BCD\u0BB5\u0BCA\u0BB0\u0BC1 \u0B95\u0BCB\u0BB0\u0BBF\u0B95\u0BCD\u0B95\u0BC8\u0BAF\u0BC1\u0BAE\u0BCD \u0B85\u0BB3\u0BB5\u0BC1\u0BB0\u0BC1\u0BB5\u0BC1\u0BAE\u0BCD \u0B87\u0BA8\u0BCD\u0BA4 \u0B85\u0BA9\u0BC1\u0BAE\u0BA4\u0BBF\u0B9A\u0BCD \u0B9A\u0BC0\u0B9F\u0BCD\u0B9F\u0BBF\u0BB2\u0BCD \u0BAA\u0B9F\u0BCD\u0B9F\u0BBF\u0BAF\u0BB2\u0BBF\u0B9F\u0BAA\u0BCD\u0BAA\u0B9F\u0BCD\u0B9F\u0BC1\u0BB3\u0BCD\u0BB3\u0BA9."
+  },
+  passport_none: { en: "None recorded", si: "\u0D9A\u0DD2\u0DC3\u0DD2\u0DC0\u0D9A\u0DCA \u0DC3\u0DA7\u0DC4\u0DB1\u0DCA \u0DB1\u0DDC\u0DC0\u0DDA", ta: "\u0B8E\u0BA4\u0BC1\u0BB5\u0BC1\u0BAE\u0BCD \u0BAA\u0BA4\u0BBF\u0BB5\u0BBE\u0B95\u0BB5\u0BBF\u0BB2\u0BCD\u0BB2\u0BC8" },
+  causal_caveat: {
+    en: "Correlation is not causation. This report describes statistical associations between published observations. It does not demonstrate a physical mechanism, and it must not be cited as a NASA or NOAA finding.",
+    si: "\u0DC3\u0DC4\u0DC3\u0DB8\u0DCA\u0DB6\u0DB1\u0DCA\u0DB0\u0DBA \u0DC4\u0DDA\u0DAD\u0DD4\u0D9A\u0DCF\u0DBB\u0D9A\u0DAD\u0DCA\u0DC0\u0DBA \u0DB1\u0DDC\u0DC0\u0DDA. \u0DB8\u0DD9\u0DB8 \u0DC0\u0DCF\u0DBB\u0DCA\u0DAD\u0DCF\u0DC0 \u0DB4\u0DCA\u200D\u0DBB\u0D9A\u0DCF\u0DC1\u0DD2\u0DAD \u0DB1\u0DD2\u0DBB\u0DD3\u0D9A\u0DCA\u0DC2\u0DAB \u0D85\u0DAD\u0DBB \u0DC3\u0D82\u0D9B\u0DCA\u200D\u0DBA\u0DCF\u0DB1\u0DB8\u0DBA \u0DC3\u0DB8\u0DCA\u0DB6\u0DB1\u0DCA\u0DB0\u0DAD\u0DCF \u0DC0\u0DD2\u0DC3\u0DCA\u0DAD\u0DBB \u0D9A\u0DBB\u0DBA\u0DD2. \u0D91\u0DBA \u0DB7\u0DDE\u0DAD\u0DD2\u0D9A \u0DBA\u0DCF\u0DB1\u0DCA\u0DAD\u0DCA\u200D\u0DBB\u0DAB\u0DBA\u0D9A\u0DCA \u0D94\u0DB4\u0DCA\u0DB4\u0DD4 \u0DB1\u0DDC\u0D9A\u0DBB\u0DB1 \u0D85\u0DAD\u0DBB NASA \u0DC4\u0DDD NOAA \u0DC3\u0DDC\u0DBA\u0DCF\u0D9C\u0DD0\u0DB1\u0DD3\u0DB8\u0D9A\u0DCA \u0DBD\u0DD9\u0DC3 \u0D8B\u0DB4\u0DD4\u0DA7\u0DCF \u0DAF\u0DD0\u0D9A\u0DCA\u0DC0\u0DD2\u0DBA \u0DB1\u0DDC\u0DC4\u0DD0\u0D9A.",
+    ta: "\u0BA4\u0BCA\u0B9F\u0BB0\u0BCD\u0BAA\u0BC1 \u0B95\u0BBE\u0BB0\u0BA3\u0BAE\u0BCD \u0B85\u0BB2\u0BCD\u0BB2. \u0B87\u0BA8\u0BCD\u0BA4 \u0B85\u0BB1\u0BBF\u0B95\u0BCD\u0B95\u0BC8 \u0BB5\u0BC6\u0BB3\u0BBF\u0BAF\u0BBF\u0B9F\u0BAA\u0BCD\u0BAA\u0B9F\u0BCD\u0B9F \u0B95\u0BA3\u0BCD\u0B95\u0BBE\u0BA3\u0BBF\u0BAA\u0BCD\u0BAA\u0BC1\u0B95\u0BB3\u0BC1\u0B95\u0BCD\u0B95\u0BC1 \u0B87\u0B9F\u0BC8\u0BAF\u0BBF\u0BB2\u0BBE\u0BA9 \u0BAA\u0BC1\u0BB3\u0BCD\u0BB3\u0BBF\u0BAF\u0BBF\u0BAF\u0BB2\u0BCD \u0BA4\u0BCA\u0B9F\u0BB0\u0BCD\u0BAA\u0BC1\u0B95\u0BB3\u0BC8 \u0BB5\u0BBF\u0BB5\u0BB0\u0BBF\u0B95\u0BCD\u0B95\u0BBF\u0BB1\u0BA4\u0BC1. \u0B87\u0BA4\u0BC1 \u0B87\u0BAF\u0BB1\u0BCD\u0BAA\u0BBF\u0BAF\u0BB2\u0BCD \u0B87\u0BAF\u0B99\u0BCD\u0B95\u0BC1\u0BAE\u0BC1\u0BB1\u0BC8\u0BAF\u0BC8 \u0BA8\u0BBF\u0BB0\u0BC2\u0BAA\u0BBF\u0B95\u0BCD\u0B95\u0BB5\u0BBF\u0BB2\u0BCD\u0BB2\u0BC8; NASA \u0B85\u0BB2\u0BCD\u0BB2\u0BA4\u0BC1 NOAA \u0B95\u0BA3\u0BCD\u0B9F\u0BC1\u0BAA\u0BBF\u0B9F\u0BBF\u0BAA\u0BCD\u0BAA\u0BBE\u0B95 \u0BAE\u0BC7\u0BB1\u0BCD\u0B95\u0BCB\u0BB3\u0BCD \u0B95\u0BBE\u0B9F\u0BCD\u0B9F\u0B95\u0BCD\u0B95\u0BC2\u0B9F\u0BBE\u0BA4\u0BC1."
+  },
+  /* -------------------------------------------------------- dataset errors */
+  error_key_not_configured: {
+    en: "No API key is configured on the server for this source, so it was skipped rather than called anonymously.",
+    si: "\u0DB8\u0DD9\u0DB8 \u0DB8\u0DD6\u0DBD\u0DCF\u0DC1\u0DCA\u200D\u0DBB\u0DBA \u0DC3\u0DB3\u0DC4\u0DCF \u0DC3\u0DDA\u0DC0\u0DCF\u0DAF\u0DCF\u0DBA\u0D9A\u0DBA\u0DDA API \u0DBA\u0DAD\u0DD4\u0DBB\u0D9A\u0DCA \u0DC0\u0DD2\u0DB1\u0DCA\u200D\u0DBA\u0DCF\u0DC3 \u0D9A\u0DBB \u0DB1\u0DD0\u0DAD, \u0D91\u0DB6\u0DD0\u0DC0\u0DD2\u0DB1\u0DCA \u0DB1\u0DD2\u0DBB\u0DCA\u0DB1\u0DCF\u0DB8\u0DD2\u0D9A\u0DC0 \u0D87\u0DB8\u0DAD\u0DD3\u0DB8 \u0DC0\u0DD9\u0DB1\u0DD4\u0DC0\u0DA7 \u0D91\u0DBA \u0DB8\u0D9F \u0DC4\u0DBB\u0DD2\u0DB1 \u0DBD\u0DAF\u0DD3.",
+    ta: "\u0B87\u0BA8\u0BCD\u0BA4 \u0BAE\u0BC2\u0BB2\u0BA4\u0BCD\u0BA4\u0BBF\u0BB1\u0BCD\u0B95\u0BC1 \u0B9A\u0BC7\u0BB5\u0BC8\u0BAF\u0B95\u0BA4\u0BCD\u0BA4\u0BBF\u0BB2\u0BCD API \u0BB5\u0BBF\u0B9A\u0BC8 \u0B85\u0BAE\u0BC8\u0B95\u0BCD\u0B95\u0BAA\u0BCD\u0BAA\u0B9F\u0BB5\u0BBF\u0BB2\u0BCD\u0BB2\u0BC8, \u0B8E\u0BA9\u0BB5\u0BC7 \u0B85\u0BA8\u0BBE\u0BAE\u0BA4\u0BC7\u0BAF\u0BAE\u0BBE\u0B95 \u0B85\u0BB4\u0BC8\u0B95\u0BCD\u0B95\u0BBE\u0BAE\u0BB2\u0BCD \u0BA4\u0BB5\u0BBF\u0BB0\u0BCD\u0B95\u0BCD\u0B95\u0BAA\u0BCD\u0BAA\u0B9F\u0BCD\u0B9F\u0BA4\u0BC1."
+  },
+  error_source_timeout: {
+    en: "The source did not answer within the request timeout.",
+    si: "\u0DB8\u0DD6\u0DBD\u0DCF\u0DC1\u0DCA\u200D\u0DBB\u0DBA \u0D89\u0DBD\u0DCA\u0DBD\u0DD3\u0DB8\u0DCA \u0D9A\u0DCF\u0DBD \u0DC3\u0DD3\u0DB8\u0DCF\u0DC0 \u0DAD\u0DD4\u0DC5 \u0DB4\u0DD2\u0DC5\u0DD2\u0DAD\u0DD4\u0DBB\u0DD4 \u0DAF\u0DD4\u0DB1\u0DCA\u0DB1\u0DDA \u0DB1\u0DD0\u0DAD.",
+    ta: "\u0BAE\u0BC2\u0BB2\u0BAE\u0BCD \u0B95\u0BCB\u0BB0\u0BBF\u0B95\u0BCD\u0B95\u0BC8 \u0BA8\u0BC7\u0BB0 \u0B8E\u0BB2\u0BCD\u0BB2\u0BC8\u0B95\u0BCD\u0B95\u0BC1\u0BB3\u0BCD \u0BAA\u0BA4\u0BBF\u0BB2\u0BB3\u0BBF\u0B95\u0BCD\u0B95\u0BB5\u0BBF\u0BB2\u0BCD\u0BB2\u0BC8."
+  },
+  error_source_network: {
+    en: "The source could not be reached from this server.",
+    si: "\u0DB8\u0DD9\u0DB8 \u0DC3\u0DDA\u0DC0\u0DCF\u0DAF\u0DCF\u0DBA\u0D9A\u0DBA\u0DD9\u0DB1\u0DCA \u0DB8\u0DD6\u0DBD\u0DCF\u0DC1\u0DCA\u200D\u0DBB\u0DBA\u0DA7 \u0DC5\u0D9F\u0DCF \u0DC0\u0DD2\u0DBA \u0DB1\u0DDC\u0DC4\u0DD0\u0D9A\u0DD2 \u0DC0\u0DD2\u0DBA.",
+    ta: "\u0B87\u0BA8\u0BCD\u0BA4\u0B9A\u0BCD \u0B9A\u0BC7\u0BB5\u0BC8\u0BAF\u0B95\u0BA4\u0BCD\u0BA4\u0BBF\u0BB2\u0BBF\u0BB0\u0BC1\u0BA8\u0BCD\u0BA4\u0BC1 \u0BAE\u0BC2\u0BB2\u0BA4\u0BCD\u0BA4\u0BC8 \u0B85\u0BA3\u0BC1\u0B95 \u0BAE\u0BC1\u0B9F\u0BBF\u0BAF\u0BB5\u0BBF\u0BB2\u0BCD\u0BB2\u0BC8."
+  },
+  error_source_rejected: {
+    en: "The source rejected the request (HTTP {status}).",
+    si: "\u0DB8\u0DD6\u0DBD\u0DCF\u0DC1\u0DCA\u200D\u0DBB\u0DBA \u0D89\u0DBD\u0DCA\u0DBD\u0DD3\u0DB8 \u0DB4\u0DCA\u200D\u0DBB\u0DAD\u0DD2\u0D9A\u0DCA\u0DC2\u0DDA\u0DB4 \u0D9A\u0DC5\u0DDA\u0DBA (HTTP {status}).",
+    ta: "\u0BAE\u0BC2\u0BB2\u0BAE\u0BCD \u0B95\u0BCB\u0BB0\u0BBF\u0B95\u0BCD\u0B95\u0BC8\u0BAF\u0BC8 \u0BA8\u0BBF\u0BB0\u0BBE\u0B95\u0BB0\u0BBF\u0BA4\u0BCD\u0BA4\u0BA4\u0BC1 (HTTP {status})."
+  },
+  error_source_invalid: {
+    en: "The source replied with a payload this connector could not parse; nothing was inferred from it.",
+    si: "\u0DB8\u0DD6\u0DBD\u0DCF\u0DC1\u0DCA\u200D\u0DBB\u0DBA \u0DB8\u0DD9\u0DB8 \u0DC3\u0DB8\u0DCA\u0DB6\u0DB1\u0DCA\u0DB0\u0D9A\u0DBA\u0DA7 \u0DC0\u0DD2\u0D9C\u0DCA\u200D\u0DBB\u0DC4 \u0D9A\u0DC5 \u0DB1\u0DDC\u0DC4\u0DD0\u0D9A\u0DD2 \u0DB0\u0DCF\u0DC0\u0D9A\u0DBA\u0D9A\u0DCA \u0DBD\u0DB6\u0DCF \u0DAF\u0DD4\u0DB1\u0DCA\u0DB1\u0DDA\u0DBA; \u0D89\u0DB1\u0DCA \u0D9A\u0DD2\u0DC3\u0DD2\u0DC0\u0D9A\u0DCA \u0D85\u0DB1\u0DD4\u0DB8\u0DCF\u0DB1 \u0DB1\u0DDC\u0D9A\u0DBB\u0DB1 \u0DBD\u0DAF\u0DD3.",
+    ta: "\u0BAE\u0BC2\u0BB2\u0BAE\u0BCD \u0B87\u0BA8\u0BCD\u0BA4 \u0B87\u0BA3\u0BC8\u0BAA\u0BCD\u0BAA\u0BBF\u0BAF\u0BBE\u0BB2\u0BCD \u0BAA\u0BBE\u0B95\u0BC1\u0BAA\u0B9F\u0BC1\u0BA4\u0BCD\u0BA4 \u0BAE\u0BC1\u0B9F\u0BBF\u0BAF\u0BBE\u0BA4 \u0BA4\u0BB0\u0BB5\u0BC8 \u0B85\u0BB3\u0BBF\u0BA4\u0BCD\u0BA4\u0BA4\u0BC1; \u0B85\u0BA4\u0BBF\u0BB2\u0BBF\u0BB0\u0BC1\u0BA8\u0BCD\u0BA4\u0BC1 \u0B8E\u0BA4\u0BC1\u0BB5\u0BC1\u0BAE\u0BCD \u0B8A\u0B95\u0BBF\u0B95\u0BCD\u0B95\u0BAA\u0BCD\u0BAA\u0B9F\u0BB5\u0BBF\u0BB2\u0BCD\u0BB2\u0BC8."
+  },
+  error_out_of_coverage: {
+    en: "The requested period is outside the published coverage of this source, so it was not called.",
+    si: "\u0D89\u0DBD\u0DCA\u0DBD\u0DCF \u0DC3\u0DD2\u0DA7\u0DD2 \u0D9A\u0DCF\u0DBD\u0DBA \u0DB8\u0DD9\u0DB8 \u0DB8\u0DD6\u0DBD\u0DCF\u0DC1\u0DCA\u200D\u0DBB\u0DBA\u0DDA \u0DB4\u0DCA\u200D\u0DBB\u0D9A\u0DCF\u0DC1\u0DD2\u0DAD \u0D86\u0DC0\u0DBB\u0DAB\u0DBA\u0DD9\u0DB1\u0DCA \u0DB4\u0DD2\u0DA7\u0DAD \u0DB6\u0DD0\u0DC0\u0DD2\u0DB1\u0DCA \u0D91\u0DBA \u0D87\u0DB8\u0DAD\u0DD4\u0DC0\u0DDA \u0DB1\u0DD0\u0DAD.",
+    ta: "\u0B95\u0BCB\u0BB0\u0BAA\u0BCD\u0BAA\u0B9F\u0BCD\u0B9F \u0B95\u0BBE\u0BB2\u0BAE\u0BCD \u0B87\u0BA8\u0BCD\u0BA4 \u0BAE\u0BC2\u0BB2\u0BA4\u0BCD\u0BA4\u0BBF\u0BA9\u0BCD \u0BB5\u0BC6\u0BB3\u0BBF\u0BAF\u0BBF\u0B9F\u0BAA\u0BCD\u0BAA\u0B9F\u0BCD\u0B9F \u0BAA\u0BB0\u0BAA\u0BCD\u0BAA\u0BC1\u0B95\u0BCD\u0B95\u0BC1 \u0BB5\u0BC6\u0BB3\u0BBF\u0BAF\u0BC7 \u0B87\u0BB0\u0BC1\u0BA8\u0BCD\u0BA4\u0BA4\u0BBE\u0BB2\u0BCD \u0B85\u0BB4\u0BC8\u0B95\u0BCD\u0B95\u0BAA\u0BCD\u0BAA\u0B9F\u0BB5\u0BBF\u0BB2\u0BCD\u0BB2\u0BC8."
+  }
+};
+function forgeText(language, key2, params = {}) {
+  const entry = FORGE_STRINGS[key2];
+  if (!entry) return key2;
+  const template = entry[language] ?? entry.en;
+  return template.replace(/\{(\w+)\}/g, (match, name) => {
+    const value = params[name];
+    return value === void 0 || value === null ? match : String(value);
+  });
+}
+function variableLabel(language, variableId) {
+  return forgeText(language, `var_${variableId}`);
+}
+var METHOD_LABEL_KEYS = {
+  descriptive: "method_descriptive",
+  correlation: "method_correlation",
+  "cross-correlation": "method_crossCorrelation",
+  "before-after": "method_beforeAfter",
+  "threshold-exceedance": "method_threshold",
+  trend: "method_trend",
+  anomaly: "method_anomaly",
+  "missing-data": "method_missing"
+};
+
+// src/lib/earth/geocode.ts
+var SRI_LANKA_PLACES = [
+  { name: "Sri Lanka (island-wide)", latitude: 7.8731, longitude: 80.7718, region: "Sri Lanka", bounds: [5.9, 79.5, 9.9, 81.9], tags: ["country"] },
+  { name: "Colombo", latitude: 6.9271, longitude: 79.8612, region: "Western Province", bounds: [6.75, 79.75, 7.1, 80.05], tags: ["capital", "coast", "urban"] },
+  { name: "Kandy", latitude: 7.2906, longitude: 80.6337, region: "Central Province", bounds: [7.15, 80.5, 7.45, 80.8], tags: ["highland"] },
+  { name: "Jaffna", latitude: 9.6615, longitude: 80.0255, region: "Northern Province", bounds: [9.5, 79.8, 9.9, 80.4], tags: ["coast", "dry zone"] },
+  { name: "Galle", latitude: 6.0535, longitude: 80.221, region: "Southern Province", bounds: [5.9, 80.05, 6.25, 80.4], tags: ["coast"] },
+  { name: "Batticaloa", latitude: 7.7102, longitude: 81.6924, region: "Eastern Province", bounds: [7.5, 81.5, 7.95, 81.9], tags: ["coast", "lagoon"] },
+  { name: "Trincomalee", latitude: 8.5874, longitude: 81.2152, region: "Eastern Province", bounds: [8.4, 81, 8.8, 81.45], tags: ["coast", "harbour"] },
+  { name: "Anuradhapura", latitude: 8.3114, longitude: 80.4037, region: "North Central Province", bounds: [8.1, 80.2, 8.55, 80.65], tags: ["dry zone"] },
+  { name: "Hambantota", latitude: 6.1246, longitude: 81.1185, region: "Southern Province", bounds: [6, 80.95, 6.35, 81.35], tags: ["dry zone", "coast"] },
+  { name: "Nuwara Eliya", latitude: 6.9497, longitude: 80.7891, region: "Central Province", bounds: [6.85, 80.65, 7.05, 80.9], tags: ["highland", "tea"] },
+  { name: "Ratnapura", latitude: 6.6828, longitude: 80.3992, region: "Sabaragamuwa", bounds: [6.5, 80.2, 6.85, 80.6], tags: ["wet zone"] },
+  { name: "Sinharaja Forest Reserve", latitude: 6.4154, longitude: 80.4497, region: "Sabaragamuwa / Southern", bounds: [6.3, 80.35, 6.55, 80.6], tags: ["rainforest", "protected"] },
+  { name: "Horton Plains", latitude: 6.8094, longitude: 80.7994, region: "Central Province", bounds: [6.75, 80.75, 6.87, 80.87], tags: ["montane", "protected"] },
+  { name: "Yala National Park", latitude: 6.3728, longitude: 81.5067, region: "Southern / Uva", bounds: [6.2, 81.35, 6.55, 81.7], tags: ["protected", "dry zone"] },
+  { name: "Wilpattu National Park", latitude: 8.4491, longitude: 80.0436, region: "North Western", bounds: [8.2, 79.85, 8.65, 80.25], tags: ["protected"] },
+  { name: "Udawalawe National Park", latitude: 6.4744, longitude: 80.8886, region: "Sabaragamuwa / Uva", bounds: [6.35, 80.75, 6.6, 81], tags: ["protected"] },
+  { name: "Adam\u2019s Peak (Sri Pada)", latitude: 6.8096, longitude: 80.4993, region: "Central Province", bounds: [6.75, 80.45, 6.86, 80.55], tags: ["highland"] },
+  { name: "Pidurutalagala", latitude: 7.0008, longitude: 80.7719, region: "Central Province", bounds: [6.95, 80.72, 7.05, 80.82], tags: ["summit"] },
+  { name: "Point Pedro", latitude: 9.8167, longitude: 80.2333, region: "Northern Province", bounds: [9.75, 80.15, 9.87, 80.3], tags: ["coast"] },
+  { name: "Dondra Head", latitude: 5.9217, longitude: 80.5894, region: "Southern Province", bounds: [5.87, 80.53, 5.97, 80.65], tags: ["coast", "southernmost"] },
+  { name: "Kalpitiya", latitude: 8.2306, longitude: 79.7656, region: "North Western", bounds: [8.1, 79.65, 8.35, 79.9], tags: ["lagoon", "coast"] },
+  { name: "Mannar", latitude: 8.9811, longitude: 79.9044, region: "Northern Province", bounds: [8.8, 79.7, 9.15, 80.15], tags: ["coast", "shallow sea"] },
+  { name: "Negombo Lagoon", latitude: 7.2059, longitude: 79.8367, region: "Western Province", bounds: [7.1, 79.75, 7.3, 79.95], tags: ["lagoon"] },
+  { name: "Polonnaruwa", latitude: 7.9403, longitude: 81.0188, region: "North Central Province", bounds: [7.8, 80.9, 8.1, 81.15], tags: ["dry zone", "reservoir"] },
+  { name: "Arugam Bay", latitude: 6.8404, longitude: 81.8369, region: "Eastern Province", bounds: [6.75, 81.75, 6.95, 81.95], tags: ["coast"] }
+];
+var WORLD_PLACES = [
+  { name: "London", latitude: 51.5072, longitude: -0.1276, region: "United Kingdom", bounds: [51.28, -0.51, 51.7, 0.33] },
+  { name: "New York City", latitude: 40.7128, longitude: -74.006, region: "United States", bounds: [40.49, -74.26, 40.92, -73.7] },
+  { name: "Amazon Basin (Manaus)", latitude: -3.119, longitude: -60.0217, region: "Brazil", bounds: [-5.5, -64, -1, -57], tags: ["forest"] },
+  { name: "Sahel (Niamey)", latitude: 13.5117, longitude: 2.1251, region: "Niger", bounds: [12.5, 0.5, 15, 4], tags: ["dryland"] },
+  { name: "Bay of Bengal", latitude: 15, longitude: 88, region: "Indian Ocean", bounds: [5, 80, 22, 95], tags: ["ocean"] },
+  { name: "Maldives (Mal\xE9)", latitude: 4.1755, longitude: 73.5093, region: "Maldives", bounds: [3, 72.5, 5.5, 74.5], tags: ["atoll", "ocean"] },
+  { name: "Chennai", latitude: 13.0827, longitude: 80.2707, region: "India", bounds: [12.85, 80.05, 13.3, 80.4] },
+  { name: "Nairobi", latitude: -1.2921, longitude: 36.8219, region: "Kenya", bounds: [-1.5, 36.6, -1.05, 37.05] },
+  { name: "Cape Town", latitude: -33.9249, longitude: 18.4241, region: "South Africa", bounds: [-34.36, 18.3, -33.5, 19] },
+  { name: "Central Kalimantan (Palangkaraya)", latitude: -2.208, longitude: 113.916, region: "Indonesia", bounds: [-4, 111, 0, 117], tags: ["peatland", "fire"] },
+  { name: "Sydney", latitude: -33.8688, longitude: 151.2093, region: "Australia", bounds: [-34.2, 150.5, -33.4, 151.7] },
+  { name: "Los Angeles", latitude: 34.0522, longitude: -118.2437, region: "United States", bounds: [33.6, -119, 34.5, -117.5], tags: ["fire"] }
+];
+var GAZETTEER = [...SRI_LANKA_PLACES, ...WORLD_PLACES];
+
+// src/lib/forge/interpreter.ts
+function hashString(value) {
+  let hash = 2166136261;
+  for (let i = 0; i < value.length; i += 1) {
+    hash ^= value.charCodeAt(i);
+    hash = Math.imul(hash, 16777619) >>> 0;
+  }
+  return hash.toString(16).padStart(8, "0");
+}
+var SINHALA = /[\u0D80-\u0DFF]/g;
+var TAMIL = /[\u0B80-\u0BFF]/g;
+function detectLanguage2(text) {
+  const sinhala = (text.match(SINHALA) || []).length;
+  const tamil = (text.match(TAMIL) || []).length;
+  if (sinhala >= 3 && sinhala >= tamil) return "si";
+  if (tamil >= 3 && tamil > sinhala) return "ta";
+  return "en";
+}
+function containsKeyword(text, keyword) {
+  const haystack = text.toLowerCase();
+  const needle = keyword.toLowerCase();
+  if (!needle) return false;
+  const ascii = /^[\x00-\x7F]+$/.test(needle);
+  if (!ascii || needle.includes(" ") || needle.length > 4) return haystack.includes(needle);
+  return new RegExp(`(^|[^a-z0-9])${needle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}([^a-z0-9]|$)`, "i").test(
+    haystack
+  );
+}
+function scoreDomain(text) {
+  let best = { domain: "unsupported", score: 0 };
+  for (const definition of DOMAIN_DEFINITIONS) {
+    let score = 0;
+    for (const keyword of definition.keywords) {
+      if (containsKeyword(text, keyword)) score += keyword.includes(" ") ? 3 : 2;
+    }
+    if (score > best.score) best = { domain: definition.id, score };
+  }
+  return best;
+}
+var MONTHS = {
+  january: 0,
+  jan: 0,
+  february: 1,
+  feb: 1,
+  march: 2,
+  mar: 2,
+  april: 3,
+  apr: 3,
+  may: 4,
+  june: 5,
+  jun: 5,
+  july: 6,
+  jul: 6,
+  august: 7,
+  aug: 7,
+  september: 8,
+  sep: 8,
+  sept: 8,
+  october: 9,
+  oct: 9,
+  november: 10,
+  nov: 10,
+  december: 11,
+  dec: 11,
+  // Sinhala months
+  "\u0DA2\u0DB1\u0DC0\u0DCF\u0DBB\u0DD2": 0,
+  "\u0DB4\u0DD9\u0DB6\u0DBB\u0DC0\u0DCF\u0DBB\u0DD2": 1,
+  "\u0DB8\u0DCF\u0DBB\u0DCA\u0DAD\u0DD4": 2,
+  "\u0D85\u0DB4\u0DCA\u200D\u0DBB\u0DDA\u0DBD\u0DCA": 3,
+  "\u0DB8\u0DD0\u0DBA\u0DD2": 4,
+  "\u0DA2\u0DD6\u0DB1\u0DD2": 5,
+  "\u0DA2\u0DD6\u0DBD\u0DD2": 6,
+  "\u0D85\u0D9C\u0DDD\u0DC3\u0DCA\u0DAD\u0DD4": 7,
+  "\u0DC3\u0DD0\u0DB4\u0DCA\u0DAD\u0DD0\u0DB8\u0DCA\u0DB6\u0DBB\u0DCA": 8,
+  "\u0D94\u0D9A\u0DCA\u0DAD\u0DDD\u0DB6\u0DBB\u0DCA": 9,
+  "\u0DB1\u0DDC\u0DC0\u0DD0\u0DB8\u0DCA\u0DB6\u0DBB\u0DCA": 10,
+  "\u0DAF\u0DD9\u0DC3\u0DD0\u0DB8\u0DCA\u0DB6\u0DBB\u0DCA": 11,
+  // Tamil months
+  "\u0B9C\u0BA9\u0BB5\u0BB0\u0BBF": 0,
+  "\u0BAA\u0BBF\u0BAA\u0BCD\u0BB0\u0BB5\u0BB0\u0BBF": 1,
+  "\u0BAE\u0BBE\u0BB0\u0BCD\u0B9A\u0BCD": 2,
+  "\u0B8F\u0BAA\u0BCD\u0BB0\u0BB2\u0BCD": 3,
+  "\u0BAE\u0BC7": 4,
+  "\u0B9C\u0BC2\u0BA9\u0BCD": 5,
+  "\u0B9C\u0BC2\u0BB2\u0BC8": 6,
+  "\u0B86\u0B95\u0BB8\u0BCD\u0B9F\u0BCD": 7,
+  "\u0B9A\u0BC6\u0BAA\u0BCD\u0B9F\u0BAE\u0BCD\u0BAA\u0BB0\u0BCD": 8,
+  "\u0B85\u0B95\u0BCD\u0B9F\u0BCB\u0BAA\u0BB0\u0BCD": 9,
+  "\u0BA8\u0BB5\u0BAE\u0BCD\u0BAA\u0BB0\u0BCD": 10,
+  "\u0B9F\u0BBF\u0B9A\u0BAE\u0BCD\u0BAA\u0BB0\u0BCD": 11
+};
+function startOfDayUtc(year, month, day) {
+  return new Date(Date.UTC(year, month, day, 0, 0, 0, 0));
+}
+function endOfDayUtc(year, month, day) {
+  return new Date(Date.UTC(year, month, day, 23, 59, 59, 999));
+}
+function monthEndUtc(year, month) {
+  return new Date(Date.UTC(year, month + 1, 0, 23, 59, 59, 999));
+}
+function isValidDate(date) {
+  return Number.isFinite(date.getTime());
+}
+function clampToNow(range, now) {
+  const nowIso2 = now.toISOString();
+  const start = range.start;
+  const end = range.end > nowIso2 ? nowIso2 : range.end;
+  return { start, end };
+}
+function parseTimeRange(text, domain, language, now = /* @__PURE__ */ new Date()) {
+  const lower = text.toLowerCase();
+  for (const event of NAMED_EVENTS) {
+    if (event.names.some((token) => containsKeyword(lower, token))) {
+      return {
+        range: {
+          start: event.start,
+          end: event.end,
+          resolution: "hour",
+          origin: "named-event",
+          label: event.label,
+          assumed: false
+        },
+        notes: [forgeText(language, "rangeNamedEvent", { event: event.label })]
+      };
+    }
+  }
+  const isoDate2 = /\b(\d{4})-(\d{2})-(\d{2})\b/g;
+  const isoMatches = [...lower.matchAll(isoDate2)];
+  if (isoMatches.length > 0) {
+    const first = isoMatches[0];
+    const start = startOfDayUtc(Number(first[1]), Number(first[2]) - 1, Number(first[3]));
+    let end = endOfDayUtc(Number(first[1]), Number(first[2]) - 1, Number(first[3]));
+    if (isoMatches.length > 1) {
+      const last = isoMatches[isoMatches.length - 1];
+      end = endOfDayUtc(Number(last[1]), Number(last[2]) - 1, Number(last[3]));
+    }
+    if (isValidDate(start) && isValidDate(end) && end >= start) {
+      const clamped = clampToNow({ start: start.toISOString(), end: end.toISOString() }, now);
+      return {
+        range: {
+          ...clamped,
+          resolution: domain === "earth-environment" ? "day" : "hour",
+          origin: "explicit-date",
+          label: `${clamped.start.slice(0, 10)} \u2192 ${clamped.end.slice(0, 10)}`,
+          assumed: false
+        },
+        notes: [forgeText(language, "rangeExplicit")]
+      };
+    }
+  }
+  const monthNames = Object.keys(MONTHS).join("|");
+  const monthYear = new RegExp(`(${monthNames})\\s+?(\\d{4})|(\\d{4})\\s+?(${monthNames})`, "i");
+  const monthMatch = lower.match(monthYear);
+  if (monthMatch) {
+    const monthToken = monthMatch[1] || monthMatch[4];
+    const yearToken = monthMatch[2] || monthMatch[3];
+    const month = MONTHS[monthToken.toLowerCase()] ?? MONTHS[monthToken];
+    const year = Number(yearToken);
+    if (month !== void 0 && Number.isFinite(year)) {
+      const start = startOfDayUtc(year, month, 1);
+      const end = monthEndUtc(year, month);
+      const clamped = clampToNow({ start: start.toISOString(), end: end.toISOString() }, now);
+      return {
+        range: {
+          ...clamped,
+          resolution: "hour",
+          origin: "explicit-month",
+          label: `${start.toISOString().slice(0, 7)}`,
+          assumed: false
+        },
+        notes: [forgeText(language, "rangeExplicit")]
+      };
+    }
+  }
+  const yearMatch = lower.match(/\b(1[6-9]\d{2}|20\d{2})\b/);
+  if (yearMatch) {
+    const year = Number(yearMatch[1]);
+    const start = startOfDayUtc(year, 0, 1);
+    const end = endOfDayUtc(year, 11, 31);
+    const clamped = clampToNow({ start: start.toISOString(), end: end.toISOString() }, now);
+    return {
+      range: {
+        ...clamped,
+        resolution: "day",
+        origin: "explicit-year",
+        label: String(year),
+        assumed: false
+      },
+      notes: [forgeText(language, "rangeExplicit")]
+    };
+  }
+  const relative3 = lower.match(/(?:last|past|recent|අවසන්|පසුගිය|கடந்த)\s*(\d{1,3})?\s*(day|days|week|weeks|month|months|දින|සති|මාස|நாட்கள்|வாரங்கள்|மாதங்கள்)/);
+  if (relative3) {
+    const amount = Number(relative3[1] || 7);
+    const unit = relative3[2];
+    const days = unit.startsWith("day") || unit === "\u0DAF\u0DD2\u0DB1" || unit === "\u0BA8\u0BBE\u0B9F\u0BCD\u0B95\u0BB3\u0BCD" ? 1 : unit.startsWith("week") || unit === "\u0DC3\u0DAD\u0DD2" || unit === "\u0BB5\u0BBE\u0BB0\u0B99\u0BCD\u0B95\u0BB3\u0BCD" ? 7 : 30;
+    const end = now;
+    const start = new Date(now.getTime() - amount * days * 864e5);
+    return {
+      range: {
+        start: start.toISOString(),
+        end: end.toISOString(),
+        resolution: days === 30 && domain === "earth-environment" ? "month" : "hour",
+        origin: "relative",
+        label: `${start.toISOString().slice(0, 10)} \u2192 ${end.toISOString().slice(0, 10)}`,
+        assumed: false
+      },
+      notes: [forgeText(language, "rangeExplicit")]
+    };
+  }
+  return null;
+}
+function defaultRange(domain, language, now) {
+  const definition = DOMAIN_DEFINITIONS.find((entry) => entry.id === domain);
+  const resolution = definition?.resolution ?? "day";
+  const days = resolution === "month" ? 365 * 5 : resolution === "hour" ? 30 : 180;
+  const start = new Date(now.getTime() - days * 864e5);
+  return {
+    range: {
+      start: start.toISOString(),
+      end: now.toISOString(),
+      resolution,
+      origin: "default",
+      label: `${start.toISOString().slice(0, 10)} \u2192 ${now.toISOString().slice(0, 10)}`,
+      assumed: true
+    },
+    notes: [forgeText(language, "rangeDefault")]
+  };
+}
+var REGION_ALIASES = [
+  { alias: ["sri lanka", "\u0DC1\u0DCA\u200D\u0DBB\u0DD3 \u0DBD\u0D82\u0D9A\u0DCF", "\u0DC1\u0DCA\u200D\u0DBB\u0DD3 \u0DBD\u0D82\u0D9A\u0DCF\u0DC0", "\u0B87\u0BB2\u0B99\u0BCD\u0B95\u0BC8"], place: "Sri Lanka (island-wide)" },
+  { alias: ["colombo", "\u0D9A\u0DDC\u0DC5\u0DB9", "\u0B95\u0BCA\u0BB4\u0BC1\u0BAE\u0BCD\u0BAA\u0BC1"], place: "Colombo" },
+  { alias: ["kandy", "\u0DB8\u0DC4\u0DB1\u0DD4\u0DC0\u0DBB", "\u0B95\u0BA3\u0BCD\u0B9F\u0BBF"], place: "Kandy" },
+  { alias: ["jaffna", "\u0DBA\u0DCF\u0DB4\u0DB1\u0DBA", "\u0BAF\u0BBE\u0BB4\u0BCD\u0BAA\u0BCD\u0BAA\u0BBE\u0BA3\u0BAE\u0BCD"], place: "Jaffna" },
+  { alias: ["galle", "\u0D9C\u0DCF\u0DBD\u0DCA\u0DBD", "\u0B95\u0BBE\u0BB2\u0BBF"], place: "Galle" },
+  { alias: ["batticaloa", "\u0DB8\u0DA9\u0D9A\u0DBD\u0DB4\u0DD4\u0DC0", "\u0BAE\u0B9F\u0BCD\u0B9F\u0B95\u0BCD\u0B95\u0BB3\u0BAA\u0BCD\u0BAA\u0BC1"], place: "Batticaloa" },
+  { alias: ["trincomalee", "\u0DAD\u0DCA\u200D\u0DBB\u0DD2\u0D9A\u0DD4\u0DAB\u0DCF\u0DB8\u0DBD\u0DBA", "\u0BA4\u0BBF\u0BB0\u0BC1\u0B95\u0BCB\u0BA3\u0BAE\u0BB2\u0BC8"], place: "Trincomalee" },
+  { alias: ["anuradhapura", "\u0D85\u0DB1\u0DD4\u0DBB\u0DCF\u0DB0\u0DB4\u0DD4\u0DBB\u0DBA", "\u0B85\u0BA9\u0BC1\u0BB0\u0BBE\u0BA4\u0BAA\u0BC1\u0BB0\u0BAE\u0BCD"], place: "Anuradhapura" },
+  { alias: ["hambantota", "\u0DC4\u0DB8\u0DCA\u0DB6\u0DB1\u0DCA\u0DAD\u0DDC\u0DA7", "\u0B85\u0BAE\u0BCD\u0BAA\u0BBE\u0BA8\u0BCD\u0BA4\u0BCB\u0B9F\u0BCD\u0B9F\u0BC8"], place: "Hambantota" },
+  { alias: ["nuwara eliya", "\u0DB1\u0DD4\u0DC0\u0DBB\u0D91\u0DC5\u0DD2\u0DBA", "\u0BA8\u0BC1\u0BB5\u0BB0\u0BC6\u0BB2\u0BBF\u0BAF\u0BBE"], place: "Nuwara Eliya" }
+];
+function parseRegion(text) {
+  const lower = text.toLowerCase();
+  for (const entry of REGION_ALIASES) {
+    if (entry.alias.some((alias) => lower.includes(alias.toLowerCase()))) {
+      const place = SRI_LANKA_PLACES.find((candidate) => candidate.name === entry.place) || WORLD_PLACES.find((candidate) => candidate.name === entry.place);
+      if (place) {
+        return {
+          name: place.name,
+          latitude: place.latitude,
+          longitude: place.longitude,
+          source: "gazetteer",
+          bounds: place.bounds
+        };
+      }
+    }
+  }
+  for (const place of [...SRI_LANKA_PLACES, ...WORLD_PLACES]) {
+    const name = place.name.toLowerCase();
+    const stem = name.replace(/\s*\(.*\)$/, "");
+    if (stem.length >= 4 && lower.includes(stem)) {
+      return {
+        name: place.name,
+        latitude: place.latitude,
+        longitude: place.longitude,
+        source: "gazetteer",
+        bounds: place.bounds
+      };
+    }
+  }
+  return { name: "Global", latitude: null, longitude: null, source: "global" };
+}
+var VARIABLE_KEYWORDS = {
+  kp: ["kp", "k-index", "k index", "geomagnetic index", "\u0DA0\u0DD4\u0DB8\u0DCA\u0DB6\u0D9A \u0DAF\u0DBB\u0DCA\u0DC1\u0D9A", "\u0B95\u0BBE\u0BA8\u0BCD\u0BA4\u0B95\u0BCD \u0B95\u0BC1\u0BB1\u0BBF\u0BAF\u0BC0\u0B9F\u0BC1"],
+  solar_wind_speed: ["solar wind speed", "wind speed", "\u0DC3\u0DD4\u0DC5\u0D82 \u0DC0\u0DDA\u0D9C\u0DBA", "\u0B95\u0BBE\u0BB1\u0BCD\u0BB1\u0BBF\u0BA9\u0BCD \u0BB5\u0BC7\u0B95\u0BAE\u0BCD"],
+  bz_gsm: ["bz", "bz gsm", "imf bz"],
+  bt: ["bt", "imf magnitude"],
+  proton_density: ["density", "proton", "\u0D9D\u0DB1\u0DAD\u0DCA\u0DC0\u0DBA", "\u0B85\u0B9F\u0BB0\u0BCD\u0BA4\u0BCD\u0BA4\u0BBF"],
+  cme_speed: ["cme", "coronal mass ejection", "\u0D9A\u0DDD\u0DBB\u0DDD\u0DB1\u0DCF", "\u0B95\u0BCA\u0BB0\u0BCB\u0BA9\u0BBE"],
+  temperature: ["temperature", "heat", "warming", "\u0D8B\u0DC2\u0DCA\u0DAB\u0DAD\u0DCA\u0DC0", "\u0BB5\u0BC6\u0BAA\u0BCD\u0BAA\u0BA8\u0BBF\u0BB2\u0BC8"],
+  precipitation: ["rain", "rainfall", "precipitation", "monsoon", "\u0DC0\u0DBB\u0DCA\u0DC2\u0DCF", "\u0DC0\u0DD0\u0DC3\u0DD2", "\u0BAE\u0BB4\u0BC8"],
+  asteroid_miss_distance: ["miss distance", "close approach", "distance"],
+  asteroid_diameter: ["size", "diameter", "how big"],
+  orbital_altitude: ["altitude", "height", "orbit height"]
+};
+function detectVariables(text, domain) {
+  const definition = DOMAIN_DEFINITIONS.find((entry) => entry.id === domain);
+  const allowed = new Set(definition?.variables ?? []);
+  const found = [];
+  for (const [id, keywords] of Object.entries(VARIABLE_KEYWORDS)) {
+    if (!allowed.has(id)) continue;
+    if (keywords.some((keyword) => containsKeyword(text, keyword))) found.push(id);
+  }
+  if (found.length > 0) return found;
+  return definition?.variables.length ? [definition.variables[0]] : [];
+}
+function buildVariableRefs(variables, domain) {
+  return variables.map((id) => {
+    const meta = variableMeta(id);
+    const role = domain === "space-weather" ? id === "kp" ? "dependent" : "independent" : id === "temperature" || id === "precipitation" ? "dependent" : "context";
+    return {
+      id,
+      unit: meta?.unit ?? "unit not published",
+      datasetId: meta?.datasetId ?? "unassigned",
+      role
+    };
+  });
+}
+function selectMethods(domain, variables, range) {
+  const methods = ["descriptive", "missing-data"];
+  const hasNumeric = variables.length > 0;
+  if (!hasNumeric) return methods;
+  if (domain === "space-weather") {
+    methods.push("correlation", "cross-correlation", "threshold-exceedance");
+    methods.push("anomaly");
+  } else if (domain === "earth-environment") {
+    methods.push("correlation", "trend", "anomaly");
+  } else if (domain === "near-earth-objects") {
+    methods.push("correlation");
+  } else {
+    methods.push("descriptive");
+  }
+  if (range.origin === "named-event" && domain === "space-weather") {
+    methods.push("before-after");
+  }
+  return [...new Set(methods)];
+}
+function interpret(question, options = {}) {
+  const now = options.now ?? /* @__PURE__ */ new Date();
+  const text = String(question || "").trim();
+  const detected = detectLanguage2(text);
+  const language = detected === "en" && options.preferredLanguage ? options.preferredLanguage : detected;
+  const notes = [];
+  const scored = scoreDomain(text);
+  let domain = scored.domain;
+  const isFollowUp = Boolean(options.context && (scored.score === 0 || !parseTimeRange(text, domain, language, now)));
+  if (isFollowUp && options.context) domain = options.context.domain;
+  const parsed = parseTimeRange(text, domain, language, now);
+  const inherited = !parsed && options.context ? options.context.timeRange : null;
+  const inheritsRange = inherited !== null;
+  const range = parsed?.range ?? inherited ?? defaultRange(domain, language, now).range;
+  if (parsed) notes.push(...parsed.notes);
+  else if (inheritsRange) notes.push(forgeText(language, "followUpMerged"));
+  else notes.push(forgeText(language, "rangeDefault"));
+  const region = parseRegion(text);
+  if (region.source === "gazetteer") {
+    notes.push(
+      forgeText(language, "regionResolved", {
+        region: region.name,
+        lat: region.latitude ?? 0,
+        lon: region.longitude ?? 0
+      })
+    );
+  } else if (domain !== "space-weather" && domain !== "near-earth-objects") {
+    notes.push(forgeText(language, "regionGlobal"));
+  }
+  let variables = detectVariables(text, domain);
+  if (variables.length === 0 && isFollowUp && options.context) {
+    variables = options.context.variables.map((variable) => variable.id);
+  }
+  if (domain === "space-weather") {
+    if (!variables.includes("kp")) variables = ["kp", ...variables];
+    if (variables.length === 1) variables = ["kp", "solar_wind_speed"];
+  }
+  const definition = DOMAIN_DEFINITIONS.find((entry) => entry.id === domain);
+  const datasets = definition?.datasets ?? [];
+  const methods = selectMethods(domain, variables, range);
+  if (domain === "unsupported") notes.push(forgeText(language, "noCompatibleDataset"));
+  if (range.assumed) notes.push(forgeText(language, "rangeDefault"));
+  const objectiveKey = `obj_${domain.replace(/-([a-z])/g, (_, letter) => letter.toUpperCase())}`;
+  const objective = forgeText(language, objectiveKey);
+  const expectedOutput = domain === "earth-environment" ? "time-series-characterisation" : domain === "planetary-imagery" || domain === "astronomy-context" ? "imagery-context" : domain === "unsupported" ? "none" : "quantified-association";
+  const confidence = domain === "unsupported" ? "low" : parsed && !range.assumed && region.source !== "none" ? "high" : range.assumed ? "medium" : "high";
+  return {
+    version: FORGE_MODEL_VERSION,
+    id: hashString(`${text}|${language}|${range.start}|${range.end}`),
+    question: text,
+    language,
+    domain,
+    objective,
+    timeRange: range,
+    region,
+    variables: buildVariableRefs([...new Set(variables)], domain),
+    requiredDatasets: datasets,
+    methods,
+    expectedOutput,
+    followUp: Boolean(options.context),
+    interpretationConfidence: confidence,
+    notes: [...new Set(notes)]
+  };
+}
+
+// src/lib/forge/hypotheses.ts
+var DRIVER_PREFERENCE = [
+  "solar_wind_speed",
+  "bz_gsm",
+  "bt",
+  "proton_density",
+  "cme_speed"
+];
+var DRIVER_THRESHOLDS = {
+  solar_wind_speed: { value: 500, unit: "km/s" },
+  bz_gsm: { value: -10, unit: "nT" },
+  bt: { value: 10, unit: "nT" },
+  proton_density: { value: 20, unit: "p/cm\xB3" },
+  cme_speed: { value: 800, unit: "km/s" }
+};
+var STORM_KP_THRESHOLD = 5;
+function hypothesisId(template, request, index) {
+  return `H${index + 1}-${hashString(`${template}|${request.id}|${index}`)}`;
+}
+function labels(language, ids) {
+  return ids.map((id) => variableLabel(language, id));
+}
+function requiredObservations(request) {
+  return request.requiredDatasets.map((id) => datasetById(id)).filter((dataset) => Boolean(dataset)).map((dataset) => `${dataset.title} (${dataset.organisation})`);
+}
+function limitations(request) {
+  const language = request.language;
+  const list = [forgeText(language, "lim_correlation")];
+  if (request.domain === "space-weather") {
+    list.push(forgeText(language, "lim_global_index"));
+    list.push(forgeText(language, "lim_single_point"));
+    list.push(forgeText(language, "lim_rolling"));
+  }
+  if (request.domain === "earth-environment") {
+    list.push(forgeText(language, "lim_monthly"));
+    list.push(forgeText(language, "lim_global_index"));
+  }
+  if (request.domain === "near-earth-objects" || request.domain === "space-weather") {
+    list.push(forgeText(language, "lim_estimate"));
+  }
+  if (request.variables.length === 0) list.push(forgeText(language, "lim_no_numeric_domain"));
+  return list;
+}
+function alternatives(language) {
+  return [
+    forgeText(language, "alt_autocorrelation"),
+    forgeText(language, "alt_other_driver"),
+    forgeText(language, "alt_seasonal"),
+    forgeText(language, "alt_instrument"),
+    forgeText(language, "alt_chance")
+  ];
+}
+function nullHypothesis(request, index, driver, response) {
+  const language = request.language;
+  return {
+    version: FORGE_MODEL_VERSION,
+    id: hypothesisId("null-association", request, index),
+    template: "null-association",
+    question: request.question,
+    statement: forgeText(language, "hyp_null_statement", {
+      driver: variableLabel(language, driver),
+      response: variableLabel(language, response),
+      period: request.timeRange.label
+    }),
+    explanation: forgeText(language, "hyp_null_explanation"),
+    independentVariables: labels(language, [driver]),
+    dependentVariables: labels(language, [response]),
+    requiredObservations: requiredObservations(request),
+    expectedRelationship: { type: "none", lagHours: null, effectThreshold: 0.3 },
+    alternativeExplanations: alternatives(language),
+    falsificationCriteria: [forgeText(language, "falsify_null")],
+    limitations: limitations(request),
+    testMethod: "correlation",
+    isNull: true,
+    status: "proposed"
+  };
+}
+function spaceWeatherHypotheses(request) {
+  const language = request.language;
+  const ids = request.variables.map((variable) => variable.id);
+  const driver = DRIVER_PREFERENCE.find((candidate) => ids.includes(candidate)) ?? "solar_wind_speed";
+  const response = "kp";
+  const driverMeta = variableMeta(driver);
+  const threshold = DRIVER_THRESHOLDS[driver];
+  const list = [];
+  list.push({
+    version: FORGE_MODEL_VERSION,
+    id: hypothesisId("lead-lag", request, 0),
+    template: "lead-lag",
+    question: request.question,
+    statement: forgeText(language, "hyp_lead_lag_statement", {
+      period: request.timeRange.label,
+      driver: variableLabel(language, driver),
+      response: variableLabel(language, response),
+      lag: 12,
+      direction: forgeText(language, driver === "bz_gsm" ? "direction_negative" : "direction_positive")
+    }),
+    explanation: forgeText(language, "hyp_lead_lag_explanation"),
+    independentVariables: labels(language, [driver]),
+    dependentVariables: labels(language, [response]),
+    requiredObservations: requiredObservations(request),
+    expectedRelationship: {
+      type: driver === "bz_gsm" ? "negative" : "positive",
+      lagHours: 12,
+      effectThreshold: 0.3
+    },
+    alternativeExplanations: alternatives(language),
+    falsificationCriteria: [forgeText(language, "falsify_lead_lag")],
+    limitations: limitations(request),
+    testMethod: "cross-correlation",
+    isNull: false,
+    status: "proposed"
+  });
+  if (threshold && driverMeta) {
+    list.push({
+      version: FORGE_MODEL_VERSION,
+      id: hypothesisId("threshold-response", request, 1),
+      template: "threshold-response",
+      question: request.question,
+      statement: forgeText(language, "hyp_threshold_statement", {
+        period: request.timeRange.label,
+        driver: `${variableLabel(language, driver)} ${driver === "bz_gsm" ? "\u2264" : "\u2265"} ${threshold.value} ${threshold.unit}`,
+        response: variableLabel(language, response),
+        threshold: STORM_KP_THRESHOLD
+      }),
+      explanation: forgeText(language, "hyp_threshold_explanation"),
+      independentVariables: labels(language, [driver]),
+      dependentVariables: labels(language, [response]),
+      requiredObservations: requiredObservations(request),
+      expectedRelationship: { type: "threshold", lagHours: 6, effectThreshold: 0.3 },
+      alternativeExplanations: alternatives(language),
+      falsificationCriteria: [forgeText(language, "falsify_threshold")],
+      limitations: limitations(request),
+      testMethod: "threshold-exceedance",
+      isNull: false,
+      status: "proposed"
+    });
+  }
+  if (request.timeRange.origin === "named-event") {
+    list.push({
+      version: FORGE_MODEL_VERSION,
+      id: hypothesisId("before-after", request, list.length),
+      template: "before-after",
+      question: request.question,
+      statement: forgeText(language, "hyp_before_after_statement", {
+        period: request.timeRange.label,
+        response: variableLabel(language, response)
+      }),
+      explanation: forgeText(language, "hyp_before_after_explanation"),
+      independentVariables: [request.timeRange.label],
+      dependentVariables: labels(language, [response]),
+      requiredObservations: requiredObservations(request),
+      expectedRelationship: { type: "threshold", lagHours: null, effectThreshold: 0.3 },
+      alternativeExplanations: alternatives(language),
+      falsificationCriteria: [forgeText(language, "falsify_before_after")],
+      limitations: limitations(request),
+      testMethod: "before-after",
+      isNull: false,
+      status: "proposed"
+    });
+  }
+  list.push(nullHypothesis(request, list.length, driver, response));
+  return list;
+}
+function earthHypotheses(request) {
+  const language = request.language;
+  const ids = request.variables.map((variable) => variable.id);
+  const response = ids.includes("precipitation") ? "precipitation" : "temperature";
+  const other = response === "temperature" ? "precipitation" : "temperature";
+  const list = [];
+  list.push({
+    version: FORGE_MODEL_VERSION,
+    id: hypothesisId("trend", request, 0),
+    template: "trend",
+    question: request.question,
+    statement: forgeText(language, "hyp_trend_statement", {
+      start: request.timeRange.start.slice(0, 10),
+      end: request.timeRange.end.slice(0, 10),
+      response: variableLabel(language, response),
+      region: request.region.name,
+      direction: forgeText(language, "direction_positive")
+    }),
+    explanation: forgeText(language, "hyp_trend_explanation"),
+    independentVariables: ["UTC time (month index)"],
+    dependentVariables: labels(language, [response]),
+    requiredObservations: requiredObservations(request),
+    expectedRelationship: { type: "positive", lagHours: null, effectThreshold: 0.2 },
+    alternativeExplanations: [
+      forgeText(language, "alt_seasonal"),
+      forgeText(language, "alt_instrument"),
+      forgeText(language, "alt_selection"),
+      forgeText(language, "alt_autocorrelation")
+    ],
+    falsificationCriteria: [forgeText(language, "falsify_trend")],
+    limitations: limitations(request),
+    testMethod: "trend",
+    isNull: false,
+    status: "proposed"
+  });
+  list.push({
+    version: FORGE_MODEL_VERSION,
+    id: hypothesisId("lead-lag", request, 1),
+    template: "lead-lag",
+    question: request.question,
+    statement: forgeText(language, "hyp_lead_lag_statement", {
+      period: request.timeRange.label,
+      driver: variableLabel(language, other),
+      response: variableLabel(language, response),
+      lag: 0,
+      direction: forgeText(language, "direction_positive")
+    }),
+    explanation: forgeText(language, "hyp_lead_lag_explanation"),
+    independentVariables: labels(language, [other]),
+    dependentVariables: labels(language, [response]),
+    requiredObservations: requiredObservations(request),
+    expectedRelationship: { type: "positive", lagHours: 0, effectThreshold: 0.3 },
+    alternativeExplanations: alternatives(language),
+    falsificationCriteria: [forgeText(language, "falsify_lead_lag")],
+    limitations: limitations(request),
+    testMethod: "correlation",
+    isNull: false,
+    status: "proposed"
+  });
+  list.push(nullHypothesis(request, list.length, other, response));
+  return list;
+}
+function neoHypotheses(request) {
+  const language = request.language;
+  const list = [
+    {
+      version: FORGE_MODEL_VERSION,
+      id: hypothesisId("lead-lag", request, 0),
+      template: "lead-lag",
+      question: request.question,
+      statement: forgeText(language, "hyp_lead_lag_statement", {
+        period: request.timeRange.label,
+        driver: variableLabel(language, "asteroid_diameter"),
+        response: variableLabel(language, "asteroid_miss_distance"),
+        lag: 0,
+        direction: forgeText(language, "direction_positive")
+      }),
+      explanation: forgeText(language, "hyp_lead_lag_explanation"),
+      independentVariables: labels(language, ["asteroid_diameter"]),
+      dependentVariables: labels(language, ["asteroid_miss_distance"]),
+      requiredObservations: requiredObservations(request),
+      expectedRelationship: { type: "positive", lagHours: null, effectThreshold: 0.3 },
+      alternativeExplanations: [
+        forgeText(language, "alt_selection"),
+        forgeText(language, "alt_instrument"),
+        forgeText(language, "alt_chance")
+      ],
+      falsificationCriteria: [forgeText(language, "falsify_null")],
+      limitations: limitations(request),
+      testMethod: "correlation",
+      isNull: false,
+      status: "proposed"
+    },
+    nullHypothesis(request, 1, "asteroid_diameter", "asteroid_miss_distance")
+  ];
+  return list;
+}
+function contextHypothesis(request) {
+  const language = request.language;
+  const imagery = request.domain === "planetary-imagery";
+  return [
+    {
+      version: FORGE_MODEL_VERSION,
+      id: hypothesisId("descriptive-context", request, 0),
+      template: "descriptive-context",
+      question: request.question,
+      statement: forgeText(language, "hyp_context_statement", {
+        period: request.timeRange.label,
+        sourceType: forgeText(language, imagery ? "sourceType_imagery" : "sourceType_context")
+      }),
+      explanation: forgeText(language, "hyp_context_explanation"),
+      independentVariables: [],
+      dependentVariables: [],
+      requiredObservations: requiredObservations(request),
+      expectedRelationship: { type: "none", lagHours: null, effectThreshold: null },
+      alternativeExplanations: [forgeText(language, "alt_selection")],
+      falsificationCriteria: [
+        imagery ? "Reject if the rover image API returns no records for the requested date." : "Reject if the APOD archive has no entry for the requested date."
+      ],
+      limitations: [forgeText(language, "lim_no_numeric_domain")],
+      testMethod: "descriptive",
+      isNull: false,
+      status: "proposed"
+    }
+  ];
+}
+function generateHypotheses(request) {
+  switch (request.domain) {
+    case "space-weather":
+      return spaceWeatherHypotheses(request);
+    case "earth-environment":
+      return earthHypotheses(request);
+    case "near-earth-objects":
+      return neoHypotheses(request);
+    case "planetary-imagery":
+    case "astronomy-context":
+      return contextHypothesis(request);
+    case "orbital": {
+      const language = request.language;
+      return [
+        {
+          version: FORGE_MODEL_VERSION,
+          id: hypothesisId("descriptive-context", request, 0),
+          template: "descriptive-context",
+          question: request.question,
+          statement: forgeText(language, "hyp_context_statement", {
+            period: request.timeRange.label,
+            sourceType: "ISS orbital elements (TLE)"
+          }),
+          explanation: forgeText(language, "hyp_context_explanation"),
+          independentVariables: [],
+          dependentVariables: labels(language, ["orbital_altitude"]),
+          requiredObservations: requiredObservations(request),
+          expectedRelationship: { type: "none", lagHours: null, effectThreshold: null },
+          alternativeExplanations: [forgeText(language, "alt_selection")],
+          falsificationCriteria: ["Reject if no TLE is available for the request."],
+          limitations: [
+            ...limitations(request),
+            "A single propagated altitude is not a measured time series."
+          ],
+          testMethod: "descriptive",
+          isNull: false,
+          status: "proposed"
+        }
+      ];
+    }
+    default:
+      return [];
+  }
+}
+
+// src/lib/forge/analysis.ts
+function finiteValues(values2) {
+  return values2.filter((value) => typeof value === "number" && Number.isFinite(value));
+}
+function mean(values2) {
+  if (values2.length === 0) return null;
+  let total = 0;
+  for (const value of values2) total += value;
+  return total / values2.length;
+}
+function sampleStdDev(values2) {
+  if (values2.length < 2) return null;
+  const average = mean(values2);
+  if (average === null) return null;
+  let sumSquares = 0;
+  for (const value of values2) sumSquares += (value - average) ** 2;
+  return Math.sqrt(sumSquares / (values2.length - 1));
+}
+function quantile(values2, q) {
+  if (values2.length === 0) return null;
+  if (q <= 0) return Math.min(...values2);
+  if (q >= 1) return Math.max(...values2);
+  const sorted = [...values2].sort((a, b) => a - b);
+  const position = (sorted.length - 1) * q;
+  const lower = Math.floor(position);
+  const upper = Math.ceil(position);
+  if (lower === upper) return sorted[lower];
+  return sorted[lower] + (sorted[upper] - sorted[lower]) * (position - lower);
+}
+function median(values2) {
+  return quantile(values2, 0.5);
+}
+function describe(values2) {
+  const clean = finiteValues(values2);
+  if (clean.length === 0) {
+    return { n: 0, mean: null, median: null, sd: null, min: null, max: null, q1: null, q3: null };
+  }
+  return {
+    n: clean.length,
+    mean: mean(clean),
+    median: median(clean),
+    sd: sampleStdDev(clean),
+    min: Math.min(...clean),
+    max: Math.max(...clean),
+    q1: quantile(clean, 0.25),
+    q3: quantile(clean, 0.75)
+  };
+}
+function logGamma(z) {
+  if (z < 0.5) {
+    return Math.log(Math.PI / Math.abs(Math.sin(Math.PI * z))) - logGamma(1 - z);
+  }
+  const coefficients = [
+    0.9999999999998099,
+    676.5203681218851,
+    -1259.1392167224028,
+    771.3234287776531,
+    -176.6150291621406,
+    12.507343278686905,
+    -0.13857109526572012,
+    9984369578019572e-21,
+    15056327351493116e-23
+  ];
+  const zz = z - 1;
+  let x = coefficients[0];
+  for (let i = 1; i < 9; i += 1) x += coefficients[i] / (zz + i);
+  const t = zz + 7.5;
+  return 0.5 * Math.log(2 * Math.PI) + (zz + 0.5) * Math.log(t) - t + Math.log(x);
+}
+function betaContinuedFraction(a, b, x) {
+  const MAX_ITERATIONS = 300;
+  const EPSILON = 3e-14;
+  const TINY = 1e-300;
+  const qab = a + b;
+  const qap = a + 1;
+  const qam = a - 1;
+  let c = 1;
+  let d = 1 - qab * x / qap;
+  if (Math.abs(d) < TINY) d = TINY;
+  d = 1 / d;
+  let h = d;
+  for (let m = 1; m <= MAX_ITERATIONS; m += 1) {
+    const m2 = 2 * m;
+    let aa = m * (b - m) * x / ((qam + m2) * (a + m2));
+    d = 1 + aa * d;
+    if (Math.abs(d) < TINY) d = TINY;
+    c = 1 + aa / c;
+    if (Math.abs(c) < TINY) c = TINY;
+    d = 1 / d;
+    h *= d * c;
+    aa = -(a + m) * (qab + m) * x / ((a + m2) * (qap + m2));
+    d = 1 + aa * d;
+    if (Math.abs(d) < TINY) d = TINY;
+    c = 1 + aa / c;
+    if (Math.abs(c) < TINY) c = TINY;
+    d = 1 / d;
+    const delta = d * c;
+    h *= delta;
+    if (Math.abs(delta - 1) < EPSILON) break;
+  }
+  return h;
+}
+function regularizedIncompleteBeta(a, b, x) {
+  if (!Number.isFinite(a) || !Number.isFinite(b) || a <= 0 || b <= 0) return Number.NaN;
+  if (x <= 0) return 0;
+  if (x >= 1) return 1;
+  const front = Math.exp(logGamma(a + b) - logGamma(a) - logGamma(b) + a * Math.log(x) + b * Math.log(1 - x));
+  if (x < (a + 1) / (a + b + 2)) {
+    return front * betaContinuedFraction(a, b, x) / a;
+  }
+  return 1 - front * betaContinuedFraction(b, a, 1 - x) / b;
+}
+function studentTTwoTailedP(t, df) {
+  if (!Number.isFinite(t) || !Number.isFinite(df) || df <= 0) return null;
+  if (t === 0) return 1;
+  const x = df / (df + t * t);
+  const p = regularizedIncompleteBeta(df / 2, 0.5, x);
+  if (!Number.isFinite(p)) return null;
+  return Math.min(1, Math.max(0, p));
+}
+function correlationTest(x, y) {
+  const pairs = [];
+  const length = Math.min(x.length, y.length);
+  for (let i = 0; i < length; i += 1) {
+    if (Number.isFinite(x[i]) && Number.isFinite(y[i])) pairs.push([x[i], y[i]]);
+  }
+  const n = pairs.length;
+  if (n < 3) return { r: null, n, t: null, df: null, p: null };
+  const meanX = mean(pairs.map((pair) => pair[0]));
+  const meanY = mean(pairs.map((pair) => pair[1]));
+  let sxy = 0;
+  let sxx = 0;
+  let syy = 0;
+  for (const [xi, yi] of pairs) {
+    sxy += (xi - meanX) * (yi - meanY);
+    sxx += (xi - meanX) ** 2;
+    syy += (yi - meanY) ** 2;
+  }
+  if (sxx === 0 || syy === 0) return { r: null, n, t: null, df: null, p: null };
+  const r = sxy / Math.sqrt(sxx * syy);
+  const clamped = Math.min(1, Math.max(-1, r));
+  const df = n - 2;
+  if (Math.abs(clamped) >= 1) return { r: clamped, n, t: Number.POSITIVE_INFINITY, df, p: 0 };
+  const t = clamped * Math.sqrt(df / (1 - clamped * clamped));
+  return { r: clamped, n, t, df, p: studentTTwoTailedP(t, df) };
+}
+function linearRegression(x, y) {
+  const pairs = [];
+  const length = Math.min(x.length, y.length);
+  for (let i = 0; i < length; i += 1) {
+    if (Number.isFinite(x[i]) && Number.isFinite(y[i])) pairs.push([x[i], y[i]]);
+  }
+  const n = pairs.length;
+  if (n < 3) return { slope: null, intercept: null, r2: null, n, slopeStandardError: null };
+  const meanX = mean(pairs.map((pair) => pair[0]));
+  const meanY = mean(pairs.map((pair) => pair[1]));
+  let sxy = 0;
+  let sxx = 0;
+  let syy = 0;
+  for (const [xi, yi] of pairs) {
+    sxy += (xi - meanX) * (yi - meanY);
+    sxx += (xi - meanX) ** 2;
+    syy += (yi - meanY) ** 2;
+  }
+  if (sxx === 0) return { slope: null, intercept: null, r2: null, n, slopeStandardError: null };
+  const slope = sxy / sxx;
+  const intercept = meanY - slope * meanX;
+  const r2 = syy === 0 ? null : sxy * sxy / (sxx * syy);
+  let residualSum = 0;
+  for (const [xi, yi] of pairs) {
+    const fitted = intercept + slope * xi;
+    residualSum += (yi - fitted) ** 2;
+  }
+  const df = n - 2;
+  const slopeStandardError = df > 0 ? Math.sqrt(residualSum / df / sxx) : null;
+  return { slope, intercept, r2, n, slopeStandardError };
+}
+function crossCorrelation(driver, response, maxLagSteps) {
+  const limit = Math.max(0, Math.floor(maxLagSteps));
+  const curve = [];
+  for (let lag = -limit; lag <= limit; lag += 1) {
+    const xs = [];
+    const ys = [];
+    for (let i = 0; i < driver.length; i += 1) {
+      const j = i + lag;
+      if (j < 0 || j >= response.length) continue;
+      if (Number.isFinite(driver[i]) && Number.isFinite(response[j])) {
+        xs.push(driver[i]);
+        ys.push(response[j]);
+      }
+    }
+    const test = correlationTest(xs, ys);
+    curve.push({ lagSteps: lag, r: test.r, n: test.n });
+  }
+  let best = null;
+  for (const entry of curve) {
+    if (entry.r === null) continue;
+    if (!best || Math.abs(entry.r) > Math.abs(best.r)) best = entry;
+  }
+  return {
+    bestLagSteps: best ? best.lagSteps : null,
+    bestR: best ? best.r : null,
+    bestN: best ? best.n : 0,
+    curve
+  };
+}
+function detectAnomalies(values2, z = 3) {
+  const clean = finiteValues(values2);
+  const average = mean(clean);
+  const sd = sampleStdDev(clean);
+  if (average === null || sd === null || sd === 0) {
+    return { count: 0, threshold: null, indices: [], mean: average, sd };
+  }
+  const indices = [];
+  values2.forEach((value, index) => {
+    if (!Number.isFinite(value)) return;
+    if (Math.abs((value - average) / sd) >= z) indices.push(index);
+  });
+  return { count: indices.length, threshold: z, indices, mean: average, sd };
+}
+function compareGroups(baseline, event) {
+  const a = finiteValues(baseline);
+  const b = finiteValues(event);
+  const meanA = mean(a);
+  const meanB = mean(b);
+  const sdA = sampleStdDev(a);
+  const sdB = sampleStdDev(b);
+  let welchT = null;
+  let welchDf = null;
+  let p = null;
+  if (meanA !== null && meanB !== null && sdA !== null && sdB !== null) {
+    const varianceA = sdA * sdA / a.length;
+    const varianceB = sdB * sdB / b.length;
+    const denominator = Math.sqrt(varianceA + varianceB);
+    if (denominator > 0) {
+      welchT = (meanB - meanA) / denominator;
+      welchDf = (varianceA + varianceB) ** 2 / (varianceA ** 2 / (a.length - 1) + varianceB ** 2 / (b.length - 1));
+      p = studentTTwoTailedP(welchT, welchDf);
+    }
+  }
+  return {
+    beforeMean: meanA,
+    afterMean: meanB,
+    changePercent: meanA !== null && meanB !== null && meanA !== 0 ? (meanB - meanA) / Math.abs(meanA) * 100 : null,
+    beforeN: a.length,
+    afterN: b.length,
+    welchT,
+    welchDf,
+    p
+  };
+}
+function erfc(x) {
+  const z = Math.abs(x);
+  const t = 1 / (1 + 0.3275911 * z);
+  const poly = t * (0.254829592 + t * (-0.284496736 + t * (1.421413741 + t * (-1.453152027 + t * 1.061405429))));
+  const value = poly * Math.exp(-z * z);
+  return x >= 0 ? value : 2 - value;
+}
+function twoByTwoTable(a, b, c, d) {
+  const n = a + b + c + d;
+  const row1 = a + b;
+  const row2 = c + d;
+  const col1 = a + c;
+  const col2 = b + d;
+  if (n === 0 || row1 === 0 || row2 === 0 || col1 === 0 || col2 === 0) {
+    return { a, b, c, d, oddsRatio: null, phi: null, chiSquare: null, p: null, n };
+  }
+  const expected = [row1 * col1, row1 * col2, row2 * col1, row2 * col2].map((value) => value / n);
+  const observed = [a, b, c, d];
+  let chiSquare = 0;
+  for (let i = 0; i < 4; i += 1) {
+    const correction = Math.max(0, Math.abs(observed[i] - expected[i]) - 0.5);
+    chiSquare += correction * correction / expected[i];
+  }
+  const phi = (a * d - b * c) / Math.sqrt(row1 * row2 * col1 * col2);
+  const oddsRatio = b * c === 0 ? null : a * d / (b * c);
+  const p = erfc(Math.sqrt(chiSquare / 2));
+  return { a, b, c, d, oddsRatio, phi, chiSquare, p, n };
+}
+function missingReport(times, values2, nowMs) {
+  const parsed = times.map((time) => Date.parse(time)).filter((value) => Number.isFinite(value)).sort((a, b) => a - b);
+  const present = values2.filter((value) => typeof value === "number" && Number.isFinite(value)).length;
+  const missing = Math.max(0, values2.length - present);
+  const fraction = values2.length === 0 ? 1 : missing / values2.length;
+  if (parsed.length < 2) {
+    return {
+      expected: null,
+      present,
+      missing,
+      fraction,
+      coveragePercent: null,
+      cadenceMs: null,
+      largestGapMs: null,
+      method: "fewer than two timestamps \u2014 cadence cannot be inferred"
+    };
+  }
+  const gaps = [];
+  for (let i = 1; i < parsed.length; i += 1) gaps.push(parsed[i] - parsed[i - 1]);
+  const cadence = median(gaps);
+  if (!cadence || cadence <= 0) {
+    return {
+      expected: null,
+      present,
+      missing,
+      fraction,
+      coveragePercent: null,
+      cadenceMs: null,
+      largestGapMs: Math.max(...gaps),
+      method: "no stable cadence \u2014 coverage not estimated"
+    };
+  }
+  const span = parsed[parsed.length - 1] - parsed[0];
+  const expected = Math.max(1, Math.round(span / cadence) + 1);
+  const coveragePercent = Math.min(100, parsed.length / expected * 100);
+  return {
+    expected,
+    present,
+    missing,
+    fraction,
+    coveragePercent,
+    cadenceMs: cadence,
+    largestGapMs: Math.max(...gaps),
+    method: "median sampling interval over the returned timestamps"
+  };
+}
+function nearestIndex(sortedTimes, target) {
+  let low = 0;
+  let high = sortedTimes.length - 1;
+  while (low < high) {
+    const middle = low + high >> 1;
+    if (sortedTimes[middle] < target) low = middle + 1;
+    else high = middle;
+  }
+  if (low > 0 && Math.abs(sortedTimes[low - 1] - target) <= Math.abs(sortedTimes[low] - target)) {
+    return low - 1;
+  }
+  return low;
+}
+function alignSeries(driver, response, toleranceMs) {
+  const driverPoints = driver.map((observation) => ({ ms: Date.parse(observation.time), value: observation.value })).filter((point) => Number.isFinite(point.ms)).sort((a, b) => a.ms - b.ms);
+  const responsePoints = response.map((observation) => ({ ms: Date.parse(observation.time), value: observation.value })).filter((point) => Number.isFinite(point.ms)).sort((a, b) => a.ms - b.ms);
+  const driverTimes = driverPoints.map((point) => point.ms);
+  const times = [];
+  const driverValues = [];
+  const responseValues = [];
+  let pairedCount = 0;
+  let driverMissing = 0;
+  let responseMissing = 0;
+  for (const point of responsePoints) {
+    times.push(new Date(point.ms).toISOString());
+    responseValues.push(point.value);
+    if (point.value === null) responseMissing += 1;
+    if (driverTimes.length === 0) {
+      driverValues.push(null);
+      driverMissing += 1;
+      continue;
+    }
+    const index = nearestIndex(driverTimes, point.ms);
+    const candidate = driverPoints[index];
+    if (!candidate || Math.abs(candidate.ms - point.ms) > toleranceMs) {
+      driverValues.push(null);
+      driverMissing += 1;
+      continue;
+    }
+    driverValues.push(candidate.value);
+    if (candidate.value === null) driverMissing += 1;
+    else if (point.value !== null) pairedCount += 1;
+  }
+  const steps = [];
+  for (let i = 1; i < responsePoints.length; i += 1) {
+    const difference = responsePoints[i].ms - responsePoints[i - 1].ms;
+    if (difference > 0) steps.push(difference);
+  }
+  return {
+    times,
+    driver: driverValues,
+    response: responseValues,
+    pairedCount,
+    driverMissing,
+    responseMissing,
+    toleranceMs,
+    medianStepMs: median(steps),
+    driverCadence: cadenceLabel(driver),
+    responseCadence: cadenceLabel(response)
+  };
+}
+function cadenceLabel(observations) {
+  if (observations.length < 2) return "unknown";
+  const times = observations.map((observation) => Date.parse(observation.time)).filter((value) => Number.isFinite(value)).sort((a, b) => a - b);
+  const gaps = [];
+  for (let i = 1; i < times.length; i += 1) gaps.push(times[i] - times[i - 1]);
+  const step = median(gaps);
+  if (!step || step <= 0) return "unknown";
+  const minutes = step / 6e4;
+  if (minutes < 90) return `${Math.round(minutes)} min`;
+  const hours = minutes / 60;
+  if (hours < 36) return `${Math.round(hours)} h`;
+  return `${Math.round(hours / 24)} days`;
+}
+function effectMagnitude(r) {
+  if (r === null || !Number.isFinite(r)) return "none";
+  const magnitude = Math.abs(r);
+  if (magnitude >= 0.7) return "strong";
+  if (magnitude >= 0.5) return "moderate";
+  if (magnitude >= 0.3) return "weak";
+  return "none";
+}
+function round(value, digits = 4) {
+  if (value === null || !Number.isFinite(value)) return null;
+  const factor = 10 ** digits;
+  return Math.round(value * factor) / factor;
+}
+
+// src/lib/forge/evidence.ts
+var ALPHA = 0.05;
+var MIN_CORRELATION_N = 10;
+var MIN_TREND_N = 12;
+var MIN_THRESHOLD_N = 20;
+var EFFECT_FLOOR = 0.3;
+function format(value, digits = 3) {
+  if (value === null || value === void 0 || !Number.isFinite(value)) return "\u2014";
+  return Number(value.toFixed(digits)).toString();
+}
+function strengthFrom(r, p, significant) {
+  const magnitude = effectMagnitude(r);
+  if (!significant || magnitude === "none") return "none";
+  if (magnitude === "strong" && p !== null && p <= 0.01) return "strong";
+  if (magnitude === "strong") return "moderate";
+  return magnitude;
+}
+function classifyCorrelation(args) {
+  const { r, p, n, expected, language } = args;
+  const minR = args.minR ?? EFFECT_FLOOR;
+  const values2 = { r, p, n, minR };
+  if (n < MIN_CORRELATION_N || r === null || p === null) {
+    return {
+      classification: "insufficient",
+      strength: "none",
+      ruleKey: "rule_insufficient_n",
+      rule: forgeText(language, "rule_insufficient_n", { n, min: MIN_CORRELATION_N }),
+      values: values2
+    };
+  }
+  const significant = p <= ALPHA && Math.abs(r) >= minR;
+  if (!significant) {
+    return {
+      classification: "neutral",
+      strength: "none",
+      ruleKey: "rule_correlation_neutral",
+      rule: forgeText(language, "rule_correlation_neutral", { r: format(r), n, p: format(p) }),
+      values: values2
+    };
+  }
+  const signMatches = expected === "none" ? true : expected === "positive" ? r > 0 : r < 0;
+  if (expected !== "none" && !signMatches) {
+    return {
+      classification: "contradicting",
+      strength: strengthFrom(r, p, true),
+      ruleKey: "rule_correlation_contradict",
+      rule: forgeText(language, "rule_correlation_contradict", { r: format(r), n, p: format(p) }),
+      values: values2
+    };
+  }
+  return {
+    classification: "supporting",
+    strength: strengthFrom(r, p, true),
+    ruleKey: "rule_correlation_support",
+    rule: forgeText(language, "rule_correlation_support", {
+      r: format(r),
+      n,
+      p: format(p),
+      minR
+    }),
+    values: values2
+  };
+}
+function classifyThreshold(args) {
+  const { cellA, cellB, cellC, cellD, phi, p, n, language } = args;
+  if (n < MIN_THRESHOLD_N || phi === null || p === null) {
+    return {
+      classification: "insufficient",
+      strength: "none",
+      rule: forgeText(language, "rule_insufficient_n", { n, min: MIN_THRESHOLD_N })
+    };
+  }
+  if (n === 0 || cellA + cellB === 0 || cellC + cellD === 0) {
+    return {
+      classification: "insufficient",
+      strength: "none",
+      rule: forgeText(language, "rule_threshold_absent")
+    };
+  }
+  if (p <= ALPHA && phi > 0.1) {
+    return {
+      classification: "supporting",
+      strength: strengthFrom(phi, p, true),
+      rule: forgeText(language, "rule_correlation_support", {
+        r: format(phi),
+        n,
+        p: format(p),
+        minR: 0.1
+      })
+    };
+  }
+  if (p <= ALPHA && phi < -0.1) {
+    return {
+      classification: "contradicting",
+      strength: strengthFrom(phi, p, true),
+      rule: forgeText(language, "rule_correlation_contradict", {
+        r: format(phi),
+        n,
+        p: format(p)
+      })
+    };
+  }
+  return {
+    classification: "neutral",
+    strength: "none",
+    rule: forgeText(language, "rule_correlation_neutral", {
+      r: format(phi),
+      n,
+      p: format(p)
+    })
+  };
+}
+function qualityNote(series, language) {
+  const total = series.observations.length;
+  const missing = series.observations.filter((observation) => observation.missing).length;
+  if (missing === 0) return forgeText(language, "quality_complete");
+  return forgeText(language, "quality_fill", { missing, total });
+}
+function buildEvidence(args) {
+  const { analyses, hypotheses, series, datasets, language } = args;
+  const items = [];
+  const seriesById = new Map(series.map((entry) => [entry.id, entry]));
+  const hypothesisForAnalysis = (analysis) => {
+    return hypotheses.filter((hypothesis) => {
+      if (analysis.method === hypothesis.testMethod) return true;
+      if (hypothesis.testMethod === "cross-correlation" && analysis.method === "cross-correlation") return true;
+      if (hypothesis.template === "null-association" && analysis.method === "correlation") return true;
+      return false;
+    });
+  };
+  for (const analysis of analyses) {
+    if (analysis.skipped) continue;
+    const linkedHypotheses = hypothesisForAnalysis(analysis);
+    if (linkedHypotheses.length === 0) continue;
+    const primarySeries = analysis.datasetRefs.map((ref) => seriesById.get(ref)).find((entry) => Boolean(entry));
+    if (!primarySeries) continue;
+    const dataset = datasetById(primarySeries.datasetId);
+    const numeric = (key2) => {
+      const value = analysis.results[key2];
+      return typeof value === "number" && Number.isFinite(value) ? value : null;
+    };
+    for (const hypothesis of linkedHypotheses) {
+      let classification = "insufficient";
+      let strength = "none";
+      let rule = forgeText(language, "rule_no_data");
+      let values2 = { n: analysis.sampleSize };
+      if (analysis.method === "correlation" || analysis.method === "cross-correlation") {
+        const expected = hypothesis.expectedRelationship.type === "negative" ? "negative" : hypothesis.expectedRelationship.type === "positive" ? "positive" : "none";
+        const verdict = classifyCorrelation({
+          r: numeric("r"),
+          p: numeric("p"),
+          n: analysis.sampleSize,
+          expected,
+          language,
+          minR: hypothesis.expectedRelationship.effectThreshold ?? EFFECT_FLOOR
+        });
+        classification = verdict.classification;
+        strength = verdict.strength;
+        rule = verdict.rule;
+        values2 = { ...values2, ...verdict.values };
+        if (analysis.method === "cross-correlation" && numeric("bestLagHours") !== null) {
+          const bestLagHours = numeric("bestLagHours");
+          rule = `${rule} ${forgeText(language, "rule_lead_lag", {
+            lag: format(bestLagHours, 1),
+            r: format(numeric("r")),
+            expected: hypothesis.expectedRelationship.lagHours ?? "\u2014"
+          })}`;
+          values2.bestLagHours = bestLagHours;
+          if (hypothesis.template === "lead-lag" && bestLagHours < 0 && classification === "supporting") {
+            classification = "contradicting";
+            rule = `${rule} ${hypothesis.falsificationCriteria[0] ?? ""}`.trim();
+          }
+        }
+      } else if (analysis.method === "threshold-exceedance") {
+        const verdict = classifyThreshold({
+          cellA: numeric("cellA") ?? 0,
+          cellB: numeric("cellB") ?? 0,
+          cellC: numeric("cellC") ?? 0,
+          cellD: numeric("cellD") ?? 0,
+          phi: numeric("phi"),
+          p: numeric("p"),
+          n: analysis.sampleSize,
+          language
+        });
+        classification = verdict.classification;
+        strength = verdict.strength;
+        rule = verdict.rule;
+        values2 = { ...values2, phi: numeric("phi"), p: numeric("p"), risktRatio: numeric("relativeRisk") };
+      } else if (analysis.method === "trend") {
+        const r = numeric("r");
+        const p = numeric("p");
+        const slope = numeric("slope");
+        if (analysis.sampleSize < MIN_TREND_N || r === null || p === null || slope === null) {
+          classification = "insufficient";
+          rule = forgeText(language, "rule_insufficient_n", {
+            n: analysis.sampleSize,
+            min: MIN_TREND_N
+          });
+        } else if (p <= ALPHA && Math.abs(r) >= 0.2) {
+          const directionOk = hypothesis.expectedRelationship.type === "positive" ? slope > 0 : slope < 0;
+          classification = directionOk ? "supporting" : "contradicting";
+          strength = strengthFrom(r, p, true);
+          rule = forgeText(
+            language,
+            directionOk ? "rule_correlation_support" : "rule_correlation_contradict",
+            { r: format(r), n: analysis.sampleSize, p: format(p), minR: 0.2 }
+          );
+        } else {
+          classification = "neutral";
+          rule = forgeText(language, "rule_correlation_neutral", {
+            r: format(r),
+            n: analysis.sampleSize,
+            p: format(p)
+          });
+        }
+        values2 = { ...values2, r, p, slope };
+      } else if (analysis.method === "before-after") {
+        const p = numeric("p");
+        const change = numeric("changePercent");
+        if (analysis.sampleSize < MIN_THRESHOLD_N || p === null || change === null) {
+          classification = "insufficient";
+          rule = forgeText(language, "rule_insufficient_n", {
+            n: analysis.sampleSize,
+            min: MIN_THRESHOLD_N
+          });
+        } else if (p <= ALPHA && change > 0) {
+          classification = "supporting";
+          strength = Math.abs(change) >= 50 ? "moderate" : "weak";
+          rule = `${forgeText(language, "rule_correlation_support", {
+            r: format(change / 100),
+            n: analysis.sampleSize,
+            p: format(p),
+            minR: EFFECT_FLOOR
+          })}`;
+        } else if (p <= ALPHA && change < 0) {
+          classification = "contradicting";
+          strength = "weak";
+          rule = forgeText(language, "rule_correlation_contradict", {
+            r: format(change / 100),
+            n: analysis.sampleSize,
+            p: format(p)
+          });
+        } else {
+          classification = "neutral";
+          rule = forgeText(language, "rule_correlation_neutral", {
+            r: format(change / 100),
+            n: analysis.sampleSize,
+            p: format(p)
+          });
+        }
+        values2 = { ...values2, p, changePercent: change };
+      } else if (analysis.method === "descriptive") {
+        classification = analysis.sampleSize > 0 ? "neutral" : "insufficient";
+        rule = analysis.sampleSize > 0 ? forgeText(language, "quality_complete") : forgeText(language, "rule_no_data");
+      }
+      items.push({
+        id: `E-${items.length + 1}-${analysis.id}`,
+        datasetId: primarySeries.datasetId,
+        datasetTitle: dataset?.title ?? primarySeries.datasetId,
+        organisation: dataset?.organisation ?? "Other",
+        sourceUrl: primarySeries.provenance.sourceUrl,
+        documentationUrl: primarySeries.provenance.documentationUrl,
+        retrievedAt: primarySeries.provenance.retrievedAt,
+        observationStart: primarySeries.provenance.observationStart,
+        observationEnd: primarySeries.provenance.observationEnd,
+        measurements: forgeText(language, "evidence_measurements", {
+          variable: variableLabel(language, primarySeries.variableId),
+          method: analysis.methodLabel,
+          dataset: primarySeries.datasetId
+        }),
+        units: primarySeries.unit,
+        processing: forgeText(language, "processing_parse", {
+          rows: primarySeries.observations.length,
+          tolerance: 90
+        }),
+        quality: qualityNote(primarySeries, language),
+        limitations: [...analysis.limitations, ...dataset?.limitations ?? []],
+        hypothesisIds: [hypothesis.id],
+        classification,
+        strength,
+        rule,
+        analysisId: analysis.id,
+        values: values2
+      });
+    }
+  }
+  for (const result2 of datasets) {
+    for (const entry of result2.series) {
+      items.push({
+        id: `Q-${items.length + 1}-${entry.id}`,
+        datasetId: entry.datasetId,
+        datasetTitle: entry.provenance.datasetTitle,
+        organisation: entry.provenance.organisation,
+        sourceUrl: entry.provenance.sourceUrl,
+        documentationUrl: entry.provenance.documentationUrl,
+        retrievedAt: entry.provenance.retrievedAt,
+        observationStart: entry.provenance.observationStart,
+        observationEnd: entry.provenance.observationEnd,
+        measurements: `${entry.label}: ${entry.observations.filter((observation) => !observation.missing).length} valid observations`,
+        units: entry.unit,
+        processing: entry.provenance.processingHistory.join(" \u2192 "),
+        quality: qualityNote(entry, language),
+        limitations: [...datasetById(entry.datasetId)?.limitations ?? []],
+        hypothesisIds: [],
+        classification: "neutral",
+        strength: "none",
+        rule: entry.missing.fraction > 0 ? forgeText(language, "rule_missing_coverage", {
+          coverage: format((1 - entry.missing.fraction) * 100, 1)
+        }) : forgeText(language, "rule_missing_coverage", { coverage: "100" }),
+        analysisId: null,
+        values: {
+          observations: entry.observations.length,
+          missingFraction: entry.missing.fraction,
+          expected: entry.missing.expected
+        }
+      });
+    }
+  }
+  for (const result2 of datasets) {
+    if (result2.status === "live" || result2.status === "cached" || result2.status === "partial") {
+      if (result2.series.length > 0) continue;
+    }
+    const dataset = datasetById(result2.datasetId);
+    items.push({
+      id: `G-${items.length + 1}-${result2.datasetId}`,
+      datasetId: result2.datasetId,
+      datasetTitle: dataset?.title ?? result2.datasetId,
+      organisation: dataset?.organisation ?? "Other",
+      sourceUrl: dataset?.endpoint ?? result2.documentationUrl,
+      documentationUrl: result2.documentationUrl,
+      retrievedAt: (/* @__PURE__ */ new Date()).toISOString(),
+      observationStart: null,
+      observationEnd: null,
+      measurements: "no measurement retrieved",
+      units: "\u2014",
+      processing: "none \u2014 the connector returned no usable records",
+      quality: "unavailable",
+      limitations: dataset?.limitations ?? [],
+      hypothesisIds: hypotheses.map((hypothesis) => hypothesis.id),
+      classification: "insufficient",
+      strength: "none",
+      rule: result2.detail ?? forgeText(language, "rule_no_data"),
+      analysisId: null,
+      values: { errorCode: result2.errorCode ?? null }
+    });
+  }
+  return items;
+}
+function evidenceCounts(items) {
+  return {
+    supporting: items.filter((item) => item.classification === "supporting").length,
+    contradicting: items.filter((item) => item.classification === "contradicting").length,
+    neutral: items.filter((item) => item.classification === "neutral").length,
+    insufficient: items.filter((item) => item.classification === "insufficient").length
+  };
+}
+function hypothesisEvidence(items, hypothesisId2) {
+  return items.filter((item) => item.hypothesisIds.includes(hypothesisId2));
+}
+
+// src/lib/forge/planner.ts
+var DAY_MS = 864e5;
+function overlapFraction(start, end, coverageStart, coverageEnd) {
+  const span = Math.max(1, end - start);
+  const overlap = Math.max(0, Math.min(end, coverageEnd) - Math.max(start, coverageStart));
+  return overlap / span;
+}
+function coverageVerdict(dataset, range, now, language) {
+  const start = Date.parse(range.start);
+  const end = Date.parse(range.end);
+  if (!Number.isFinite(start) || !Number.isFinite(end)) {
+    return { coverage: "unknown", detail: forgeText(language, "coverageUnknown") };
+  }
+  const { coverage } = dataset;
+  if (coverage.kind === "rolling") {
+    const days = coverage.rollingDays ?? 30;
+    const coverageEnd = now.getTime();
+    const coverageStart = coverageEnd - days * DAY_MS;
+    const fraction2 = overlapFraction(start, end, coverageStart, coverageEnd);
+    const label2 = `${new Date(coverageStart).toISOString().slice(0, 10)} \u2192 ${new Date(coverageEnd).toISOString().slice(0, 10)}`;
+    if (fraction2 >= 0.95) return { coverage: "in-range", detail: forgeText(language, "coverageInRange") };
+    if (fraction2 > 0) {
+      return {
+        coverage: "partial",
+        detail: `${forgeText(language, "coveragePartial")} (${label2})`
+      };
+    }
+    return {
+      coverage: "out-of-coverage",
+      detail: forgeText(language, "coverageOut", { coverage: `${days}-day rolling window (${label2})` })
+    };
+  }
+  const earliest = coverage.earliest ? Date.parse(coverage.earliest) : Number.NEGATIVE_INFINITY;
+  const latest = coverage.latest ? Date.parse(coverage.latest) : now.getTime();
+  const archiveEnd = Math.min(latest, now.getTime());
+  const fraction = overlapFraction(start, end, earliest, archiveEnd);
+  const label = `${Number.isFinite(earliest) ? new Date(earliest).toISOString().slice(0, 10) : "\u2014"} \u2192 ${new Date(
+    archiveEnd
+  ).toISOString().slice(0, 10)}`;
+  if (fraction >= 0.95) return { coverage: "in-range", detail: forgeText(language, "coverageInRange") };
+  if (fraction > 0) {
+    return { coverage: "partial", detail: `${forgeText(language, "coveragePartial")} (${label})` };
+  }
+  return {
+    coverage: "out-of-coverage",
+    detail: forgeText(language, "coverageOut", { coverage: `${dataset.coverage.description} (${label})` })
+  };
+}
+function candidateDatasets(request) {
+  const ids = new Set(request.requiredDatasets);
+  for (const variable of request.variables) {
+    const meta = variableMeta(variable.id);
+    if (meta) ids.add(meta.datasetId);
+  }
+  const selected = [];
+  for (const id of ids) {
+    const dataset = datasetById(id);
+    if (dataset) selected.push(dataset);
+  }
+  return selected;
+}
+function buildPlan(request, context = {}, hypothesesCount = 0) {
+  const now = context.now ?? /* @__PURE__ */ new Date();
+  const language = request.language;
+  const nasaKeyMode2 = context.nasaKeyMode ?? "demo";
+  const requestedVariables = request.variables.map((variable) => variable.id);
+  const datasets = candidateDatasets(request).map((dataset) => {
+    const domainMatch = dataset.domains.includes(request.domain);
+    const datasetVariables = dataset.variables.map((variable) => String(variable.id));
+    const variableMatch = requestedVariables.length === 0 || datasetVariables.length === 0 || requestedVariables.some((id) => datasetVariables.includes(id));
+    const contextRelevant = domainMatch && !variableMatch && datasetVariables.length > 0;
+    const compatible = domainMatch && (variableMatch || contextRelevant);
+    const verdict = coverageVerdict(dataset, request.timeRange, now, language);
+    const keyConfigured = !dataset.keyRequired || nasaKeyMode2 !== "none";
+    const reason = !domainMatch ? forgeText(language, "compatDomainMismatch") : contextRelevant ? forgeText(language, "compatContext") : !variableMatch ? forgeText(language, "compatVariableMismatch") : datasetVariables.length === 0 ? `${forgeText(language, "compatDomain")} ${forgeText(language, "lim_no_numeric_domain")}` : forgeText(language, "compatDomain");
+    return {
+      datasetId: dataset.id,
+      title: dataset.title,
+      organisation: dataset.organisation,
+      compatible,
+      reason,
+      coverage: verdict.coverage,
+      coverageDetail: verdict.detail,
+      variables: dataset.variables.map((variable) => `${variable.label} (${variable.unit})`),
+      units: [...new Set(dataset.variables.map((variable) => variable.unit))],
+      endpoint: dataset.endpoint,
+      documentationUrl: dataset.documentationUrl,
+      requiresKey: dataset.access === "api-key",
+      keyConfigured,
+      expectedLimitations: dataset.limitations
+    };
+  });
+  const executable = datasets.some(
+    (dataset) => dataset.compatible && dataset.keyConfigured && dataset.coverage !== "out-of-coverage"
+  );
+  const methods = request.methods.map((id) => ({
+    id,
+    reason: forgeText(language, METHOD_REASONS[id] ?? "planVerifySample")
+  }));
+  const verification = [
+    forgeText(language, "planVerifyProvenance"),
+    forgeText(language, "planVerifyMissing"),
+    forgeText(language, "planVerifyUnits"),
+    forgeText(language, "planVerifySample", { min: MIN_CORRELATION_N })
+  ];
+  const missingInformation = [];
+  if (request.timeRange.assumed) missingInformation.push(forgeText(language, "planMissingTime"));
+  if (request.timeRange.resolution === "hour" && datasets.some((dataset) => dataset.coverage === "in-range" && dataset.datasetId === "nasa-power")) {
+    missingInformation.push(forgeText(language, "planMissingResolution"));
+  }
+  const keyedNotConfigured = datasets.some((dataset) => dataset.requiresKey && !dataset.keyConfigured);
+  if (keyedNotConfigured) missingInformation.push(forgeText(language, "planMissingKey"));
+  if (nasaKeyMode2 === "demo" && datasets.some((dataset) => dataset.requiresKey)) {
+    missingInformation.push(forgeText(language, "planDemoKey"));
+  }
+  if (hypothesesCount === 0) missingInformation.push(forgeText(language, "noCompatibleDataset"));
+  const limitations2 = [];
+  for (const dataset of datasets) {
+    if (dataset.compatible) limitations2.push(...dataset.expectedLimitations);
+  }
+  if (datasets.length === 0) limitations2.push(forgeText(language, "noCompatibleDataset"));
+  let blockingReason;
+  if (!executable) {
+    const outOfCoverage = datasets.find((dataset) => dataset.coverage === "out-of-coverage");
+    blockingReason = outOfCoverage ? outOfCoverage.coverageDetail : datasets.length === 0 ? forgeText(language, "noCompatibleDataset") : forgeText(language, "noCompatibleDataset");
+  }
+  return {
+    version: FORGE_MODEL_VERSION,
+    requestId: request.id,
+    question: request.question,
+    objective: hypothesesCount === 0 && datasets.length === 0 ? forgeText(language, "noCompatibleDataset") : request.objective,
+    datasets,
+    retrievalWindow: request.timeRange,
+    methods,
+    verification,
+    missingInformation: [...new Set(missingInformation)],
+    limitations: [...new Set(limitations2)],
+    executable,
+    blockingReason
+  };
+}
+
+// src/lib/forge/counterEvidence.ts
+var SEVERITY_RANK = {
+  low: 1,
+  medium: 2,
+  high: 3
+};
+function add(findings, finding) {
+  findings.push({ id: `CE-${findings.length + 1}`, ...finding });
+}
+function buildCounterEvidence(args) {
+  const { request, datasets, analyses, evidence, hypotheses, language } = args;
+  const findings = [];
+  for (const result2 of datasets) {
+    const dataset = datasetById(result2.datasetId);
+    const title = dataset?.title ?? result2.datasetId;
+    if (result2.status === "out-of-coverage") {
+      add(findings, {
+        kind: "data-gap",
+        severity: "high",
+        title: forgeText(language, "ce_out_of_coverage_title"),
+        detail: forgeText(language, "ce_out_of_coverage_detail", {
+          dataset: title,
+          coverage: dataset?.coverage.description ?? "published window"
+        })
+      });
+      continue;
+    }
+    if (result2.status === "unavailable" || result2.status === "not-requested") {
+      add(findings, {
+        kind: "data-gap",
+        severity: "high",
+        title: forgeText(language, "ce_data_gap_title"),
+        detail: `${forgeText(language, "ce_data_gap_detail", { dataset: title })} ${result2.detail ?? ""}`.trim()
+      });
+      continue;
+    }
+    for (const series of result2.series) {
+      if (series.missing.fraction >= 0.2) {
+        add(findings, {
+          kind: "data-gap",
+          severity: "high",
+          title: forgeText(language, "ce_data_gap_title"),
+          detail: `${title} \u2014 ${series.label}: ${forgeText(language, "rule_missing_coverage", {
+            coverage: (100 * (1 - series.missing.fraction)).toFixed(1)
+          })}`
+        });
+      }
+    }
+  }
+  if (datasets.every((result2) => result2.series.length === 0)) {
+    add(findings, {
+      kind: "data-gap",
+      severity: "high",
+      title: forgeText(language, "ce_data_gap_title"),
+      detail: forgeText(language, "rule_no_data")
+    });
+  }
+  for (const analysis of analyses) {
+    const driverCadence = analysis.parameters.driverCadence;
+    const responseCadence = analysis.parameters.responseCadence;
+    if (typeof driverCadence === "string" && typeof responseCadence === "string" && driverCadence !== responseCadence) {
+      add(findings, {
+        kind: "temporal-mismatch",
+        severity: "medium",
+        title: forgeText(language, "ce_temporal_title"),
+        detail: forgeText(language, "ce_temporal_detail", {
+          left: driverCadence,
+          right: responseCadence
+        })
+      });
+      break;
+    }
+  }
+  const assumptionsSeen = /* @__PURE__ */ new Set();
+  for (const analysis of analyses) {
+    for (const assumption of analysis.assumptions) {
+      if (assumptionsSeen.has(assumption)) continue;
+      assumptionsSeen.add(assumption);
+      if (assumptionsSeen.size > 3) break;
+      add(findings, {
+        kind: "assumption",
+        severity: "medium",
+        title: forgeText(language, "ce_assumption_title"),
+        detail: forgeText(language, "ce_assumption_detail", { assumption })
+      });
+    }
+  }
+  const alternatives2 = /* @__PURE__ */ new Set();
+  for (const hypothesis of hypotheses) {
+    for (const alternative of hypothesis.alternativeExplanations) {
+      if (alternatives2.has(alternative)) continue;
+      alternatives2.add(alternative);
+      add(findings, {
+        kind: "alternative-explanation",
+        severity: "medium",
+        title: forgeText(language, "ce_alternative_title"),
+        detail: alternative
+      });
+    }
+  }
+  const estimateDatasets = datasets.filter(
+    (result2) => result2.series.length > 0 && (result2.datasetId === "nasa-neows" || result2.datasetId === "nasa-donki")
+  );
+  if (estimateDatasets.length > 0) {
+    const variables = estimateDatasets.flatMap((result2) => result2.series.map((series) => variableLabel(language, series.variableId))).join(", ");
+    add(findings, {
+      kind: "measurement-uncertainty",
+      severity: "medium",
+      title: forgeText(language, "ce_uncertainty_title"),
+      detail: forgeText(language, "ce_uncertainty_detail", {
+        detail: `${variables} \u2014 ${forgeText(language, "lim_estimate")}`
+      })
+    });
+  } else if (datasets.some((result2) => result2.series.length > 0)) {
+    add(findings, {
+      kind: "measurement-uncertainty",
+      severity: "low",
+      title: forgeText(language, "ce_uncertainty_title"),
+      detail: forgeText(language, "ce_uncertainty_detail", {
+        detail: forgeText(language, "lim_single_point")
+      })
+    });
+  }
+  if (request.domain === "near-earth-objects" || request.domain === "space-weather") {
+    add(findings, {
+      kind: "selection-bias",
+      severity: "medium",
+      title: forgeText(language, "ce_selection_title"),
+      detail: forgeText(language, "alt_selection")
+    });
+  }
+  if (request.domain === "space-weather" || request.domain === "earth-environment") {
+    add(findings, {
+      kind: "missing-variable",
+      severity: "medium",
+      title: forgeText(language, "ce_missing_variable_title"),
+      detail: forgeText(language, "alt_other_driver")
+    });
+  }
+  for (const hypothesis of hypotheses) {
+    if (hypothesis.falsificationCriteria.length === 0) continue;
+    add(findings, {
+      kind: "falsification",
+      severity: "low",
+      title: forgeText(language, "ce_falsification_title"),
+      detail: hypothesis.falsificationCriteria.join(" ")
+    });
+  }
+  if (evidence.filter((item) => item.classification === "supporting").length === 0) {
+    add(findings, {
+      kind: "falsification",
+      severity: "low",
+      title: forgeText(language, "verdict_insufficient_title"),
+      detail: forgeText(language, "verdict_insufficient_summary")
+    });
+  }
+  const severity = findings.reduce(
+    (worst, finding) => SEVERITY_RANK[finding.severity] > SEVERITY_RANK[worst] ? finding.severity : worst,
+    "low"
+  );
+  return {
+    findings,
+    severity,
+    dataGapDetected: findings.some((finding) => finding.kind === "data-gap")
+  };
+}
+
+// src/lib/earth/geo.ts
+function boundingBoxAround(latitude, longitude, spanDegrees = 1.2) {
+  const half = Math.abs(spanDegrees) / 2;
+  const south = Math.max(-90, latitude - half);
+  const north = Math.min(90, latitude + half);
+  const west = Math.max(-180, longitude - half);
+  const east = Math.min(180, longitude + half);
+  return [south, west, north, east];
+}
+
+// src/lib/forge/orchestrator.ts
+var PAIR_TOLERANCE_MS = 90 * 60 * 1e3;
+var MAX_LAG_HOURS = 12;
+function methodLabel(language, method) {
+  return forgeText(language, METHOD_LABEL_KEYS[method] ?? "method_descriptive");
+}
+function values(observations) {
+  return observations.map((observation) => observation.value).filter((value) => typeof value === "number" && Number.isFinite(value));
+}
+function seriesMap(datasets) {
+  const map = /* @__PURE__ */ new Map();
+  for (const result2 of datasets) {
+    for (const series of result2.series) {
+      const id = series.variableId;
+      if (!map.has(id)) map.set(id, series);
+    }
+  }
+  return map;
+}
+function baseAnalysis(language, method, inputVariables, datasetRefs) {
+  return {
+    id: "",
+    method,
+    methodLabel: methodLabel(language, method),
+    inputVariables,
+    datasetRefs,
+    assumptions: [],
+    parameters: {},
+    results: {},
+    limitations: [],
+    skipped: false,
+    sampleSize: 0
+  };
+}
+function runAnalyses(request, datasets, language = request.language) {
+  const languageCode = language;
+  const map = seriesMap(datasets);
+  const analyses = [];
+  const push = (analysis) => {
+    if (!analysis.id) {
+      analysis.id = `AN-${analyses.length + 1}-${analysis.method}-${hashString(
+        `${analysis.datasetRefs.join("+")}|${analysis.inputVariables.join("+")}`
+      )}`;
+    }
+    analysis.results = Object.fromEntries(
+      Object.entries(analysis.results).map(([key2, value]) => [
+        key2,
+        typeof value === "number" ? round(value, 6) : value
+      ])
+    );
+    analyses.push(analysis);
+  };
+  for (const series of map.values()) {
+    const descriptive = baseAnalysis(languageCode, "descriptive", [series.variableId], [series.id]);
+    const stats = describe(values(series.observations));
+    descriptive.assumptions = [forgeText(languageCode, "assumption_units")];
+    descriptive.parameters = { unit: series.unit, cadence: series.cadence };
+    descriptive.results = {
+      n: stats.n,
+      mean: stats.mean,
+      median: stats.median,
+      sd: stats.sd,
+      min: stats.min,
+      max: stats.max,
+      q1: stats.q1,
+      q3: stats.q3
+    };
+    descriptive.sampleSize = stats.n;
+    descriptive.limitations = [forgeText(languageCode, "limitation_causality")];
+    descriptive.series = series.observations.map((observation, index) => ({
+      x: index,
+      y: observation.value
+    }));
+    if (stats.n === 0) {
+      descriptive.skipped = true;
+      descriptive.skipReason = forgeText(languageCode, "limitation_insufficient");
+    }
+    push(descriptive);
+    const missing = baseAnalysis(languageCode, "missing-data", [series.variableId], [series.id]);
+    const report = missingReport(
+      series.observations.map((observation) => observation.time),
+      series.observations.map((observation) => observation.value)
+    );
+    missing.parameters = { unit: series.unit, cadence: series.cadence };
+    missing.results = {
+      observations: series.observations.length,
+      present: report.present,
+      missing: report.missing,
+      missingFraction: report.fraction,
+      coveragePercent: report.coveragePercent,
+      largestGapHours: report.largestGapMs === null ? null : report.largestGapMs / 36e5,
+      expected: report.expected
+    };
+    missing.sampleSize = series.observations.length;
+    missing.assumptions = [forgeText(languageCode, "assumption_alignment")];
+    missing.limitations = [forgeText(languageCode, "limitation_missing")];
+    if (report.expected !== null && report.coveragePercent !== null && report.coveragePercent < 90) {
+      missing.limitations.push(
+        forgeText(languageCode, "rule_missing_coverage", {
+          coverage: report.coveragePercent.toFixed(1)
+        })
+      );
+    }
+    if (series.observations.length === 0) {
+      missing.skipped = true;
+      missing.skipReason = forgeText(languageCode, "limitation_insufficient");
+    }
+    push(missing);
+  }
+  const kp = map.get("kp");
+  const driverOrder = ["bz_gsm", "solar_wind_speed", "bt", "proton_density", "cme_speed"];
+  const driverVariable = driverOrder.find((id) => map.has(id));
+  const driver = driverVariable ? map.get(driverVariable) : void 0;
+  if (kp && driver && driverVariable) {
+    const paired = alignSeries(driver.observations, kp.observations, PAIR_TOLERANCE_MS);
+    const driverNumbers = paired.driver.map((value) => value === null ? Number.NaN : value);
+    const responseNumbers = paired.response.map((value) => value === null ? Number.NaN : value);
+    const correlation = baseAnalysis(
+      languageCode,
+      "correlation",
+      [driverVariable, "kp"],
+      [driver.id, kp.id]
+    );
+    const test = correlationTest(driverNumbers, responseNumbers);
+    correlation.parameters = {
+      driver: driverVariable,
+      response: "kp",
+      toleranceMinutes: PAIR_TOLERANCE_MS / 6e4,
+      driverCadence: paired.driverCadence,
+      responseCadence: paired.responseCadence
+    };
+    correlation.results = { r: test.r, p: test.p, n: test.n, t: test.t };
+    correlation.sampleSize = test.n;
+    correlation.assumptions = [
+      forgeText(languageCode, "assumption_linear"),
+      forgeText(languageCode, "assumption_independence"),
+      forgeText(languageCode, "assumption_normal"),
+      forgeText(languageCode, "assumption_alignment")
+    ];
+    correlation.limitations = [
+      forgeText(languageCode, "limitation_autocorr"),
+      forgeText(languageCode, "limitation_causality"),
+      ...test.n < 30 ? [forgeText(languageCode, "limitation_smallN")] : []
+    ];
+    correlation.series = paired.times.map((time, index) => ({
+      x: Date.parse(time),
+      y: driverNumbers[index] ?? null
+    }));
+    correlation.pairs = paired.times.reduce((acc, _time, index) => {
+      const driverValue = driverNumbers[index];
+      const responseValue = responseNumbers[index];
+      if (Number.isFinite(driverValue) && Number.isFinite(responseValue)) {
+        acc.push({ x: driverValue, y: responseValue });
+      }
+      return acc;
+    }, []);
+    if (test.n < 3) {
+      correlation.skipped = true;
+      correlation.skipReason = forgeText(languageCode, "limitation_insufficient");
+    }
+    push(correlation);
+    const stepMs = paired.medianStepMs;
+    if (stepMs && stepMs > 0 && test.n >= 3) {
+      const maxSteps = Math.max(1, Math.min(12, Math.round(MAX_LAG_HOURS * 36e5 / stepMs)));
+      const cc = crossCorrelation(driverNumbers, responseNumbers, maxSteps);
+      const cross = baseAnalysis(
+        languageCode,
+        "cross-correlation",
+        [driverVariable, "kp"],
+        [driver.id, kp.id]
+      );
+      cross.parameters = {
+        driver: driverVariable,
+        response: "kp",
+        maxLagHours: MAX_LAG_HOURS,
+        lagStepHours: stepMs / 36e5,
+        driverCadence: paired.driverCadence,
+        responseCadence: paired.responseCadence
+      };
+      let bestP = null;
+      if (cc.bestLagSteps !== null) {
+        const lag = cc.bestLagSteps;
+        const xs = [];
+        const ys = [];
+        for (let i = 0; i < driverNumbers.length; i += 1) {
+          const j = i + lag;
+          if (j < 0 || j >= responseNumbers.length) continue;
+          if (Number.isFinite(driverNumbers[i]) && Number.isFinite(responseNumbers[j])) {
+            xs.push(driverNumbers[i]);
+            ys.push(responseNumbers[j]);
+          }
+        }
+        bestP = correlationTest(xs, ys).p;
+      }
+      cross.results = {
+        r: cc.bestR,
+        p: bestP,
+        bestLagHours: cc.bestLagSteps === null ? null : cc.bestLagSteps * stepMs / 36e5,
+        n: cc.bestN,
+        testedLags: cc.curve.length
+      };
+      cross.sampleSize = cc.bestN;
+      cross.assumptions = [
+        forgeText(languageCode, "assumption_linear"),
+        forgeText(languageCode, "assumption_independence"),
+        forgeText(languageCode, "assumption_alignment")
+      ];
+      cross.limitations = [
+        forgeText(languageCode, "limitation_autocorr"),
+        forgeText(languageCode, "limitation_causality"),
+        `Lag resolution equals the paired sampling interval (${(stepMs / 36e5).toFixed(2)} h).`
+      ];
+      cross.series = cc.curve.map((entry) => ({ x: entry.lagSteps, y: entry.r }));
+      if (cc.bestLagSteps === null) {
+        cross.skipped = true;
+        cross.skipReason = forgeText(languageCode, "limitation_insufficient");
+      }
+      push(cross);
+      const threshold = DRIVER_THRESHOLDS[driverVariable];
+      if (threshold) {
+        const thresholdAnalysis = baseAnalysis(
+          languageCode,
+          "threshold-exceedance",
+          [driverVariable, "kp"],
+          [driver.id, kp.id]
+        );
+        let a = 0;
+        let b = 0;
+        let c = 0;
+        let d = 0;
+        for (let i = 0; i < paired.driver.length; i += 1) {
+          const driverValue = paired.driver[i];
+          const responseValue = paired.response[i];
+          if (driverValue === null || responseValue === null) continue;
+          const driverExtreme = driverVariable === "bz_gsm" ? driverValue <= threshold.value : driverValue >= threshold.value;
+          const responseExtreme = responseValue >= STORM_KP_THRESHOLD;
+          if (driverExtreme && responseExtreme) a += 1;
+          else if (driverExtreme && !responseExtreme) b += 1;
+          else if (!driverExtreme && responseExtreme) c += 1;
+          else d += 1;
+        }
+        const table = twoByTwoTable(a, b, c, d);
+        const relativeRisk = a + b > 0 && c + d > 0 ? a / (a + b) / (c / (c + d) === 0 ? Number.NaN : c / (c + d)) : null;
+        thresholdAnalysis.parameters = {
+          driver: driverVariable,
+          driverThreshold: threshold.value,
+          driverThresholdUnit: threshold.unit,
+          response: "kp",
+          responseThreshold: STORM_KP_THRESHOLD
+        };
+        thresholdAnalysis.results = {
+          cellA: a,
+          cellB: b,
+          cellC: c,
+          cellD: d,
+          phi: table.phi,
+          chiSquare: table.chiSquare,
+          p: table.p,
+          oddsRatio: table.oddsRatio,
+          relativeRisk: Number.isFinite(relativeRisk) ? relativeRisk : null,
+          n: table.n
+        };
+        thresholdAnalysis.sampleSize = table.n;
+        thresholdAnalysis.assumptions = [
+          forgeText(languageCode, "assumption_independence"),
+          "The Kp storm threshold is the NOAA G1 level (Kp = 5)."
+        ];
+        thresholdAnalysis.limitations = [
+          forgeText(languageCode, "limitation_autocorr"),
+          forgeText(languageCode, "limitation_causality"),
+          forgeText(languageCode, "lim_global_index")
+        ];
+        if (table.n < 20) {
+          thresholdAnalysis.skipped = true;
+          thresholdAnalysis.skipReason = forgeText(languageCode, "limitation_insufficient");
+        }
+        push(thresholdAnalysis);
+      }
+    }
+    if (request.timeRange.origin === "named-event") {
+      const inside = [];
+      const outside = [];
+      const start = Date.parse(request.timeRange.start);
+      const end = Date.parse(request.timeRange.end);
+      for (const observation of kp.observations) {
+        if (observation.value === null) continue;
+        const time = Date.parse(observation.time);
+        if (time >= start && time <= end) inside.push(observation.value);
+        else outside.push(observation.value);
+      }
+      const comparison = compareGroups(outside, inside);
+      const beforeAfter = baseAnalysis(languageCode, "before-after", ["kp"], [kp.id, driver.id]);
+      beforeAfter.parameters = {
+        eventWindow: request.timeRange.label,
+        baseline: "all retrieved Kp samples outside the event window",
+        toleranceMinutes: PAIR_TOLERANCE_MS / 6e4
+      };
+      beforeAfter.results = {
+        beforeMean: comparison.beforeMean,
+        afterMean: comparison.afterMean,
+        changePercent: comparison.changePercent,
+        welchT: comparison.welchT,
+        p: comparison.p,
+        n: comparison.beforeN + comparison.afterN,
+        baselineN: comparison.beforeN,
+        eventN: comparison.afterN
+      };
+      beforeAfter.sampleSize = comparison.beforeN + comparison.afterN;
+      beforeAfter.assumptions = [
+        forgeText(languageCode, "assumption_independence"),
+        forgeText(languageCode, "assumption_normal")
+      ];
+      beforeAfter.limitations = [
+        forgeText(languageCode, "limitation_autocorr"),
+        forgeText(languageCode, "limitation_causality"),
+        "The baseline is the remainder of the retrieved window, which may itself be disturbed."
+      ];
+      if (inside.length === 0 || outside.length < 3) {
+        beforeAfter.skipped = true;
+        beforeAfter.skipReason = forgeText(languageCode, "limitation_insufficient");
+      }
+      push(beforeAfter);
+    }
+  }
+  const temperature = map.get("temperature");
+  const precipitation = map.get("precipitation");
+  for (const [series, variable] of [
+    [temperature, "temperature"],
+    [precipitation, "precipitation"]
+  ]) {
+    if (!series) continue;
+    const points = series.observations.map((observation, index) => ({ index, value: observation.value, time: observation.time })).filter(
+      (point) => typeof point.value === "number" && Number.isFinite(point.value)
+    );
+    if (points.length === 0) continue;
+    const regression = linearRegression(
+      points.map((point) => point.index),
+      points.map((point) => point.value)
+    );
+    const test = correlationTest(
+      points.map((point) => point.index),
+      points.map((point) => point.value)
+    );
+    const trend = baseAnalysis(languageCode, "trend", [variable], [series.id]);
+    trend.parameters = {
+      unit: series.unit,
+      cadence: series.cadence,
+      xAxis: "month index within the retrieved window"
+    };
+    trend.results = {
+      slope: regression.slope,
+      slopePerYear: regression.slope === null ? null : regression.slope * 12,
+      intercept: regression.intercept,
+      r2: regression.r2,
+      r: test.r,
+      p: test.p,
+      n: points.length,
+      slopeStandardError: regression.slopeStandardError
+    };
+    trend.sampleSize = points.length;
+    trend.assumptions = [
+      forgeText(languageCode, "assumption_linear"),
+      forgeText(languageCode, "assumption_independence"),
+      forgeText(languageCode, "assumption_normal")
+    ];
+    trend.limitations = [
+      forgeText(languageCode, "limitation_autocorr"),
+      forgeText(languageCode, "limitation_causality"),
+      forgeText(languageCode, "lim_monthly")
+    ];
+    trend.series = points.map((point) => ({ x: point.index, y: point.value }));
+    if (points.length < 3) {
+      trend.skipped = true;
+      trend.skipReason = forgeText(languageCode, "limitation_insufficient");
+    }
+    push(trend);
+  }
+  if (temperature && precipitation) {
+    const byTime = /* @__PURE__ */ new Map();
+    for (const observation of temperature.observations) {
+      byTime.set(observation.time, { temperature: observation.value, precipitation: null });
+    }
+    for (const observation of precipitation.observations) {
+      const entry = byTime.get(observation.time) ?? { temperature: null, precipitation: null };
+      entry.precipitation = observation.value;
+      byTime.set(observation.time, entry);
+    }
+    const paired = [...byTime.entries()].filter(([, entry]) => entry.temperature !== null && entry.precipitation !== null).sort((a, b) => a[0].localeCompare(b[0]));
+    const test = correlationTest(
+      paired.map(([, entry]) => entry.precipitation),
+      paired.map(([, entry]) => entry.temperature)
+    );
+    const correlation = baseAnalysis(
+      languageCode,
+      "correlation",
+      ["precipitation", "temperature"],
+      [precipitation.id, temperature.id]
+    );
+    correlation.parameters = {
+      driver: "precipitation",
+      response: "temperature",
+      pairing: "exact monthly timestamp"
+    };
+    correlation.results = { r: test.r, p: test.p, n: test.n };
+    correlation.sampleSize = test.n;
+    correlation.assumptions = [
+      forgeText(languageCode, "assumption_linear"),
+      forgeText(languageCode, "assumption_independence"),
+      forgeText(languageCode, "assumption_normal")
+    ];
+    correlation.limitations = [
+      forgeText(languageCode, "limitation_autocorr"),
+      forgeText(languageCode, "limitation_causality"),
+      forgeText(languageCode, "lim_monthly")
+    ];
+    correlation.series = paired.map(([time, entry]) => ({
+      x: Date.parse(time),
+      y: entry.precipitation
+    }));
+    if (test.n < 3) {
+      correlation.skipped = true;
+      correlation.skipReason = forgeText(languageCode, "limitation_insufficient");
+    }
+    push(correlation);
+  }
+  const diameter = map.get("asteroid_diameter");
+  const missDistance = map.get("asteroid_miss_distance");
+  if (diameter && missDistance) {
+    const byTime = /* @__PURE__ */ new Map();
+    for (const observation of diameter.observations) {
+      byTime.set(observation.time, { diameter: observation.value, distance: null });
+    }
+    for (const observation of missDistance.observations) {
+      const entry = byTime.get(observation.time) ?? { diameter: null, distance: null };
+      entry.distance = observation.value;
+      byTime.set(observation.time, entry);
+    }
+    const paired = [...byTime.entries()].filter(([, entry]) => entry.diameter !== null && entry.distance !== null).sort((a, b) => a[0].localeCompare(b[0]));
+    const test = correlationTest(
+      paired.map(([, entry]) => entry.diameter),
+      paired.map(([, entry]) => entry.distance)
+    );
+    const correlation = baseAnalysis(
+      languageCode,
+      "correlation",
+      ["asteroid_diameter", "asteroid_miss_distance"],
+      [diameter.id, missDistance.id]
+    );
+    correlation.parameters = {
+      driver: "asteroid_diameter",
+      response: "asteroid_miss_distance",
+      pairing: "same close-approach record"
+    };
+    correlation.results = { r: test.r, p: test.p, n: test.n };
+    correlation.sampleSize = test.n;
+    correlation.assumptions = [
+      forgeText(languageCode, "assumption_linear"),
+      forgeText(languageCode, "assumption_independence")
+    ];
+    correlation.limitations = [
+      forgeText(languageCode, "lim_estimate"),
+      forgeText(languageCode, "alt_selection"),
+      forgeText(languageCode, "limitation_causality")
+    ];
+    correlation.series = paired.map(([time, entry]) => ({ x: Date.parse(time), y: entry.diameter }));
+    if (test.n < 3) {
+      correlation.skipped = true;
+      correlation.skipReason = forgeText(languageCode, "limitation_insufficient");
+    }
+    push(correlation);
+  }
+  for (const series of map.values()) {
+    const numbers = values(series.observations);
+    if (numbers.length < 8) continue;
+    const anomaly = baseAnalysis(languageCode, "anomaly", [series.variableId], [series.id]);
+    const result2 = detectAnomalies(numbers, 3);
+    anomaly.parameters = { zThreshold: 3, unit: series.unit };
+    anomaly.results = {
+      anomalies: result2.count,
+      mean: result2.mean,
+      sd: result2.sd,
+      observations: numbers.length
+    };
+    anomaly.sampleSize = numbers.length;
+    anomaly.assumptions = [forgeText(languageCode, "assumption_normal")];
+    anomaly.limitations = [
+      forgeText(languageCode, "limitation_autocorr"),
+      "A z-score flag is not automatically a physical anomaly."
+    ];
+    anomaly.series = series.observations.map((observation, index) => ({
+      x: index,
+      y: observation.value
+    }));
+    push(anomaly);
+  }
+  return analyses;
+}
+function conclude(request, hypotheses, selected, evidence, analyses, language) {
+  const relevant = selected ? hypothesisEvidence(evidence, selected.id) : evidence.filter((item) => item.hypothesisIds.length > 0);
+  const counts = evidenceCounts(relevant);
+  const supporting = relevant.filter((item) => item.classification === "supporting");
+  const contradicting = relevant.filter((item) => item.classification === "contradicting");
+  let verdict = "insufficient-evidence";
+  if (supporting.length > 0 && contradicting.length > 0) verdict = "mixed";
+  else if (contradicting.length > supporting.length) verdict = "not-supported";
+  else if (supporting.length > 0) verdict = "weakly-supported";
+  else verdict = "insufficient-evidence";
+  const titleKey = verdict === "mixed" ? "verdict_mixed_title" : verdict === "not-supported" ? "verdict_not_supported_title" : verdict === "weakly-supported" ? "verdict_weak_title" : "verdict_insufficient_title";
+  const summaryKey = verdict === "mixed" ? "verdict_mixed_summary" : verdict === "not-supported" ? "verdict_not_supported_summary" : verdict === "weakly-supported" ? "verdict_weak_summary" : "verdict_insufficient_summary";
+  const params = {
+    supporting: counts.supporting,
+    contradicting: counts.contradicting,
+    neutral: counts.neutral,
+    insufficient: counts.insufficient
+  };
+  const limitations2 = /* @__PURE__ */ new Set();
+  if (selected) {
+    for (const limitation of selected.limitations) limitations2.add(limitation);
+  }
+  for (const analysis of analyses) {
+    if (analysis.skipped) continue;
+    for (const limitation of analysis.limitations.slice(0, 3)) limitations2.add(limitation);
+  }
+  if (limitations2.size === 0) {
+    limitations2.add(forgeText(language, "limitation_insufficient"));
+  }
+  return {
+    verdict,
+    title: forgeText(language, titleKey),
+    summary: forgeText(language, summaryKey, params),
+    causalCaveat: forgeText(language, "causal_caveat"),
+    supportingCount: counts.supporting,
+    contradictingCount: counts.contradicting,
+    neutralCount: counts.neutral,
+    insufficientCount: counts.insufficient,
+    limitations: [...limitations2].slice(0, 10),
+    alternatives: selected ? selected.alternativeExplanations : []
+  };
+}
+function mercator(latitude, longitude) {
+  const RADIUS = 6378137;
+  const clamped = Math.max(-85.05112878, Math.min(85.05112878, latitude));
+  const x = RADIUS * (longitude * Math.PI) / 180;
+  const y = RADIUS * Math.log(Math.tan(Math.PI / 4 + clamped * Math.PI / 360));
+  return [x, y];
+}
+function buildImagery(request) {
+  if (request.domain !== "earth-environment") return [];
+  const hasPrecipitation = request.variables.some((variable) => variable.id === "precipitation");
+  const layerId = hasPrecipitation ? "IMERG_Precipitation_Rate" : "MODIS_Terra_Land_Surface_Temp_Day";
+  const layer2 = getGibsLayer(layerId);
+  if (!layer2) return [];
+  const { latitude, longitude } = request.region;
+  const date = request.timeRange.end.slice(0, 10);
+  if (latitude === null || longitude === null) return [];
+  const bounds = request.region.bounds ?? boundingBoxAround(latitude, longitude, 2);
+  const [south, west, north, east] = bounds;
+  const [minX, minY] = mercator(south, west);
+  const [maxX, maxY] = mercator(north, east);
+  return [
+    {
+      layerId: layer2.id,
+      title: layer2.title,
+      date,
+      wmsUrl: wmsGetMapUrl({
+        layer: layer2,
+        time: date,
+        bbox3857: [minX, minY, maxX, maxY],
+        width: 1024,
+        height: 640
+      }),
+      attribution: GIBS_ATTRIBUTION
+    }
+  ];
+}
+function assembleInvestigation(input) {
+  const { request, hypotheses, plan, datasets } = input;
+  const language = request.language;
+  const createdAt = input.createdAt ?? (/* @__PURE__ */ new Date()).toISOString();
+  const analyses = runAnalyses(request, datasets, language);
+  const evidence = buildEvidence({ analyses, hypotheses, series: datasets.flatMap((d) => d.series), datasets, language });
+  const counterEvidence = buildCounterEvidence({ request, plan, datasets, analyses, evidence, hypotheses, language });
+  const selected = hypotheses.find((hypothesis) => hypothesis.id === input.selectedHypothesisId) ?? hypotheses.find((hypothesis) => !hypothesis.isNull) ?? hypotheses[0] ?? null;
+  const conclusion = conclude(request, hypotheses, selected, evidence, analyses, language);
+  const sources = datasets.map((result2) => ({
+    datasetId: result2.datasetId,
+    title: result2.series[0]?.provenance.datasetTitle ?? result2.datasetId,
+    organisation: result2.series[0]?.provenance.organisation ?? "Other",
+    status: result2.status,
+    detail: result2.detail ?? null,
+    errorCode: result2.errorCode ?? null,
+    documentationUrl: result2.documentationUrl,
+    recordCount: result2.series.reduce((total, series) => total + series.observations.length, 0),
+    retrievedAt: result2.series[0]?.provenance.retrievedAt ?? null
+  }));
+  const limitations2 = new Set(plan.limitations);
+  for (const analysis of analyses) {
+    if (analysis.skipped) continue;
+    for (const limitation of analysis.limitations) limitations2.add(limitation);
+  }
+  for (const source of sources) {
+    if (source.status === "unavailable" || source.status === "out-of-coverage") {
+      limitations2.add(`${source.title}: ${source.detail ?? source.status}`);
+    }
+  }
+  if (limitations2.size === 0) limitations2.add(forgeText(language, "limitation_causality"));
+  return {
+    version: FORGE_MODEL_VERSION,
+    id: input.investigationId ?? `INV-${hashString(`${request.id}|${createdAt}|${datasets.length}`)}`,
+    question: request.question,
+    language,
+    createdAt,
+    request,
+    hypotheses,
+    selectedHypothesisId: selected ? selected.id : null,
+    plan,
+    datasets,
+    analyses,
+    evidence,
+    counterEvidence,
+    conclusion,
+    sources,
+    imagery: buildImagery(request),
+    limitations: [...limitations2].slice(0, 16)
+  };
+}
+
+// src/lib/forge/normalize.ts
+var NormalisationError = class extends Error {
+  constructor(message) {
+    super(message);
+    this.name = "NormalisationError";
+  }
+};
+var MISSING_SENTINELS = /* @__PURE__ */ new Set([-999, -9999, -99999, -1e31]);
+function parseValue(cell) {
+  if (cell === null || cell === void 0) return { value: null, missing: true, raw: null };
+  if (typeof cell === "number") {
+    if (!Number.isFinite(cell) || MISSING_SENTINELS.has(cell)) {
+      return { value: null, missing: true, raw: String(cell) };
+    }
+    return { value: cell, missing: false, raw: String(cell) };
+  }
+  if (typeof cell === "string") {
+    const trimmed = cell.trim();
+    if (!trimmed || /^(null|nan|n\/a|na|undefined)$/i.test(trimmed)) {
+      return { value: null, missing: true, raw: trimmed || null };
+    }
+    const numeric = Number(trimmed);
+    if (!Number.isFinite(numeric) || MISSING_SENTINELS.has(numeric)) {
+      return { value: null, missing: true, raw: trimmed };
+    }
+    return { value: numeric, missing: false, raw: trimmed };
+  }
+  return { value: null, missing: true, raw: null };
+}
+function parseUtcTimestamp(value) {
+  if (typeof value !== "string" || !value.trim()) return null;
+  const trimmed = value.trim();
+  const normalised = /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}(:\d{2}(\.\d+)?)?$/.test(trimmed) ? `${trimmed.replace(" ", "T")}Z` : trimmed;
+  const ms = Date.parse(normalised);
+  if (!Number.isFinite(ms)) return null;
+  return new Date(ms).toISOString();
+}
+function tableRows(payload) {
+  if (!Array.isArray(payload) || payload.length === 0) {
+    throw new NormalisationError("Expected a non-empty array table.");
+  }
+  const first = payload[0];
+  if (Array.isArray(first)) {
+    const header = first.map((cell) => String(cell));
+    if (header.length === 0) throw new NormalisationError("Table header is empty.");
+    return payload.slice(1).map((row) => {
+      const record = {};
+      if (!Array.isArray(row)) throw new NormalisationError("Table row is not an array.");
+      header.forEach((name, index) => {
+        record[name] = row[index];
+      });
+      return record;
+    });
+  }
+  if (typeof first === "object" && first !== null) {
+    return payload;
+  }
+  throw new NormalisationError("Unsupported table shape.");
+}
+function provenanceFor(datasetId, input, observations, processing) {
+  const dataset = datasetById(datasetId);
+  if (!dataset) throw new NormalisationError(`Unknown dataset id ${datasetId}`);
+  const times = observations.map((observation) => observation.time).filter(Boolean).sort();
+  return {
+    organisation: dataset.organisation,
+    datasetId,
+    datasetTitle: dataset.title,
+    sourceUrl: input.sourceUrl,
+    documentationUrl: dataset.documentationUrl,
+    retrievedAt: input.retrievedAt,
+    observationStart: times.length ? times[0] : null,
+    observationEnd: times.length ? times[times.length - 1] : null,
+    recordCount: observations.length,
+    payloadHash: hashString(input.payloadText || JSON.stringify(input.payload ?? null)),
+    processingHistory: ["fetched by server connector", ...processing, "timestamps normalised to UTC"],
+    attribution: dataset.attribution
+  };
+}
+function buildSeries(options) {
+  const dataset = datasetById(options.datasetId);
+  if (!dataset) throw new NormalisationError(`Unknown dataset id ${options.datasetId}`);
+  const times = options.observations.map((observation) => observation.time);
+  const values2 = options.observations.map((observation) => observation.value);
+  const missing = missingReport(times, values2);
+  return {
+    id: `${options.datasetId}:${options.variableId}`,
+    datasetId: options.datasetId,
+    variableId: options.variableId,
+    label: options.label,
+    unit: options.unit,
+    cadence: options.cadence,
+    observations: options.observations,
+    missing: {
+      count: missing.missing,
+      fraction: missing.fraction,
+      expected: missing.expected,
+      method: missing.method
+    },
+    provenance: provenanceFor(options.datasetId, options.input, options.observations, options.processing),
+    status: options.status ?? "live",
+    rawRecords: options.rawRecords
+  };
+}
+function normaliseKp(input) {
+  const rows = tableRows(input.payload);
+  const observations = [];
+  for (const row of rows) {
+    const time = parseUtcTimestamp(row.time_tag ?? row.time ?? row[Object.keys(row)[0]]);
+    if (!time) continue;
+    const parsed = parseValue(row.Kp ?? row.kp ?? row.kp_index);
+    observations.push({ time, value: parsed.value, unit: "Kp", missing: parsed.missing, raw: parsed.raw });
+  }
+  observations.sort((a, b) => a.time.localeCompare(b.time));
+  if (observations.length === 0) {
+    throw new NormalisationError("No rows with a usable timestamp and Kp value.");
+  }
+  return [
+    buildSeries({
+      datasetId: "noaa-swpc-kp",
+      variableId: "kp",
+      label: "Planetary K index (Kp)",
+      unit: "Kp",
+      cadence: "3 h",
+      observations,
+      input,
+      processing: [`parsed ${rows.length} SWPC table rows`],
+      rawRecords: input.payload
+    })
+  ];
+}
+var MAG_COLUMNS = [
+  { variable: "bz_gsm", column: "bz_gsm", unit: "nT", label: "IMF Bz (GSM)" },
+  { variable: "bt", column: "bt", unit: "nT", label: "IMF magnitude (Bt)" }
+];
+var PLASMA_COLUMNS = [
+  { variable: "solar_wind_speed", column: "speed", unit: "km/s", label: "Solar wind speed" },
+  { variable: "proton_density", column: "density", unit: "p/cm\xB3", label: "Proton density" }
+];
+function normaliseSolarWindColumns(input, columns, kind) {
+  const rows = tableRows(input.payload);
+  return columns.map((column) => {
+    const observations = [];
+    for (const row of rows) {
+      const time = parseUtcTimestamp(row.time_tag ?? row.time);
+      if (!time) continue;
+      const parsed = parseValue(row[column.column]);
+      observations.push({
+        time,
+        value: parsed.value,
+        unit: column.unit,
+        missing: parsed.missing,
+        raw: parsed.raw
+      });
+    }
+    observations.sort((a, b) => a.time.localeCompare(b.time));
+    if (observations.length === 0) {
+      throw new NormalisationError(`No usable ${kind} rows for ${column.column}.`);
+    }
+    return buildSeries({
+      datasetId: "noaa-swpc-solar-wind",
+      variableId: column.variable,
+      label: column.label,
+      unit: column.unit,
+      cadence: "~1 min",
+      observations,
+      input,
+      processing: [`parsed ${rows.length} SWPC ${kind} table rows`],
+      rawRecords: input.payload
+    });
+  });
+}
+function normaliseSolarWind(input) {
+  const rows = tableRows(input.payload);
+  const hasMag = rows.some((row) => "bz_gsm" in row || "bt" in row);
+  const hasPlasma = rows.some((row) => "speed" in row || "density" in row);
+  if (!hasMag && !hasPlasma) {
+    throw new NormalisationError("Solar-wind table has neither magnetometer nor plasma columns.");
+  }
+  return hasMag ? normaliseSolarWindColumns(input, MAG_COLUMNS, "magnetometer") : normaliseSolarWindColumns(input, PLASMA_COLUMNS, "plasma");
+}
+function normaliseDonki(notificationsInput, cmeInput, language) {
+  const notifications = Array.isArray(notificationsInput.payload) ? notificationsInput.payload : [];
+  const events = [];
+  for (const raw of notifications) {
+    if (!raw || typeof raw !== "object") continue;
+    const record = raw;
+    const time = parseUtcTimestamp(record.messageIssueTime ?? record.messageIssueTimeUtc);
+    if (!time) continue;
+    events.push({
+      id: String(record.messageID ?? "donki-notification"),
+      type: String(record.messageType ?? "notification"),
+      startTime: time,
+      note: String(record.messageBody ?? "").slice(0, 400)
+    });
+  }
+  const cmeRecords = cmeInput && Array.isArray(cmeInput.payload) ? cmeInput.payload : [];
+  const observations = [];
+  for (const raw of cmeRecords) {
+    if (!raw || typeof raw !== "object") continue;
+    const record = raw;
+    const time = parseUtcTimestamp(record.startTime);
+    if (!time) continue;
+    const analyses = Array.isArray(record.cmeAnalyses) ? record.cmeAnalyses : [];
+    const speedCandidate = analyses.map((analysis) => Number(analysis?.speed)).find((value) => Number.isFinite(value) && value > 0);
+    observations.push({
+      time,
+      value: Number.isFinite(speedCandidate) ? speedCandidate : null,
+      unit: "km/s",
+      missing: !Number.isFinite(speedCandidate),
+      raw: Number.isFinite(speedCandidate) ? String(speedCandidate) : null
+    });
+    events.push({
+      id: String(record.cmeID ?? "cme"),
+      type: "CME",
+      startTime: time,
+      note: String(record.sourceLocation ?? "")
+    });
+  }
+  observations.sort((a, b) => a.time.localeCompare(b.time));
+  const series = [];
+  if (observations.length > 0) {
+    series.push(
+      buildSeries({
+        datasetId: "nasa-donki",
+        variableId: "cme_speed",
+        label: "CME linear speed (model fit)",
+        unit: "km/s",
+        cadence: "event-based",
+        observations,
+        input: cmeInput,
+        processing: [
+          `parsed ${notifications.length} notifications and ${cmeRecords.length} CME records`,
+          "CME speeds are model fits, not in-situ measurements"
+        ],
+        rawRecords: cmeInput ? cmeInput.payload : null
+      })
+    );
+  } else {
+    series.push(
+      buildSeries({
+        datasetId: "nasa-donki",
+        variableId: "event_count",
+        label: "DONKI events (no numeric speed published)",
+        unit: "events",
+        cadence: "event-based",
+        observations: events.map((event) => ({
+          time: event.startTime,
+          value: 1,
+          unit: "events",
+          missing: false,
+          raw: event.type
+        })),
+        input: notificationsInput,
+        processing: [`parsed ${events.length} DONKI notifications`, language === "en" ? "no numeric speed available" : "no numeric speed available"],
+        rawRecords: notificationsInput.payload,
+        status: "partial"
+      })
+    );
+  }
+  return { series, events };
+}
+function normaliseNeoWs(input) {
+  const payload = input.payload;
+  const byDate = payload && typeof payload === "object" ? payload.near_earth_objects : null;
+  if (!byDate || typeof byDate !== "object") {
+    throw new NormalisationError("NeoWs payload has no near_earth_objects block.");
+  }
+  const miss = [];
+  const diameter = [];
+  for (const objects of Object.values(byDate)) {
+    if (!Array.isArray(objects)) continue;
+    for (const raw of objects) {
+      if (!raw || typeof raw !== "object") continue;
+      const object = raw;
+      const approach = Array.isArray(object.close_approach_data) ? object.close_approach_data[0] : null;
+      const time = parseUtcTimestamp(approach?.close_approach_date_full ?? approach?.close_approach_date);
+      if (!time) continue;
+      const distanceAu = parseValue(approach?.miss_distance?.astronomical);
+      const diameterKm = parseValue(
+        object.estimated_diameter?.kilometers?.estimated_diameter_max ?? null
+      );
+      miss.push({
+        time,
+        value: distanceAu.value,
+        unit: "au",
+        missing: distanceAu.missing,
+        raw: distanceAu.raw
+      });
+      diameter.push({
+        time,
+        value: diameterKm.value,
+        unit: "km",
+        missing: diameterKm.missing,
+        raw: diameterKm.raw
+      });
+    }
+  }
+  if (miss.length === 0) throw new NormalisationError("NeoWs payload contained no dated close approaches.");
+  const sortByTime = (observations) => observations.slice().sort((a, b) => a.time.localeCompare(b.time));
+  return [
+    buildSeries({
+      datasetId: "nasa-neows",
+      variableId: "asteroid_miss_distance",
+      label: "Close-approach miss distance",
+      unit: "au",
+      cadence: "event-based",
+      observations: sortByTime(miss),
+      input,
+      processing: [`parsed ${miss.length} close approaches`],
+      rawRecords: input.payload
+    }),
+    buildSeries({
+      datasetId: "nasa-neows",
+      variableId: "asteroid_diameter",
+      label: "Estimated asteroid diameter",
+      unit: "km",
+      cadence: "event-based",
+      observations: sortByTime(diameter),
+      input,
+      processing: ["diameters are estimates derived from absolute magnitude and assumed albedo"],
+      rawRecords: input.payload
+    })
+  ];
+}
+function normalisePower(input, variable) {
+  const code = variable === "temperature" ? "T2M" : "PRECTOTCORR";
+  const parsed = parsePowerResponse(input.payload, ["T2M", "PRECTOTCORR"]);
+  if (parsed.rows.length === 0) {
+    throw new NormalisationError("POWER payload contained no monthly rows.");
+  }
+  const unit = variable === "temperature" ? "\xB0C" : "mm/day";
+  const observations = parsed.rows.map((row) => {
+    const value = row.values[code];
+    return {
+      time: new Date(Date.UTC(row.year, row.month - 1, 1, 0, 0, 0, 0)).toISOString(),
+      value: typeof value === "number" ? value : null,
+      unit,
+      missing: typeof value !== "number",
+      raw: typeof value === "number" ? String(value) : null,
+      quality: "monthly grid-cell mean"
+    };
+  });
+  return buildSeries({
+    datasetId: "nasa-power",
+    variableId: variable,
+    label: variable === "temperature" ? "Air temperature at 2 m" : "Precipitation rate",
+    unit,
+    cadence: "1 month",
+    observations,
+    input,
+    processing: [
+      `parsed ${parsed.rows.length} monthly POWER cells`,
+      `requested parameter ${code}`,
+      "POWER values are re-analysis grid estimates, not station measurements"
+    ],
+    rawRecords: input.payload
+  });
+}
+function normaliseTle(input) {
+  const payload = input.payload;
+  const line1 = typeof payload?.line1 === "string" ? payload.line1 : "";
+  const line2 = typeof payload?.line2 === "string" ? payload.line2 : "";
+  if (!line1 || !line2) throw new NormalisationError("TLE payload lacks line1/line2.");
+  const meanMotion = Number(line2.slice(52, 63));
+  if (!Number.isFinite(meanMotion) || meanMotion <= 0) {
+    throw new NormalisationError("TLE mean motion could not be parsed.");
+  }
+  const MU_EARTH = 398600.4418;
+  const periodSeconds = 86400 / meanMotion;
+  const semiMajor = Math.cbrt(MU_EARTH * (periodSeconds / (2 * Math.PI)) ** 2);
+  const altitude = semiMajor - 6371;
+  const epoch = line1.slice(18, 32).trim();
+  const epochYear = Number(epoch.slice(0, 2));
+  const dayOfYear = Number(epoch.slice(2));
+  const year = epochYear < 57 ? 2e3 + epochYear : 1900 + epochYear;
+  const epochDate = Number.isFinite(year) && Number.isFinite(dayOfYear) ? new Date(Date.UTC(year, 0, 1) + (dayOfYear - 1) * 864e5) : null;
+  if (!epochDate || !Number.isFinite(epochDate.getTime())) {
+    throw new NormalisationError("TLE epoch could not be parsed.");
+  }
+  const observation = {
+    time: epochDate.toISOString(),
+    value: Number(altitude.toFixed(1)),
+    unit: "km",
+    missing: false,
+    raw: String(altitude.toFixed(1)),
+    quality: "derived from TLE mean motion via Kepler\u2019s third law"
+  };
+  return [
+    buildSeries({
+      datasetId: "nova-iss-tle",
+      variableId: "orbital_altitude",
+      label: "Derived ISS altitude",
+      unit: "km",
+      cadence: "TLE epoch",
+      observations: [observation],
+      input,
+      processing: [
+        "parsed TLE mean motion",
+        "derived semi-major axis with Kepler\u2019s third law (\u03BC = 398600.4418 km\xB3/s\xB2)",
+        "derived value, not a direct measurement"
+      ],
+      rawRecords: input.payload
+    })
+  ];
+}
+function normaliseApod(input) {
+  const payload = input.payload;
+  const date = parseUtcTimestamp(payload?.date);
+  if (!date) throw new NormalisationError("APOD payload has no usable date.");
+  return [
+    buildSeries({
+      datasetId: "nasa-apod",
+      variableId: "record_count",
+      label: "APOD editorial record",
+      unit: "records",
+      cadence: "1 day",
+      observations: [{ time: date, value: 1, unit: "records", missing: false, raw: "present" }],
+      input,
+      processing: ["APOD is editorial content; no numeric measurement is extracted"],
+      rawRecords: input.payload,
+      status: "partial"
+    })
+  ];
+}
+function normaliseMarsPhotos(input, date) {
+  const payload = input.payload;
+  const photos = Array.isArray(payload?.photos) ? payload.photos : [];
+  const time = parseUtcTimestamp(`${date}T12:00:00Z`) ?? parseUtcTimestamp(date);
+  if (!time) throw new NormalisationError("Mars photo request had no valid date.");
+  return [
+    buildSeries({
+      datasetId: "nasa-mars-photos",
+      variableId: "image_count",
+      label: "Rover images available for the date",
+      unit: "images",
+      cadence: "1 sol",
+      observations: [
+        { time, value: photos.length, unit: "images", missing: false, raw: String(photos.length) }
+      ],
+      input,
+      processing: ["counted returned image records; no surface measurement is derived"],
+      rawRecords: photos.slice(0, 5),
+      status: photos.length === 0 ? "partial" : "live"
+    })
+  ];
+}
+
+// server/forge/connectors.ts
+var DEFAULT_TIMEOUT_MS = 12e3;
+var MAX_CACHE_ENTRIES2 = 200;
+var TTL_MS = {
+  "noaa-swpc-kp": 10 * 6e4,
+  "noaa-swpc-solar-wind": 2 * 6e4,
+  "nasa-donki": 30 * 6e4,
+  "nasa-power": 6 * 60 * 6e4,
+  "nasa-neows": 6 * 60 * 6e4,
+  "nova-iss-tle": 30 * 6e4,
+  "nasa-apod": 6 * 60 * 6e4,
+  "nasa-mars-photos": 6 * 60 * 6e4
+};
+var DEFAULT_CACHE = /* @__PURE__ */ new Map();
+function sanitiseUrl(url) {
+  try {
+    const parsed = new URL(url);
+    for (const name of ["api_key", "apikey", "key", "apiKey"]) parsed.searchParams.delete(name);
+    return parsed.toString();
+  } catch {
+    return url.replace(/([?&])(api_key|apikey|key|apiKey)=[^&]*/gi, "$1").replace(/[?&]$/, "");
+  }
+}
+function withNasaKey(url, key2) {
+  const parsed = new URL(url);
+  parsed.searchParams.set("api_key", key2);
+  return parsed.toString();
+}
+async function fetchText(url, options, cacheKey, ttlMs) {
+  const cache2 = options.cache ?? DEFAULT_CACHE;
+  const nowMs = (options.now ?? (() => /* @__PURE__ */ new Date()))().getTime();
+  const cached2 = cache2.get(cacheKey);
+  if (cached2 && cached2.expires > nowMs) {
+    return { ok: true, text: cached2.value, status: 200, retrievedAt: new Date(nowMs).toISOString() };
+  }
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), options.timeoutMs ?? DEFAULT_TIMEOUT_MS);
+  const retrieveStart = nowMs;
+  try {
+    const response = await (options.fetchImpl ?? fetch)(url, {
+      signal: controller.signal,
+      headers: {
+        Accept: "application/json",
+        // NASA asks clients to identify themselves; no secret is included.
+        "User-Agent": "NOVA-Hypothesis-Forge/1.0 (NASA Space Explorer scientific investigation)"
+      }
+    });
+    const text = await response.text();
+    const retrievedAt = (/* @__PURE__ */ new Date()).toISOString();
+    if (!response.ok) {
+      return {
+        ok: false,
+        text,
+        status: response.status,
+        errorCode: response.status === 429 ? "SOURCE_RATE_LIMITED" : "SOURCE_REJECTED",
+        detail: `HTTP ${response.status}`,
+        retrievedAt
+      };
+    }
+    if (cache2.size > MAX_CACHE_ENTRIES2) {
+      for (const [key2, entry] of cache2) {
+        if (entry.expires <= nowMs) cache2.delete(key2);
+      }
+    }
+    cache2.set(cacheKey, { expires: retrieveStart + ttlMs, value: text });
+    return { ok: true, text, status: response.status, retrievedAt };
+  } catch (error) {
+    const aborted = error instanceof Error && error.name === "AbortError";
+    return {
+      ok: false,
+      text: "",
+      status: 0,
+      errorCode: aborted ? "SOURCE_TIMEOUT" : "SOURCE_NETWORK",
+      detail: aborted ? "request timed out" : "network error",
+      retrievedAt: (/* @__PURE__ */ new Date()).toISOString()
+    };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+function parseJson(text) {
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new NormalisationError("Response was not valid JSON.");
+  }
+}
+function unavailable(datasetId, detail, errorCode) {
+  return {
+    datasetId,
+    status: "unavailable",
+    series: [],
+    detail,
+    errorCode,
+    documentationUrl: datasetById(datasetId)?.documentationUrl ?? ""
+  };
+}
+function adapterInput(outcome, url) {
+  return {
+    payload: parseJson(outcome.text),
+    payloadText: outcome.text,
+    retrievedAt: outcome.retrievedAt,
+    sourceUrl: sanitiseUrl(url)
+  };
+}
+function dayString(date) {
+  return date.toISOString().slice(0, 10);
+}
+function daysBetween(startIso, endIso) {
+  return Math.max(0, (Date.parse(endIso) - Date.parse(startIso)) / 864e5);
+}
+async function kpConnector(options) {
+  const dataset = datasetById("noaa-swpc-kp");
+  const outcome = await fetchText(dataset.endpoint, options, "kp-3h", TTL_MS["noaa-swpc-kp"]);
+  if (!outcome.ok) return unavailable("noaa-swpc-kp", outcome.detail ?? "source unavailable", outcome.errorCode ?? "SOURCE_UNAVAILABLE");
+  try {
+    const series = normaliseKp(adapterInput(outcome, dataset.endpoint));
+    return { datasetId: dataset.id, status: "live", series, documentationUrl: dataset.documentationUrl };
+  } catch (error) {
+    return unavailable(
+      "noaa-swpc-kp",
+      error instanceof Error ? error.message : "payload could not be parsed",
+      "SOURCE_INVALID_PAYLOAD"
+    );
+  }
+}
+async function solarWindConnector(options) {
+  const dataset = datasetById("noaa-swpc-solar-wind");
+  const magUrl = "https://services.swpc.noaa.gov/products/solar-wind/mag-1-day.json";
+  const plasmaUrl = "https://services.swpc.noaa.gov/products/solar-wind/plasma-1-day.json";
+  const [mag, plasma] = await Promise.all([
+    fetchText(magUrl, options, "sw-mag-1d", TTL_MS["noaa-swpc-solar-wind"]),
+    fetchText(plasmaUrl, options, "sw-plasma-1d", TTL_MS["noaa-swpc-solar-wind"])
+  ]);
+  if (!mag.ok && !plasma.ok) {
+    return unavailable(
+      "noaa-swpc-solar-wind",
+      mag.detail ?? plasma.detail ?? "source unavailable",
+      mag.errorCode ?? plasma.errorCode ?? "SOURCE_UNAVAILABLE"
+    );
+  }
+  const series = [];
+  if (mag.ok) {
+    try {
+      series.push(
+        ...normaliseSolarWind(adapterInput(mag, magUrl)).filter(
+          (entry) => ["bz_gsm", "bt"].includes(entry.variableId)
+        )
+      );
+    } catch {
+    }
+  }
+  if (plasma.ok) {
+    try {
+      series.push(
+        ...normaliseSolarWind(adapterInput(plasma, plasmaUrl)).filter(
+          (entry) => ["solar_wind_speed", "proton_density"].includes(entry.variableId)
+        )
+      );
+    } catch {
+    }
+  }
+  if (series.length === 0) {
+    return unavailable("noaa-swpc-solar-wind", "no solar-wind columns could be parsed", "SOURCE_INVALID_PAYLOAD");
+  }
+  return {
+    datasetId: dataset.id,
+    status: mag.ok && plasma.ok ? "live" : "partial",
+    series,
+    detail: mag.ok && plasma.ok ? void 0 : "one of the two SWPC solar-wind tables was unavailable",
+    errorCode: mag.ok && plasma.ok ? void 0 : "SOURCE_PARTIAL",
+    documentationUrl: dataset.documentationUrl
+  };
+}
+async function donkiConnector(request, options) {
+  const dataset = datasetById("nasa-donki");
+  const key2 = options.nasaKey;
+  if (!key2) {
+    return unavailable(
+      "nasa-donki",
+      "No NASA API key is configured on the server; the DONKI request was not sent.",
+      "KEY_NOT_CONFIGURED"
+    );
+  }
+  const now = (options.now ?? (() => /* @__PURE__ */ new Date()))();
+  const earliest = Date.parse("2008-01-01T00:00:00Z");
+  const start = Math.max(Date.parse(request.timeRange.start), earliest);
+  const end = Math.min(Date.parse(request.timeRange.end), now.getTime());
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end < earliest || start > end) {
+    return {
+      datasetId: dataset.id,
+      status: "out-of-coverage",
+      series: [],
+      detail: "DONKI events begin around 2008; the requested period is outside that archive.",
+      errorCode: "OUT_OF_COVERAGE",
+      documentationUrl: dataset.documentationUrl
+    };
+  }
+  const startDate = dayString(new Date(start));
+  const endDate = dayString(new Date(end));
+  const notificationsUrl = `https://api.nasa.gov/DONKI/notifications?startDate=${startDate}&endDate=${endDate}&type=all`;
+  const cmeUrl = `https://api.nasa.gov/DONKI/CME?startDate=${startDate}&endDate=${endDate}`;
+  const [notifications, cme] = await Promise.all([
+    fetchText(withNasaKey(notificationsUrl, key2), options, `donki-n-${startDate}-${endDate}`, TTL_MS["nasa-donki"]),
+    fetchText(withNasaKey(cmeUrl, key2), options, `donki-cme-${startDate}-${endDate}`, TTL_MS["nasa-donki"])
+  ]);
+  if (!notifications.ok && !cme.ok) {
+    return unavailable(
+      "nasa-donki",
+      notifications.detail ?? cme.detail ?? "DONKI unavailable",
+      notifications.errorCode ?? cme.errorCode ?? "SOURCE_UNAVAILABLE"
+    );
+  }
+  try {
+    const notificationInput = notifications.ok ? adapterInput(notifications, notificationsUrl) : { payload: [], payloadText: "", retrievedAt: notifications.retrievedAt, sourceUrl: sanitiseUrl(notificationsUrl) };
+    const cmeInput = cme.ok ? adapterInput(cme, cmeUrl) : null;
+    const { series, events } = normaliseDonki(notificationInput, cmeInput, request.language);
+    if (series.length > 0) series[0].rawRecords = { notifications: notificationInput.payload, cme: cmeInput?.payload ?? [], events: events.length };
+    return {
+      datasetId: dataset.id,
+      status: notifications.ok && cme.ok ? "live" : "partial",
+      series,
+      detail: notifications.ok && cme.ok ? void 0 : "one DONKI sub-request was unavailable",
+      errorCode: notifications.ok && cme.ok ? void 0 : "SOURCE_PARTIAL",
+      documentationUrl: dataset.documentationUrl
+    };
+  } catch (error) {
+    return unavailable(
+      "nasa-donki",
+      error instanceof Error ? error.message : "DONKI payload could not be parsed",
+      "SOURCE_INVALID_PAYLOAD"
+    );
+  }
+}
+async function powerConnector(request, options) {
+  const dataset = datasetById("nasa-power");
+  const { latitude, longitude } = request.region;
+  if (latitude === null || longitude === null) {
+    return unavailable(
+      "nasa-power",
+      "POWER needs a study area. No coordinates were named in the question, and NOVA will not choose one on your behalf.",
+      "NO_REGION_COORDINATES"
+    );
+  }
+  const startYear = new Date(request.timeRange.start).getUTCFullYear();
+  const endYear = new Date(request.timeRange.end).getUTCFullYear();
+  const url = buildPowerUrl(latitude, longitude, ["T2M", "PRECTOTCORR"], startYear, endYear);
+  const outcome = await fetchText(url, options, `power-${latitude}-${longitude}-${startYear}-${endYear}`, TTL_MS["nasa-power"]);
+  if (!outcome.ok) {
+    return unavailable("nasa-power", outcome.detail ?? "POWER unavailable", outcome.errorCode ?? "SOURCE_UNAVAILABLE");
+  }
+  const series = [];
+  const errors = [];
+  for (const variable of ["temperature", "precipitation"]) {
+    try {
+      series.push(normalisePower(adapterInput(outcome, url), variable));
+    } catch (error) {
+      errors.push(error instanceof Error ? error.message : "parse failure");
+    }
+  }
+  if (series.length === 0) {
+    return unavailable("nasa-power", errors[0] ?? "POWER payload could not be parsed", "SOURCE_INVALID_PAYLOAD");
+  }
+  return {
+    datasetId: dataset.id,
+    status: series.length === 2 ? "live" : "partial",
+    series,
+    detail: errors.length ? `one parameter could not be parsed: ${errors[0]}` : void 0,
+    documentationUrl: dataset.documentationUrl
+  };
+}
+async function neoWsConnector(request, options) {
+  const dataset = datasetById("nasa-neows");
+  const key2 = options.nasaKey;
+  if (!key2) {
+    return unavailable("nasa-neows", "No NASA API key is configured on the server.", "KEY_NOT_CONFIGURED");
+  }
+  const now = (options.now ?? (() => /* @__PURE__ */ new Date()))();
+  const requestedStart = Date.parse(request.timeRange.start);
+  const requestedEnd = Math.min(Date.parse(request.timeRange.end), now.getTime());
+  if (!Number.isFinite(requestedStart) || requestedEnd < requestedStart) {
+    return unavailable("nasa-neows", "The requested period is not a valid date range.", "INVALID_RANGE");
+  }
+  const windowDays = Math.min(7, Math.max(1, Math.ceil(daysBetween(request.timeRange.start, new Date(requestedEnd).toISOString()))));
+  const windowStart = new Date(requestedEnd - windowDays * 864e5);
+  const startDate = dayString(windowStart);
+  const endDate = dayString(new Date(requestedEnd));
+  const url = `https://api.nasa.gov/neo/rest/v1/feed?start_date=${startDate}&end_date=${endDate}`;
+  const outcome = await fetchText(withNasaKey(url, key2), options, `neows-${startDate}-${endDate}`, TTL_MS["nasa-neows"]);
+  if (!outcome.ok) {
+    return unavailable("nasa-neows", outcome.detail ?? "NeoWs unavailable", outcome.errorCode ?? "SOURCE_UNAVAILABLE");
+  }
+  try {
+    const series = normaliseNeoWs(adapterInput(outcome, url));
+    const truncated = daysBetween(request.timeRange.start, request.timeRange.end) > 7;
+    return {
+      datasetId: dataset.id,
+      status: truncated ? "partial" : "live",
+      series,
+      detail: truncated ? `NeoWs accepts a 7-day window; only ${startDate} \u2192 ${endDate} of the requested period was queried.` : void 0,
+      errorCode: truncated ? "WINDOW_TRUNCATED" : void 0,
+      documentationUrl: dataset.documentationUrl
+    };
+  } catch (error) {
+    return unavailable(
+      "nasa-neows",
+      error instanceof Error ? error.message : "NeoWs payload could not be parsed",
+      "SOURCE_INVALID_PAYLOAD"
+    );
+  }
+}
+async function tleConnector(options) {
+  const dataset = datasetById("nova-iss-tle");
+  const outcome = await fetchText(dataset.endpoint, options, "iss-tle", TTL_MS["nova-iss-tle"]);
+  if (!outcome.ok) return unavailable("nova-iss-tle", outcome.detail ?? "TLE feed unavailable", outcome.errorCode ?? "SOURCE_UNAVAILABLE");
+  try {
+    return {
+      datasetId: dataset.id,
+      status: "live",
+      series: normaliseTle(adapterInput(outcome, dataset.endpoint)),
+      documentationUrl: dataset.documentationUrl
+    };
+  } catch (error) {
+    return unavailable(
+      "nova-iss-tle",
+      error instanceof Error ? error.message : "TLE payload could not be parsed",
+      "SOURCE_INVALID_PAYLOAD"
+    );
+  }
+}
+async function apodConnector(request, options) {
+  const dataset = datasetById("nasa-apod");
+  const key2 = options.nasaKey;
+  if (!key2) return unavailable("nasa-apod", "No NASA API key is configured on the server.", "KEY_NOT_CONFIGURED");
+  const date = request.timeRange.end.slice(0, 10);
+  if (date < "1995-06-16") {
+    return {
+      datasetId: dataset.id,
+      status: "out-of-coverage",
+      series: [],
+      detail: "APOD begins 1995-06-16.",
+      errorCode: "OUT_OF_COVERAGE",
+      documentationUrl: dataset.documentationUrl
+    };
+  }
+  const url = `https://api.nasa.gov/planetary/apod?date=${date}`;
+  const outcome = await fetchText(withNasaKey(url, key2), options, `apod-${date}`, TTL_MS["nasa-apod"]);
+  if (!outcome.ok) return unavailable("nasa-apod", outcome.detail ?? "APOD unavailable", outcome.errorCode ?? "SOURCE_UNAVAILABLE");
+  try {
+    return {
+      datasetId: dataset.id,
+      status: "live",
+      series: normaliseApod(adapterInput(outcome, url)),
+      documentationUrl: dataset.documentationUrl
+    };
+  } catch (error) {
+    return unavailable(
+      "nasa-apod",
+      error instanceof Error ? error.message : "APOD payload could not be parsed",
+      "SOURCE_INVALID_PAYLOAD"
+    );
+  }
+}
+async function marsPhotosConnector(request, options) {
+  const dataset = datasetById("nasa-mars-photos");
+  const key2 = options.nasaKey;
+  if (!key2) return unavailable("nasa-mars-photos", "No NASA API key is configured on the server.", "KEY_NOT_CONFIGURED");
+  const date = request.timeRange.end.slice(0, 10);
+  const url = `https://api.nasa.gov/mars-photos/api/v1/rovers/curiosity/photos?earth_date=${date}`;
+  const outcome = await fetchText(withNasaKey(url, key2), options, `mars-${date}`, TTL_MS["nasa-mars-photos"]);
+  if (!outcome.ok) {
+    return unavailable("nasa-mars-photos", outcome.detail ?? "Mars photo service unavailable", outcome.errorCode ?? "SOURCE_UNAVAILABLE");
+  }
+  try {
+    return {
+      datasetId: dataset.id,
+      status: "live",
+      series: normaliseMarsPhotos(adapterInput(outcome, url), date),
+      documentationUrl: dataset.documentationUrl
+    };
+  } catch (error) {
+    return unavailable(
+      "nasa-mars-photos",
+      error instanceof Error ? error.message : "Mars photo payload could not be parsed",
+      "SOURCE_INVALID_PAYLOAD"
+    );
+  }
+}
+async function retrieveDatasets(request, plan, options = {}) {
+  const targets = plan.datasets.filter((dataset) => dataset.compatible);
+  const tasks = [];
+  for (const target of targets) {
+    if (target.coverage === "out-of-coverage") {
+      const dataset = datasetById(target.datasetId);
+      tasks.push(
+        Promise.resolve({
+          datasetId: target.datasetId,
+          status: "out-of-coverage",
+          series: [],
+          detail: target.coverageDetail,
+          errorCode: "OUT_OF_COVERAGE",
+          documentationUrl: dataset?.documentationUrl ?? target.documentationUrl
+        })
+      );
+      continue;
+    }
+    switch (target.datasetId) {
+      case "noaa-swpc-kp":
+        tasks.push(kpConnector(options));
+        break;
+      case "noaa-swpc-solar-wind":
+        tasks.push(solarWindConnector(options));
+        break;
+      case "nasa-donki":
+        tasks.push(donkiConnector(request, options));
+        break;
+      case "nasa-power":
+        tasks.push(powerConnector(request, options));
+        break;
+      case "nasa-neows":
+        tasks.push(neoWsConnector(request, options));
+        break;
+      case "nova-iss-tle":
+        tasks.push(tleConnector(options));
+        break;
+      case "nasa-apod":
+        tasks.push(apodConnector(request, options));
+        break;
+      case "nasa-mars-photos":
+        tasks.push(marsPhotosConnector(request, options));
+        break;
+      default:
+        tasks.push(
+          Promise.resolve(unavailable(target.datasetId, "No connector implemented for this dataset.", "NOT_IMPLEMENTED"))
+        );
+    }
+  }
+  const results = await Promise.all(tasks);
+  for (const target of plan.datasets) {
+    if (target.compatible) continue;
+    results.push({
+      datasetId: target.datasetId,
+      status: "not-requested",
+      series: [],
+      detail: target.reason,
+      errorCode: "NOT_COMPATIBLE",
+      documentationUrl: target.documentationUrl
+    });
+  }
+  return results;
+}
+
+// server/forge/investigate.ts
+var MAX_QUESTION_CHARS = 1200;
+var MIN_QUESTION_CHARS = 8;
+var LANGUAGES = ["en", "si", "ta"];
+var DOMAINS = [
+  "space-weather",
+  "earth-environment",
+  "near-earth-objects",
+  "orbital",
+  "planetary-imagery",
+  "astronomy-context",
+  "unsupported"
+];
+var METHODS = [
+  "descriptive",
+  "correlation",
+  "cross-correlation",
+  "before-after",
+  "threshold-exceedance",
+  "trend",
+  "anomaly",
+  "missing-data"
+];
+function validateQuestion(question) {
+  if (typeof question !== "string") {
+    return { status: 400, code: "INVALID_REQUEST", message: "A question string is required." };
+  }
+  const trimmed = question.trim();
+  if (trimmed.length < MIN_QUESTION_CHARS) {
+    return { status: 400, code: "INVALID_REQUEST", message: "Ask a fuller research question." };
+  }
+  if (trimmed.length > MAX_QUESTION_CHARS) {
+    return { status: 413, code: "QUESTION_TOO_LONG", message: "That question is too long." };
+  }
+  return null;
+}
+function isIsoDate2(value) {
+  return typeof value === "string" && Number.isFinite(Date.parse(value));
+}
+function sanitiseContext(raw) {
+  if (!raw || typeof raw !== "object") return null;
+  const input = raw;
+  if (typeof input.question !== "string") return null;
+  const domain = DOMAINS.includes(input.domain) ? input.domain : "unsupported";
+  const language = LANGUAGES.includes(input.language) ? input.language : "en";
+  const rawRange = input.timeRange;
+  if (!rawRange || !isIsoDate2(rawRange.start) || !isIsoDate2(rawRange.end)) return null;
+  const timeRange = {
+    start: new Date(rawRange.start).toISOString(),
+    end: new Date(rawRange.end).toISOString(),
+    resolution: ["hour", "day", "month"].includes(String(rawRange.resolution)) ? rawRange.resolution : "day",
+    origin: "default",
+    label: typeof rawRange.label === "string" ? rawRange.label.slice(0, 120) : "previous window",
+    assumed: Boolean(rawRange.assumed)
+  };
+  const rawRegion = input.region;
+  const region = {
+    name: typeof rawRegion?.name === "string" ? rawRegion.name.slice(0, 120) : "Global",
+    latitude: typeof rawRegion?.latitude === "number" && Number.isFinite(rawRegion.latitude) ? rawRegion.latitude : null,
+    longitude: typeof rawRegion?.longitude === "number" && Number.isFinite(rawRegion.longitude) ? rawRegion.longitude : null,
+    source: ["gazetteer", "global", "none"].includes(String(rawRegion?.source)) ? rawRegion?.source : "global"
+  };
+  const variables = Array.isArray(input.variables) ? input.variables.map((entry) => {
+    if (!entry || typeof entry !== "object") return null;
+    const variable = entry;
+    const id = variable.id;
+    const meta = VARIABLES.find((candidate) => candidate.id === id);
+    if (!meta) return null;
+    return {
+      id,
+      unit: meta.unit,
+      datasetId: meta.datasetId,
+      role: ["independent", "dependent", "context"].includes(String(variable.role)) ? variable.role : "context"
+    };
+  }).filter((entry) => Boolean(entry)).slice(0, 6) : [];
+  return {
+    version: "forge/1",
+    id: typeof input.id === "string" ? input.id.slice(0, 64) : "context",
+    question: input.question.slice(0, MAX_QUESTION_CHARS),
+    language,
+    domain,
+    objective: typeof input.objective === "string" ? input.objective.slice(0, 300) : "",
+    timeRange,
+    region,
+    variables,
+    requiredDatasets: Array.isArray(input.requiredDatasets) ? input.requiredDatasets.filter((id) => typeof id === "string" && DATASETS.some((dataset) => dataset.id === id)).slice(0, 8) : [],
+    methods: Array.isArray(input.methods) ? input.methods.filter((method) => METHODS.includes(method)).slice(0, 8) : [],
+    expectedOutput: "unknown",
+    followUp: true,
+    interpretationConfidence: "medium",
+    notes: []
+  };
+}
+function nasaKeyMode(nasaKey) {
+  if (!nasaKey) return "none";
+  return nasaKey === "DEMO_KEY" ? "demo" : "key";
+}
+function interpretQuestion(input) {
+  const language = LANGUAGES.includes(input.language) ? input.language : void 0;
+  const context = sanitiseContext(input.context);
+  const request = interpret(input.question, {
+    now: input.now,
+    context,
+    preferredLanguage: language
+  });
+  const hypotheses = generateHypotheses(request);
+  const plan = buildPlan(request, { now: input.now, nasaKeyMode: nasaKeyMode(input.nasaKey) }, hypotheses.length);
+  return { request, hypotheses, plan };
+}
+async function investigate(input) {
+  const dependencies = input.dependencies ?? {};
+  const now = (dependencies.now ?? (() => /* @__PURE__ */ new Date()))();
+  const { request, hypotheses, plan } = interpretQuestion({
+    question: input.question,
+    language: input.language,
+    context: input.context,
+    now,
+    nasaKey: dependencies.nasaKey
+  });
+  const connectorOptions = {
+    fetchImpl: dependencies.fetchImpl,
+    now: dependencies.now,
+    nasaKey: dependencies.nasaKey,
+    nasaKeyIsShared: dependencies.nasaKeyIsShared,
+    timeoutMs: dependencies.timeoutMs,
+    cache: dependencies.cache
+  };
+  const datasets = await retrieveDatasets(request, plan, connectorOptions);
+  const hypothesisId2 = typeof input.hypothesisId === "string" && hypotheses.some((h) => h.id === input.hypothesisId) ? input.hypothesisId : null;
+  return assembleInvestigation({
+    request,
+    hypotheses,
+    plan,
+    datasets,
+    selectedHypothesisId: hypothesisId2,
+    createdAt: now.toISOString(),
+    investigationId: dependencies.investigationId
+  });
+}
+function cataloguePayload(nasaKey) {
+  return {
+    ok: true,
+    engine: "nova-hypothesis-forge/1",
+    datasets: DATASETS,
+    capabilities: {
+      nasaKey: nasaKeyMode(nasaKey),
+      noaaKeyless: true,
+      liveInvestigation: true,
+      llmRequired: false,
+      languages: LANGUAGES,
+      note: "Datasets are documented in the registry; every measurement is fetched live. No language model is used for any numeric result."
+    }
+  };
+}
+
+// server/forgeRoutes.ts
+function createRateLimit(buckets2, name, max, windowMs) {
+  return (req, res, next) => {
+    const ip = req.headers["x-forwarded-for"]?.split(",")[0]?.trim() || req.ip || req.socket.remoteAddress || "unknown";
+    const key2 = `${name}:${ip}`;
+    const now = Date.now();
+    const bucket = buckets2.get(key2);
+    if (!bucket || now > bucket.resetAt) {
+      buckets2.set(key2, { count: 1, resetAt: now + windowMs });
+      return next();
+    }
+    bucket.count += 1;
+    if (bucket.count > max) {
+      const retryAfter = Math.max(1, Math.ceil((bucket.resetAt - now) / 1e3));
+      res.setHeader("Retry-After", String(retryAfter));
+      res.setHeader("X-RateLimit-Limit", String(max));
+      res.setHeader("X-RateLimit-Remaining", "0");
+      return res.status(429).json({
+        ok: false,
+        code: "RATE_LIMITED",
+        error: "Too many investigation requests. Please wait before running another.",
+        retryAfter
+      });
+    }
+    res.setHeader("X-RateLimit-Limit", String(max));
+    res.setHeader("X-RateLimit-Remaining", String(Math.max(0, max - bucket.count)));
+    return next();
+  };
+}
+function createForgeRouter(deps = {}) {
+  const router = express2.Router();
+  const buckets2 = /* @__PURE__ */ new Map();
+  const rateLimit4 = (name, max, windowMs) => createRateLimit(buckets2, name, max, windowMs);
+  const nasaKey = () => {
+    if (deps.nasaKey !== void 0) return deps.nasaKey;
+    const configured = process.env.NASA_API_KEY;
+    return configured && configured.trim() ? configured.trim() : "DEMO_KEY";
+  };
+  router.get("/catalogue", rateLimit4("forge-catalogue", 60, 6e4), (_req, res) => {
+    res.setHeader("Cache-Control", "private, max-age=300");
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    return res.json(cataloguePayload(nasaKey()));
+  });
+  router.post("/interpret", rateLimit4("forge-interpret", 40, 6e4), (req, res) => {
+    res.setHeader("Cache-Control", "no-store");
+    const validation = validateQuestion(req.body?.question);
+    if (validation) {
+      return res.status(validation.status).json({
+        ok: false,
+        code: validation.code,
+        error: validation.message
+      });
+    }
+    try {
+      const now = (deps.now ?? (() => /* @__PURE__ */ new Date()))();
+      const outcome = interpretQuestion({
+        question: String(req.body.question),
+        language: req.body?.language,
+        context: req.body?.context,
+        now,
+        nasaKey: nasaKey()
+      });
+      return res.json({
+        ok: true,
+        request: outcome.request,
+        hypotheses: outcome.hypotheses,
+        plan: outcome.plan
+      });
+    } catch {
+      return res.status(500).json({
+        ok: false,
+        code: "INTERNAL_ERROR",
+        error: "The question could not be interpreted. Please retry."
+      });
+    }
+  });
+  router.post("/investigate", rateLimit4("forge-investigate", 8, 6e4), async (req, res) => {
+    res.setHeader("Cache-Control", "no-store");
+    const validation = validateQuestion(req.body?.question);
+    if (validation) {
+      return res.status(validation.status).json({
+        ok: false,
+        code: validation.code,
+        error: validation.message
+      });
+    }
+    try {
+      const investigation = await investigate({
+        question: String(req.body.question),
+        language: req.body?.language,
+        context: req.body?.context,
+        hypothesisId: req.body?.hypothesisId,
+        dependencies: {
+          fetchImpl: deps.fetchImpl,
+          now: deps.now,
+          nasaKey: nasaKey(),
+          timeoutMs: deps.timeoutMs,
+          cache: deps.cache
+        }
+      });
+      return res.json({ ok: true, investigation });
+    } catch (error) {
+      const message = error instanceof Error && error.name === "NormalisationError" ? error.message : "The investigation could not be completed. Partial sources are never replaced with simulated values.";
+      return res.status(502).json({ ok: false, code: "SOURCE_UNAVAILABLE", error: message });
+    }
+  });
+  return router;
+}
+var forgeRouter = createForgeRouter();
+
+// server/life/router.js
+import express3 from "express";
 
 // server/life/store.js
 import { mkdirSync, existsSync } from "node:fs";
@@ -5913,10 +10880,10 @@ function detectHardware({
   loadavg = () => os.loadavg()
 } = {}) {
   const cpuList = safe(cpus, []) || [];
-  const totalRamGb = round(safe(totalmem, 0) / GB);
-  const freeRamGb = round(safe(freemem, 0) / GB);
+  const totalRamGb = round2(safe(totalmem, 0) / GB);
+  const freeRamGb = round2(safe(freemem, 0) / GB);
   const gpu = gpuFromEnv(env);
-  const load1 = round((safe(loadavg, [0]) || [0])[0] ?? 0);
+  const load1 = round2((safe(loadavg, [0]) || [0])[0] ?? 0);
   const cpuCount = cpuList.length || 1;
   const forced = envProfile(env);
   const reported = {
@@ -5925,7 +10892,7 @@ function detectHardware({
     totalRamGb,
     freeRamGb,
     load1,
-    loadPerCpu: round(load1 / cpuCount),
+    loadPerCpu: round2(load1 / cpuCount),
     gpu,
     platform: process.platform,
     arch: process.arch,
@@ -5958,7 +10925,7 @@ function safe(fn, fallback) {
     return fallback;
   }
 }
-function round(value) {
+function round2(value) {
   return Math.round(Number(value || 0) * 10) / 10;
 }
 
@@ -5973,7 +10940,7 @@ var LifeError = class extends Error {
     this.details = details;
   }
 };
-var DEFAULT_TIMEOUT_MS = 6e4;
+var DEFAULT_TIMEOUT_MS2 = 6e4;
 var MAX_TIMEOUT_MS = 18e4;
 var LOCAL_MODEL_PREFERENCE = {
   simple: ["llama3.2:3b", "qwen2.5:3b", "phi3:mini", "gemma2:2b"],
@@ -6195,7 +11162,7 @@ function createModelFabric({
     const fitted = fitContext(messages, { contextWindow: contextBudget(hardware, selection.contextWindow) });
     const controller = new AbortController();
     const id = requestId || `req_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
-    const budget = Math.min(MAX_TIMEOUT_MS, Math.max(100, Number(timeoutMs) || selection.timeoutMs || DEFAULT_TIMEOUT_MS));
+    const budget = Math.min(MAX_TIMEOUT_MS, Math.max(100, Number(timeoutMs) || selection.timeoutMs || DEFAULT_TIMEOUT_MS2));
     const timer = setTimeout(() => controller.abort(new Error("AI_TIMEOUT")), budget);
     inflight.set(id, { controller, provider: provider.id, startedAt: Date.now() });
     try {
@@ -6724,7 +11691,7 @@ var RANGES = {
   ta: /[\u0B80-\u0BFF]/g,
   en: /[A-Za-z]/g
 };
-function detectLanguage2(input) {
+function detectLanguage3(input) {
   const text = typeof input === "string" ? input : String(input ?? "");
   const counts = { si: 0, ta: 0, en: 0 };
   for (const [language, pattern] of Object.entries(RANGES)) {
@@ -6869,7 +11836,7 @@ ${cleanBody}`)) {
     }
     return null;
   };
-  const add = (input = {}) => {
+  const add2 = (input = {}) => {
     security.require("memory.write");
     const category = String(input.category || "semantic");
     if (!MEMORY_CATEGORIES.includes(category)) {
@@ -6877,7 +11844,7 @@ ${cleanBody}`)) {
     }
     const { title, body } = validate(input);
     const tags = sanitiseTags(input.tags);
-    const language = input.language || detectLanguage2(body).language;
+    const language = input.language || detectLanguage3(body).language;
     const duplicateTitle = store.queryOne(
       "select * from memories where user_id = ? and category = ? and lower(title) = lower(?)",
       [userId, category, title]
@@ -6956,7 +11923,7 @@ ${cleanBody}`)) {
           title,
           body,
           JSON.stringify(tags),
-          patch.language ?? detectLanguage2(body).language,
+          patch.language ?? detectLanguage3(body).language,
           patch.confidence === void 0 ? existing.confidence : clamp(Number(patch.confidence)),
           patch.pinned === void 0 ? existing.pinned : patch.pinned ? 1 : 0,
           ["private", "task", "shared"].includes(patch.visibility) ? patch.visibility : existing.visibility,
@@ -7138,7 +12105,7 @@ ${cleanBody}`)) {
   return {
     categories: MEMORY_CATEGORIES,
     retention: RETENTION_DAYS,
-    add,
+    add: add2,
     update,
     correct,
     remove,
@@ -8386,7 +13353,7 @@ function createOrchestrator({
       maxToolCalls: clamp2(limits.maxToolCalls, 0, 8, DEFAULT_LIMITS.maxToolCalls),
       maxIterations: clamp2(limits.maxIterations, 1, 4, DEFAULT_LIMITS.maxIterations)
     };
-    const detected = language || detectLanguage2(text).language;
+    const detected = language || detectLanguage3(text).language;
     const plan = planFor({ objective: text, allowedTools: requested, limits: resolvedLimits });
     const id = randomId("task");
     const stamp = now();
@@ -9059,7 +14026,7 @@ function createBenchmarkService({ store, memory, clock = () => /* @__PURE__ */ n
     let detail = "";
     try {
       if (testCase.suite === "language") {
-        const detected = detectLanguage2(testCase.input);
+        const detected = detectLanguage3(testCase.input);
         passed = detected.language === expectation.expect;
         detail = `detected ${detected.language} (${Math.round(detected.confidence * 100)}%)`;
       } else if (testCase.suite === "security") {
@@ -9221,7 +14188,7 @@ function createLifeEngine({
       },
       mode: { localOnly: fabric.localOnly, executionEnabled: String(env.NOVA_LIFE_ALLOW_EXECUTE || "") === "1" },
       hardware: hardware.profile,
-      language: detectLanguage2(language).language,
+      language: detectLanguage3(language).language,
       providers: {
         total: providers.length,
         localConfigured: localProviders.filter((provider) => provider.configured).length,
@@ -9264,7 +14231,7 @@ function createLifeEngine({
 
 // server/life/router.js
 function createLifeRouter({ engine = null, env = process.env, root = process.cwd() } = {}) {
-  const router = express2.Router();
+  const router = express3.Router();
   let instance = engine;
   const getEngine = () => {
     if (!instance) instance = createLifeEngine({ env, root });
@@ -9432,8 +14399,8 @@ process.on("unhandledRejection", (reason, promise) => {
 });
 var __filename = fileURLToPath(import.meta.url);
 var __dirname = path.dirname(__filename);
-var app = express3();
-app.use(express3.json({ limit: "256kb" }));
+var app = express4();
+app.use(express4.json({ limit: "256kb" }));
 var isDev = process.env.NODE_ENV !== "production";
 var corsAllowHosts = parseAllowHosts(process.env.CORS_ORIGINS);
 for (const platformHost of platformHosts(process.env)) corsAllowHosts.add(platformHost);
@@ -9735,6 +14702,7 @@ app.use("/api/space-videos", spaceVideosRouter);
 app.use("/api/community", communityVideosRouter);
 app.use("/api/workspace", workspaceConfigRouter);
 app.use("/api/news", spaceNewsRouter);
+app.use("/api/forge", forgeRouter);
 app.use(
   "/api/nova/life",
   rateLimit3({ windowMs: 6e4, max: 120, keyPrefix: "nova-life" }),
@@ -9761,7 +14729,7 @@ async function startServer() {
   const indexHtmlPath = path.resolve(distPath, "index.html");
   if (isProduction && fs.existsSync(indexHtmlPath)) {
     console.log(`[Production] Serving static build assets from: ${distPath}`);
-    app.use(express3.static(distPath));
+    app.use(express4.static(distPath));
     app.get("*", (req, res) => {
       res.sendFile(indexHtmlPath);
     });

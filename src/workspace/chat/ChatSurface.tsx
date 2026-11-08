@@ -32,6 +32,7 @@ import {
   MessageSquarePlus,
   Pencil,
   Pin,
+  FlaskConical,
   PinOff,
   RefreshCw,
   Rocket,
@@ -70,6 +71,7 @@ import {
 import { DEEP_SCIENCE_PROMPT, SCIENCE_PROMPTS, type SciencePromptId } from './sciencePrompts';
 import { displayModelName } from '../../lib/modelLabels';
 import NovaOrb from '../home/NovaOrb';
+import ForgeSurface from '../../features/hypothesis-forge/ForgeSurface';
 
 /** Literal keys, so the shell test can verify all three languages. */
 function providerLabel(provider: ChatProvider, t: (key: string) => string): string {
@@ -166,6 +168,9 @@ export default function ChatSurface() {
   const conversations = useConversations(client, userId);
   const thread = useThread(client, userId, conversationId);
 
+  // Two modes share one NOVA assistant: the conversational astronomy chat and
+  // the evidence-based investigation workspace. Neither replaces the other.
+  const [mode, setMode] = useState<'chat' | 'forge'>('chat');
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
   const [filter, setFilter] = useState('');
@@ -471,6 +476,16 @@ export default function ChatSurface() {
     );
   }
 
+  if (mode === 'forge') {
+    return (
+      <div className="nova-chat-shell nova-chat-shell--forge">
+        <section className="nova-chat-main" aria-label={t('hfTitle')}>
+          <ForgeSurface onExitToChat={() => setMode('chat')} />
+        </section>
+      </div>
+    );
+  }
+
   return (
     <div className="nova-chat-shell">
       {/* ------------------------------------------------------ conversation rail */}
@@ -696,6 +711,16 @@ export default function ChatSurface() {
           </div>
 
           <div className="nova-chat-head__actions">
+            <button
+              type="button"
+              className="nova-chat-mode"
+              onClick={() => setMode('forge')}
+              title={t('hfModeHint')}
+              aria-label={t('hfModeHint')}
+            >
+              <FlaskConical size={14} strokeWidth={1.9} aria-hidden="true" />
+              <span className="nova-chat-mode__label">{t('hfModeInvestigate')}</span>
+            </button>
             <ThinkingMenu
               value={thinking}
               onChange={setThinking}
