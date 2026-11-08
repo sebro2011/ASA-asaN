@@ -11,7 +11,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import { normalisePath, parseRoute, routeHref } from '../src/app/router.tsx';
-import { ACCOUNT_NAV, EXPLORE_NAV, WORKSPACE_NAV } from '../src/app/navConfig.ts';
+import { ACCOUNT_NAV, EXPLORE_NAV, ROUTE_LABEL_KEYS, WORKSPACE_NAV } from '../src/app/navConfig.ts';
 import { workspaceCopy } from '../src/i18n/workspaceCopy.ts';
 import { resources } from '../src/i18n.ts';
 
@@ -95,6 +95,25 @@ test('workspace copy exists in all three languages with identical keys', () => {
   for (const [key, value] of Object.entries(workspaceCopy.en)) {
     assert.ok(value.trim().length > 0, `${key} is empty`);
   }
+});
+
+test('every workspace destination has a shell title, so the header never says "not found"', () => {
+  const items = [...WORKSPACE_NAV, ...(Array.isArray(EXPLORE_NAV) ? EXPLORE_NAV : [EXPLORE_NAV]), ...ACCOUNT_NAV];
+  const missing = [];
+  for (const item of items) {
+    // Legacy aliases (e.g. /workspace → home) redirect before the shell renders,
+    // so they do not need a header title of their own.
+    if (parseRoute(item.href).name !== item.route) continue;
+    const key = ROUTE_LABEL_KEYS[item.route];
+    if (!key) {
+      missing.push(`${item.id} (${item.route}) has no ROUTE_LABEL_KEYS entry`);
+      continue;
+    }
+    for (const lang of ['en', 'si', 'ta']) {
+      if (!resources[lang].translation[key]) missing.push(`${item.id}: ${lang} missing ${key}`);
+    }
+  }
+  assert.deepEqual(missing, [], `shell titles must resolve:\n${missing.join('\n')}`);
 });
 
 test('every nav item has a label in every language', () => {

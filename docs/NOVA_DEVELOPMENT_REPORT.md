@@ -47,13 +47,13 @@ with `status: live`. Copy in English, Sinhala and Tamil (`wsIntel*`, 104 keys).
 RLS, 4 policies each) and `20261108_nova_life_rollback.sql`.
 
 **Tests** — 6 new suites, 48 engine tests + 5 UI tests, all registered in
-`package.json`; `npm test` runs 395 tests in total.
+`package.json`; `npm test` runs 396 tests in total.
 
 ## 3. The 20 required points
 
 | # | Requirement | Status | Evidence |
 | --- | --- | --- | --- |
-| 1 | Extend, never replace, the existing NOVA engine | ✅ | only additive edits (`server.ts` mount, nav/router/App entries); all pre-existing suites pass inside the 395 |
+| 1 | Extend, never replace, the existing NOVA engine | ✅ | only additive edits (`server.ts` mount, nav/router/App entries); all pre-existing suites pass inside the 396 |
 | 2 | Phase 0 audit before building | ✅ | §1 of this report; constraint list kept in the mission record |
 | 3 | 01 Adaptive Model Fabric | ✅ | `modelFabric.js`: Ollama, OpenAI-compatible, llama.cpp, OpenRouter, Gemini; `/providers`, `/providers/health`, `/providers/select`; no key leaks (`test-life-api` asserts) |
 | 4 | 02 Unified Memory Fabric (5 categories, SQLite, migrations, transactions, backups, FTS5, optional vectors) | ✅ | `memory.js`, `schema.js`; FTS5 `memories_fts`; `store.tx`, `store.backup`, `POST /backup`; vector term only with an embedding adapter |
@@ -78,7 +78,7 @@ RLS, 4 policies each) and `20261108_nova_life_rollback.sql`.
 
 | # | Criterion | Verdict | How it is checked |
 | --- | --- | --- | --- |
-| 1 | Existing features and integrations still work | ✅ | 395/395 tests, including every pre-existing suite; `test:workspace-shell` still pins routes and copy |
+| 1 | Existing features and integrations still work | ✅ | 396/396 tests, including every pre-existing suite; `test:workspace-shell` still pins routes and copy |
 | 2 | No working provider removed, no conversations or saved data deleted | ✅ | additive diff; no migration drops a non-`life_*` table |
 | 3 | No mock data, no fake AI activity, no invented metrics in the product | ✅ | UI has no fixtures; error paths render engine codes; benchmark seeds its own data |
 | 4 | An LLM cannot approve its own claim | ✅ | `user_approvals` written only by `security.decide()`; verification needs checks |
@@ -160,7 +160,7 @@ RLS, 4 policies each) and `20261108_nova_life_rollback.sql`.
 npm run lint                                # tsc --noEmit, clean
 npm run test:life                           # 10 + 13 + 12 + 8 + 5 = 48 pass
 npm run test:workspace-intelligence         # 5 pass
-npm test                                    # 395 pass, 0 fail (exit 0)
+npm test                                    # 396 pass, 0 fail (exit 0)
 npm run build                               # esbuild api + vite client, clean
 ```
 

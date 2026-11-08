@@ -167,6 +167,6 @@ That is the honest state, not a failure of the app.
 ## 10. Resource expectations
 
 Measured on this branch: the seven benchmark cases finish in ~27 ms total on an
-in-memory database, and the full 395-test suite runs in about 90 s. Nothing in
+in-memory database, and the full 396-test suite runs in about 90 s. Nothing in
 the engine keeps a timer alive after a request; the test scripts pass
 `--test-force-exit` because the SQLite handle stays open otherwise.

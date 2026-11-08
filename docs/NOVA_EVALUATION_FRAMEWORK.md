@@ -9,7 +9,7 @@ Both report measured numbers; neither fabricates a pass rate.
 ## 1. Test inventory
 
 `npm test` = `npm run lint` (`tsc --noEmit`) followed by 34 Node test scripts.
-Last full run on this branch: **395 tests, 395 passed, 0 failed**, exit 0.
+Last full run on this branch: **396 tests, 396 passed, 0 failed**, exit 0.
 
 | Suite | Tests | What it proves |
 | --- | --- | --- |
@@ -19,7 +19,7 @@ Last full run on this branch: **395 tests, 395 passed, 0 failed**, exit 0.
 | `test:life-api` | 8 | real Express over HTTP: status/config/security, memory CRUD + FTS, coded errors, a verified task run, skill lifecycle enforcement, simulation approval, benchmarks + graph, provider health |
 | `test:life-sql` | 5 | the Supabase migration on PGlite: 13 tables, RLS on all, 4 policies each, no `anon` grants, forged `user_id` rejected, forged `verified` insert rejected, rollback drops only `life_*` |
 | `test:workspace-intelligence` | 5 | the UI surface: overview from status counts, memory/skill panels, empty states, security grant POST, benchmark run, engine error shown as a code |
-| `test:workspace-shell` | 11 | routes, nav/href consistency, **copy parity across en/si/ta**, no dynamic `t()` keys, WCAG AA contrast for both themes |
+| `test:workspace-shell` | 12 | routes, nav/href consistency, **copy parity across en/si/ta**, no dynamic `t()` keys, WCAG AA contrast for both themes |
 | `test:workspace-dom` | 5 | rendered workspace flows in jsdom |
 | 14 other `test:workspace-*` | 134 | SQL, auth, sync, import, cloud config, config, security, home, news, chat, settings, search, astronomy, modules |
 | `test:api-routes`, `test:earth*`, `test:nova-*`, `test:space-*`, `test:community`, `test:ai-viewer`, `test:welcome`, `test:space-build-security`, `test:security-performance` | 192 | pre-existing guards: route inventory, science math, chat fallback and thinking ladder, news/videos, security headers, cache policy, rate limiting, service-worker behaviour |
@@ -45,7 +45,7 @@ npm install
 npm run lint
 npm run test:life            # 10 + 13 + 12 + 8 + 5
 npm run test:workspace-intelligence
-npm test                     # everything (395)
+npm test                     # everything (396)
 ```
 
 Each script runs with `node --import tsx --test --test-force-exit`. `test-life-*`

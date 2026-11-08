@@ -215,4 +215,6 @@ export const ROUTE_LABEL_KEYS: Partial<Record<RouteName, string>> = {
   search: 'wsSearchPageTitle',
   profile: 'wsProfile',
   explore: 'wsExplore',
+  intelligence: 'wsMenuIntelligence',
+  workspace: 'wsNavWorkspace',
 };
