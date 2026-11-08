@@ -495,7 +495,7 @@ test('an empty composer never queues anything', async () => {
   }
 });
 
-test('quick actions and the roadmap only point at routes that exist', async () => {
+test('quick actions only point at routes that exist', async () => {
   const dom = installDom();
   try {
     stubFetch();

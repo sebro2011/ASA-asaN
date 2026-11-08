@@ -147,9 +147,21 @@ The chat surface is a modern two-pane workspace:
 - composer: floating glass, provider picker, thinking picker, send/stop.
 
 The dashboard gained a reasoning-ladder card (select a level from Home), a
-thinking picker inside the hero composer, and the astronomy studio grid. The
-level chosen on Home travels with the queued prompt
+thinking picker inside the hero composer, the live **Sky now** row and the
+astronomy studio grid. The level chosen on Home travels with the queued prompt
 (`nova_pending_thinking`) so the hand-off is not lost.
+
+Two cards were **removed** from the dashboard on request: the per-provider
+inventory (it lives in Settings → AI providers, where the probes already are)
+and the "Workspace modules" roadmap list (planned destinations keep their
+`Soon` flag and phase on the sidebar and on their own route surface). The
+remaining utility cards sit in one responsive row under the Explore card.
+
+The legacy service worker in `public/sw.js` used stale-while-revalidate for
+every non-image request, including Vite's unhashed `/src/*` modules, so the
+first load after an edit could show the previous build. It now bypasses
+`/src/`, `/@*` and `/node_modules/` entirely and its caches were bumped to v3,
+which deletes the stale shell on activate.
 
 ## 5. Tests
 

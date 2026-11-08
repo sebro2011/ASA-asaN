@@ -124,11 +124,14 @@ test('workspace shell renders, searches, switches theme and explains planned mod
     `every planned module is flagged (model ${plannedItems.length}, rendered ${plannedFlags.length})`,
   );
 
-  // 3. No AI provider is configured in the test server → the offline truth.
+  // 3. The provider inventory lives on Settings now; Home keeps the reasoning
+  //    ladder and its honesty note about online models.
   await act(async () => {
     await new Promise((resolve) => setTimeout(resolve, 30));
   });
-  assert.match(container.textContent, /AI providers/);
+  assert.match(container.textContent, /Reasoning ladder/);
+  assert.match(container.textContent, /served by an online model/);
+  assert.equal(container.textContent.includes('AI providers'), false, 'the provider card is off the dashboard');
 
   // 4. Command palette: opens on ⌘K, filters, closes on Escape.
   await act(async () => {
