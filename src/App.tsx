@@ -29,6 +29,8 @@ const SearchSurface = lazy(() => import('./workspace/search/SearchSurface'));
 const SettingsSurface = lazy(() => import('./workspace/settings/SettingsSurface'));
 
 const ChatSurface = lazy(() => import('./workspace/chat/ChatSurface'));
+// The news surface fetches two feeds; keep it out of the workspace entry chunk.
+const NewsSurface = lazy(() => import('./workspace/news/NewsSurface'));
 
 /** Branded loading state for the Explore chunk (kept dark: Explore is dark). */
 function ExploreLoading() {
@@ -102,6 +104,14 @@ function WorkspaceSurface({ route }: { route: AppRoute }) {
           <SearchSurface />
         </Suspense>
       </RequireAuth>
+    );
+  }
+
+  if (route.name === 'news') {
+    return (
+      <Suspense fallback={<SurfaceLoading label="Loading space news…" />}>
+        <NewsSurface />
+      </Suspense>
     );
   }
 

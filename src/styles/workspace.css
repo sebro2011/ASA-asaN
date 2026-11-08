@@ -1160,6 +1160,201 @@
   margin-top: 1rem;
 }
 
+/* ----------------------------------------------------------- space news */
+
+.nova-chip--active {
+  border-color: color-mix(in srgb, var(--color-ws-accent) 55%, transparent);
+  background: color-mix(in srgb, var(--color-ws-accent) 14%, transparent);
+  color: var(--color-ws-accent-ink);
+}
+.nova-chip--muted {
+  color: var(--color-ws-text-3);
+}
+button.nova-chip {
+  cursor: pointer;
+  transition: border-color 160ms var(--ease-out-expo), background 160ms var(--ease-out-expo);
+}
+button.nova-chip:hover {
+  border-color: color-mix(in srgb, var(--color-ws-accent) 40%, transparent);
+}
+
+.nova-news-source {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.1875rem 0.5rem;
+  border-radius: 999px;
+  border: 1px solid var(--color-ws-line);
+  font-size: 0.6875rem;
+  color: var(--color-ws-text-2);
+}
+.nova-news-source .nova-dot {
+  background: var(--color-ws-success);
+}
+.nova-news-source--off {
+  color: var(--color-ws-text-3);
+  border-style: dashed;
+}
+.nova-news-source--off .nova-dot {
+  background: var(--color-ws-line-strong);
+}
+.nova-news-source--error {
+  border-color: color-mix(in srgb, var(--color-ws-danger, #d96a6a) 45%, transparent);
+}
+.nova-news-source--error .nova-dot {
+  background: var(--color-ws-danger, #d96a6a);
+}
+.nova-news-source__state {
+  font-family: var(--font-mono);
+  font-size: 0.5rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-ws-text-3);
+}
+
+.nova-news-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.75rem;
+}
+@media (min-width: 720px) {
+  .nova-news-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (min-width: 1080px) {
+  .nova-news-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.nova-news-card {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: 16px;
+  border: 1px solid var(--color-ws-line);
+  background: var(--ws-glass);
+  backdrop-filter: blur(18px) saturate(140%);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+  box-shadow: var(--ws-shadow-1);
+  transition: transform 180ms var(--ease-out-expo), border-color 180ms var(--ease-out-expo);
+}
+.nova-news-card:hover {
+  transform: translateY(-2px);
+  border-color: color-mix(in srgb, var(--color-ws-accent) 35%, transparent);
+}
+.nova-news-card__image {
+  width: 100%;
+  height: 8rem;
+  object-fit: cover;
+  border-bottom: 1px solid var(--color-ws-line);
+  background: color-mix(in srgb, var(--color-ws-text) 6%, transparent);
+}
+.nova-news-card__body {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 0.375rem;
+  padding: 0.8125rem;
+}
+.nova-news-card__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3125rem;
+  font-family: var(--font-mono);
+  font-size: 0.5625rem;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--color-ws-text-3);
+}
+.nova-news-card__title {
+  font-size: 0.84375rem;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--color-ws-text);
+  text-decoration: none;
+}
+.nova-news-card__title:hover {
+  color: var(--color-ws-accent-ink);
+}
+.nova-news-card__summary {
+  font-size: 0.75rem;
+  line-height: 1.55;
+  color: var(--color-ws-text-2);
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.nova-news-card__actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-top: auto;
+  padding-top: 0.375rem;
+}
+.nova-news-card__actions .nova-btn {
+  height: 1.75rem;
+  font-size: 0.6875rem;
+}
+.nova-news-card__link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.6875rem;
+  color: var(--color-ws-text-3);
+  text-decoration: none;
+}
+.nova-news-card__link:hover {
+  color: var(--color-ws-accent-ink);
+}
+
+.nova-paper {
+  min-width: 0;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--color-ws-line);
+}
+.nova-paper:first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+.nova-paper__title {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 0.25rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--color-ws-text);
+  text-decoration: none;
+}
+.nova-paper__title:hover {
+  color: var(--color-ws-accent-ink);
+}
+.nova-paper__meta {
+  margin-top: 0.1875rem;
+  font-family: var(--font-mono);
+  font-size: 0.5625rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--color-ws-text-3);
+}
+.nova-paper__summary {
+  margin-top: 0.25rem;
+  font-size: 0.75rem;
+  line-height: 1.55;
+  color: var(--color-ws-text-2);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
 /* ------------------------------------------------------------- sky now */
 
 .nova-sky-grid {

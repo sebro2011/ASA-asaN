@@ -28,6 +28,7 @@ export type RouteName =
   /** The NOVA workspace dashboard, moved off the front door in the recovery. */
   | 'workspace'
   | 'chat'
+  | 'news'
   | 'projects'
   | 'documents'
   | 'writing'
@@ -63,6 +64,7 @@ const DETAIL_SEGMENTS: Record<string, RouteName> = {
 const FLAT_SEGMENTS: Record<string, RouteName> = {
   workspace: 'workspace',
   chat: 'chat',
+  news: 'news',
   projects: 'projects',
   documents: 'documents',
   writing: 'writing',

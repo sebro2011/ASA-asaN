@@ -19,6 +19,7 @@ import {
   FolderKanban,
   House,
   MessageSquare,
+  Newspaper,
   PenLine,
   Settings,
   UserRound,
@@ -62,6 +63,16 @@ export const WORKSPACE_NAV: WorkspaceNavItem[] = [
     status: 'live',
     descriptionKey: 'wsAreaChatDesc',
     bulletKeys: ['wsAreaChatB1', 'wsAreaChatB2'],
+  },
+  {
+    id: 'news',
+    route: 'news',
+    href: '/news',
+    labelKey: 'wsMenuNews',
+    icon: Newspaper,
+    status: 'live',
+    descriptionKey: 'wsAreaNewsDesc',
+    bulletKeys: ['wsAreaNewsB1', 'wsAreaNewsB2'],
   },
   {
     id: 'projects',
@@ -175,7 +186,7 @@ export const ACCOUNT_NAV: WorkspaceNavItem[] = [
 ];
 
 /** The four-item mobile bar plus the drawer trigger. */
-export const MOBILE_NAV_IDS = ['home', 'chat', 'explore', 'tasks'] as const;
+export const MOBILE_NAV_IDS = ['home', 'chat', 'news', 'explore'] as const;
 
 export function findNavItem(id: string): WorkspaceNavItem | undefined {
   return [...WORKSPACE_NAV, EXPLORE_NAV, ...ACCOUNT_NAV].find((item) => item.id === id);
@@ -189,6 +200,7 @@ export function navItemForRoute(route: RouteName): WorkspaceNavItem | undefined 
 export const ROUTE_LABEL_KEYS: Partial<Record<RouteName, string>> = {
   home: 'navHome',
   chat: 'wsMenuChat',
+  news: 'wsMenuNews',
   projects: 'wsMenuProjects',
   documents: 'wsMenuDocuments',
   writing: 'wsMenuWriting',

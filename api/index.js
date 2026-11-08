@@ -556,23 +556,23 @@ var CORE_PARAMETER_CODES = POWER_PARAMETERS.filter((p) => p.core).map((p) => p.c
 // server/earthIntelligence.ts
 var earthRouter = express.Router();
 var cache = /* @__PURE__ */ new Map();
-function cacheGet2(key) {
-  const entry = cache.get(key);
+function cacheGet2(key2) {
+  const entry = cache.get(key2);
   if (!entry) return null;
   if (Date.now() > entry.expires) {
-    cache.delete(key);
+    cache.delete(key2);
     return null;
   }
   return entry.payload;
 }
-function cacheSet2(key, payload, ttlMs) {
+function cacheSet2(key2, payload, ttlMs) {
   if (cache.size > 400) {
     const now = Date.now();
     for (const [k, entry] of cache) {
       if (now > entry.expires) cache.delete(k);
     }
   }
-  cache.set(key, { expires: Date.now() + ttlMs, payload });
+  cache.set(key2, { expires: Date.now() + ttlMs, payload });
 }
 async function fetchWithTimeout(url, options = {}, timeoutMs = 2e4) {
   const controller = new AbortController();
@@ -587,11 +587,11 @@ var rateBuckets = /* @__PURE__ */ new Map();
 function rateLimit(name, max, windowMs) {
   return (req, res, next) => {
     const ip = req.headers["x-forwarded-for"]?.split(",")[0]?.trim() || req.ip || "unknown";
-    const key = `${name}:${ip}`;
+    const key2 = `${name}:${ip}`;
     const now = Date.now();
-    const bucket = rateBuckets.get(key);
+    const bucket = rateBuckets.get(key2);
     if (!bucket || now > bucket.resetAt) {
-      rateBuckets.set(key, { count: 1, resetAt: now + windowMs });
+      rateBuckets.set(key2, { count: 1, resetAt: now + windowMs });
       return next();
     }
     bucket.count += 1;
@@ -901,8 +901,8 @@ earthRouter.get("/firms/hotspots", rateLimit("firms", 30, 6e4), async (req, res)
         frpSum += item.frp;
         frpCount += 1;
       }
-      const key = (item.confidence || "unknown").toString().toLowerCase();
-      confidenceCounts[key] = (confidenceCounts[key] || 0) + 1;
+      const key2 = (item.confidence || "unknown").toString().toLowerCase();
+      confidenceCounts[key2] = (confidenceCounts[key2] || 0) + 1;
     });
     const maxFeatures = 3e3;
     const envelope = {
@@ -1411,12 +1411,12 @@ function decodeEntities(value) {
     return entity;
   });
 }
-async function youtubeJson(endpoint, params, key) {
+async function youtubeJson(endpoint, params, key2) {
   const url = new URL(`https://www.googleapis.com/youtube/v3/${endpoint}`);
   url.search = params.toString();
   let response;
   try {
-    response = await fetch(url, { signal: AbortSignal.timeout(7e3), headers: { "x-goog-api-key": key } });
+    response = await fetch(url, { signal: AbortSignal.timeout(7e3), headers: { "x-goog-api-key": key2 } });
   } catch {
     throw new UpstreamFailure("network");
   }
@@ -1438,11 +1438,11 @@ async function youtubeJson(endpoint, params, key) {
 }
 async function verifyCommunityYouTube(id) {
   if (!VIDEO_ID.test(id)) return null;
-  const key = process.env.YOUTUBE_API_KEY?.trim();
-  if (!key) throw new Error("youtube-unavailable");
+  const key2 = process.env.YOUTUBE_API_KEY?.trim();
+  if (!key2) throw new Error("youtube-unavailable");
   let data;
   try {
-    data = await youtubeJson("videos", new URLSearchParams({ part: "snippet,contentDetails,status", id }), key);
+    data = await youtubeJson("videos", new URLSearchParams({ part: "snippet,contentDetails,status", id }), key2);
   } catch {
     throw new Error("youtube-unavailable");
   }
@@ -1459,7 +1459,7 @@ async function verifyCommunityYouTube(id) {
     durationSeconds: durationSeconds(entry?.contentDetails?.duration)
   };
 }
-async function searchYouTube(mode, category, query, token, key, scope) {
+async function searchYouTube(mode, category, query, token, key2, scope) {
   const search = new URLSearchParams({
     part: "snippet",
     type: "video",
@@ -1473,12 +1473,12 @@ async function searchYouTube(mode, category, query, token, key, scope) {
   });
   if (token) search.set("pageToken", token);
   if (scope === "nasa") search.set("channelId", NASA_MAIN_CHANNEL);
-  const results = await youtubeJson("search", search, key);
+  const results = await youtubeJson("search", search, key2);
   if (!Array.isArray(results?.items)) throw new UpstreamFailure("upstream");
   const ids = [...new Set(results.items.map((entry) => entry?.id?.videoId).filter((id) => typeof id === "string" && VIDEO_ID.test(id)))];
   const nextPageToken = wrapYouTubeToken(results.nextPageToken);
   if (!ids.length) return { items: [], nextPageToken, source: "youtube" };
-  const details = await youtubeJson("videos", new URLSearchParams({ part: "snippet,contentDetails,status", id: ids.join(",") }), key);
+  const details = await youtubeJson("videos", new URLSearchParams({ part: "snippet,contentDetails,status", id: ids.join(",") }), key2);
   if (!Array.isArray(details?.items)) throw new UpstreamFailure("upstream");
   const byId = new Map(details.items.map((entry) => [entry?.id, entry]));
   const items = ids.flatMap((id) => {
@@ -1544,11 +1544,11 @@ function createSpaceVideosRouter() {
     const curatedToken = /^c_(\d{1,4})$/.exec(token);
     const upstreamToken = unwrapYouTubeToken(token);
     if (upstreamToken === null) return res.status(400).json({ error: "invalid-request" });
-    const key = process.env.YOUTUBE_API_KEY?.trim();
-    if (curatedToken || !key) {
-      if (!key && token && !curatedToken) return res.status(503).json({ error: "missing-key" });
+    const key2 = process.env.YOUTUBE_API_KEY?.trim();
+    if (curatedToken || !key2) {
+      if (!key2 && token && !curatedToken) return res.status(503).json({ error: "missing-key" });
       const offset = curatedToken ? Number(curatedToken[1]) : 0;
-      return res.json({ ...getCuratedPage(mode, category, query, offset, 9, scope), source: "curated", ...!key ? { reason: "missing-key" } : {} });
+      return res.json({ ...getCuratedPage(mode, category, query, offset, 9, scope), source: "curated", ...!key2 ? { reason: "missing-key" } : {} });
     }
     const cacheKey = JSON.stringify([mode, scope, category, query.toLocaleLowerCase(), token]);
     const cached2 = cache2.get(cacheKey);
@@ -1564,7 +1564,7 @@ function createSpaceVideosRouter() {
         }
         return res.json({ ...getCuratedPage(mode, category, query, 0, 9, scope), source: "curated", reason: "rate-limit" });
       }
-      pending = searchYouTube(mode, category, query, upstreamToken, key, scope);
+      pending = searchYouTube(mode, category, query, upstreamToken, key2, scope);
       inflight.set(cacheKey, pending);
     }
     try {
@@ -1721,10 +1721,10 @@ function supabaseStore(client) {
     }
   };
 }
-function isPublishableKey(key) {
-  if (key.startsWith("sb_publishable_")) return true;
+function isPublishableKey(key2) {
+  if (key2.startsWith("sb_publishable_")) return true;
   try {
-    const parts = key.split(".");
+    const parts = key2.split(".");
     if (parts.length !== 3) return false;
     return JSON.parse(Buffer.from(parts[1], "base64url").toString("utf8")).role === "anon";
   } catch {
@@ -1776,7 +1776,7 @@ function createCommunityRouter(options = {}) {
       return res.status(429).json({ error: "rate-limit" });
     }
     if (rates.size > 1e3) {
-      for (const [key, value] of rates) if (value.reset <= now) rates.delete(key);
+      for (const [key2, value] of rates) if (value.reset <= now) rates.delete(key2);
       while (rates.size > 1e3) rates.delete(rates.keys().next().value);
     }
     next();
@@ -2788,9 +2788,9 @@ function validateChatRequest(body) {
 function createNovaRateLimiter({ limit = RATE_LIMIT_REQUESTS, windowMs = RATE_LIMIT_WINDOW_MS, now = Date.now } = {}) {
   const clients = /* @__PURE__ */ new Map();
   return function checkRateLimit(clientIp) {
-    const key = typeof clientIp === "string" && clientIp.trim() ? clientIp.trim().slice(0, 128) : "unknown";
+    const key2 = typeof clientIp === "string" && clientIp.trim() ? clientIp.trim().slice(0, 128) : "unknown";
     const timestamp = now();
-    let entry = clients.get(key);
+    let entry = clients.get(key2);
     if (!entry && clients.size >= 4096) {
       for (const [client, bucket] of clients) {
         if (bucket.resetAt <= timestamp) clients.delete(client);
@@ -2801,7 +2801,7 @@ function createNovaRateLimiter({ limit = RATE_LIMIT_REQUESTS, windowMs = RATE_LI
     }
     if (!entry || entry.resetAt <= timestamp) {
       entry = { count: 0, resetAt: timestamp + windowMs };
-      clients.set(key, entry);
+      clients.set(key2, entry);
     }
     if (entry.count >= limit) {
       return {
@@ -3170,7 +3170,7 @@ function createNovaChatHandler({
       openrouter: resolveOpenRouterModel({
         baseModel: baseOpenRouterModel,
         level: validated.thinking,
-        readEnv: (key) => getProcessEnv()[key]
+        readEnv: (key2) => getProcessEnv()[key2]
       }),
       gemini: cleanModelName(readKey(getGeminiModel), DEFAULT_GEMINI_MODEL),
       arena: cleanModelName(readKey(getArenaModel), "arena_smart.aria")
@@ -3255,8 +3255,8 @@ var handleNovaChatRequest = createNovaChatHandler();
 var PROBE_TIMEOUT_MS = 12e3;
 var PROBE_COOLDOWN_MS = 1e4;
 var MAX_REASON_CHARS = 180;
-function envValue(env, key) {
-  const value = env?.[key];
+function envValue(env, key2) {
+  const value = env?.[key2];
   return typeof value === "string" ? value.trim() : "";
 }
 function redactReason(text, secrets = []) {
@@ -4402,55 +4402,6 @@ Explanation to translate: "${explanation}"`;
       return res.json({ success: true, data: fallback });
     }
   });
-  app2.get("/api/news", async (_req, res) => {
-    const newsItems = [
-      {
-        id: "news-1",
-        title: "NASA\u2019s James Webb Space Telescope Discovers Most Distant Known Black Hole",
-        date: "September 2026",
-        category: "Deep Space",
-        url: "https://www.nasa.gov/missions/webb/",
-        summary: "Astronomers using the James Webb Space Telescope have identified an active supermassive black hole thriving in a galaxy observed just 400 million years after the Big Bang.",
-        summarySi: "\u0DA2\u0DDA\u0DB8\u0DCA\u0DC3\u0DCA \u0DC0\u0DD9\u0DB6\u0DCA \u0D85\u0DB7\u0DCA\u200D\u0DBA\u0DC0\u0D9A\u0DCF\u0DC1 \u0DAF\u0DD4\u0DBB\u0DDA\u0D9A\u0DCA\u0DC2\u0DBA \u0DB8\u0D9F\u0DD2\u0DB1\u0DCA \u0DB8\u0DC4\u0DCF \u0DB4\u0DD2\u0DB4\u0DD2\u0DBB\u0DD4\u0DB8\u0DD9\u0DB1\u0DCA \u0DC0\u0DC3\u0DBB \u0DB8\u0DD2\u0DBD\u0DD2\u0DBA\u0DB1 400\u0D9A\u0DA7 \u0DB4\u0DC3\u0DD4\u0DC0 \u0DB6\u0DD2\u0DC4\u0DD2\u0DC0\u0DD6 \u0DAF\u0DD4\u0DBB\u0DC3\u0DCA\u0DAE\u0DAD\u0DB8 \u0D85\u0DAD\u0DD2 \u0DAF\u0DD0\u0DC0\u0DD0\u0DB1\u0DCA\u0DAD \u0D9A\u0DC5\u0DD4 \u0D9A\u0DD4\u0DC4\u0DBB\u0DBA\u0D9A\u0DCA \u0DC3\u0DDC\u0DBA\u0DCF\u0D9C\u0DD9\u0DB1 \u0D87\u0DAD.",
-        summaryTa: "\u0B9C\u0BC7\u0BAE\u0BCD\u0BB8\u0BCD \u0BB5\u0BC6\u0BAA\u0BCD \u0BB5\u0BBF\u0BA3\u0BCD\u0BB5\u0BC6\u0BB3\u0BBF \u0BA4\u0BCA\u0BB2\u0BC8\u0BA8\u0BCB\u0B95\u0BCD\u0B95\u0BBF, \u0BAA\u0BC6\u0BB0\u0BC1\u0BB5\u0BC6\u0B9F\u0BBF\u0BAA\u0BCD\u0BAA\u0BBF\u0BB1\u0BCD\u0B95\u0BC1 400 \u0BAE\u0BBF\u0BB2\u0BCD\u0BB2\u0BBF\u0BAF\u0BA9\u0BCD \u0B86\u0BA3\u0BCD\u0B9F\u0BC1\u0B95\u0BB3\u0BC1\u0B95\u0BCD\u0B95\u0BC1\u0BAA\u0BCD \u0BAA\u0BBF\u0BB1\u0B95\u0BC1 \u0BA4\u0BCB\u0BA9\u0BCD\u0BB1\u0BBF\u0BAF \u0BAE\u0BBF\u0B95 \u0BA4\u0BCA\u0BB2\u0BC8\u0BA4\u0BC2\u0BB0 \u0B95\u0BB0\u0BC1\u0BA8\u0BCD\u0BA4\u0BC1\u0BB3\u0BC8\u0BAF\u0BC8\u0B95\u0BCD \u0B95\u0BA3\u0BCD\u0B9F\u0BC1\u0BAA\u0BBF\u0B9F\u0BBF\u0BA4\u0BCD\u0BA4\u0BC1\u0BB3\u0BCD\u0BB3\u0BA4\u0BC1.",
-        image: "https://images.unsplash.com/photo-1614728894747-a83421e2b9c9?auto=format&fit=crop&w=800&q=80"
-      },
-      {
-        id: "news-2",
-        title: "Artemis Program Prepares Crew for Lunar Orbit Mission",
-        date: "September 2026",
-        category: "Lunar Exploration",
-        url: "https://www.nasa.gov/artemis",
-        summary: "NASA astronauts completed integrated launch simulations at Kennedy Space Center as preparations accelerate for the upcoming Artemis circumlunar voyage.",
-        summarySi: "\u0DB1\u0DCF\u0DC3\u0DCF \u0D86\u0DA7\u0DD9\u0DB8\u0DD2\u0DC3\u0DCA \u0DC0\u0DD0\u0DA9\u0DC3\u0DA7\u0DC4\u0DB1 \u0DBA\u0DA7\u0DAD\u0DDA \u0DC3\u0DB3 \u0DC0\u0DA7\u0DCF \u0D9C\u0DB8\u0DB1\u0DCA \u0D9A\u0DD2\u0DBB\u0DD3\u0DB8\u0DDA \u0DB8\u0DD9\u0DC4\u0DD9\u0DBA\u0DD4\u0DB8 \u0DC3\u0DB3\u0DC4\u0DCF \u0D85\u0DB7\u0DCA\u200D\u0DBA\u0DC0\u0D9A\u0DCF\u0DC1\u0D9C\u0DCF\u0DB8\u0DD3\u0DB1\u0DCA\u0D9C\u0DDA \u0DB4\u0DD4\u0DC4\u0DD4\u0DAB\u0DD4 \u0D9A\u0DA7\u0DBA\u0DD4\u0DAD\u0DD4 \u0DC3\u0DCF\u0DBB\u0DCA\u0DAE\u0D9A\u0DC0 \u0D85\u0DC0\u0DC3\u0DB1\u0DCA \u0D9A\u0DBB \u0D87\u0DAD.",
-        summaryTa: "\u0BA8\u0BBE\u0B9A\u0BBE\u0BB5\u0BBF\u0BA9\u0BCD \u0B86\u0BB0\u0BCD\u0B9F\u0BCD\u0B9F\u0BC6\u0BAE\u0BBF\u0BB8\u0BCD \u0BA4\u0BBF\u0B9F\u0BCD\u0B9F\u0BA4\u0BCD\u0BA4\u0BBF\u0BA9\u0BCD \u0B95\u0BC0\u0BB4\u0BCD \u0BA8\u0BBF\u0BB2\u0BB5\u0BC8\u0B9A\u0BCD \u0B9A\u0BC1\u0BB1\u0BCD\u0BB1\u0BBF \u0BB5\u0BB0\u0BC1\u0BAE\u0BCD \u0BAA\u0BA3\u0BBF\u0B95\u0BCD\u0B95\u0BBE\u0BA9 \u0BB5\u0BBF\u0BA3\u0BCD\u0BB5\u0BC6\u0BB3\u0BBF \u0BB5\u0BC0\u0BB0\u0BB0\u0BCD\u0B95\u0BB3\u0BBF\u0BA9\u0BCD \u0BAA\u0BAF\u0BBF\u0BB1\u0BCD\u0B9A\u0BBF \u0BB5\u0BC6\u0BB1\u0BCD\u0BB1\u0BBF\u0B95\u0BB0\u0BAE\u0BBE\u0B95 \u0BA8\u0BBF\u0BB1\u0BC8\u0BB5\u0BC1 \u0BAA\u0BC6\u0BB1\u0BCD\u0BB1\u0BC1\u0BB3\u0BCD\u0BB3\u0BA4\u0BC1.",
-        image: "https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&w=800&q=80"
-      },
-      {
-        id: "news-3",
-        title: "Perseverance Rover Unearths Organic Molecule Signatures in Jezero Crater",
-        date: "September 2026",
-        category: "Mars Exploration",
-        url: "https://mars.nasa.gov/mars2020/",
-        summary: "Samples cored by NASA Perseverance rover inside an ancient Martian river delta show promising concentrations of organic carbon compounds.",
-        summarySi: "\u0D85\u0D9F\u0DC4\u0DBB\u0DD4 \u0DB8\u0DAD \u0DA2\u0DD9\u0DC3\u0DD3\u0DBB\u0DDD \u0D86\u0DC0\u0DCF\u0DA7\u0DBA\u0DDA \u0DB4\u0DD0\u0DBB\u0DAB\u0DD2 \u0D9C\u0D82\u0D9C\u0DCF \u0DA9\u0DD9\u0DBD\u0DCA\u0DA7\u0DCF\u0DC0\u0DD9\u0DB1\u0DCA \u0D9A\u0DCF\u0DB6\u0DB1\u0DD2\u0D9A \u0D85\u0DAB\u0DD4\u0D9A \u0DC3\u0DCF\u0D9A\u0DCA\u0DC2\u0DD2 \u0DB1\u0DCF\u0DC3\u0DCF \u0DB4\u0DBB\u0DCA\u0DC3\u0DD9\u0DC0\u0DBB\u0DB1\u0DCA\u0DC3\u0DCA \u0DBB\u0DDD\u0DC0\u0DBB\u0DBA \u0DB8\u0D9F\u0DD2\u0DB1\u0DCA \u0DC3\u0DDC\u0DBA\u0DCF\u0D9C\u0DD9\u0DB1 \u0D87\u0DAD.",
-        summaryTa: "\u0B9A\u0BC6\u0BB5\u0BCD\u0BB5\u0BBE\u0BAF\u0BCD \u0B95\u0BBF\u0BB0\u0B95\u0BA4\u0BCD\u0BA4\u0BBF\u0BB2\u0BCD \u0B89\u0BB3\u0BCD\u0BB3 \u0B9C\u0BC6\u0B9A\u0BC6\u0BB0\u0BCB \u0BAA\u0BB3\u0BCD\u0BB3\u0BA4\u0BCD\u0BA4\u0BBF\u0BA9\u0BCD \u0BAA\u0BA3\u0BCD\u0B9F\u0BC8\u0BAF \u0BA8\u0BA4\u0BBF\u0BAA\u0BCD \u0BAA\u0B9F\u0BC1\u0B95\u0BC8\u0BAF\u0BBF\u0BB2\u0BCD \u0B95\u0BB0\u0BBF\u0BAE \u0BAE\u0BC2\u0BB2\u0B95\u0BCD\u0B95\u0BC2\u0BB1\u0BC1\u0B95\u0BB3\u0BBF\u0BA9\u0BCD \u0B85\u0B9F\u0BC8\u0BAF\u0BBE\u0BB3\u0B99\u0BCD\u0B95\u0BB3\u0BC8 \u0BAA\u0BC6\u0BB0\u0BCD\u0B9A\u0BB5\u0BB0\u0BA9\u0BCD\u0BB8\u0BCD \u0BB0\u0BCB\u0BB5\u0BB0\u0BCD \u0B95\u0BA3\u0BCD\u0B9F\u0BB1\u0BBF\u0BA8\u0BCD\u0BA4\u0BC1\u0BB3\u0BCD\u0BB3\u0BA4\u0BC1.",
-        image: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=800&q=80"
-      },
-      {
-        id: "news-4",
-        title: "Europa Clipper Trajectory on Target for Jovian Ocean World Arrival",
-        date: "September 2026",
-        category: "Outer Planets",
-        url: "https://europa.nasa.gov/",
-        summary: "Cruising toward Jupiter, the Europa Clipper spacecraft successfully deployed its radar antennas to peer beneath the icy shell of moon Europa.",
-        summarySi: "\u0DBA\u0DD4\u0DBB\u0DDD\u0DB4\u0DCF \u0D9A\u0DCA\u0DBD\u0DD2\u0DB4\u0DBB\u0DCA \u0DBA\u0DCF\u0DB1\u0DBA \u0DB6\u0DCA\u200D\u0DBB\u0DC4\u0DC3\u0DCA\u0DB4\u0DAD\u0DD2\u0D9C\u0DDA \u0D85\u0DBA\u0DD2\u0DC3\u0DCA \u0DC3\u0DC4\u0DD2\u0DAD \u0DBA\u0DD4\u0DBB\u0DDD\u0DB4\u0DCF \u0D8B\u0DB4\u0D9C\u0DCA\u200D\u0DBB\u0DC4\u0DBA\u0DCF\u0D9C\u0DDA \u0D85\u0DB7\u0DCA\u200D\u0DBA\u0DB1\u0DCA\u0DAD\u0DBB \u0DC3\u0DCF\u0D9C\u0DBB\u0DBA \u0D9C\u0DC0\u0DDA\u0DC2\u0DAB\u0DBA \u0DC3\u0DB3\u0DC4\u0DCF \u0DC3\u0DCF\u0DBB\u0DCA\u0DAE\u0D9A\u0DC0 \u0D9C\u0DB8\u0DB1\u0DCA \u0D9A\u0DBB\u0DBA\u0DD2.",
-        summaryTa: "\u0BAF\u0BC2\u0BB0\u0BCB\u0BAA\u0BCD\u0BAA\u0BBE \u0B95\u0BBF\u0BB3\u0BBF\u0BAA\u0BCD\u0BAA\u0BB0\u0BCD \u0BB5\u0BBF\u0BA3\u0BCD\u0B95\u0BB2\u0BAE\u0BCD \u0BB5\u0BBF\u0BAF\u0BBE\u0BB4\u0BA9\u0BBF\u0BA9\u0BCD \u0BAA\u0BA9\u0BBF \u0BAE\u0BC2\u0B9F\u0BBF\u0BAF \u0BAF\u0BC2\u0BB0\u0BCB\u0BAA\u0BCD\u0BAA\u0BBE \u0BA8\u0BBF\u0BB2\u0BB5\u0BBF\u0BA9\u0BCD \u0B86\u0BB4\u0BCD\u0B95\u0B9F\u0BB2\u0BC8 \u0B86\u0BAF\u0BCD\u0BB5\u0BC1 \u0B9A\u0BC6\u0BAF\u0BCD\u0BB5\u0BA4\u0BB1\u0BCD\u0B95\u0BBE\u0BA9 \u0BA4\u0BA9\u0BA4\u0BC1 \u0BAA\u0BAF\u0BA3\u0BA4\u0BCD\u0BA4\u0BC8 \u0BB5\u0BC6\u0BB1\u0BCD\u0BB1\u0BBF\u0B95\u0BB0\u0BAE\u0BBE\u0B95\u0BA4\u0BCD \u0BA4\u0BCA\u0B9F\u0BB0\u0BCD\u0B95\u0BBF\u0BB1\u0BA4\u0BC1.",
-        image: "https://images.unsplash.com/photo-1462331940025-496dfbfc7564?auto=format&fit=crop&w=800&q=80"
-      }
-    ];
-    res.json({ success: true, articles: newsItems });
-  });
   app2.get("/api/nasa-archive", async (req, res) => {
     const yearQuery = req.query.year ? parseInt(req.query.year, 10) : null;
     const searchQuery = (req.query.q || "").trim().toLowerCase();
@@ -4581,11 +4532,11 @@ Explanation to translate: "${explanation}"`;
 
 // server/workspaceConfig.ts
 import { Router as Router3 } from "express";
-function isPublishableKey2(key) {
-  if (!key) return false;
-  if (key.startsWith("sb_publishable_")) return key.length >= 24;
+function isPublishableKey2(key2) {
+  if (!key2) return false;
+  if (key2.startsWith("sb_publishable_")) return key2.length >= 24;
   try {
-    const parts = key.split(".");
+    const parts = key2.split(".");
     if (parts.length !== 3) return false;
     const payload = JSON.parse(Buffer.from(parts[1], "base64url").toString("utf8"));
     return payload?.role === "anon";
@@ -4616,6 +4567,472 @@ workspaceConfigRouter.get("/config", (_req, res) => {
   res.setHeader("Cache-Control", "no-store");
   res.json(readWorkspaceCloudConfig());
 });
+
+// server/spaceNews.ts
+import { Router as Router4 } from "express";
+var NEWS_API_VERSION = 1;
+var TOPICS = {
+  all: "astronomy telescope space science",
+  missions: "NASA mission spacecraft launch",
+  universe: "astrophysics black hole exoplanet galaxy",
+  earth: "Earth observation climate satellite NASA"
+};
+var MAX_LIMIT = 30;
+var DEFAULT_LIMIT = 12;
+var UPSTREAM_TIMEOUT_MS2 = 5e3;
+var CACHE_TTL_MS = 10 * 6e4;
+var PAPERS_TTL_MS = 30 * 6e4;
+var MAX_CACHE_ENTRIES = 60;
+var RATE_WINDOW_MS2 = 6e4;
+var RATE_MAX = 30;
+var ARXIV_DOCS = "https://info.arxiv.org/help/api/index.html";
+function key(name) {
+  return (process.env[name] || "").trim();
+}
+function capped(value, max) {
+  if (typeof value !== "string") return "";
+  return value.trim().slice(0, max);
+}
+var ENTITIES = {
+  amp: "&",
+  lt: "<",
+  gt: ">",
+  quot: '"',
+  apos: "'",
+  nbsp: " ",
+  "#39": "'",
+  "#8217": "\u2019",
+  "#8216": "\u2018",
+  "#8220": "\u201C",
+  "#8221": "\u201D",
+  "#8211": "\u2013",
+  "#8212": "\u2014",
+  "#8230": "\u2026"
+};
+function stripHtml(value) {
+  return value.replace(/<script[\s\S]*?<\/script>/gi, " ").replace(/<style[\s\S]*?<\/style>/gi, " ").replace(/<[^>]+>/g, " ").replace(/&([a-zA-Z#0-9]+);/g, (match, name) => ENTITIES[name] ?? match).replace(/\s+/g, " ").trim();
+}
+function httpUrl(value) {
+  if (typeof value !== "string" || !value.trim()) return null;
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" || url.protocol === "http:" ? url.toString() : null;
+  } catch {
+    return null;
+  }
+}
+function isoDate(value) {
+  if (typeof value !== "string") return null;
+  const time = Date.parse(value);
+  return Number.isNaN(time) ? null : new Date(time).toISOString();
+}
+function articleId(sourceId, url) {
+  let hash = 0;
+  for (let i = 0; i < url.length; i += 1) hash = hash * 31 + url.charCodeAt(i) >>> 0;
+  return `${sourceId}-${hash.toString(36)}`;
+}
+async function getText(url, headers = {}) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), UPSTREAM_TIMEOUT_MS2);
+  try {
+    const response = await fetch(url, { headers: { Accept: "*/*", ...headers }, signal: controller.signal });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.text();
+  } finally {
+    clearTimeout(timer);
+  }
+}
+async function getJson(url, headers = {}) {
+  const text = await getText(url, headers);
+  return JSON.parse(text);
+}
+async function fetchSpaceflight(topic, query, limit) {
+  const search = new URLSearchParams({ limit: String(limit), ordering: "-published_at" });
+  const term = query || TOPICS[topic];
+  if (term) search.set("search", term);
+  const data = await getJson(`https://api.spaceflightnewsapi.net/v4/articles/?${search.toString()}`);
+  const results = Array.isArray(data?.results) ? data.results : [];
+  return results.flatMap((entry) => {
+    const url = httpUrl(entry?.url);
+    const title = capped(stripHtml(entry?.title ?? ""), 300);
+    if (!url || !title) return [];
+    return [{
+      id: articleId("spaceflight", url),
+      title,
+      summary: capped(stripHtml(entry?.summary ?? ""), 600),
+      url,
+      imageUrl: httpUrl(entry?.image_url),
+      sourceId: "spaceflight",
+      sourceLabel: capped(stripHtml(entry?.news_site ?? ""), 80) || "Spaceflight News",
+      publishedAt: isoDate(entry?.published_at),
+      kind: "news"
+    }];
+  });
+}
+async function fetchGNews(topic, query, limit) {
+  const token = key("GNEWS_API_KEY");
+  if (!token) return [];
+  const search = new URLSearchParams({
+    q: query || TOPICS[topic],
+    lang: "en",
+    max: String(limit),
+    apikey: token
+  });
+  const data = await getJson(`https://gnews.io/api/v4/search?${search.toString()}`);
+  const articles = Array.isArray(data?.articles) ? data.articles : [];
+  return articles.flatMap((entry) => {
+    const url = httpUrl(entry?.url);
+    const title = capped(stripHtml(entry?.title ?? ""), 300);
+    if (!url || !title) return [];
+    return [{
+      id: articleId("gnews", url),
+      title,
+      summary: capped(stripHtml(entry?.description ?? ""), 600),
+      url,
+      imageUrl: httpUrl(entry?.image),
+      sourceId: "gnews",
+      sourceLabel: capped(stripHtml(entry?.source?.name ?? ""), 80) || "GNews",
+      publishedAt: isoDate(entry?.publishedAt),
+      kind: "news"
+    }];
+  });
+}
+async function fetchNewsApi(topic, query, limit) {
+  const token = key("NEWSAPI_KEY");
+  if (!token) return [];
+  const search = new URLSearchParams({
+    q: query || TOPICS[topic],
+    language: "en",
+    sortBy: "publishedAt",
+    pageSize: String(limit)
+  });
+  const data = await getJson(`https://newsapi.org/v2/everything?${search.toString()}`, {
+    "X-Api-Key": token
+  });
+  const articles = Array.isArray(data?.articles) ? data.articles : [];
+  return articles.flatMap((entry) => {
+    const url = httpUrl(entry?.url);
+    const title = capped(stripHtml(entry?.title ?? ""), 300);
+    if (!url || !title) return [];
+    return [{
+      id: articleId("newsapi", url),
+      title,
+      summary: capped(stripHtml(entry?.description ?? ""), 600),
+      url,
+      imageUrl: httpUrl(entry?.urlToImage),
+      sourceId: "newsapi",
+      sourceLabel: capped(stripHtml(entry?.source?.name ?? ""), 80) || "NewsAPI",
+      publishedAt: isoDate(entry?.publishedAt),
+      kind: "news"
+    }];
+  });
+}
+async function fetchGuardian(topic, query, limit) {
+  const token = key("GUARDIAN_API_KEY");
+  if (!token) return [];
+  const search = new URLSearchParams({
+    q: query || TOPICS[topic],
+    section: "science",
+    "show-fields": "trailText,thumbnail",
+    "page-size": String(limit),
+    "order-by": "newest",
+    "api-key": token
+  });
+  const data = await getJson(`https://content.guardianapis.com/search?${search.toString()}`);
+  const results = Array.isArray(data?.response?.results) ? data.response.results : [];
+  return results.flatMap((entry) => {
+    const url = httpUrl(entry?.webUrl);
+    const title = capped(stripHtml(entry?.webTitle ?? ""), 300);
+    if (!url || !title) return [];
+    return [{
+      id: articleId("guardian", url),
+      title,
+      summary: capped(stripHtml(entry?.fields?.trailText ?? ""), 600),
+      url,
+      imageUrl: httpUrl(entry?.fields?.thumbnail),
+      sourceId: "guardian",
+      sourceLabel: capped(stripHtml(entry?.sectionName ?? ""), 80) || "The Guardian",
+      publishedAt: isoDate(entry?.webPublicationDate),
+      kind: "news"
+    }];
+  });
+}
+var NEWS_SOURCES = [
+  {
+    id: "spaceflight",
+    label: "Spaceflight News",
+    envVar: null,
+    docs: "https://api.spaceflightnewsapi.net/v4/docs/",
+    fetch: fetchSpaceflight
+  },
+  {
+    id: "gnews",
+    label: "GNews",
+    envVar: "GNEWS_API_KEY",
+    docs: "https://gnews.io/docs/v4",
+    fetch: fetchGNews
+  },
+  {
+    id: "newsapi",
+    label: "NewsAPI",
+    envVar: "NEWSAPI_KEY",
+    docs: "https://newsapi.org/docs/endpoints/everything",
+    fetch: fetchNewsApi
+  },
+  {
+    id: "guardian",
+    label: "The Guardian",
+    envVar: "GUARDIAN_API_KEY",
+    docs: "https://open-platform.theguardian.com/documentation/",
+    fetch: fetchGuardian
+  }
+];
+function isConfigured(envVar) {
+  return envVar === null || Boolean(key(envVar));
+}
+function newsSourceInventory() {
+  return [
+    ...NEWS_SOURCES.map((source) => ({
+      id: source.id,
+      label: source.label,
+      kind: "news",
+      envVar: source.envVar,
+      docs: source.docs,
+      configured: isConfigured(source.envVar)
+    })),
+    {
+      id: "arxiv",
+      label: "arXiv astro-ph",
+      kind: "papers",
+      envVar: null,
+      docs: ARXIV_DOCS,
+      configured: true
+    }
+  ];
+}
+function parseArxivFeed(xml) {
+  const entries = xml.match(/<entry>[\s\S]*?<\/entry>/g) || [];
+  return entries.flatMap((entry) => {
+    const rawId = capped(entry.match(/<id>([\s\S]*?)<\/id>/)?.[1] ?? "", 200);
+    const title = capped(stripHtml(entry.match(/<title>([\s\S]*?)<\/title>/)?.[1] ?? ""), 300);
+    if (!rawId || !title) return [];
+    const url = httpUrl(rawId.replace(/^http:/, "https:"));
+    if (!url) return [];
+    const summary = capped(stripHtml(entry.match(/<summary>([\s\S]*?)<\/summary>/)?.[1] ?? ""), 700);
+    const authors = [...entry.matchAll(/<author>[\s\S]*?<name>([\s\S]*?)<\/name>[\s\S]*?<\/author>/g)].map((match) => capped(stripHtml(match[1]), 120)).filter(Boolean).slice(0, 6);
+    const categories = [...entry.matchAll(/<category term="([^"]{1,40})"/g)].map((match) => match[1]).slice(0, 4);
+    return [{
+      id: `arxiv-${url.split("/abs/")[1] || url}`.slice(0, 120),
+      title,
+      summary,
+      url,
+      authors,
+      publishedAt: isoDate(entry.match(/<published>([\s\S]*?)<\/published>/)?.[1]),
+      categories,
+      kind: "paper"
+    }];
+  });
+}
+var ARXIV_HEADERS = { "User-Agent": "NOVA-workspace/1.0 (astronomy reader)" };
+async function fetchArxiv(query, limit) {
+  const search = new URLSearchParams({
+    search_query: query ? `all:${query}` : "cat:astro-ph.*",
+    sortBy: "submittedDate",
+    sortOrder: "descending",
+    max_results: String(limit)
+  });
+  const xml = await getText(`https://export.arxiv.org/api/query?${search.toString()}`, ARXIV_HEADERS);
+  return parseArxivFeed(xml);
+}
+var buckets = /* @__PURE__ */ new Map();
+function rateLimit2(name, max, windowMs) {
+  return (req, res, next) => {
+    const ip = req.headers["x-forwarded-for"]?.split(",")[0]?.trim() || req.ip || "unknown";
+    const bucketKey = `${name}:${ip}`;
+    const now = Date.now();
+    const bucket = buckets.get(bucketKey);
+    if (!bucket || now > bucket.resetAt) {
+      buckets.set(bucketKey, { count: 1, resetAt: now + windowMs });
+      return next();
+    }
+    bucket.count += 1;
+    if (bucket.count > max) {
+      const retryAfter = Math.ceil((bucket.resetAt - now) / 1e3);
+      res.setHeader("Retry-After", String(retryAfter));
+      return res.status(429).json({
+        ok: false,
+        code: "rate-limited",
+        message: `Too many news requests. Try again in ${retryAfter} s.`,
+        retryAfter
+      });
+    }
+    return next();
+  };
+}
+function parseTopic(value) {
+  const raw = typeof value === "string" ? value.trim().toLowerCase() : "";
+  if (!raw) return "all";
+  return Object.prototype.hasOwnProperty.call(TOPICS, raw) ? raw : null;
+}
+function parseLimit(value) {
+  if (value === void 0 || value === null || value === "") return DEFAULT_LIMIT;
+  const num = Number(value);
+  if (!Number.isInteger(num) || num < 1 || num > MAX_LIMIT) return null;
+  return num;
+}
+function parseQuery(value) {
+  if (value === void 0 || value === null) return "";
+  if (typeof value !== "string") return null;
+  const query = value.trim();
+  if (query.length > 120) return null;
+  return query;
+}
+function sortAndDedupe(items, limit) {
+  const seen = /* @__PURE__ */ new Set();
+  const unique = [];
+  for (const item of items) {
+    const dedupeKey = item.url.replace(/^https?:\/\//, "").replace(/\/$/, "").toLowerCase();
+    if (seen.has(dedupeKey)) continue;
+    seen.add(dedupeKey);
+    unique.push(item);
+  }
+  unique.sort((a, b) => {
+    const left = a.publishedAt ? Date.parse(a.publishedAt) : 0;
+    const right = b.publishedAt ? Date.parse(b.publishedAt) : 0;
+    return right - left;
+  });
+  return unique.slice(0, limit);
+}
+function createSpaceNewsRouter() {
+  const router = Router4();
+  const cache2 = /* @__PURE__ */ new Map();
+  const readCache = (cacheKey, now) => {
+    const entry = cache2.get(cacheKey);
+    if (!entry) return null;
+    if (entry.expires <= now) {
+      cache2.delete(cacheKey);
+      return null;
+    }
+    return entry.body;
+  };
+  const writeCache = (cacheKey, body, ttl, now) => {
+    if (cache2.size >= MAX_CACHE_ENTRIES) {
+      const oldest = cache2.keys().next();
+      if (!oldest.done) cache2.delete(oldest.value);
+    }
+    cache2.set(cacheKey, { expires: now + ttl, body });
+  };
+  router.get("/sources", (_req, res) => {
+    res.json({ ok: true, version: NEWS_API_VERSION, sources: newsSourceInventory() });
+  });
+  router.get("/", rateLimit2("news", RATE_MAX, RATE_WINDOW_MS2), async (req, res) => {
+    const topic = parseTopic(req.query.topic);
+    if (!topic) {
+      return res.status(400).json({
+        ok: false,
+        code: "invalid-topic",
+        message: "topic must be one of: all, missions, universe, earth."
+      });
+    }
+    const limit = parseLimit(req.query.limit);
+    if (limit === null) {
+      return res.status(400).json({
+        ok: false,
+        code: "invalid-limit",
+        message: `limit must be an integer between 1 and ${MAX_LIMIT}.`
+      });
+    }
+    const query = parseQuery(req.query.q);
+    if (query === null) {
+      return res.status(400).json({ ok: false, code: "invalid-query", message: "q must be at most 120 characters." });
+    }
+    const now = Date.now();
+    const cacheKey = `news:${topic}:${limit}:${query}`;
+    const cached2 = readCache(cacheKey, now);
+    if (cached2) return res.json({ ...cached2, cached: true });
+    const attempts = NEWS_SOURCES.map(async (source) => {
+      if (!isConfigured(source.envVar)) {
+        return { source, state: "unconfigured", items: [] };
+      }
+      try {
+        const items2 = await source.fetch(topic, query, limit);
+        return { source, state: "ok", items: items2 };
+      } catch {
+        return { source, state: "error", items: [] };
+      }
+    });
+    const results = await Promise.all(attempts);
+    const items = sortAndDedupe(results.flatMap((result2) => result2.items), limit);
+    const sources = results.map((result2) => ({
+      id: result2.source.id,
+      label: result2.source.label,
+      kind: "news",
+      envVar: result2.source.envVar,
+      docs: result2.source.docs,
+      configured: isConfigured(result2.source.envVar),
+      state: result2.state,
+      count: result2.items.length
+    }));
+    const attempted = sources.filter((source) => source.configured);
+    if (items.length === 0 && attempted.length > 0 && attempted.every((source) => source.state === "error")) {
+      return res.status(502).json({
+        ok: false,
+        code: "upstream",
+        message: "Every configured news provider failed. Nothing is shown rather than something invented.",
+        sources
+      });
+    }
+    const body = {
+      ok: true,
+      version: NEWS_API_VERSION,
+      topic,
+      items,
+      sources,
+      generatedAt: new Date(now).toISOString()
+    };
+    writeCache(cacheKey, body, CACHE_TTL_MS, now);
+    return res.json(body);
+  });
+  router.get("/papers", rateLimit2("papers", RATE_MAX, RATE_WINDOW_MS2), async (req, res) => {
+    const limit = parseLimit(req.query.limit);
+    if (limit === null) {
+      return res.status(400).json({
+        ok: false,
+        code: "invalid-limit",
+        message: `limit must be an integer between 1 and ${MAX_LIMIT}.`
+      });
+    }
+    const query = parseQuery(req.query.q);
+    if (query === null) {
+      return res.status(400).json({ ok: false, code: "invalid-query", message: "q must be at most 120 characters." });
+    }
+    const now = Date.now();
+    const cacheKey = `papers:${limit}:${query}`;
+    const cached2 = readCache(cacheKey, now);
+    if (cached2) return res.json({ ...cached2, cached: true });
+    try {
+      const items = (await fetchArxiv(query, limit)).slice(0, limit);
+      const body = {
+        ok: true,
+        version: NEWS_API_VERSION,
+        source: "arxiv",
+        docs: ARXIV_DOCS,
+        items,
+        generatedAt: new Date(now).toISOString()
+      };
+      writeCache(cacheKey, body, PAPERS_TTL_MS, now);
+      return res.json(body);
+    } catch {
+      return res.status(502).json({
+        ok: false,
+        code: "upstream",
+        message: "arXiv did not answer. No papers are shown rather than something invented."
+      });
+    }
+  });
+  return router;
+}
+var spaceNewsRouter = createSpaceNewsRouter();
 
 // server.ts
 dotenv.config();
@@ -4690,21 +5107,21 @@ app.use((req, res, next) => {
   next();
 });
 var rateStore = /* @__PURE__ */ new Map();
-function rateLimit2(options) {
+function rateLimit3(options) {
   return (req, res, next) => {
     if (options.skip?.(req)) {
       return next();
     }
     const ip = req.ip || req.socket.remoteAddress || "unknown";
-    const key = `${options.keyPrefix}:${ip}`;
+    const key2 = `${options.keyPrefix}:${ip}`;
     const now = Date.now();
-    const entry = rateStore.get(key) || { count: 0, windowStart: now };
+    const entry = rateStore.get(key2) || { count: 0, windowStart: now };
     if (now - entry.windowStart >= options.windowMs) {
       entry.count = 0;
       entry.windowStart = now;
     }
     entry.count += 1;
-    rateStore.set(key, entry);
+    rateStore.set(key2, entry);
     res.setHeader("X-RateLimit-Limit", String(options.max));
     res.setHeader("X-RateLimit-Remaining", String(Math.max(0, options.max - entry.count)));
     res.setHeader("X-RateLimit-Reset", String(Math.ceil((entry.windowStart + options.windowMs - now) / 1e3)));
@@ -4719,13 +5136,13 @@ function rateLimit2(options) {
     next();
   };
 }
-app.use("/api/youtube/meta", rateLimit2({ windowMs: 6e4, max: 30, keyPrefix: "youtube-meta" }));
-app.use("/api/community", rateLimit2({ windowMs: 6e4, max: 20, keyPrefix: "community" }));
-app.use("/api/workspace/config", rateLimit2({ windowMs: 6e4, max: 60, keyPrefix: "workspace-config" }));
+app.use("/api/youtube/meta", rateLimit3({ windowMs: 6e4, max: 30, keyPrefix: "youtube-meta" }));
+app.use("/api/community", rateLimit3({ windowMs: 6e4, max: 20, keyPrefix: "community" }));
+app.use("/api/workspace/config", rateLimit3({ windowMs: 6e4, max: 60, keyPrefix: "workspace-config" }));
 var NOVA_CHAT_PATHS = ["/api/nova/chat", "/api/chat", "/api/openrouter/chat", "/api/nasa-ai"];
 app.use((req, res, next) => {
   if (NOVA_CHAT_PATHS.includes(req.path)) {
-    return rateLimit2({
+    return rateLimit3({
       windowMs: 6e4,
       max: 15,
       keyPrefix: "nova-chat",
@@ -4929,6 +5346,7 @@ app.use("/api/earth", earthRouter);
 app.use("/api/space-videos", spaceVideosRouter);
 app.use("/api/community", communityVideosRouter);
 app.use("/api/workspace", workspaceConfigRouter);
+app.use("/api/news", spaceNewsRouter);
 app.use("/api", (_req, res) => {
   res.status(404).json({ error: "Not found", code: "NOT_FOUND" });
 });

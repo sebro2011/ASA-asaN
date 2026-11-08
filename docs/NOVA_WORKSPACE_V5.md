@@ -115,6 +115,53 @@ served its fallback payload. The AI button is disabled while there is nothing
 real to ground on, so a prompt can never quote a value the server did not send.
 Feeds load independently: one failing card never blanks the other two.
 
+## 3c. Space News and arXiv papers (API keys)
+
+`/news` is a live workspace destination ("Space News" in the sidebar and the
+mobile bar). It reads two server routes and nothing else:
+
+| Route | Provider | Key | Notes |
+| --- | --- | --- | --- |
+| `/api/news` | Spaceflight News API v4 | none | free; always available |
+| `/api/news` | GNews | `GNEWS_API_KEY` | broad astronomy search |
+| `/api/news` | NewsAPI.org | `NEWSAPI_KEY` | sent as `X-Api-Key`, never in a URL |
+| `/api/news` | The Guardian | `GUARDIAN_API_KEY` | science desk, trail text + thumbnail |
+| `/api/news/papers` | arXiv astro-ph | none | Atom feed, newest first |
+
+**How keys behave.** All four are read server-side only. `GET /api/news/sources`
+returns `{ id, label, envVar, docs, configured }` — a boolean, never a value — and
+`/api/news` repeats that per source with `state: ok | unconfigured | error`.
+A provider without a key is never called. A provider that fails is reported as
+`unreachable` while the others still render; if *every* attempted provider fails
+the route answers `502 upstream` and the UI says "The news feed could not be
+reached." with a retry. No story, date or summary is ever synthesised.
+
+**What the surface shows.** Topic chips (All / Missions / Universe / Earth),
+a source strip, a responsive card grid (image, publisher, date, summary, outbound
+link) and an arXiv list with authors and categories. Every card has **Ask NOVA**,
+which queues a prompt quoting only that headline's title, publisher and summary
+and asks for established vs. uncertain science. Titles and summaries are
+HTML-stripped and length-capped on the server, so upstream markup cannot reach
+the DOM.
+
+**Environment.**
+
+```bash
+GNEWS_API_KEY=""        # https://gnews.io/
+NEWSAPI_KEY=""          # https://newsapi.org/register
+GUARDIAN_API_KEY=""     # https://open-platform.theguardian.com/access/
+```
+
+Server responses are cached for 10 minutes (30 for papers) with a 30/min per-IP
+limit, and identical concurrent requests share one upstream call in the cache.
+
+**Tests.** `npm run test:space-news` covers the inventory (booleans, no leakage),
+aggregation/dedupe/sorting, the NewsAPI header form, one-provider failure,
+all-failed 502, validation, caching, arXiv parsing and the rate limit.
+`npm run test:workspace-news` mounts the surface: configured vs. keyless chips,
+outbound link safety, honest empty/error states with a working retry, and the
+grounded Ask NOVA hand-off.
+
 ## 3b. Chat without an account
 
 `/chat` is no longer wrapped in `RequireAuth`. The session state decides where a
