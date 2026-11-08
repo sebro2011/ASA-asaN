@@ -1,0 +1,20 @@
+[
+ {
+  "messageID": "20240510-AL-001",
+  "messageType": "CME",
+  "messageIssueTime": "2024-05-10T12:00:00Z",
+  "messageBody": "CME observed leaving the Sun, Earth-directed component likely."
+ },
+ {
+  "messageID": "20240511-AL-002",
+  "messageType": "FLR",
+  "messageIssueTime": "2024-05-11T03:20:00Z",
+  "messageBody": "X-class flare observed."
+ },
+ {
+  "messageID": "20240512-AL-003",
+  "messageType": "GST",
+  "messageIssueTime": "2024-05-12T06:00:00Z",
+  "messageBody": "Geomagnetic storm in progress."
+ }
+]
