@@ -14,6 +14,7 @@ import { handleNovaDiagnostics } from './server/novaDiagnostics.js';
 import { setupNasaRoutes } from './server/nasaRoutes.ts';
 import { workspaceConfigRouter } from './server/workspaceConfig.ts';
 import { spaceNewsRouter } from './server/spaceNews.ts';
+import { forgeRouter } from './server/forgeRoutes.ts';
 
 dotenv.config();
 
@@ -411,6 +412,10 @@ app.use('/api/workspace', workspaceConfigRouter);
 // Space news + astronomy papers. Keys are read server-side only; the client
 // learns which providers are configured, never the key values.
 app.use('/api/news', spaceNewsRouter);
+// NOVA Hypothesis Forge — scientific investigation mode inside the NOVA AI
+// Assistant. Data connectors, statistical analysis and evidence classification
+// are server-side; the dataset registry carries documentation only.
+app.use('/api/forge', forgeRouter);
 
 // Unknown API paths answer JSON, so a typo never arrives at the client as an
 // HTML page it cannot parse.

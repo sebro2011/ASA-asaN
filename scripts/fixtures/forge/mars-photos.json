@@ -1,0 +1,12 @@
+{
+ "photos": [
+  {
+   "id": 1,
+   "img_src": "https://example.invalid/mars1.jpg"
+  },
+  {
+   "id": 2,
+   "img_src": "https://example.invalid/mars2.jpg"
+  }
+ ]
+}

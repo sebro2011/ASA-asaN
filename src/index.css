@@ -16,4 +16,5 @@
 @import "./styles/tokens.css";
 @import "./styles/nova-tokens.css";
 @import "./styles/workspace.css";
+@import "./styles/hypothesis-forge.css";
 @import "./globals.css";
