@@ -1,9 +1,10 @@
 /**
  * One-time, opt-in import of the pre-workspace assistant thread.
  *
- * `src/components/NasaAi.jsx` has always persisted its thread to
- * `nasa_ai_chat_thread_v3` (the last 25 messages). That is the only local user
- * content that exists today, so it is the only thing this phase can migrate.
+ * The retired legacy assistant (`src/components/NasaAi.jsx`, removed in favour
+ * of the workspace chat) persisted its thread to `nasa_ai_chat_thread_v3` (the
+ * last 25 messages). That is the only local user content that exists, so it is
+ * the only thing this importer migrates.
  *
  * Guarantees, in order of importance:
  *   1. **Nothing is deleted.** The local key is never removed here; the profile

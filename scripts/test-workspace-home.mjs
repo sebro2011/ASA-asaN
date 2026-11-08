@@ -77,11 +77,16 @@ function installDom() {
 }
 
 /** Only what Home touches: auth session, the profile row and `/api/nova/config`. */
-function stubFetch() {
+function stubFetch({ feeds = null } = {}) {
   const calls = [];
   globalThis.fetch = async (url) => {
     const target = String(url);
     calls.push(target);
+    if (feeds) {
+      for (const [path, body] of Object.entries(feeds)) {
+        if (target.includes(path)) return json(body);
+      }
+    }
     if (target.includes('/api/workspace/config')) {
       return json({
         enabled: true,
@@ -137,7 +142,7 @@ function createFakeClient() {
   return client;
 }
 
-async function mountHome() {
+async function mountHome({ client } = {}) {
   const React = (await import('react')).default;
   const { act } = await import('react');
   const { createRoot } = await import('react-dom/client');
@@ -163,7 +168,7 @@ async function mountHome() {
             null,
             React.createElement(
               AuthProvider,
-              { createClient: async () => createFakeClient() },
+              { createClient: async () => (client === undefined ? createFakeClient() : client) },
               React.createElement(HomeSurface),
             ),
           ),
@@ -246,11 +251,169 @@ test('the greeting, subtitle and composer are on the page', async () => {
     stubFetch();
     const app = await mountHome();
     assert.match(app.text(), /Good (morning|afternoon|evening)/);
-    assert.match(app.text(), /AI workspace for thinking, writing and organising/);
+    assert.match(app.text(), /Your astronomy workspace/);
     const composer = document.querySelector('#nova-home-prompt');
     assert.ok(composer, 'a composer input exists');
-    assert.match(composer.getAttribute('placeholder'), /Ask Nova anything/);
+    assert.match(composer.getAttribute('placeholder'), /Ask NOVA about the sky/);
     assert.equal(document.querySelectorAll('.nova-chip-glass').length, 4, 'four prompt suggestions');
+    await app.unmount();
+  } finally {
+    dom.window.close();
+  }
+});
+
+test('the thinking picker lists all five levels in order and remembers the choice', async () => {
+  const dom = installDom();
+  try {
+    stubFetch();
+    const app = await mountHome();
+
+    const trigger = [...document.querySelectorAll('button')].find((button) =>
+      (button.getAttribute('aria-label') || '').startsWith('Thinking level'),
+    );
+    assert.ok(trigger, 'the composer carries a thinking picker');
+    assert.match(trigger.textContent || '', /Auto/);
+
+    await app.act(async () => {
+      trigger.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+    });
+
+    const options = [...document.querySelectorAll('[role="option"]')];
+    assert.equal(options.length, 5, 'all five rungs are offered');
+    assert.deepEqual(
+      options.map((option) =>
+        (option.querySelector('.nova-thinking__option-label')?.textContent || '')
+          .replace(/[·●]/g, '')
+          .trim(),
+      ),
+      ['Auto', 'Flash', 'Flash thinking', 'Thinking', 'Deep thinking'],
+      'the ladder is ordered auto → deep',
+    );
+    assert.equal(options[0].getAttribute('aria-selected'), 'true', 'auto is the default');
+
+    await app.act(async () => {
+      options[4].dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+    });
+    await settle(app.act, 40);
+
+    assert.equal(window.localStorage.getItem('nova_thinking_level_v1'), 'deep-thinking');
+    assert.match(trigger.textContent || '', /Deep thinking/);
+    assert.equal(document.querySelectorAll('[role="option"]').length, 0, 'the list closes after choosing');
+    await app.unmount();
+  } finally {
+    dom.window.close();
+  }
+});
+
+test('a starter chosen on Home carries its thinking level into the chat queue', async () => {
+  const dom = installDom();
+  try {
+    stubFetch();
+    window.sessionStorage.clear();
+    const app = await mountHome();
+
+    const card = [...document.querySelectorAll('.nova-science-card')].find((node) =>
+      /Mission briefing/.test(node.textContent || ''),
+    );
+    assert.ok(card, 'the astronomy studio offers a mission briefing starter');
+    await app.act(async () => {
+      card.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+    });
+    await settle(app.act, 40);
+
+    assert.equal(window.location.pathname, '/chat');
+    assert.match(window.sessionStorage.getItem('nova_pending_prompt') || '', /Artemis/);
+    assert.equal(window.sessionStorage.getItem('nova_pending_thinking'), 'thinking');
+    await app.unmount();
+  } finally {
+    dom.window.close();
+  }
+});
+
+test('Sky now reads the three live feeds and grounds a prompt on real values', async () => {
+  const dom = installDom();
+  try {
+    stubFetch({
+      feeds: {
+        '/api/apod': {
+          success: true,
+          data: {
+            title: 'The Pillars of Creation',
+            date: '2026-11-08',
+            media_type: 'image',
+            url: 'https://apod.example/pillars.jpg',
+          },
+        },
+        '/api/asteroids/neows': {
+          success: true,
+          data: {
+            near_earth_objects: {
+              '2026-11-08': [
+                {
+                  name: '99942 Apophis (2004 MN4)',
+                  close_approach_data: [
+                    {
+                      close_approach_date: '2026-11-08',
+                      relative_velocity: { kilometers_per_second: '30.73' },
+                      miss_distance: { kilometers: '31600', lunar: '0.08' },
+                    },
+                  ],
+                },
+              ],
+            },
+          },
+        },
+        '/api/iss': {
+          success: true,
+          data: { latitude: 12.34, longitude: 56.78, altitude: 420.1, velocity: 27600 },
+        },
+      },
+    });
+    window.sessionStorage.clear();
+    const app = await mountHome();
+    await settle(app.act, 80);
+
+    const text = app.text();
+    assert.match(text, /Sky now/, 'the live astronomy section is on the dashboard');
+    assert.match(text, /The Pillars of Creation/);
+    assert.match(text, /0\.08 lunar distances/);
+    assert.match(text, /12\.34°, 56\.78° · 420\.1 km/);
+    assert.equal(text.includes('Feed unavailable right now.'), false, 'a served feed is not shown as unavailable');
+
+    const card = [...document.querySelectorAll('.nova-sky-card')].find((node) =>
+      /The Pillars of Creation/.test(node.textContent || ''),
+    );
+    const ask = [...card.querySelectorAll('button')].find((node) => /Ask NOVA/.test(node.textContent || ''));
+    assert.ok(ask, 'each live card can hand its values to the AI');
+    await app.act(async () => {
+      ask.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+    });
+    await settle(app.act, 40);
+
+    const prompt = window.sessionStorage.getItem('nova_pending_prompt') || '';
+    assert.match(prompt, /The Pillars of Creation/);
+    assert.match(prompt, /2026-11-08/);
+    assert.equal(window.location.pathname, '/chat');
+    await app.unmount();
+  } finally {
+    dom.window.close();
+  }
+});
+
+test('a failed sky feed says so instead of inventing a value', async () => {
+  const dom = installDom();
+  try {
+    stubFetch({ feeds: { '/api/apod': { success: false } } });
+    const app = await mountHome();
+    await settle(app.act, 80);
+
+    const card = [...document.querySelectorAll('.nova-sky-card')].find((node) =>
+      /Picture of the day/.test(node.textContent || ''),
+    );
+    assert.ok(card, 'the APOD card is rendered');
+    assert.match(card.textContent, /Feed unavailable right now\./);
+    const retry = [...card.querySelectorAll('button')].find((node) => /Retry/.test(node.textContent || ''));
+    assert.ok(retry, 'a failed feed offers a retry, not a fake value');
     await app.unmount();
   } finally {
     dom.window.close();
@@ -285,6 +448,34 @@ test('sending from Home queues the prompt and opens the chat', async () => {
   }
 });
 
+test('a signed-out visitor is not blocked from the AI surface', async () => {
+  const dom = installDom();
+  try {
+    stubFetch();
+    window.sessionStorage.clear();
+    window.localStorage.clear();
+    const app = await mountHome({ client: null });
+
+    const input = document.querySelector('#nova-home-prompt');
+    await app.act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set;
+      setter.call(input, 'Explain the Moon phases');
+      input.dispatchEvent(new window.Event('input', { bubbles: true }));
+    });
+    await app.act(async () => {
+      input.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    });
+    await settle(app.act, 60);
+
+    // No sign-in detour: the guest lands in the chat workspace with the prompt.
+    assert.equal(window.location.pathname, '/chat');
+    assert.equal(window.sessionStorage.getItem('nova_pending_prompt'), 'Explain the Moon phases');
+    await app.unmount();
+  } finally {
+    dom.window.close();
+  }
+});
+
 test('an empty composer never queues anything', async () => {
   const dom = installDom();
   try {
@@ -304,7 +495,7 @@ test('an empty composer never queues anything', async () => {
   }
 });
 
-test('quick actions and the roadmap only point at routes that exist', async () => {
+test('quick actions only point at routes that exist', async () => {
   const dom = installDom();
   try {
     stubFetch();

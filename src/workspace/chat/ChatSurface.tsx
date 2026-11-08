@@ -1,31 +1,44 @@
 /**
- * NOVA Chat surface (Phase 3D-1).
+ * NOVA Chat surface — the astronomy-focused AI workspace.
  *
- * Conversations live in Supabase; the reply transport is the existing
- * `POST /api/nova/chat` handler, unchanged. Signed-in only, by decision: the
- * route is wrapped in `RequireAuth`, so every write has a real owner and RLS
- * does the enforcement.
+ * Layout, left to right: a conversation rail (search, filter, pin/archive) and
+ * the thread itself, with a sticky head, the transcript, and a floating composer
+ * whose toolbar carries the provider and the five-level thinking ladder
+ * (auto → flash → flash thinking → thinking → deep thinking).
  *
- * Honesty notes:
- *  - the reply is revealed with a typewriter effect, not streamed; nothing in
- *    the UI claims otherwise;
- *  - a message that could not be persisted is marked "not saved" instead of
- *    silently pretending it was.
+ * Astronomy is a first-class part of the surface, not a garnish: the empty state
+ * offers four grounded space-science starters, and each one pre-selects the
+ * thinking level that suits it. The starters ask for reasoning, named sources
+ * and explicit uncertainty; none of them asks NOVA to pretend it has live
+ * telemetry.
+ *
+ * Honesty notes (unchanged from Phase 3D-1):
+ *  - a reply is revealed with a typewriter effect, not streamed;
+ *  - a message that could not be persisted is marked "not saved";
+ *  - the model and provider that actually answered are recorded on the bubble.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
+  Aperture,
   Archive,
   ArchiveRestore,
+  ArrowUp,
+  Brain,
   Check,
   Copy,
+  Leaf,
+  Loader2,
+  MessageSquarePlus,
   Pencil,
   Pin,
   PinOff,
-  Plus,
   RefreshCw,
-  Send,
+  Rocket,
+  Search,
   Square,
+  Target,
+  Telescope,
   Trash2,
   TriangleAlert,
   X,
@@ -43,8 +56,18 @@ import {
   type ChatTurn,
 } from './chatClient';
 import { useConversations, useThread } from './useChatData';
-import { takePrompt } from './pendingPrompt';
+import { takePrompt, takeThinking } from './pendingPrompt';
 import MessageBody from './MessageBody';
+import ThinkingMenu from './ThinkingMenu';
+import {
+  isThinkingLevel,
+  unavailableThinkingLevels,
+  readThinkingPreference,
+  thinkingMeta,
+  writeThinkingPreference,
+  type ThinkingLevel,
+} from './thinking';
+import { DEEP_SCIENCE_PROMPT, SCIENCE_PROMPTS, type SciencePromptId } from './sciencePrompts';
 import { displayModelName } from '../../lib/modelLabels';
 import NovaOrb from '../home/NovaOrb';
 
@@ -61,6 +84,22 @@ function providerLabel(provider: ChatProvider, t: (key: string) => string): stri
       return t('wsChatProvider_local');
     default:
       return t('wsChatProvider_auto');
+  }
+}
+
+function ScienceIcon({ id, size = 16 }: { id: SciencePromptId | 'deep'; size?: number }) {
+  const props = { size, strokeWidth: 1.8, 'aria-hidden': true } as const;
+  switch (id) {
+    case 'mission':
+      return <Rocket {...props} />;
+    case 'sky':
+      return <Telescope {...props} />;
+    case 'neo':
+      return <Target {...props} />;
+    case 'earth':
+      return <Leaf {...props} />;
+    default:
+      return <Brain {...props} />;
   }
 }
 
@@ -119,8 +158,8 @@ function useTypewriter(text: string, enabled: boolean) {
 export default function ChatSurface() {
   const { t, i18n } = useTranslation();
   const route = useRoute();
-  const { client, user, profile } = useAuth();
-  const { providers } = useProviderConfig();
+  const { client, user, profile, status: authStatus } = useAuth();
+  const { providers, thinking: thinkingCatalogue } = useProviderConfig();
   const userId = user?.id ?? null;
   const conversationId = route.id ?? null;
 
@@ -137,11 +176,15 @@ export default function ChatSurface() {
   const [provider, setProvider] = useState<ChatProvider>(
     (profile?.preferred_provider as ChatProvider | undefined) ?? 'auto',
   );
+  const [thinking, setThinking] = useState<ThinkingLevel>(readThinkingPreference);
   const [revealingId, setRevealingId] = useState<string | null>(null);
+  const [apodState, setApodState] = useState<'idle' | 'loading' | 'error'>('idle');
+  const [apodNotice, setApodNotice] = useState('');
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const pendingRef = useRef(false);
   const copyTimer = useRef<number | null>(null);
+  const composerRef = useRef<HTMLTextAreaElement | null>(null);
 
   const locale = i18n.language || 'en';
   const active = conversations.items.find((row) => row.id === conversationId) ?? null;
@@ -155,9 +198,22 @@ export default function ChatSurface() {
     return list;
   }, [providers]);
 
+  const unavailable = useMemo(
+    () => unavailableThinkingLevels(thinkingCatalogue?.levels),
+    [thinkingCatalogue],
+  );
+
   useEffect(() => {
     if (!available.includes(provider)) setProvider('auto');
   }, [available, provider]);
+
+  useEffect(() => {
+    if (unavailable.includes(thinking)) setThinking('auto');
+  }, [unavailable, thinking]);
+
+  useEffect(() => {
+    writeThinkingPreference(thinking);
+  }, [thinking]);
 
   const visible = conversations.items.filter((row) =>
     showArchived
@@ -167,6 +223,7 @@ export default function ChatSurface() {
   const archivedCount = conversations.items.filter((row) => row.archived).length;
 
   const lastAssistant = [...thread.messages].reverse().find((row) => row.role === 'assistant');
+  const currentThinking = thinkingMeta(thinking);
 
   useEffect(
     () => () => {
@@ -200,11 +257,12 @@ export default function ChatSurface() {
   }, []);
 
   /**
-   * Ask the unchanged `/api/nova/chat` handler for a reply and record it.
-   * The request carries an AbortSignal so Stop can end it immediately.
+   * Ask `/api/nova/chat` for a reply and record it. The request carries the
+   * chosen thinking level, the provider and an AbortSignal so Stop can end it
+   * immediately.
    */
   const requestReply = useCallback(
-    async (history: ChatTurn[], targetId: string | null) => {
+    async (history: ChatTurn[], targetId: string | null, level: ThinkingLevel) => {
       const controller = new AbortController();
       abortRef.current = controller;
 
@@ -212,6 +270,7 @@ export default function ChatSurface() {
         messages: history,
         lang: locale.slice(0, 2),
         provider,
+        thinking: level,
         signal: controller.signal,
       });
       abortRef.current = null;
@@ -261,9 +320,12 @@ export default function ChatSurface() {
   );
 
   const send = useCallback(
-    async (override?: string) => {
+    async (override?: string, levelOverride?: ThinkingLevel) => {
       const text = (override ?? draft).trim();
       if (!text || sending) return;
+      const requested = levelOverride ?? thinking;
+      const level: ThinkingLevel = unavailable.includes(requested) ? 'auto' : requested;
+      if (levelOverride && level !== thinking) setThinking(level);
       setSending(true);
       setDraft('');
       setShowList(false);
@@ -288,9 +350,9 @@ export default function ChatSurface() {
         { role: 'user' as const, content: text },
       ]);
 
-      await requestReply(history, targetId);
+      await requestReply(history, targetId, level);
     },
-    [draft, sending, conversationId, conversations, thread, requestReply],
+    [draft, sending, thinking, unavailable, conversationId, conversations, thread, requestReply],
   );
 
   /**
@@ -310,12 +372,65 @@ export default function ChatSurface() {
         .filter((row) => row.id !== lastReply?.id)
         .map((row) => ({ role: row.role, content: row.content })),
     );
-    await requestReply(history, conversationId);
-  }, [sending, conversationId, thread, requestReply]);
+    await requestReply(history, conversationId, thinking);
+  }, [sending, conversationId, thread, requestReply, thinking]);
 
   const stop = useCallback(() => {
     abortRef.current?.abort();
   }, []);
+
+  /** Put a prompt (and its level) into the composer, ready to edit. */
+  const seedPrompt = useCallback((text: string, level: ThinkingLevel) => {
+    setDraft(text);
+    setThinking(level);
+    setShowList(false);
+    const composer = composerRef.current ?? document.getElementById('nova-chat-composer');
+    (composer as HTMLTextAreaElement | null)?.focus();
+  }, []);
+
+  /** A science starter seeds the composer and pre-selects its level. */
+  const applySciencePrompt = useCallback(
+    (promptKey: string, level: ThinkingLevel) => seedPrompt(t(promptKey), level),
+    [seedPrompt, t],
+  );
+
+  /**
+   * Ground a question in real data: fetch today's NASA APOD and put its own
+   * caption into the prompt. The caption is quoted verbatim and labelled, and a
+   * cached reference entry is announced rather than passed off as live.
+   */
+  const groundWithApod = useCallback(async () => {
+    if (apodState === 'loading') return;
+    setApodState('loading');
+    setApodNotice('');
+    try {
+      const response = await fetch('/api/apod', { headers: { Accept: 'application/json' } });
+      if (!response.ok) throw new Error('apod-unavailable');
+      const payload = (await response.json()) as {
+        data?: { title?: unknown; date?: unknown; explanation?: unknown };
+        isFallback?: unknown;
+      };
+      const title = typeof payload?.data?.title === 'string' ? payload.data.title : '';
+      if (!title) throw new Error('apod-empty');
+      const explanation = typeof payload?.data?.explanation === 'string'
+        ? payload.data.explanation.replace(/\s+/g, ' ').trim().slice(0, 700)
+        : '';
+      const date = typeof payload?.data?.date === 'string' ? payload.data.date.slice(0, 10) : '';
+      seedPrompt(
+        t('wsScienceApodPrompt', {
+          title: title.slice(0, 160),
+          date,
+          explanation,
+          interpolation: { escapeValue: false },
+        }),
+        'thinking',
+      );
+      setApodState('idle');
+      if (payload?.isFallback === true) setApodNotice(t('wsScienceApodFallback'));
+    } catch {
+      setApodState('error');
+    }
+  }, [apodState, seedPrompt, t]);
 
   /**
    * A prompt typed on Home is handed over through sessionStorage. It is consumed
@@ -324,11 +439,15 @@ export default function ChatSurface() {
    */
   useEffect(() => {
     if (pendingRef.current || conversationId) return;
+    if (authStatus === 'loading') return;
     if (conversations.state !== 'ready') return;
     pendingRef.current = true;
     const pending = takePrompt();
-    if (pending) void send(pending);
-  }, [conversationId, conversations.state, send]);
+    const pendingLevel = takeThinking();
+    if (pending) {
+      void send(pending, isThinkingLevel(pendingLevel) ? pendingLevel : undefined);
+    }
+  }, [authStatus, conversationId, conversations.state, send]);
 
   const reveal = useTypewriter(
     revealingId && lastAssistant?.id === revealingId ? lastAssistant.content : '',
@@ -340,57 +459,91 @@ export default function ChatSurface() {
     if (revealingId && reveal.done) setRevealingId(null);
   }, [revealingId, reveal.done]);
 
+  // The session state decides where conversations live (cloud vs. device), so
+  // the surface waits one tick rather than briefly reading the wrong store.
+  if (authStatus === 'loading') {
+    return (
+      <div className="nova-chat-shell">
+        <div className="nova-card m-auto p-5 text-[12.5px] text-ws-text-3" role="status">
+          {t('wsChatLoading')}
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="flex h-full min-h-0 gap-3">
-      {/* Conversation list */}
+    <div className="nova-chat-shell">
+      {/* ------------------------------------------------------ conversation rail */}
       <aside
-        className={`${showList ? 'flex' : 'hidden'} nova-glass-strong w-full shrink-0 flex-col gap-3 rounded-[22px] p-3 md:flex md:w-[288px]`}
+        className={`nova-chat-rail ${showList ? 'flex' : 'hidden'} md:flex`}
         aria-label={t('wsChatListTitle')}
       >
-        <div className="flex items-center gap-2">
+        <div className="nova-chat-rail__head">
+          <p className="nova-chat-rail__title">{t('wsChatListTitle')}</p>
           <button
             type="button"
             onClick={() => navigate('/chat')}
-            className="nova-btn nova-btn--primary flex-1 justify-center"
+            className="nova-btn nova-btn--primary nova-chat-rail__new"
           >
-            <Plus size={14} strokeWidth={2.2} aria-hidden="true" />
+            <MessageSquarePlus size={14} strokeWidth={2.1} aria-hidden="true" />
             {t('wsChatNew')}
           </button>
         </div>
 
-        <input
-          type="search"
-          value={filter}
-          onChange={(event) => setFilter(event.target.value)}
-          placeholder={t('wsChatFilterPlaceholder')}
-          aria-label={t('wsChatFilterPlaceholder')}
-          className="nova-field"
-        />
+        {authStatus !== 'signed-in' ? (
+          <div className="nova-chat-guest">
+            <p className="nova-chat-guest__title">{t('wsChatGuestTitle')}</p>
+            <p className="nova-chat-guest__body">{t('wsChatGuestBody')}</p>
+            <Link to="/profile" className="nova-chat-guest__cta">
+              {t('wsChatGuestCta')}
+            </Link>
+          </div>
+        ) : null}
 
-        <div className="flex items-center justify-between gap-2 text-[11px] text-ws-text-3">
-          <span>{showArchived ? t('wsChatArchivedToggle') : t('wsChatListTitle')}</span>
+        <div className="nova-chat-rail__search">
+          <Search size={13} strokeWidth={1.9} aria-hidden="true" />
+          <input
+            type="search"
+            value={filter}
+            onChange={(event) => setFilter(event.target.value)}
+            placeholder={t('wsChatFilterPlaceholder')}
+            aria-label={t('wsChatFilterPlaceholder')}
+            className="nova-chat-rail__input"
+          />
+        </div>
+
+        <div className="nova-chat-rail__tabs" role="group" aria-label={t('wsChatListTitle')}>
           <button
             type="button"
-            onClick={() => setShowArchived((value) => !value)}
-            className="nova-link text-[11px]"
-            aria-pressed={showArchived}
+            className={`nova-chat-rail__tab ${showArchived ? '' : 'nova-chat-rail__tab--active'}`}
+            aria-pressed={!showArchived}
+            onClick={() => setShowArchived(false)}
           >
-            {showArchived ? t('wsChatListTitle') : `${t('wsChatArchivedToggle')}${archivedCount ? ` (${archivedCount})` : ''}`}
+            {t('wsChatListTitle')}
+          </button>
+          <button
+            type="button"
+            className={`nova-chat-rail__tab ${showArchived ? 'nova-chat-rail__tab--active' : ''}`}
+            aria-pressed={showArchived}
+            onClick={() => setShowArchived(true)}
+          >
+            {t('wsChatArchivedToggle')}
+            {archivedCount ? <span className="nova-chat-rail__count">{archivedCount}</span> : null}
           </button>
         </div>
 
         <div
-          className="min-h-0 flex-1 overflow-y-auto overscroll-contain"
+          className="nova-chat-rail__scroll overflow-y-auto"
           role="region"
           aria-label={t('wsChatListTitle')}
           tabIndex={0}
         >
           {conversations.state === 'loading' && conversations.items.length === 0 ? (
-            <p className="p-2 text-[12px] text-ws-text-3">{t('wsChatLoading')}</p>
+            <p className="px-2 py-1.5 text-[12px] text-ws-text-3">{t('wsChatLoading')}</p>
           ) : null}
 
           {conversations.state === 'error' ? (
-            <div className="nova-card p-3 text-[12px] text-ws-text-2">
+            <div className="nova-card m-1 p-3 text-[12px] text-ws-text-2">
               <p>{t('wsChatListError')}</p>
               <button type="button" onClick={() => void conversations.reload()} className="nova-link mt-2">
                 {t('wsChatRetry')}
@@ -399,18 +552,19 @@ export default function ChatSurface() {
           ) : null}
 
           {visible.length === 0 && conversations.state === 'ready' ? (
-            <p className="p-2 text-[12px] leading-relaxed text-ws-text-3">
+            <p className="px-2 py-1.5 text-[12px] leading-relaxed text-ws-text-3">
               {showArchived ? t('wsChatEmptyArchive') : t('wsChatEmptyList')}
             </p>
           ) : null}
 
-          <ul className="flex flex-col gap-1">
+          <ul className="nova-chat-rail__list">
             {visible.map((row) => {
               const isActive = row.id === conversationId;
               return (
                 <li key={row.id}>
                   <div
-                    className={`nova-nav-item group flex items-center gap-1.5 ${isActive ? 'nova-nav-item--active' : ''}`}
+                    className={`nova-chat-rail__item group ${isActive ? 'nova-chat-rail__item--active' : ''}`}
+                    aria-current={isActive ? 'page' : undefined}
                   >
                     {renaming === row.id ? (
                       <form
@@ -444,21 +598,21 @@ export default function ChatSurface() {
                       <>
                         <Link
                           to={`/chat/${row.id}`}
-                          className="min-w-0 flex-1"
+                          className="nova-chat-rail__link"
                           onClick={() => setShowList(false)}
                         >
-                          <span className="flex min-w-0 items-center gap-1.5">
+                          <span className="nova-chat-rail__link-title">
                             {row.pinned ? (
                               <Pin size={11} className="shrink-0 text-ws-accent-ink" aria-hidden="true" />
                             ) : null}
-                            <span className="truncate text-[12.5px]">{row.title}</span>
+                            <span className="truncate">{row.title}</span>
                           </span>
-                          <span className="mt-0.5 block text-[10.5px] text-ws-text-3">
+                          <span className="nova-chat-rail__link-time">
                             {relativeTime(row.last_message_at ?? row.updated_at, locale)}
                           </span>
                         </Link>
 
-                        <span className="flex shrink-0 items-center opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 max-md:opacity-100">
+                        <span className="nova-chat-rail__actions">
                           <button
                             type="button"
                             className="nova-icon-btn h-6 w-6"
@@ -512,39 +666,135 @@ export default function ChatSurface() {
         </div>
       </aside>
 
-      {/* Thread */}
-      <section className="flex min-w-0 flex-1 flex-col gap-3" aria-label={t('wsChatTitle')}>
-        <div className="flex items-center gap-2 md:hidden">
-          <button type="button" className="nova-btn nova-btn--ghost" onClick={() => setShowList((value) => !value)}>
+      {/* --------------------------------------------------------------- thread */}
+      <section className="nova-chat-main" aria-label={t('wsChatTitle')}>
+        <header className="nova-chat-head">
+          <button
+            type="button"
+            className="nova-btn nova-btn--ghost nova-chat-head__list md:hidden"
+            onClick={() => setShowList((value) => !value)}
+            aria-label={t('wsChatListTitle')}
+          >
+            <Archive size={14} strokeWidth={1.9} aria-hidden="true" />
             {t('wsChatListTitle')}
           </button>
-        </div>
 
-        {active ? (
-          <div className="flex items-center justify-between gap-3">
-            <h1 className="truncate text-[15px] font-semibold text-ws-text">{active.title}</h1>
-            {active.archived ? <span className="nova-chip">{t('wsChatArchivedChip')}</span> : null}
+          <div className="nova-chat-head__titles">
+            <h1 className="nova-chat-head__title">
+              {active ? active.title : t('wsChatNew')}
+              {active?.archived ? <span className="nova-chip ml-2">{t('wsChatArchivedChip')}</span> : null}
+              {authStatus !== 'signed-in' ? (
+                <span className="nova-chip ml-2">{t('wsChatGuestChip')}</span>
+              ) : null}
+            </h1>
+            <p className="nova-chat-head__sub">
+              <span className="nova-chat-head__dot" aria-hidden="true" />
+              {t('wsChatTitle')} · {providerLabel(provider, t)}
+              <span className="nova-chat-head__sep" aria-hidden="true">/</span>
+              {t(currentThinking.labelKey)}
+            </p>
           </div>
-        ) : (
-          <h1 className="text-[15px] font-semibold text-ws-text">{t('wsChatNew')}</h1>
-        )}
+
+          <div className="nova-chat-head__actions">
+            <ThinkingMenu
+              value={thinking}
+              onChange={setThinking}
+              unavailable={unavailable}
+              className="nova-thinking--head"
+            />
+            <button
+              type="button"
+              className="nova-icon-btn nova-chat-head__new"
+              onClick={() => navigate('/chat')}
+              aria-label={t('wsChatNew')}
+              title={t('wsChatNew')}
+            >
+              <MessageSquarePlus size={16} strokeWidth={1.9} aria-hidden="true" />
+            </button>
+          </div>
+        </header>
 
         <div
-          className="min-h-0 flex-1 overflow-y-auto overscroll-contain rounded-xl"
+          className="nova-chat-thread overflow-y-auto"
           role="region"
           aria-label={t('wsChatThreadRegion')}
           tabIndex={0}
         >
           {!conversationId || thread.messages.length === 0 ? (
-            <div className="nova-hero-wash flex h-full flex-col items-center justify-center rounded-[22px] border border-ws-line px-5 py-10 text-center">
-              <NovaOrb state={sending ? 'generating' : 'idle'} size={96} />
-              <p className="mt-5 text-[21px] font-semibold tracking-[-0.02em] text-ws-text">
-                {t('wsChatEmptyThread')}
-              </p>
-              <p className="mt-2 max-w-[34rem] text-[13px] leading-relaxed text-ws-text-2">
-                {t('wsChatEmptyThreadBody')}
-              </p>
-              <div className="mt-5 flex max-w-[38rem] flex-wrap items-center justify-center gap-2">
+            <div className="nova-chat-empty">
+              <div className="nova-chat-empty__orb">
+                <NovaOrb state={sending ? 'generating' : 'idle'} size={96} />
+              </div>
+              <p className="nova-chat-empty__title">{t('wsChatEmptyThread')}</p>
+              <p className="nova-chat-empty__body">{t('wsChatEmptyThreadBody')}</p>
+
+              <div className="nova-science-grid">
+                {SCIENCE_PROMPTS.map((card) => (
+                  <button
+                    key={card.id}
+                    type="button"
+                    className="nova-science-card"
+                    onClick={() => applySciencePrompt(card.promptKey, card.thinking)}
+                  >
+                    <span className="nova-science-card__icon" aria-hidden="true">
+                      <ScienceIcon id={card.id} />
+                    </span>
+                    <span className="nova-science-card__title">{t(card.titleKey)}</span>
+                    <span className="nova-science-card__body">{t(card.bodyKey)}</span>
+                    <span className="nova-science-card__level">
+                      {t(thinkingMeta(card.thinking).labelKey)}
+                    </span>
+                  </button>
+                ))}
+              </div>
+
+              <button
+                type="button"
+                className="nova-science-deep"
+                onClick={() => applySciencePrompt(DEEP_SCIENCE_PROMPT.promptKey, DEEP_SCIENCE_PROMPT.thinking)}
+              >
+                <span className="nova-science-deep__icon" aria-hidden="true">
+                  <ScienceIcon id="deep" size={17} />
+                </span>
+                <span className="min-w-0 text-left">
+                  <span className="nova-science-deep__title">{t(DEEP_SCIENCE_PROMPT.titleKey)}</span>
+                  <span className="nova-science-deep__body">{t(DEEP_SCIENCE_PROMPT.bodyKey)}</span>
+                </span>
+                <span className="nova-science-deep__level">
+                  {t(thinkingMeta(DEEP_SCIENCE_PROMPT.thinking).labelKey)}
+                </span>
+              </button>
+
+              <div className="nova-ground-row">
+                <button
+                  type="button"
+                  className="nova-ground-btn"
+                  onClick={() => void groundWithApod()}
+                  aria-busy={apodState === 'loading'}
+                  disabled={apodState === 'loading'}
+                >
+                  <span className="nova-ground-btn__icon" aria-hidden="true">
+                    {apodState === 'loading' ? (
+                      <Loader2 size={14} strokeWidth={2} className="nova-spin" />
+                    ) : (
+                      <Aperture size={14} strokeWidth={1.9} />
+                    )}
+                  </span>
+                  <span className="min-w-0 text-left">
+                    <span className="nova-ground-btn__title">
+                      {apodState === 'loading' ? t('wsScienceApodLoading') : t('wsScienceApodTitle')}
+                    </span>
+                    <span className="nova-ground-btn__body">{t('wsScienceApodBody')}</span>
+                  </span>
+                </button>
+                {apodState === 'error' ? (
+                  <p className="nova-ground-note" role="status">{t('wsScienceApodError')}</p>
+                ) : apodNotice ? (
+                  <p className="nova-ground-note" role="status">{apodNotice}</p>
+                ) : null}
+              </div>
+
+              <div className="nova-chat-empty__suggestions">
                 {SUGGESTIONS.map((key) => (
                   <button
                     key={key}
@@ -552,7 +802,7 @@ export default function ChatSurface() {
                     className="nova-chip-glass"
                     onClick={() => {
                       setDraft(t(key));
-                      document.getElementById('nova-chat-composer')?.focus();
+                      composerRef.current?.focus();
                     }}
                   >
                     {t(key)}
@@ -561,48 +811,54 @@ export default function ChatSurface() {
               </div>
             </div>
           ) : (
-            <ul className="flex flex-col gap-3 p-1">
+            <ul className="nova-msg-list">
               {thread.messages.map((row) => {
                 const isUser = row.role === 'user';
                 const isRevealing = row.id === revealingId && row.id === lastAssistant?.id;
                 return (
                   <li
                     key={row.id}
-                    className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}
+                    className={`nova-msg ${isUser ? 'nova-msg--user' : 'nova-msg--assistant'} ${
+                      row.is_error ? 'nova-msg--error' : ''
+                    }`}
                     data-role={row.role}
                   >
-                    <div
-                      className={`max-w-[min(46rem,92%)] rounded-[18px] border px-3.5 py-2.5 shadow-[var(--ws-shadow-1)] ${
-                        row.is_error
-                          ? 'border-[color-mix(in_srgb,var(--color-ws-danger)_45%,transparent)] bg-[color-mix(in_srgb,var(--color-ws-danger)_10%,transparent)]'
-                          : isUser
-                            ? 'border-[color-mix(in_srgb,var(--color-ws-accent)_38%,transparent)] bg-[color-mix(in_srgb,var(--color-ws-accent)_12%,transparent)]'
-                            : 'nova-card'
-                      }`}
-                    >
-                      {row.is_error ? (
-                        <p className="flex items-start gap-2 text-[12.5px] leading-relaxed text-ws-text">
-                          <TriangleAlert size={14} className="mt-0.5 shrink-0" aria-hidden="true" />
-                          <span className="whitespace-pre-line">{row.content}</span>
-                        </p>
-                      ) : isUser ? (
-                        <p className="whitespace-pre-wrap text-[12.5px] leading-relaxed text-ws-text">{row.content}</p>
-                      ) : isRevealing ? (
-                        <p className="whitespace-pre-wrap text-[12.5px] leading-relaxed text-ws-text">{reveal.shown}</p>
+                    <span className="nova-msg__avatar" aria-hidden="true">
+                      {isUser ? (
+                        <span className="nova-msg__avatar-initial">
+                          {(profile?.display_name || user?.email || 'U').slice(0, 1).toUpperCase()}
+                        </span>
                       ) : (
-                        <MessageBody content={row.content} />
+                        <span className="nova-msg__avatar-nova">
+                          <NovaOrb state={sending && row.id === lastAssistant?.id ? 'generating' : 'idle'} size={26} />
+                        </span>
                       )}
+                    </span>
 
-                      <div className="mt-1.5 flex flex-wrap items-center gap-2 text-[10.5px] text-ws-text-3">
+                    <div className="nova-msg__body">
+                      <div className="nova-msg__bubble">
+                        {row.is_error ? (
+                          <p className="flex items-start gap-2 text-[12.5px] leading-relaxed text-ws-text">
+                            <TriangleAlert size={14} className="mt-0.5 shrink-0" aria-hidden="true" />
+                            <span className="whitespace-pre-line">{row.content}</span>
+                          </p>
+                        ) : isUser ? (
+                          <p className="whitespace-pre-wrap text-[12.5px] leading-relaxed text-ws-text">{row.content}</p>
+                        ) : isRevealing ? (
+                          <p className="whitespace-pre-wrap text-[12.5px] leading-relaxed text-ws-text">{reveal.shown}</p>
+                        ) : (
+                          <MessageBody content={row.content} />
+                        )}
+                      </div>
+
+                      <div className="nova-msg__meta">
                         {!isUser && row.provider ? <span>{row.provider}</span> : null}
-                        {!isUser && displayModelName(row.model) ? (
-                          <span>· {displayModelName(row.model)}</span>
-                        ) : null}
+                        {!isUser && displayModelName(row.model) ? <span>· {displayModelName(row.model)}</span> : null}
                         {thread.unsaved.includes(row.id) ? (
                           <span className="text-[color:var(--color-ws-danger)]">· {t('wsChatNotSaved')}</span>
                         ) : null}
                         {!isUser && !row.is_error ? (
-                          <span className="ml-auto flex items-center gap-0.5">
+                          <span className="nova-msg__actions">
                             <button
                               type="button"
                               className="nova-icon-btn h-6 w-6"
@@ -610,11 +866,7 @@ export default function ChatSurface() {
                               title={t('wsChatCopy')}
                               onClick={() => void copyMessage(row)}
                             >
-                              {copiedId === row.id ? (
-                                <Check size={12} aria-hidden="true" />
-                              ) : (
-                                <Copy size={12} aria-hidden="true" />
-                              )}
+                              {copiedId === row.id ? <Check size={12} aria-hidden="true" /> : <Copy size={12} aria-hidden="true" />}
                             </button>
                             {row.id === lastAssistant?.id && !sending ? (
                               <button
@@ -637,9 +889,22 @@ export default function ChatSurface() {
                   </li>
                 );
               })}
+
               {sending ? (
-                <li className="text-[11.5px] text-ws-text-3" role="status">
-                  {t('wsChatSending')}
+                <li className="nova-msg nova-msg--assistant nova-msg--pending" role="status">
+                  <span className="nova-msg__avatar" aria-hidden="true">
+                    <span className="nova-msg__avatar-nova">
+                      <NovaOrb state="thinking" size={26} />
+                    </span>
+                  </span>
+                  <div className="nova-msg__body">
+                    <p className="nova-msg__pending">
+                      <span className="nova-msg__dots" aria-hidden="true">
+                        <i /><i /><i />
+                      </span>
+                      {t(currentThinking.statusKey)}
+                    </p>
+                  </div>
                 </li>
               ) : null}
             </ul>
@@ -647,7 +912,7 @@ export default function ChatSurface() {
         </div>
 
         <form
-          className="nova-composer flex flex-col gap-2 p-2.5"
+          className="nova-composer nova-chat-composer"
           onSubmit={(event) => {
             event.preventDefault();
             void send();
@@ -658,6 +923,7 @@ export default function ChatSurface() {
           </label>
           <textarea
             id="nova-chat-composer"
+            ref={composerRef}
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
             onKeyDown={(event) => {
@@ -668,44 +934,71 @@ export default function ChatSurface() {
             }}
             rows={2}
             placeholder={t('wsChatComposerPlaceholder')}
-            className="nova-field min-h-[3.25rem] resize-y border-0 bg-transparent"
+            className="nova-chat-composer__input"
           />
-          <div className="flex items-center justify-between gap-2">
-            <label className="flex items-center gap-1.5 text-[11px] text-ws-text-3">
-              <span>{t('wsChatProvider')}</span>
-              <select
-                value={provider}
-                onChange={(event) => setProvider(event.target.value as ChatProvider)}
-                className="nova-field h-7 py-0 text-[11.5px]"
-              >
-                {available.map((item) => (
-                  <option key={item} value={item}>
-                    {providerLabel(item, t)}
-                  </option>
-                ))}
-              </select>
-            </label>
+          <div className="nova-chat-composer__bar">
+            <div className="nova-chat-composer__controls">
+              <label className="nova-chat-composer__provider">
+                <span className="sr-only">{t('wsChatProvider')}</span>
+                <select
+                  value={provider}
+                  onChange={(event) => setProvider(event.target.value as ChatProvider)}
+                  className="nova-chat-composer__select"
+                  aria-label={t('wsChatProvider')}
+                >
+                  {available.map((item) => (
+                    <option key={item} value={item}>
+                      {providerLabel(item, t)}
+                    </option>
+                  ))}
+                </select>
+              </label>
 
-            {sending ? (
+              <ThinkingMenu value={thinking} onChange={setThinking} unavailable={unavailable} />
+
               <button
                 type="button"
-                onClick={stop}
-                className="nova-btn nova-btn--secondary justify-center"
-                aria-label={t('wsChatStop')}
+                className="nova-composer__tool"
+                onClick={() => void groundWithApod()}
+                aria-label={t('wsScienceApodTitle')}
+                title={t('wsScienceApodBody')}
+                aria-busy={apodState === 'loading'}
+                disabled={apodState === 'loading'}
               >
-                <Square size={11} strokeWidth={2.6} aria-hidden="true" />
-                {t('wsChatStop')}
+                {apodState === 'loading' ? (
+                  <Loader2 size={13} strokeWidth={2} aria-hidden="true" className="nova-spin" />
+                ) : (
+                  <Aperture size={13} strokeWidth={1.9} aria-hidden="true" />
+                )}
+                <span className="nova-composer__tool-label">{t('wsScienceApodTitle')}</span>
               </button>
-            ) : (
-              <button
-                type="submit"
-                disabled={!draft.trim()}
-                className="nova-btn nova-btn--primary justify-center disabled:opacity-50"
-              >
-                <Send size={13} strokeWidth={2.2} aria-hidden="true" />
-                {t('wsChatSend')}
-              </button>
-            )}
+            </div>
+
+            <div className="nova-chat-composer__actions">
+              <span className="nova-chat-composer__hint">{t('wsChatComposerHint')}</span>
+              {sending ? (
+                <button
+                  type="button"
+                  onClick={stop}
+                  className="nova-btn nova-btn--secondary nova-chat-composer__stop"
+                  aria-label={t('wsChatStop')}
+                >
+                  <Square size={11} strokeWidth={2.6} aria-hidden="true" />
+                  {t('wsChatStop')}
+                </button>
+              ) : (
+                <button
+                  type="submit"
+                  disabled={!draft.trim()}
+                  className="nova-chat-composer__send"
+                  aria-label={t('wsChatSend')}
+                  title={t('wsChatSend')}
+                >
+                  <ArrowUp size={16} strokeWidth={2.4} aria-hidden="true" />
+                  <span className="sr-only">{t('wsChatSend')}</span>
+                </button>
+              )}
+            </div>
           </div>
         </form>
       </section>

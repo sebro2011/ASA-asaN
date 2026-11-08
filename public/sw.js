@@ -4,10 +4,10 @@
  * pending mission telemetry once connectivity is restored.
  */
 
-const CACHE_NAME_SHELL = 'nasa-app-shell-v2';
-const CACHE_NAME_APOD = 'nasa-apod-data-v2';
-const CACHE_NAME_MISSIONS = 'nasa-mission-telemetry-v2';
-const CACHE_NAME_IMAGES = 'nasa-imagery-cache-v2';
+const CACHE_NAME_SHELL = 'nasa-app-shell-v3';
+const CACHE_NAME_APOD = 'nasa-apod-data-v3';
+const CACHE_NAME_MISSIONS = 'nasa-mission-telemetry-v3';
+const CACHE_NAME_IMAGES = 'nasa-imagery-cache-v3';
 
 const SYNC_TAG_TELEMETRY = 'sync-nasa-telemetry';
 const DB_NAME = 'nasa_telemetry_sync_db';
@@ -240,6 +240,17 @@ self.addEventListener('fetch', (event) => {
 
   // Skip Vite dev websocket
   if (url.pathname.includes('vite-hmr') || url.pathname.includes('/@vite')) {
+    return;
+  }
+
+  // Vite serves source modules, HMR clients and dependency chunks from disk with
+  // no content hash. Caching them would make the first load after an edit show
+  // the previous build, so dev requests always go straight to the network.
+  if (
+    url.pathname.startsWith('/src/') ||
+    url.pathname.startsWith('/@') ||
+    url.pathname.startsWith('/node_modules/')
+  ) {
     return;
   }
 

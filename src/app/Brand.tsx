@@ -64,7 +64,7 @@ export function NovaWordmark({
           </span>
           {showTag ? (
             <span className="mt-1 block truncate font-mono text-[8.5px] uppercase tracking-[0.18em] text-ws-text-3">
-              AI Workspace
+              Space Science
             </span>
           ) : null}
         </span>

@@ -13,6 +13,7 @@ import { useTranslation } from 'react-i18next';
 import type { SupportedLanguage } from '../../i18n/translations';
 import type { TabId } from '../../ui/navigation';
 import { useApiResource } from '../../hooks/useApiResource';
+import { navigate } from '../../app/router';
 import { loadApod, loadEarthPreview, loadIss, loadNeo } from './homeData';
 import HomeHero from './Hero';
 import SignalStrip from './SignalStrip';
@@ -69,7 +70,7 @@ export default function HomePage({
             </div>
             <button
               type="button"
-              onClick={() => onNavigate('assistant')}
+              onClick={() => navigate('/chat')}
               className="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-[10px] bg-atmo px-5 text-sm font-semibold text-[#04202b] transition-colors hover:bg-atmo-soft"
             >
               {t('navAskNova')}

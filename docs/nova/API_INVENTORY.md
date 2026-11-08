@@ -38,7 +38,7 @@ missing, crash, HTML, wrong status). It exits non-zero only when something faile
 | `/api/youtube/meta?url=…` | 502 `YOUTUBE_UNAVAILABLE` | We could not reach YouTube — the video is not necessarily gone |
 | NASA feeds (`/api/apod`, `/api/iss`, …) | 200 with fixture/fallback data | The app stays usable offline and says `isFallback` |
 
-## The surface (38 routes)
+## The surface (41 routes)
 
 **Platform** `GET /api/health` · `GET /api/nova/config` · `GET /api/nova/diagnostics` (and `?probe=1`) ·
 `GET /api/workspace/config` · `GET /api/community/config`
@@ -47,8 +47,13 @@ missing, crash, HTML, wrong status). It exits non-zero only when something faile
 `POST /api/translate`
 
 **NASA** `GET /api/apod` · `/api/apod-range` · `/api/asteroids/neows` · `/api/epic` · `/api/exoplanets` ·
-`/api/news` · `/api/nasa-archive` · `/api/iss` · `/api/solar-weather` · `/api/satellites` ·
+`/api/nasa-archive` · `/api/iss` · `/api/solar-weather` · `/api/satellites` ·
 `/api/missions/grounded-search` · `/api/youtube/meta` · `/api/space-videos`
+
+**News & papers** `GET /api/news` (Spaceflight News + GNews + NewsAPI + Guardian, aggregated and
+deduped) · `/api/news/sources` (which keys are configured — booleans only) · `/api/news/papers`
+(arXiv astro-ph). Keys: `GNEWS_API_KEY`, `NEWSAPI_KEY`, `GUARDIAN_API_KEY`; the first and arXiv
+need none. The old hard-coded `/api/news` list was deleted.
 
 **Earth** `GET /api/earth/health` · `/api/earth/power` · `/api/earth/gibs/domains` · `/api/earth/gibs/probe` ·
 `/api/earth/firms/hotspots` · `POST /api/earth/analyst`

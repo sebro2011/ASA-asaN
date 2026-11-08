@@ -9,6 +9,12 @@
 
 export type ChatProvider = 'auto' | 'arena' | 'openrouter' | 'gemini' | 'local';
 
+/**
+ * Reasoning ladder, ordered fastest → deepest. The server maps each level onto
+ * OpenRouter's `reasoning.effort` plus a token budget; see `thinking.ts`.
+ */
+export type ChatThinking = 'auto' | 'flash' | 'flash-thinking' | 'thinking' | 'deep-thinking';
+
 export interface ChatTurn {
   role: 'user' | 'assistant' | 'system';
   content: string;
@@ -25,6 +31,8 @@ export interface ChatReply {
   text: string;
   provider: string;
   model: string;
+  /** The level the server actually used (echoed, never guessed). */
+  thinking: ChatThinking;
   suggestions: string[];
   fallback: boolean;
   /** Empty unless `fallback` — then it says which providers failed and how. */
@@ -42,6 +50,7 @@ export type ChatErrorCode =
   | 'MESSAGE_TOO_LARGE'
   | 'REQUEST_TOO_LARGE'
   | 'INVALID_REQUEST'
+  | 'INVALID_THINKING'
   | 'EMPTY_PROVIDER_RESPONSE'
   | 'RATE_LIMITED'
   | 'MODEL_UNAVAILABLE'
@@ -79,6 +88,7 @@ const KNOWN_CODES = new Set<string>([
   'INVALID_ROLE',
   'INVALID_PROVIDER',
   'INVALID_LANGUAGE',
+  'INVALID_THINKING',
   'EMPTY_PROVIDER_RESPONSE',
   'INVALID_PROVIDER_RESPONSE',
   'PROVIDER_ERROR',
@@ -98,6 +108,7 @@ export function normaliseErrorCode(code: unknown, status?: number): ChatErrorCod
       || code === 'INVALID_PROVIDER' || code === 'INVALID_LANGUAGE') {
       return 'INVALID_REQUEST';
     }
+    if (code === 'INVALID_THINKING') return 'INVALID_THINKING';
     if (code === 'INVALID_PROVIDER_RESPONSE' || code === 'PROVIDER_ERROR') {
       return 'PROVIDER_UNAVAILABLE';
     }
@@ -146,6 +157,8 @@ export function chatErrorKey(code: ChatErrorCode): string {
       return 'wsChatErrTooLarge';
     case 'INVALID_REQUEST':
       return 'wsChatErrInvalid';
+    case 'INVALID_THINKING':
+      return 'wsChatErrThinking';
     default:
       return 'wsChatErrUnknown';
   }
@@ -155,6 +168,8 @@ export interface SendChatOptions {
   messages: ChatTurn[];
   lang: string;
   provider?: ChatProvider;
+  /** Reasoning depth. `auto` keeps the deployment's default behaviour. */
+  thinking?: ChatThinking;
   signal?: AbortSignal;
 }
 
@@ -162,6 +177,7 @@ export async function sendChat({
   messages,
   lang,
   provider = 'auto',
+  thinking = 'auto',
   signal,
 }: SendChatOptions): Promise<ChatResult> {
   let response: Response;
@@ -169,7 +185,7 @@ export async function sendChat({
     response = await fetch('/api/nova/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify({ messages, lang, provider }),
+      body: JSON.stringify({ messages, lang, provider, thinking }),
       signal,
     });
   } catch {
@@ -200,6 +216,7 @@ export async function sendChat({
       text: body.text,
       provider: typeof body.provider === 'string' ? body.provider : 'NOVA',
       model: typeof body.model === 'string' ? body.model : '',
+      thinking: normaliseThinking(body.thinking),
       suggestions: Array.isArray(body.suggestions)
         ? body.suggestions.filter((item): item is string => typeof item === 'string').slice(0, 4)
         : [],
@@ -248,4 +265,17 @@ export const HISTORY_WINDOW = 20;
 
 export function historyWindow(messages: ChatTurn[]): ChatTurn[] {
   return messages.slice(-HISTORY_WINDOW);
+}
+
+/** Only the five known levels are accepted; anything else becomes `auto`. */
+function normaliseThinking(value: unknown): ChatThinking {
+  switch (value) {
+    case 'flash':
+    case 'flash-thinking':
+    case 'thinking':
+    case 'deep-thinking':
+      return value;
+    default:
+      return 'auto';
+  }
 }

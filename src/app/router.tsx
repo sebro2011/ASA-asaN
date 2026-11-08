@@ -28,6 +28,7 @@ export type RouteName =
   /** The NOVA workspace dashboard, moved off the front door in the recovery. */
   | 'workspace'
   | 'chat'
+  | 'news'
   | 'projects'
   | 'documents'
   | 'writing'
@@ -63,6 +64,7 @@ const DETAIL_SEGMENTS: Record<string, RouteName> = {
 const FLAT_SEGMENTS: Record<string, RouteName> = {
   workspace: 'workspace',
   chat: 'chat',
+  news: 'news',
   projects: 'projects',
   documents: 'documents',
   writing: 'writing',
@@ -112,6 +114,9 @@ export function parseRoute(pathname: string): AppRoute {
 
   if (parts[0] === 'explore') {
     if (parts.length === 1) return { name: 'explore', tab: 'home', path: '/explore' };
+    // The in-Explore assistant tab was retired in favour of the NOVA chat
+    // workspace. Old bookmarks keep working: they resolve to the chat surface.
+    if (parts.length === 2 && parts[1] === 'assistant') return { name: 'chat', path: '/chat' };
     if (parts.length === 2 && isTabId(parts[1])) {
       const tab = parts[1];
       return { name: 'explore', tab, path: tab === 'space-shorts' ? '/cosmovision' : `/explore/${tab}` };

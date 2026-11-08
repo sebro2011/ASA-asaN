@@ -1053,59 +1053,9 @@ Explanation to translate: "${explanation}"`;
     }
   });
 
-  // ====================================================
-  // NASA News Feed endpoint
-  // ====================================================
-  app.get('/api/news', async (_req: Request, res: Response) => {
-    const newsItems = [
-      {
-        id: 'news-1',
-        title: "NASA’s James Webb Space Telescope Discovers Most Distant Known Black Hole",
-        date: 'September 2026',
-        category: 'Deep Space',
-        url: 'https://www.nasa.gov/missions/webb/',
-        summary: 'Astronomers using the James Webb Space Telescope have identified an active supermassive black hole thriving in a galaxy observed just 400 million years after the Big Bang.',
-        summarySi: 'ජේම්ස් වෙබ් අභ්‍යවකාශ දුරේක්ෂය මඟින් මහා පිපිරුමෙන් වසර මිලියන 400කට පසුව බිහිවූ දුරස්ථතම අති දැවැන්ත කළු කුහරයක් සොයාගෙන ඇත.',
-        summaryTa: 'ஜேம்ஸ் வெப் விண்வெளி தொலைநோக்கி, பெருவெடிப்பிற்கு 400 மில்லியன் ஆண்டுகளுக்குப் பிறகு தோன்றிய மிக தொலைதூர கருந்துளையைக் கண்டுபிடித்துள்ளது.',
-        image: 'https://images.unsplash.com/photo-1614728894747-a83421e2b9c9?auto=format&fit=crop&w=800&q=80'
-      },
-      {
-        id: 'news-2',
-        title: 'Artemis Program Prepares Crew for Lunar Orbit Mission',
-        date: 'September 2026',
-        category: 'Lunar Exploration',
-        url: 'https://www.nasa.gov/artemis',
-        summary: 'NASA astronauts completed integrated launch simulations at Kennedy Space Center as preparations accelerate for the upcoming Artemis circumlunar voyage.',
-        summarySi: 'නාසා ආටෙමිස් වැඩසටහන යටතේ සඳ වටා ගමන් කිරීමේ මෙහෙයුම සඳහා අභ්‍යවකාශගාමීන්ගේ පුහුණු කටයුතු සාර්ථකව අවසන් කර ඇත.',
-        summaryTa: 'நாசாவின் ஆர்ட்டெமிஸ் திட்டத்தின் கீழ் நிலவைச் சுற்றி வரும் பணிக்கான விண்வெளி வீரர்களின் பயிற்சி வெற்றிகரமாக நிறைவு பெற்றுள்ளது.',
-        image: 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&w=800&q=80'
-      },
-      {
-        id: 'news-3',
-        title: 'Perseverance Rover Unearths Organic Molecule Signatures in Jezero Crater',
-        date: 'September 2026',
-        category: 'Mars Exploration',
-        url: 'https://mars.nasa.gov/mars2020/',
-        summary: 'Samples cored by NASA Perseverance rover inside an ancient Martian river delta show promising concentrations of organic carbon compounds.',
-        summarySi: 'අඟහරු මත ජෙසීරෝ ආවාටයේ පැරණි ගංගා ඩෙල්ටාවෙන් කාබනික අණුක සාක්ෂි නාසා පර්සෙවරන්ස් රෝවරය මඟින් සොයාගෙන ඇත.',
-        summaryTa: 'செவ்வாய் கிரகத்தில் உள்ள ஜெசெரோ பள்ளத்தின் பண்டைய நதிப் படுகையில் கரிம மூலக்கூறுகளின் அடையாளங்களை பெர்சவரன்ஸ் ரோவர் கண்டறிந்துள்ளது.',
-        image: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=800&q=80'
-      },
-      {
-        id: 'news-4',
-        title: 'Europa Clipper Trajectory on Target for Jovian Ocean World Arrival',
-        date: 'September 2026',
-        category: 'Outer Planets',
-        url: 'https://europa.nasa.gov/',
-        summary: 'Cruising toward Jupiter, the Europa Clipper spacecraft successfully deployed its radar antennas to peer beneath the icy shell of moon Europa.',
-        summarySi: 'යුරෝපා ක්ලිපර් යානය බ්‍රහස්පතිගේ අයිස් සහිත යුරෝපා උපග්‍රහයාගේ අභ්‍යන්තර සාගරය ගවේෂණය සඳහා සාර්ථකව ගමන් කරයි.',
-        summaryTa: 'யூரோப்பா கிளிப்பர் விண்கலம் வியாழனின் பனி மூடிய யூரோப்பா நிலவின் ஆழ்கடலை ஆய்வு செய்வதற்கான தனது பயணத்தை வெற்றிகரமாகத் தொடர்கிறது.',
-        image: 'https://images.unsplash.com/photo-1462331940025-496dfbfc7564?auto=format&fit=crop&w=800&q=80'
-      }
-    ];
-
-    res.json({ success: true, articles: newsItems });
-  });
+  // `/api/news` used to be a hard-coded four-article list with invented dates.
+  // It now lives in server/spaceNews.ts, which reads real providers (Spaceflight
+  // News, GNews, NewsAPI, Guardian) and says which ones are configured.
 
   // ====================================================
   // Multi-Year NASA Archive & Search Endpoint

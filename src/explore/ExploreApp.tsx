@@ -21,12 +21,12 @@ import { ExportHtmlModal } from '../components/ExportHtmlModal';
 import WelcomeScreen from '../components/WelcomeScreen';
 import { persistWelcomePreference, shouldShowWelcome } from '../lib/welcome';
 import { useFavorites } from '../utils/favorites';
-import { Radio, ArrowLeft, Download } from 'lucide-react';
+import { ArrowLeft, Download } from 'lucide-react';
 
 /* ------------------------------------------------------------------ chunks
  * Destinations are code-split by weight, not by accident: the shell, home and
  * APOD screens ship in the initial bundle; anything that pulls three.js,
- * Leaflet, the mission chart engine or the assistant client loads on entry.
+ * Leaflet or the mission chart engine loads on entry.
  * Each destination still renders its real component — this is transport only.
  */
 const SpaceShortsPage = lazy(() => import('../features/space-shorts/SpaceShortsPage'));
@@ -38,7 +38,6 @@ const ARPlanetViewer = lazy(() =>
   import('../components/ARPlanetViewer.jsx').then((m) => ({ default: m.ARPlanetViewer }))
 );
 const RocketLaunchSimulator = lazy(() => import('../components/RocketLaunchSimulator'));
-const NasaAi = lazy(() => import('../components/NasaAi.jsx'));
 const AsteroidRadar = lazy(() => import('../components/AsteroidRadar.jsx'));
 const ISSTracker = lazy(() => import('../components/ISSTracker.jsx'));
 const IssTracker2D = lazy(() => import('../components/IssTracker2D.jsx'));
@@ -88,9 +87,11 @@ export interface ExploreAppProps {
   onSelectTab: (tab: TabId) => void;
   /** Optional escape hatch back to the NOVA workspace shell. */
   onExitToWorkspace?: () => void;
+  /** Opens the single NOVA chat surface (the legacy assistant tab is retired). */
+  onOpenChat?: () => void;
 }
 
-export default function ExploreApp({ tab, onSelectTab, onExitToWorkspace }: ExploreAppProps) {
+export default function ExploreApp({ tab, onSelectTab, onExitToWorkspace, onOpenChat }: ExploreAppProps) {
   const { t, i18n } = useTranslation();
   const lang = ((i18n.language || 'en').slice(0, 2) as SupportedLanguage) || 'en';
 
@@ -101,7 +102,6 @@ export default function ExploreApp({ tab, onSelectTab, onExitToWorkspace }: Expl
   const [targetApodDate, setTargetApodDate] = useState<string | undefined>(undefined);
   const [targetMissionId, setTargetMissionId] = useState<string | undefined>(undefined);
   const [isExportModalOpen, setIsExportModalOpen] = useState<boolean>(false);
-  const [isLiveVoiceModalOpen, setIsLiveVoiceModalOpen] = useState<boolean>(false);
   // Welcome overlay: decided after mount so SSR/first paint never includes it
   // and storage-blocked sessions simply fall through to the dashboard.
   const [welcomeVisible, setWelcomeVisible] = useState<boolean>(false);
@@ -183,7 +183,7 @@ export default function ExploreApp({ tab, onSelectTab, onExitToWorkspace }: Expl
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
-    const sequence: TabKey[] = ['home', 'earth', 'iss', 'apod', 'missions', 'asteroids', 'assistant'];
+    const sequence: TabKey[] = ['home', 'earth', 'iss', 'apod', 'missions', 'asteroids', 'quiz'];
     let startX = 0;
     let startY = 0;
     let startedAt = 0;
@@ -233,18 +233,6 @@ export default function ExploreApp({ tab, onSelectTab, onExitToWorkspace }: Expl
   }, [activeTab]);
 
   /* ------------------------------------------------------ page metadata */
-
-  const liveVoiceAction = (
-    <Button
-      variant="secondary"
-      size="sm"
-      icon={Radio}
-      onClick={() => setIsLiveVoiceModalOpen(true)}
-      className="border-atmo/30 text-atmo hover:border-atmo/60"
-    >
-      {lang === 'si' ? 'සජීවී හඬ' : lang === 'ta' ? 'நேரலை குரல்' : 'Live voice'}
-    </Button>
-  );
 
   const meta: Record<TabKey, TabMeta> = {
     home: { eyebrow: '', title: '', description: '' },
@@ -344,19 +332,6 @@ export default function ExploreApp({ tab, onSelectTab, onExitToWorkspace }: Expl
       actions: <DataStateBadge state="static" label={t('stateSimulated')} />,
       meta: <span className="font-mono">Physics model · not flight telemetry</span>
     },
-    assistant: {
-      eyebrow: t('pageAssistantEyebrow'),
-      title: t('assistantTitle'),
-      description: t('assistantDescription'),
-      actions: liveVoiceAction,
-      meta: (
-        <>
-          <span className="font-mono">Server-side keys · grounded prompts</span>
-          <span className="h-3 w-px bg-line-strong" />
-          <span>EN · සිං · தமி</span>
-        </>
-      )
-    },
     saved: {
       eyebrow: t('pageSavedEyebrow'),
       title: t('savedTitle'),
@@ -385,6 +360,7 @@ export default function ExploreApp({ tab, onSelectTab, onExitToWorkspace }: Expl
         lang={lang}
         onTabChange={handleTabSwitch}
         onExitToWorkspace={onExitToWorkspace}
+        onOpenChat={onOpenChat}
         onOpenExport={() => setIsExportModalOpen(true)}
         dataStatus={
           activeTab === 'home' || activeTab === 'space-shorts' ? null : (
@@ -565,7 +541,6 @@ export default function ExploreApp({ tab, onSelectTab, onExitToWorkspace }: Expl
                   </div>
                 )}
 
-                {activeTab === 'assistant' && <NasaAi lang={lang} />}
                 </Suspense>
                 </ErrorBoundary>
               </div>

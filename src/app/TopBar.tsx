@@ -76,7 +76,7 @@ export default function TopBar({
           </p>
         ) : (
           <p className="truncate font-mono text-[9.5px] uppercase tracking-[0.16em] text-ws-text-3">
-            AI Workspace
+            Astronomy workspace
           </p>
         )}
       </div>

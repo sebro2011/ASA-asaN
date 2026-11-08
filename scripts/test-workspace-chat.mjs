@@ -416,6 +416,7 @@ test('sending a message creates the conversation and persists both turns', async
     assert.equal(chat.body.messages.at(-1).content, 'What is a Lagrange point?');
     assert.equal(chat.body.messages.at(-1).role, 'user');
     assert.equal(chat.body.provider, 'auto');
+    assert.equal(chat.body.thinking, 'auto', 'the default rung travels with the request');
 
     // Markdown in the reply is rendered as elements, not as literal asterisks.
     await settle(app.act, 400);
@@ -423,6 +424,95 @@ test('sending a message creates the conversation and persists both turns', async
     assert.doesNotMatch(app.text(), /\*\*with markdown\*\*/);
     assert.match(app.text(), /Arena/);
     await app.unmount();
+  } finally {
+    dom.window.close();
+  }
+});
+
+test('the composer sends the chosen thinking level, and remembers it', async () => {
+  const dom = installDom();
+  try {
+    const fetches = stubFetch({
+      chatResponse: {
+        body: {
+          text: 'A deeply reasoned answer.',
+          provider: 'OpenRouter',
+          model: 'example/reasoner:free',
+          thinking: 'deep-thinking',
+        },
+      },
+    });
+    const { client } = createFakeClient();
+
+    const app = await mountChat({ client });
+
+    // The composer's picker is the last listbox trigger on the surface; the head
+    // carries the same control for quick switching mid-conversation.
+    const triggers = [...document.querySelectorAll('button[aria-haspopup="listbox"]')];
+    assert.ok(triggers.length >= 1, 'a thinking picker is rendered');
+    const composerTrigger = triggers.at(-1);
+    await app.act(async () => {
+      composerTrigger.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+    });
+    const options = [...document.querySelectorAll('[role="option"]')];
+    assert.equal(options.length, 5, 'five rungs, in order');
+    const deep = options.find((option) => /Deep thinking/.test(option.textContent || ''));
+    assert.ok(deep, 'deep thinking is offered');
+    await app.act(async () => {
+      deep.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+    });
+    await settle(app.act, 30);
+    assert.match(composerTrigger.textContent || '', /Deep thinking/);
+    assert.equal(window.localStorage.getItem('nova_thinking_level_v1'), 'deep-thinking');
+
+    await typeInto(app.act, document.querySelector('#nova-chat-composer'), 'Derive the mass relation.');
+    await submit(app.act, document.querySelector('form'));
+
+    const chat = fetches.find((call) => call.url.includes('/api/nova/chat'));
+    assert.equal(chat.body.thinking, 'deep-thinking', 'the level reaches the server');
+    await settle(app.act, 300);
+    assert.match(app.text(), /A deeply reasoned answer/);
+    await app.unmount();
+  } finally {
+    dom.window.close();
+  }
+});
+
+test('a signed-out reader can chat: threads stay on this device and survive a reload', async () => {
+  const dom = installDom();
+  try {
+    stubFetch({
+      chatResponse: {
+        body: { text: 'A guest answer.', provider: 'NOVA Local Space Engine', model: 'nasa-local-engine' },
+      },
+    });
+
+    const app = await mountChat({ client: null });
+    assert.match(app.text(), /This device only/, 'the surface says where the thread lives');
+
+    await typeInto(app.act, document.querySelector('#nova-chat-composer'), 'What is a black hole?');
+    await submit(app.act, document.querySelector('form'));
+    await settle(app.act, 300);
+
+    const stored = JSON.parse(window.localStorage.getItem('nova_local_chat_v1'));
+    assert.equal(stored.conversations.length, 1, 'one local conversation');
+    assert.equal(stored.conversations[0].title, 'What is a black hole?');
+    assert.equal(stored.messages.length, 2, 'both turns are stored on the device');
+    assert.equal(stored.messages[0].role, 'user');
+    assert.equal(stored.messages[1].role, 'assistant');
+    assert.match(app.text(), /A guest answer/);
+    assert.doesNotMatch(app.text(), /not saved/, 'a device write is a real save');
+
+    const id = stored.conversations[0].id;
+    assert.equal(window.location.pathname, `/chat/${id}`);
+
+    // A reload re-reads the same store rather than losing the thread.
+    await app.unmount();
+    const again = await mountChat({ client: null, path: `/chat/${id}` });
+    await settle(again.act, 120);
+    assert.match(again.text(), /What is a black hole/);
+    assert.match(again.text(), /A guest answer/);
+    await again.unmount();
   } finally {
     dom.window.close();
   }

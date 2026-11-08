@@ -10,6 +10,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { conversationRepo, messageRepo } from '../../data/repositories';
 import type { ConversationRow, MessageRow } from '../../data/types';
+import {
+  appendLocalMessage,
+  createLocalConversation,
+  listLocalConversations,
+  listLocalMessages,
+  removeLocalMessage,
+  updateLocalConversation,
+} from './localChat';
 
 export type LoadState = 'idle' | 'loading' | 'ready' | 'error';
 
@@ -29,6 +37,8 @@ export function useConversations(client: SupabaseClient | null, userId: string |
   const [error, setError] = useState<string | null>(null);
 
   const repo = useMemo(() => (client ? conversationRepo(client) : null), [client]);
+  /** No cloud session (signed out, or no Supabase on this deployment) → device store. */
+  const local = !repo || !userId;
   const mounted = useRef(true);
 
   useEffect(() => {
@@ -39,7 +49,12 @@ export function useConversations(client: SupabaseClient | null, userId: string |
   }, []);
 
   const reload = useCallback(async () => {
-    if (!repo) return;
+    if (!repo || !userId) {
+      if (!mounted.current) return;
+      setItems(listLocalConversations());
+      setState('ready');
+      return;
+    }
     setState('loading');
     setError(null);
     try {
@@ -52,16 +67,11 @@ export function useConversations(client: SupabaseClient | null, userId: string |
       setError(caught instanceof Error ? caught.message : 'load failed');
       setState('error');
     }
-  }, [repo]);
+  }, [repo, userId]);
 
   useEffect(() => {
-    if (!repo || !userId) {
-      setItems([]);
-      setState('idle');
-      return;
-    }
     void reload();
-  }, [repo, userId, reload]);
+  }, [reload]);
 
   /** Apply a row locally so the list never waits on a round trip. */
   const patchLocal = useCallback((id: string, patch: Partial<ConversationRow>) => {
@@ -76,7 +86,11 @@ export function useConversations(client: SupabaseClient | null, userId: string |
     () => ({
       reload,
       async create(title = 'New conversation') {
-        if (!repo || !userId) throw new Error('not-ready');
+        if (!repo || !userId) {
+          const row = createLocalConversation(title);
+          setItems((current) => [row, ...current]);
+          return row;
+        }
         const row = await repo.create(userId, { title });
         setItems((current) => [row, ...current]);
         return row;
@@ -84,26 +98,31 @@ export function useConversations(client: SupabaseClient | null, userId: string |
       async rename(id, title) {
         const next = title.trim().slice(0, 160) || 'New conversation';
         patchLocal(id, { title: next });
-        if (repo) await repo.update(id, { title: next });
+        if (local) updateLocalConversation(id, { title: next });
+        else if (repo) await repo.update(id, { title: next });
       },
       async setPinned(id, pinned) {
         patchLocal(id, { pinned });
-        if (repo) await repo.update(id, { pinned });
+        if (local) updateLocalConversation(id, { pinned });
+        else if (repo) await repo.update(id, { pinned });
       },
       async setArchived(id, archived) {
         patchLocal(id, { archived });
-        if (repo) await repo.update(id, { archived });
+        if (local) updateLocalConversation(id, { archived });
+        else if (repo) await repo.update(id, { archived });
       },
       async remove(id) {
         patchLocal(id, { deleted_at: new Date().toISOString() });
-        if (repo) await repo.softDelete(id);
+        if (local) updateLocalConversation(id, { deleted_at: new Date().toISOString() });
+        else if (repo) await repo.softDelete(id);
       },
       async restore(id) {
         patchLocal(id, { deleted_at: null });
-        if (repo) await repo.update(id, { deleted_at: null });
+        if (local) updateLocalConversation(id, { deleted_at: null });
+        else if (repo) await repo.update(id, { deleted_at: null });
       },
     }),
-    [repo, userId, reload, patchLocal],
+    [repo, userId, local, reload, patchLocal],
   );
 
   return { items, state, error, ...actions };
@@ -134,6 +153,7 @@ export function useThread(client: SupabaseClient | null, userId: string | null, 
   const [unsaved, setUnsaved] = useState<string[]>([]);
 
   const repo = useMemo(() => (client ? messageRepo(client) : null), [client]);
+  const local = !repo || !userId;
   const mounted = useRef(true);
 
   useEffect(() => {
@@ -144,7 +164,17 @@ export function useThread(client: SupabaseClient | null, userId: string | null, 
   }, []);
 
   const reload = useCallback(async () => {
-    if (!repo || !conversationId) {
+    if (!conversationId) {
+      setMessages([]);
+      setState('idle');
+      return;
+    }
+    if (local) {
+      setMessages(listLocalMessages(conversationId));
+      setState('ready');
+      return;
+    }
+    if (!repo) {
       setMessages([]);
       setState('idle');
       return;
@@ -161,7 +191,7 @@ export function useThread(client: SupabaseClient | null, userId: string | null, 
       setError(caught instanceof Error ? caught.message : 'load failed');
       setState('error');
     }
-  }, [repo, conversationId]);
+  }, [repo, local, conversationId]);
 
   useEffect(() => {
     void reload();
@@ -185,6 +215,25 @@ export function useThread(client: SupabaseClient | null, userId: string | null, 
       } as MessageRow;
 
       setMessages((current) => [...current, row]);
+
+      if (local && targetId) {
+        const stored = appendLocalMessage({
+          conversationId: targetId,
+          role: row.role,
+          content: row.content,
+          provider: row.provider,
+          model: row.model,
+          isError: row.is_error,
+          id: row.id,
+          createdAt: row.created_at,
+        });
+        if (stored.saved) {
+          setMessages((current) => current.map((item) => (item.id === row.id ? stored.row : item)));
+          return { saved: true, row: stored.row };
+        }
+        setUnsaved((current) => [...current, row.id]);
+        return { saved: false, row };
+      }
 
       if (!repo || !userId || !targetId) {
         setUnsaved((current) => [...current, row.id]);
@@ -211,7 +260,7 @@ export function useThread(client: SupabaseClient | null, userId: string | null, 
         return { saved: false, row };
       }
     },
-    [repo, userId, conversationId],
+    [repo, local, userId, conversationId],
   );
 
   const markUnsaved = useCallback((id: string) => {
@@ -227,7 +276,9 @@ export function useThread(client: SupabaseClient | null, userId: string | null, 
     async (id: string) => {
       setMessages((current) => current.filter((row) => row.id !== id));
       setUnsaved((current) => current.filter((item) => item !== id));
-      if (repo && userId) {
+      if (local) {
+        removeLocalMessage(id);
+      } else if (repo && userId) {
         try {
           await repo.remove(id);
         } catch {
@@ -235,7 +286,7 @@ export function useThread(client: SupabaseClient | null, userId: string | null, 
         }
       }
     },
-    [repo, userId],
+    [repo, local, userId],
   );
 
   return { messages, state, error, unsaved, reload, append, markUnsaved, remove };

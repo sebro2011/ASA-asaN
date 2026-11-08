@@ -150,7 +150,6 @@ const destinations = [
   ['Near-Earth Objects', 'asteroids'],
   ['Exoplanet Lab', 'exoplanets'],
   ['Launch Simulator', 'launch'],
-  ['NOVA Assistant', 'assistant'],
   ['Saved Research', 'saved']
 ];
 

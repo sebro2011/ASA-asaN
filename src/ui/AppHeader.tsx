@@ -69,6 +69,11 @@ export interface AppHeaderProps {
    */
   onExitToWorkspace?: () => void;
   workspaceLabel?: string;
+  /**
+   * Opens the NOVA chat workspace. The legacy in-Explore assistant tab was
+   * retired; every AI entry point now lands on the one chat surface.
+   */
+  onOpenChat?: () => void;
 }
 
 export default function AppHeader({
@@ -78,7 +83,8 @@ export default function AppHeader({
   dataStatus,
   lang,
   onExitToWorkspace,
-  workspaceLabel = 'NOVA Workspace'
+  workspaceLabel = 'NOVA Workspace',
+  onOpenChat
 }: AppHeaderProps) {
   const { i18n } = useTranslation();
   const [openGroup, setOpenGroup] = useState<string | null>(null);
@@ -305,7 +311,11 @@ export default function AppHeader({
 
           <button
             type="button"
-            onClick={() => go('assistant')}
+            onClick={() => {
+              setOpenGroup(null);
+              setMobileOpen(false);
+              onOpenChat?.();
+            }}
             className="hidden h-9 items-center gap-1.5 rounded-lg bg-atmo px-3 text-[12.5px] font-semibold text-[#04202b] transition-colors hover:bg-atmo-soft sm:flex"
           >
             <Sparkles className="h-3.5 w-3.5" strokeWidth={2} />

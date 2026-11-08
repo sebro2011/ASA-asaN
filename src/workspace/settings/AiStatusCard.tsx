@@ -13,7 +13,9 @@
 import { displayModelName } from '../../lib/modelLabels';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { CheckCircle2, CircleSlash, RefreshCw, TriangleAlert } from 'lucide-react';
+import { Brain, CheckCircle2, CircleSlash, RefreshCw, TriangleAlert } from 'lucide-react';
+import { useProviderConfig } from '../useProviderConfig';
+import { THINKING_ORDER, thinkingMeta } from '../chat/thinking';
 
 type ProviderKey = 'local' | 'openrouter' | 'gemini' | 'arena';
 
@@ -53,6 +55,7 @@ export default function AiStatusCard() {
   const { t } = useTranslation();
   const [report, setReport] = useState<DiagnosticsReport | null>(null);
   const [state, setState] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
+  const { thinking: catalogue } = useProviderConfig();
   const mounted = useRef(true);
 
   useEffect(() => {
@@ -175,6 +178,31 @@ export default function AiStatusCard() {
           {t('wsAiProbeCheckedAt')} {new Date(report.checkedAt).toLocaleTimeString()} · {report.deployment}
         </p>
       ) : null}
+
+      {/* The ordered thinking ladder is part of the deployment's capability, so
+          it is reported here next to the provider probes — not buried in chat. */}
+      <div className="mt-3 rounded-lg border border-ws-line p-2.5">
+        <p className="flex items-center gap-1.5 text-[11.5px] font-medium text-ws-text">
+          <Brain size={13} strokeWidth={1.9} aria-hidden="true" className="text-ws-accent-ink" />
+          {t('wsThinkingLadderTitle')}
+        </p>
+        <p className="mt-1 text-[10.5px] leading-relaxed text-ws-text-3">{t('wsThinkingLadderBody')}</p>
+        <ul className="mt-2 grid list-none grid-cols-1 gap-1 p-0 sm:grid-cols-2">
+          {THINKING_ORDER.map((level) => {
+            const entry = catalogue?.levels.find((item) => item.id === level);
+            const available = entry ? entry.available : true;
+            const effort = entry?.effort ? entry.effort.toUpperCase() : '—';
+            return (
+              <li key={level} className="flex items-center justify-between gap-2 text-[11px]">
+                <span className="text-ws-text-2">{t(thinkingMeta(level).labelKey)}</span>
+                <span className="font-mono text-[9.5px] uppercase tracking-[0.08em] text-ws-text-3">
+                  {effort} · {available ? t('wsOn') : t('wsOff')}
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
     </section>
   );
 }

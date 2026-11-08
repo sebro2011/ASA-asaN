@@ -13,6 +13,7 @@ import { getNovaPublicConfig, handleNovaChatRequest } from './server/novaChat.js
 import { handleNovaDiagnostics } from './server/novaDiagnostics.js';
 import { setupNasaRoutes } from './server/nasaRoutes.ts';
 import { workspaceConfigRouter } from './server/workspaceConfig.ts';
+import { spaceNewsRouter } from './server/spaceNews.ts';
 
 dotenv.config();
 
@@ -407,6 +408,9 @@ app.use('/api/space-videos', spaceVideosRouter);
 app.use('/api/community', communityVideosRouter);
 // Workspace cloud config (Phase 3B) — publishable key only, never the service role.
 app.use('/api/workspace', workspaceConfigRouter);
+// Space news + astronomy papers. Keys are read server-side only; the client
+// learns which providers are configured, never the key values.
+app.use('/api/news', spaceNewsRouter);
 
 // Unknown API paths answer JSON, so a typo never arrives at the client as an
 // HTML page it cannot parse.

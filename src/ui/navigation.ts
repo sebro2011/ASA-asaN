@@ -10,7 +10,6 @@
 import {
   Activity,
   Aperture,
-  Bot,
   BrainCircuit,
   Compass,
   Flame,
@@ -39,7 +38,6 @@ export type TabId =
   | 'launch'
   | 'news'
   | 'saved'
-  | 'assistant'
   | 'quiz'
   | 'iss';
 
@@ -49,7 +47,7 @@ export interface NavEntry {
   labels: Record<SupportedLanguage, string>;
   /** Short technical descriptor used in menus and cards. */
   hint: Record<SupportedLanguage, string>;
-  group: 'explore' | 'earth' | 'system' | 'assistant';
+  group: 'explore' | 'earth' | 'system' | 'library';
 }
 
 export const NAV_ENTRIES: NavEntry[] = [
@@ -138,29 +136,22 @@ export const NAV_ENTRIES: NavEntry[] = [
     hint: { en: 'Simulated flight console', si: 'අනුකරණ පියාසැරි කොන්සෝලය', ta: 'உருவகப்படுத்தப்பட்ட பறப்பு' }
   },
   {
-    id: 'assistant',
-    icon: Bot,
-    group: 'assistant',
-    labels: { en: 'NOVA Assistant', si: 'NOVA සහායකයා', ta: 'NOVA உதவியாளர்' },
-    hint: { en: 'Grounded AI · EN · සිං · தமி', si: 'AI සහායක · භාෂා තුන', ta: 'AI உதவியாளர் · மூன்று மொழிகள்' }
-  },
-  {
     id: 'saved',
     icon: Activity,
-    group: 'assistant',
+    group: 'library',
     labels: { en: 'Saved Research', si: 'සුරැකි පර්යේෂණ', ta: 'சேமித்த ஆய்வுகள்' },
     hint: { en: 'Your APODs & missions', si: 'ඔබේ ඡායාරූප සහ මෙහෙයුම්', ta: 'உங்கள் படங்கள் & பயணங்கள்' }
   }
 ];
 
 export const NAV_GROUPS: Array<{
-  id: 'explore' | 'earth' | 'system' | 'assistant';
+  id: 'explore' | 'earth' | 'system' | 'library';
   labels: Record<SupportedLanguage, string>;
 }> = [
   { id: 'explore', labels: { en: 'Explore', si: 'ගවේෂණය', ta: 'ஆராய்க' } },
   { id: 'earth', labels: { en: 'Earth', si: 'පෘථිවිය', ta: 'பூமி' } },
   { id: 'system', labels: { en: 'Solar System', si: 'සෞරග්‍රහ මණ්ඩලය', ta: 'சூரிய குடும்பம்' } },
-  { id: 'assistant', labels: { en: 'Assistant', si: 'සහායක', ta: 'உதவியாளர்' } }
+  { id: 'library', labels: { en: 'Library', si: 'පුස්තකාලය', ta: 'நூலகம்' } }
 ];
 
 export function navEntry(id: TabId): NavEntry | undefined {
@@ -172,4 +163,4 @@ export function labelFor(id: TabId, lang: SupportedLanguage, fallback = ''): str
 }
 
 /** Primary mobile destinations — the rest live behind the "More" sheet. */
-export const MOBILE_PRIMARY: TabId[] = ['home', 'earth', 'space-shorts', 'assistant', 'saved'];
+export const MOBILE_PRIMARY: TabId[] = ['home', 'earth', 'space-shorts', 'saved'];

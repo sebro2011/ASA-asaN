@@ -112,11 +112,6 @@ export default function Sidebar({ route, collapsed, onToggleCollapsed }: Sidebar
         >
           <Plus size={16} strokeWidth={2.2} aria-hidden="true" />
           <span className="nova-nav-item__label">{t('wsNewChat')}</span>
-          {collapsed ? null : (
-            <span className="nova-nav-item__flag" title={t('wsNotAvailable')}>
-              3D
-            </span>
-          )}
         </Link>
 
         <nav aria-label={t('wsMainNavigation')}>

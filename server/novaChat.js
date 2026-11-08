@@ -1,4 +1,14 @@
 import { generateLocalSpaceResponse } from '../src/utils/spaceLocalAiEngine.js';
+import {
+  DEFAULT_THINKING_LEVEL,
+  geminiThinkingConfig,
+  normaliseThinkingLevel,
+  openRouterThinkingFields,
+  publicThinkingCatalog,
+  resolveOpenRouterModel,
+  thinkingGuidance,
+  thinkingPreset,
+} from './novaThinking.js';
 
 export const OPENROUTER_CHAT_COMPLETIONS_URL = 'https://openrouter.ai/api/v1/chat/completions';
 export const GEMINI_GENERATE_CONTENT_URL = 'https://generativelanguage.googleapis.com/v1beta/models';
@@ -159,6 +169,17 @@ function validateChatRequest(body) {
     }
   }
 
+  const thinking = normaliseThinkingLevel(body.thinking);
+  if (thinking === null) {
+    return {
+      error: errorResult(
+        400,
+        'INVALID_THINKING',
+        'Thinking level must be auto, flash, flash-thinking, thinking, or deep-thinking.',
+      ),
+    };
+  }
+
   let provider = 'auto';
   if (body.provider !== undefined) {
     if (typeof body.provider !== 'string' || !SUPPORTED_PROVIDERS.has(body.provider.trim().toLowerCase())) {
@@ -167,7 +188,7 @@ function validateChatRequest(body) {
     provider = body.provider.trim().toLowerCase();
   }
 
-  return { messages, language, provider };
+  return { messages, language, provider, thinking };
 }
 
 export function createNovaRateLimiter({ limit = RATE_LIMIT_REQUESTS, windowMs = RATE_LIMIT_WINDOW_MS, now = Date.now } = {}) {
@@ -207,12 +228,14 @@ export function createNovaRateLimiter({ limit = RATE_LIMIT_REQUESTS, windowMs = 
   };
 }
 
-function makeSystemPrompt(language) {
+function makeSystemPrompt(language, thinking = DEFAULT_THINKING_LEVEL) {
+  const guidance = thinkingGuidance(thinking);
   return [
     'You are NOVA, a helpful AI assistant for NASA missions, astronomy, and space exploration.',
     'Answer accurately and accessibly. Do not claim to be an official NASA service or to have live NASA telemetry, current web access, or data that was not supplied in the conversation. State uncertainty when facts may have changed.',
     `Language preference: ${LANGUAGE_GUIDANCE[language]} Always prioritize the language used in the latest user message if it differs from this hint.`,
     'Use readable Markdown. End with up to three short, relevant follow-up questions on one line using exactly: SUGGESTIONS: [Question 1] | [Question 2] | [Question 3]. Write those questions in the response language.',
+    ...(guidance ? [guidance] : []),
   ].join('\n\n');
 }
 
@@ -264,24 +287,25 @@ function getReferer() {
 }
 
 /**
- * Gemini 3.x retired `temperature`/`top_p`/`top_k` and thinks at "medium" by
- * default, which costs ~5 s before the first token. NOVA is a chat assistant, so
- * it asks for the "low" thinking level: measured ~3 s instead of ~5 s, and it
- * keeps the whole request inside the 6 s diagnostics probe. Older 2.x models do
- * not understand `thinkingLevel`, so they keep the legacy temperature.
+ * Gemini generation config. `auto` keeps the historical shape: Gemini 3.x asks
+ * for the "low" thinking level so a chat answer starts inside the diagnostics
+ * probe, and 2.x keeps the legacy temperature. An explicit thinking level maps
+ * onto `thinkingConfig.thinkingLevel` plus the level's token budget.
  */
-export function geminiGenerationConfig(model) {
-  const isGemini3 = /^gemini-3/i.test(String(model || ''));
-  if (isGemini3) {
-    return {
-      maxOutputTokens: 1_200,
-      thinkingConfig: { thinkingLevel: 'low' },
-    };
-  }
-  return {
-    temperature: 0.7,
-    maxOutputTokens: 1_200,
-  };
+export function geminiGenerationConfig(model, thinking = DEFAULT_THINKING_LEVEL) {
+  return geminiThinkingConfig(model, thinking);
+}
+
+/**
+ * Arena/BYOM endpoints are OpenAI-compatible but not guaranteed to understand
+ * `reasoning.effort`; sending an unknown field there is a 400. The level still
+ * reaches Arena through the system prompt, and the token budget is bounded here.
+ */
+function arenaThinkingFields(thinking) {
+  const preset = thinkingPreset(thinking);
+  const fields = { max_tokens: preset.maxTokens };
+  if (preset.temperature !== null) fields.temperature = preset.temperature;
+  return fields;
 }
 
 function providerError(status, provider, model) {
@@ -328,7 +352,7 @@ function withProvider(response, provider) {
   };
 }
 
-function getLocalResponse(query, language, { fallback = false, chain = [] } = {}) {
+function getLocalResponse(query, language, { fallback = false, chain = [], thinking = DEFAULT_THINKING_LEVEL } = {}) {
   const local = generateLocalSpaceResponse(query, language);
   return result(200, {
     text: local.text,
@@ -336,6 +360,7 @@ function getLocalResponse(query, language, { fallback = false, chain = [] } = {}
     model: 'nasa-local-engine',
     provider: PROVIDER_NAMES.local,
     lang: language,
+    thinking,
     fallback,
     // Why every online provider was skipped: safe (codes and statuses only) and
     // essential, because an offline answer that does not say why is a dead end.
@@ -390,7 +415,7 @@ async function fetchProviderJson({ fetchImpl, url, init, timeoutMs, provider, mo
   }
 }
 
-async function callOpenRouter({ fetchImpl, apiKey, model, messages, language, timeoutMs }) {
+async function callOpenRouter({ fetchImpl, apiKey, model, messages, language, thinking = DEFAULT_THINKING_LEVEL, timeoutMs }) {
   const headers = {
     Authorization: `Bearer ${apiKey}`,
     'Content-Type': 'application/json',
@@ -408,11 +433,10 @@ async function callOpenRouter({ fetchImpl, apiKey, model, messages, language, ti
       body: JSON.stringify({
         model,
         messages: [
-          { role: 'system', content: makeSystemPrompt(language) },
+          { role: 'system', content: makeSystemPrompt(language, thinking) },
           ...messages,
         ],
-        temperature: 0.7,
-        max_tokens: 1_200,
+        ...openRouterThinkingFields(thinking),
       }),
     },
     timeoutMs,
@@ -438,11 +462,12 @@ async function callOpenRouter({ fetchImpl, apiKey, model, messages, language, ti
       : model,
     provider: PROVIDER_NAMES.openrouter,
     lang: language,
+    thinking,
     fallback: false,
   });
 }
 
-async function callGemini({ fetchImpl, apiKey, model, messages, language, timeoutMs }) {
+async function callGemini({ fetchImpl, apiKey, model, messages, language, thinking = DEFAULT_THINKING_LEVEL, timeoutMs }) {
   const url = `${GEMINI_GENERATE_CONTENT_URL}/${encodeURIComponent(model)}:generateContent`;
   const contents = messages.map((message) => ({
     role: message.role === 'assistant' ? 'model' : 'user',
@@ -458,9 +483,9 @@ async function callGemini({ fetchImpl, apiKey, model, messages, language, timeou
         'x-goog-api-key': apiKey,
       },
       body: JSON.stringify({
-        systemInstruction: { parts: [{ text: makeSystemPrompt(language) }] },
+        systemInstruction: { parts: [{ text: makeSystemPrompt(language, thinking) }] },
         contents,
-        generationConfig: geminiGenerationConfig(model),
+        generationConfig: geminiGenerationConfig(model, thinking),
       }),
     },
     timeoutMs,
@@ -484,11 +509,12 @@ async function callGemini({ fetchImpl, apiKey, model, messages, language, timeou
     model,
     provider: PROVIDER_NAMES.gemini,
     lang: language,
+    thinking,
     fallback: false,
   });
 }
 
-async function callArena({ fetchImpl, apiKey, model, messages, language, timeoutMs }) {
+async function callArena({ fetchImpl, apiKey, model, messages, language, thinking = DEFAULT_THINKING_LEVEL, timeoutMs }) {
   const headers = {
     Authorization: `Bearer ${apiKey}`,
     'Content-Type': 'application/json',
@@ -503,11 +529,10 @@ async function callArena({ fetchImpl, apiKey, model, messages, language, timeout
       body: JSON.stringify({
         model,
         messages: [
-          { role: 'system', content: makeSystemPrompt(language) },
+          { role: 'system', content: makeSystemPrompt(language, thinking) },
           ...messages,
         ],
-        temperature: 0.7,
-        max_tokens: 1_200,
+        ...arenaThinkingFields(thinking),
         stream: false,
       }),
     },
@@ -534,6 +559,7 @@ async function callArena({ fetchImpl, apiKey, model, messages, language, timeout
       : model,
     provider: PROVIDER_NAMES.arena,
     lang: language,
+    thinking,
     fallback: false,
   });
 }
@@ -563,14 +589,19 @@ function deploymentLabel(value, fallback = null) {
  */
 export function getNovaPublicConfig({ env = getProcessEnv() } = {}) {
   const commit = deploymentLabel(env.VERCEL_GIT_COMMIT_SHA);
+  const openrouter = typeof env.OPENROUTER_API_KEY === 'string' && Boolean(env.OPENROUTER_API_KEY.trim());
+  const gemini = typeof env.GEMINI_API_KEY === 'string' && Boolean(env.GEMINI_API_KEY.trim());
+  const arena = typeof env.ARENA_API_KEY === 'string' && Boolean(env.ARENA_API_KEY.trim());
   return {
     providers: {
       auto: true,
       local: true,
-      gemini: typeof env.GEMINI_API_KEY === 'string' && Boolean(env.GEMINI_API_KEY.trim()),
-      openrouter: typeof env.OPENROUTER_API_KEY === 'string' && Boolean(env.OPENROUTER_API_KEY.trim()),
-      arena: typeof env.ARENA_API_KEY === 'string' && Boolean(env.ARENA_API_KEY.trim()),
+      gemini,
+      openrouter,
+      arena,
     },
+    // Ordered thinking ladder (auto → deep). Keys never appear here.
+    thinking: publicThinkingCatalog({ onlineConfigured: openrouter || gemini || arena, env }),
     deployment: {
       environment: deploymentLabel(env.VERCEL_ENV, 'development'),
       commit: commit && /^[0-9a-f]{7,40}$/i.test(commit) ? commit.slice(0, 7) : null,
@@ -613,7 +644,9 @@ export function createNovaChatHandler({
     }
 
     if (validated.provider === 'local') {
-      return getLocalResponse(validated.messages.at(-1).content, validated.language);
+      return getLocalResponse(validated.messages.at(-1).content, validated.language, {
+        thinking: validated.thinking,
+      });
     }
 
     const keys = {
@@ -621,8 +654,13 @@ export function createNovaChatHandler({
       gemini: readKey(getGeminiApiKey),
       arena: readKey(getArenaApiKey),
     };
+    const baseOpenRouterModel = cleanModelName(readKey(getOpenRouterModel), OPENROUTER_FREE_MODEL);
     const models = {
-      openrouter: cleanModelName(readKey(getOpenRouterModel), OPENROUTER_FREE_MODEL),
+      openrouter: resolveOpenRouterModel({
+        baseModel: baseOpenRouterModel,
+        level: validated.thinking,
+        readEnv: (key) => getProcessEnv()[key],
+      }),
       gemini: cleanModelName(readKey(getGeminiModel), DEFAULT_GEMINI_MODEL),
       arena: cleanModelName(readKey(getArenaModel), 'arena_smart.aria'),
     };
@@ -643,7 +681,10 @@ export function createNovaChatHandler({
     }
 
     if (providerOrder.length === 0) {
-      return getLocalResponse(validated.messages.at(-1).content, validated.language, { fallback: true });
+      return getLocalResponse(validated.messages.at(-1).content, validated.language, {
+        fallback: true,
+        thinking: validated.thinking,
+      });
     }
 
     let lastError = null;
@@ -663,6 +704,7 @@ export function createNovaChatHandler({
           model: models.arena,
           messages: validated.messages,
           language: validated.language,
+          thinking: validated.thinking,
           timeoutMs: providerTimeout,
         });
       } else if (provider === 'openrouter') {
@@ -672,6 +714,7 @@ export function createNovaChatHandler({
           model: models.openrouter,
           messages: validated.messages,
           language: validated.language,
+          thinking: validated.thinking,
           timeoutMs: providerTimeout,
         });
       } else {
@@ -681,6 +724,7 @@ export function createNovaChatHandler({
           model: models.gemini,
           messages: validated.messages,
           language: validated.language,
+          thinking: validated.thinking,
           timeoutMs: providerTimeout,
         });
       }
@@ -698,7 +742,11 @@ export function createNovaChatHandler({
     // Automatic routing is resilient: if configured online providers are unavailable,
     // answer from the bundled local knowledge engine and identify that provider honestly.
     if (validated.provider === 'auto') {
-      return getLocalResponse(validated.messages.at(-1).content, validated.language, { fallback: true, chain });
+      return getLocalResponse(validated.messages.at(-1).content, validated.language, {
+        fallback: true,
+        chain,
+        thinking: validated.thinking,
+      });
     }
 
     return lastError || errorResult(503, 'PROVIDER_UNAVAILABLE', 'NOVA could not complete this request. Please retry.');

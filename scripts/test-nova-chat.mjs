@@ -1090,3 +1090,143 @@ test('a throttled request tells the client when to come back', async () => {
   assert.equal(second.body.code, 'RATE_LIMITED');
   assert.ok(Number(second.headers?.['Retry-After']) > 0, 'Retry-After must be present');
 });
+
+/* ------------------------------------------------ thinking ladder (v5) */
+
+test('the thinking ladder is ordered auto → flash → flash-thinking → thinking → deep-thinking', async () => {
+  const {
+    NOVA_THINKING_LEVELS,
+    openRouterThinkingFields,
+    thinkingPreset,
+  } = await import('../server/novaThinking.js');
+
+  assert.deepEqual(NOVA_THINKING_LEVELS, [
+    'auto',
+    'flash',
+    'flash-thinking',
+    'thinking',
+    'deep-thinking',
+  ]);
+
+  // Auto keeps the historical request shape: temperature, no reasoning block.
+  const auto = openRouterThinkingFields('auto');
+  assert.equal(auto.temperature, 0.7);
+  assert.equal(auto.max_tokens, 1_200);
+  assert.equal('reasoning' in auto, false);
+
+  // The four explicit levels trade autonomy for deliberation.
+  assert.deepEqual(openRouterThinkingFields('flash-thinking').reasoning, { effort: 'low' });
+  assert.deepEqual(openRouterThinkingFields('thinking').reasoning, { effort: 'medium' });
+  assert.deepEqual(openRouterThinkingFields('deep-thinking').reasoning, { effort: 'high' });
+  assert.equal('temperature' in openRouterThinkingFields('thinking'), false, 'reasoning models get no sampling knobs');
+
+  // From flash upward the budgets grow monotonically, which is what the depth
+  // meter promises. `auto` is the deployment default, not a rung on that scale.
+  const budgets = NOVA_THINKING_LEVELS.slice(1).map((level) => thinkingPreset(level).maxTokens);
+  assert.deepEqual(budgets, [...budgets].sort((a, b) => a - b));
+});
+
+test('an explicit thinking level reaches OpenRouter and is echoed back', async () => {
+  let payload;
+  const handler = createTestHandler({
+    fetchImpl: async (_url, options) => {
+      payload = JSON.parse(options.body);
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          model: 'example/reasoner:free',
+          choices: [{ message: { role: 'assistant', content: 'A careful answer.' } }],
+        }),
+      };
+    },
+  });
+
+  const response = await handler({
+    body: { ...sampleBody, thinking: 'deep-thinking' },
+    ip: '198.51.100.61',
+  });
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(payload.reasoning, { effort: 'high' });
+  assert.equal(payload.max_tokens, 3_200);
+  assert.equal(payload.temperature, undefined);
+  assert.match(payload.messages[0].content, /step by step/i);
+  assert.equal(response.body.thinking, 'deep-thinking');
+});
+
+test('an unknown thinking level is rejected with its own code', async () => {
+  const handler = createTestHandler();
+  const response = await handler({
+    body: { ...sampleBody, thinking: 'galaxy-brain' },
+    ip: '198.51.100.62',
+  });
+
+  assert.equal(response.status, 400);
+  assert.equal(response.body.code, 'INVALID_THINKING');
+  assert.match(response.body.error, /auto, flash, flash-thinking, thinking, or deep-thinking/);
+});
+
+test('a level can pin its own OpenRouter model without leaking the key', async () => {
+  const previous = process.env.NOVA_OPENROUTER_DEEP_THINKING_MODEL;
+  process.env.NOVA_OPENROUTER_DEEP_THINKING_MODEL = 'example/deep-reasoner:free';
+  let payload;
+  try {
+    const handler = createTestHandler({
+      fetchImpl: async (_url, options) => {
+        payload = JSON.parse(options.body);
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            model: 'example/deep-reasoner:free',
+            choices: [{ message: { role: 'assistant', content: 'Deep answer.' } }],
+          }),
+        };
+      },
+    });
+
+    const response = await handler({
+      body: { ...sampleBody, thinking: 'deep-thinking' },
+      ip: '198.51.100.63',
+    });
+
+    assert.equal(response.status, 200);
+    assert.equal(payload.model, 'example/deep-reasoner:free');
+    assert.equal(JSON.stringify(response).includes(TEST_API_KEY), false);
+  } finally {
+    if (previous === undefined) delete process.env.NOVA_OPENROUTER_DEEP_THINKING_MODEL;
+    else process.env.NOVA_OPENROUTER_DEEP_THINKING_MODEL = previous;
+  }
+});
+
+test('the public config describes every level, ordered and key-free', async () => {
+  const off = getNovaPublicConfig({ env: {} });
+  assert.deepEqual(
+    off.thinking.levels.map((level) => level.id),
+    ['auto', 'flash', 'flash-thinking', 'thinking', 'deep-thinking'],
+  );
+  assert.equal(off.thinking.default, 'auto');
+  assert.equal(off.thinking.levels[0].available, true, 'auto always works (offline engine)');
+  assert.equal(off.thinking.levels.at(-1).available, false, 'deep thinking needs a provider');
+  assert.equal(off.thinking.levels.at(-1).requiresReasoning, true);
+
+  const on = getNovaPublicConfig({ env: { OPENROUTER_API_KEY: 'private-openrouter-key' } });
+  assert.equal(on.thinking.levels.at(-1).available, true);
+  assert.equal(JSON.stringify(on).includes('private-openrouter-key'), false);
+});
+
+test('Gemini gets a real thinking level for the deeper settings', async () => {
+  const { geminiGenerationConfig } = await import('../server/novaChat.js');
+
+  assert.deepEqual(geminiGenerationConfig('gemini-3.8-flash', 'deep-thinking'), {
+    maxOutputTokens: 3_200,
+    thinkingConfig: { thinkingLevel: 'high' },
+  });
+  assert.deepEqual(geminiGenerationConfig('gemini-3.8-flash', 'flash').thinkingConfig, { thinkingLevel: 'low' });
+  // Auto is untouched, which is what keeps the diagnostics probe fast.
+  assert.deepEqual(geminiGenerationConfig('gemini-3.8-flash'), {
+    maxOutputTokens: 1_200,
+    thinkingConfig: { thinkingLevel: 'low' },
+  });
+});

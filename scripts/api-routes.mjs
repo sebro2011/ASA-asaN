@@ -27,6 +27,10 @@ export const API_ROUTES = [
   { method: 'GET', path: '/api/nova/diagnostics?probe=1', expect: [200], why: 'deep probe, throttled' },
   { method: 'GET', path: '/api/workspace/config', expect: [200], why: 'publishable Supabase config or a reason' },
   { method: 'GET', path: '/api/community/config', expect: [200], why: 'community feature switch' },
+  { method: 'GET', path: '/api/news/sources', expect: [200], why: 'which news providers have keys (booleans only)' },
+  { method: 'GET', path: '/api/news?limit=1', expect: [200, 502, 504], why: 'aggregated space news' },
+  { method: 'GET', path: '/api/news?topic=weather', expect: [400], why: 'unknown topic is rejected' },
+  { method: 'GET', path: '/api/news/papers?limit=1', expect: [200, 502, 504], why: 'arXiv astro-ph preprints' },
 
   /* ------------------------------------------------------------ AI routes */
   { method: 'POST', path: '/api/nova/chat', body: {}, expect: [400], why: 'validation before any provider call' },
@@ -40,7 +44,7 @@ export const API_ROUTES = [
   { method: 'GET', path: '/api/asteroids/neows', expect: NASA, why: 'near-Earth objects' },
   { method: 'GET', path: '/api/epic', expect: NASA, why: 'EPIC Earth imagery' },
   { method: 'GET', path: '/api/exoplanets', expect: NASA, why: 'exoplanet archive' },
-  { method: 'GET', path: '/api/news', expect: NASA, why: 'NASA news' },
+  { method: 'GET', path: '/api/news', expect: [200, 502, 504], why: 'aggregated space news (502 when every provider fails)' },
   { method: 'GET', path: '/api/nasa-archive', expect: NASA, why: 'curated archive' },
   { method: 'GET', path: '/api/iss', expect: NASA, why: 'ISS position' },
   { method: 'GET', path: '/api/solar-weather', expect: NASA, why: 'space weather' },

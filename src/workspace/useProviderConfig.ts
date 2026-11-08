@@ -15,13 +15,38 @@ export interface ProviderAvailability {
   arena: boolean;
 }
 
+export interface ThinkingCatalogueEntry {
+  id: string;
+  effort: 'low' | 'medium' | 'high' | null;
+  maxTokens: number;
+  requiresReasoning: boolean;
+  /** A per-level OpenRouter model pinned by the deployment, if any. */
+  model: string | null;
+  available: boolean;
+}
+
+export interface ThinkingCatalogue {
+  default: string;
+  levels: ThinkingCatalogueEntry[];
+}
+
 type Status = 'loading' | 'ready' | 'error';
 
-let cached: ProviderAvailability | null = null;
+interface ConfigSnapshot {
+  providers: ProviderAvailability;
+  thinking: ThinkingCatalogue | null;
+}
 
-export function useProviderConfig(): { status: Status; providers: ProviderAvailability | null } {
+let cached: ConfigSnapshot | null = null;
+
+export function useProviderConfig(): {
+  status: Status;
+  providers: ProviderAvailability | null;
+  thinking: ThinkingCatalogue | null;
+} {
   const [status, setStatus] = useState<Status>(cached ? 'ready' : 'loading');
-  const [providers, setProviders] = useState<ProviderAvailability | null>(cached);
+  const [providers, setProviders] = useState<ProviderAvailability | null>(cached?.providers ?? null);
+  const [thinking, setThinking] = useState<ThinkingCatalogue | null>(cached?.thinking ?? null);
 
   useEffect(() => {
     if (cached) return;
@@ -43,8 +68,10 @@ export function useProviderConfig(): { status: Status; providers: ProviderAvaila
           openrouter: payload?.providers?.openrouter === true,
           arena: payload?.providers?.arena === true,
         };
-        cached = next;
+        const catalogue = normaliseThinkingCatalogue(payload?.thinking);
+        cached = { providers: next, thinking: catalogue };
         setProviders(next);
+        setThinking(catalogue);
         setStatus('ready');
       })
       .catch((error) => {
@@ -58,7 +85,38 @@ export function useProviderConfig(): { status: Status; providers: ProviderAvaila
     };
   }, []);
 
-  return { status, providers };
+  return { status, providers, thinking };
+}
+
+function asEffort(value: unknown): ThinkingCatalogueEntry['effort'] {
+  if (value === 'low' || value === 'medium' || value === 'high') return value;
+  return null;
+}
+
+/**
+ * The server's thinking ladder, narrowed to what the browser can trust. An
+ * unknown shape becomes `null` and the UI falls back to the static five levels.
+ */
+function normaliseThinkingCatalogue(value: unknown): ThinkingCatalogue | null {
+  if (!value || typeof value !== 'object') return null;
+  const raw = value as { default?: unknown; levels?: unknown };
+  if (!Array.isArray(raw.levels)) return null;
+  const levels: ThinkingCatalogueEntry[] = raw.levels
+    .filter((entry): entry is Record<string, unknown> => Boolean(entry) && typeof entry === 'object')
+    .map((entry) => ({
+      id: typeof entry.id === 'string' ? entry.id.slice(0, 32) : '',
+      effort: asEffort(entry.effort),
+      maxTokens: Number(entry.maxTokens) > 0 ? Number(entry.maxTokens) : 0,
+      requiresReasoning: entry.requiresReasoning === true,
+      model: typeof entry.model === 'string' && entry.model ? entry.model.slice(0, 160) : null,
+      available: entry.available !== false,
+    }))
+    .filter((entry) => Boolean(entry.id));
+  if (levels.length === 0) return null;
+  return {
+    default: typeof raw.default === 'string' ? raw.default : 'auto',
+    levels,
+  };
 }
 
 export function onlineProviderNames(providers: ProviderAvailability | null): string[] {

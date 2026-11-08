@@ -1,0 +1,225 @@
+# NOVA workspace v5 — thinking ladder, astronomy studio, one AI surface
+
+This note describes the workspace changes in this branch. Everything below is
+implemented; nothing is aspirational copy inside the product.
+
+## 1. One AI surface
+
+The legacy in-Explore assistant (`src/components/NasaAi.jsx`, the "NOVA
+Assistant" tab) has been removed. There is now exactly one AI surface: the NOVA
+chat workspace at `/chat`.
+
+- `/explore/assistant` is retired. The route still resolves, and `App` rewrites
+  the URL to `/chat` once, so old bookmarks and shared links keep working.
+- Explore's header keeps an "Ask NOVA" button — it now opens `/chat`.
+- Explore's footer group "Assistant" became "Library" (Saved Research only), and
+  the mobile tab bar no longer offers a second, older chat.
+
+The legacy `nasa_ai_chat_thread_v3` localStorage thread is **not** deleted; the
+existing opt-in import on the Profile screen still migrates it.
+
+## 2. Thinking ladder
+
+Ordered, fastest → deepest. The order is a product contract and is identical on
+the server (`server/novaThinking.js`) and in the browser
+(`src/workspace/chat/thinking.ts`).
+
+| Level | OpenRouter `reasoning.effort` | Token budget | Gemini `thinkingLevel` |
+| --- | --- | --- | --- |
+| `auto` | — (deployment default) | 1200 | `low` (Gemini 3.x) |
+| `flash` | — | 700 | `low` |
+| `flash-thinking` | `low` | 1400 | `medium` |
+| `thinking` | `medium` | 2200 | `medium` |
+| `deep-thinking` | `high` | 3200 | `high` |
+
+How it is wired:
+
+- `POST /api/nova/chat` accepts `thinking` (`auto` by default). It is validated
+  (`INVALID_THINKING` on an unknown value), applied to the provider payload, and
+  echoed in the response so the UI never guesses what ran.
+- `auto` is byte-for-byte the previous behaviour: `temperature: 0.7`,
+  `max_tokens: 1200`, no `reasoning` block. Existing deployments and tests are
+  unaffected.
+- The four explicit levels send OpenRouter's `reasoning.effort` and drop
+  `temperature` (reasoning models ignore or reject sampling knobs). Gemini gets
+  `thinkingConfig.thinkingLevel`; Arena endpoints are OpenAI-compatible but not
+  guaranteed to accept `reasoning`, so they receive the budget and a system
+  prompt instruction instead of an unknown field.
+- Each level may pin its own OpenRouter model:
+  `NOVA_OPENROUTER_FLASH_MODEL`, `NOVA_OPENROUTER_FLASH_THINKING_MODEL`,
+  `NOVA_OPENROUTER_THINKING_MODEL`, `NOVA_OPENROUTER_DEEP_THINKING_MODEL`. This
+  is how "flash thinking" can point at a thinking-capable variant while "flash"
+  stays cheap.
+- `GET /api/nova/config` returns the ordered ladder under `thinking.levels`,
+  with `available` (true only when the deployment can actually serve it) and
+  `requiresReasoning`. No key ever appears in that payload.
+- The browser remembers the chosen level per device
+  (`nova_thinking_level_v1`) and the picker is keyboard-complete: `listbox`,
+  arrow keys, Home/End, Enter/Space, Escape, click-outside.
+
+## 3. Astronomy studio
+
+The chat empty state and the dashboard both ship four grounded space-science
+starters, each paired with the thinking level that suits it:
+
+| Starter | Level | What it asks for |
+| --- | --- | --- |
+| Mission briefing | `thinking` | Artemis objectives, hardware and milestones; settled vs. recently changed |
+| Visible sky | `flash-thinking` | Moon, planets, easy constellations — asks for hemisphere instead of inventing times |
+| NEO risk | `thinking` | Torino scale, size vs. orbit uncertainty vs. impact probability |
+| Earth observation | `flash` | What NASA POWER/GIBS measure and how to read a map without over-claiming |
+
+Plus a "Deep space question" starter (`deep-thinking`) that asks for a worked
+astrophysics derivation, and a **Picture of the day** action in chat that fetches
+the real `/api/apod` entry, quotes its caption verbatim, and seeds a prompt that
+asks NOVA to separate what the image shows from interpretation. When APOD falls
+back to a cached reference entry, the UI says so.
+
+All copy exists in English, Sinhala and Tamil (`src/i18n/workspaceCopy.ts`).
+
+## 3a. Astronomy sections and the live "Sky now" row
+
+Every destination in the workspace is an astronomy domain, not a generic
+productivity module. The labels, descriptions and bullets live in
+`src/i18n/workspaceCopy.ts` and are identical in shape across en/si/ta:
+
+| Route | Section | Phase | What it is |
+| --- | --- | --- | --- |
+| `/workspace` | Mission Control | live | the dashboard |
+| `/chat` | NOVA Chat | live | the trilingual astronomy assistant |
+| `/projects` | Missions | 4B | objectives, hardware, timelines per mission |
+| `/documents` | Observation Logs | 4C | dated observing records |
+| `/writing` | Research Journal | 4C | observations → reviewable journal entry |
+| `/research` | Deep-Sky Research | 4D | structured research questions and a source register |
+| `/code` | Orbit Lab | 4D | orbital/observing maths with the formula shown |
+| `/knowledge` | Star Library | 4E | your star charts, briefs and datasets |
+| `/tasks` | Observing Plan | 4F | session planning with Moon-phase constraints |
+| `/explore` | Explore | live | the fifteen NASA destinations, unchanged |
+
+Route slugs are unchanged so existing links and tests keep working; only the
+visible names and copy moved to astronomy vocabulary (the search scope chip now
+reads "Observation Logs" for the same reason).
+
+The dashboard also gained a **Sky now** section — three cards reading routes the
+server already ships, with no fourth data path:
+
+| Card | Endpoint | Shows | Hand-off |
+| --- | --- | --- | --- |
+| Picture of the day | `/api/apod` | title, date, thumbnail | prompt asks NOVA to separate image from interpretation |
+| Next close approach | `/api/asteroids/neows` | nearest object, lunar distances, relative velocity | prompt asks what the numbers mean, without exaggeration |
+| ISS position | `/api/iss` | latitude, longitude, altitude | prompt asks what the ground track means and how to see the station |
+
+Each card is explicit about state: a loading line, a plain "Feed unavailable
+right now." with a retry button, and a `cached reference` flag when the server
+served its fallback payload. The AI button is disabled while there is nothing
+real to ground on, so a prompt can never quote a value the server did not send.
+Feeds load independently: one failing card never blanks the other two.
+
+## 3c. Space News and arXiv papers (API keys)
+
+`/news` is a live workspace destination ("Space News" in the sidebar and the
+mobile bar). It reads two server routes and nothing else:
+
+| Route | Provider | Key | Notes |
+| --- | --- | --- | --- |
+| `/api/news` | Spaceflight News API v4 | none | free; always available |
+| `/api/news` | GNews | `GNEWS_API_KEY` | broad astronomy search |
+| `/api/news` | NewsAPI.org | `NEWSAPI_KEY` | sent as `X-Api-Key`, never in a URL |
+| `/api/news` | The Guardian | `GUARDIAN_API_KEY` | science desk, trail text + thumbnail |
+| `/api/news/papers` | arXiv astro-ph | none | Atom feed, newest first |
+
+**How keys behave.** All four are read server-side only. `GET /api/news/sources`
+returns `{ id, label, envVar, docs, configured }` — a boolean, never a value — and
+`/api/news` repeats that per source with `state: ok | unconfigured | error`.
+A provider without a key is never called. A provider that fails is reported as
+`unreachable` while the others still render; if *every* attempted provider fails
+the route answers `502 upstream` and the UI says "The news feed could not be
+reached." with a retry. No story, date or summary is ever synthesised.
+
+**What the surface shows.** Topic chips (All / Missions / Universe / Earth),
+a source strip, a responsive card grid (image, publisher, date, summary, outbound
+link) and an arXiv list with authors and categories. Every card has **Ask NOVA**,
+which queues a prompt quoting only that headline's title, publisher and summary
+and asks for established vs. uncertain science. Titles and summaries are
+HTML-stripped and length-capped on the server, so upstream markup cannot reach
+the DOM.
+
+**Environment.**
+
+```bash
+GNEWS_API_KEY=""        # https://gnews.io/
+NEWSAPI_KEY=""          # https://newsapi.org/register
+GUARDIAN_API_KEY=""     # https://open-platform.theguardian.com/access/
+```
+
+Server responses are cached for 10 minutes (30 for papers) with a 30/min per-IP
+limit, and identical concurrent requests share one upstream call in the cache.
+
+**Tests.** `npm run test:space-news` covers the inventory (booleans, no leakage),
+aggregation/dedupe/sorting, the NewsAPI header form, one-provider failure,
+all-failed 502, validation, caching, arXiv parsing and the rate limit.
+`npm run test:workspace-news` mounts the surface: configured vs. keyless chips,
+outbound link safety, honest empty/error states with a working retry, and the
+grounded Ask NOVA hand-off.
+
+## 3b. Chat without an account
+
+`/chat` is no longer wrapped in `RequireAuth`. The session state decides where a
+thread lives:
+
+| State | Storage | What the surface says |
+| --- | --- | --- |
+| Signed in | Supabase (`conversations` / `messages`, RLS) | normal, with sync badge |
+| Signed out / cloud unconfigured | localStorage (`nova_local_chat_v1`) | "This device only" + a sign-in link |
+
+- The guest store is versioned, capped (40 conversations, 800 messages) and
+  validated on read; a corrupt payload is ignored rather than repaired in place.
+- A failed device write marks the bubble "not saved" — it never pretends.
+- Signing in does **not** silently merge guest rows; the copy says threads stay
+  in this browser until you sign in, and no upload happens automatically.
+- The dashboard composer no longer detours to `/profile` for guests: a prompt is
+  queued and delivered to `/chat` exactly as it is for a signed-in reader.
+
+## 4. UI/UX
+
+The chat surface is a modern two-pane workspace:
+
+- conversation rail: search, All/Archived switch with counts, pin/rename/archive
+  /delete on hover or focus, relative timestamps;
+- sticky head: conversation title, live provider, current thinking level, new
+  chat;
+- transcript: avatars, assistant/user bubbles, markdown rendering, copy and
+  regenerate on the last answer, a real "thinking" indicator that names the
+  level, and an error bubble that keeps the provider, code and HTTP status;
+- composer: floating glass, provider picker, thinking picker, send/stop.
+
+The dashboard gained a reasoning-ladder card (select a level from Home), a
+thinking picker inside the hero composer, the live **Sky now** row and the
+astronomy studio grid. The level chosen on Home travels with the queued prompt
+(`nova_pending_thinking`) so the hand-off is not lost.
+
+Two cards were **removed** from the dashboard on request: the per-provider
+inventory (it lives in Settings → AI providers, where the probes already are)
+and the "Workspace modules" roadmap list (planned destinations keep their
+`Soon` flag and phase on the sidebar and on their own route surface). The
+remaining utility cards sit in one responsive row under the Explore card.
+
+The legacy service worker in `public/sw.js` used stale-while-revalidate for
+every non-image request, including Vite's unhashed `/src/*` modules, so the
+first load after an edit could show the previous build. It now bypasses
+`/src/`, `/@*` and `/node_modules/` entirely and its caches were bumped to v3,
+which deletes the stale shell on activate.
+
+## 5. Tests
+
+- `npm run test:nova-chat` covers the ladder order, budgets, effort mapping,
+  validation, per-level model pinning, the public catalogue and Gemini levels.
+- `npm run test:workspace-chat`, `test:workspace-home`, `test:workspace-dom` and
+  `test:workspace-shell` cover the surfaces, copy parity and the retired tab.
+- `test:workspace-home` also mounts the **Sky now** row against stubbed feeds:
+  it asserts the real values render, that a served feed is not labelled
+  unavailable, that a failed feed shows the retry copy instead of a value, and
+  that "Ask NOVA" queues a prompt quoting the live title and date.
+- `test:workspace-dom` and `test:workspace-search` assert the astronomy labels
+  ("Research Journal", "Observation Logs") and that Sinhala/Tamil shells carry no
+  English leakage.

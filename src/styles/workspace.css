@@ -816,3 +816,1421 @@
 :root[data-nova-motion='reduced'] .nova-chip-glass:hover {
   transform: none;
 }
+
+/* =============================================================================
+   CHAT WORKSPACE (v5) — the AI surface
+   -----------------------------------------------------------------------------
+   A two-pane workspace: a conversation rail and the thread, with a sticky head
+   and a floating composer. The thinking-ladder picker, the astronomy starter
+   cards and the message rows all live here so the chat surface is styled in one
+   place and inherits both palettes automatically.
+   ========================================================================== */
+
+.nova-section-title {
+  font-family: var(--font-mono);
+  font-size: 0.625rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--color-ws-text-3);
+}
+
+/* ------------------------------------------------------------------ shell */
+
+.nova-chat-shell {
+  display: flex;
+  min-height: 0;
+  height: calc(100dvh - var(--spacing-ws-topbar));
+  gap: 0.75rem;
+  padding: 0.75rem;
+}
+
+@media (max-width: 767px) {
+  .nova-chat-shell {
+    height: calc(100dvh - var(--spacing-ws-topbar) - 4.5rem);
+    padding: 0.5rem;
+  }
+}
+
+/* ------------------------------------------------------------------- rail */
+
+.nova-chat-rail {
+  flex-direction: column;
+  gap: 0.625rem;
+  width: 100%;
+  flex-shrink: 0;
+  padding: 0.75rem;
+  border-radius: 20px;
+  border: 1px solid var(--color-ws-line);
+  background: var(--ws-glass);
+  backdrop-filter: blur(22px) saturate(130%);
+  -webkit-backdrop-filter: blur(22px) saturate(130%);
+  min-height: 0;
+}
+
+@media (min-width: 768px) {
+  .nova-chat-rail {
+    width: 18rem;
+  }
+}
+
+.nova-chat-rail__head {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.nova-chat-rail__title {
+  font-family: var(--font-mono);
+  font-size: 0.5625rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--color-ws-text-3);
+}
+
+.nova-chat-rail__new {
+  width: 100%;
+  height: 2.125rem;
+  justify-content: center;
+}
+
+.nova-chat-rail__search {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  height: 2.125rem;
+  padding-inline: 0.625rem;
+  border-radius: 10px;
+  border: 1px solid var(--color-ws-line);
+  background: color-mix(in srgb, var(--color-ws-bg) 55%, transparent);
+  color: var(--color-ws-text-3);
+}
+.nova-chat-rail__search:focus-within {
+  border-color: var(--color-ws-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-ws-accent) 18%, transparent);
+}
+.nova-chat-rail__input {
+  min-width: 0;
+  flex: 1;
+  background: transparent;
+  border: 0;
+  outline: none;
+  font-size: 0.75rem;
+  color: var(--color-ws-text);
+}
+.nova-chat-rail__input::placeholder {
+  color: var(--color-ws-text-3);
+}
+
+.nova-chat-rail__tabs {
+  display: flex;
+  gap: 0.25rem;
+  padding: 0.1875rem;
+  border-radius: 10px;
+  border: 1px solid var(--color-ws-line);
+  background: color-mix(in srgb, var(--color-ws-bg) 45%, transparent);
+}
+.nova-chat-rail__tab {
+  display: inline-flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3125rem;
+  height: 1.75rem;
+  border-radius: 8px;
+  font-size: 0.6875rem;
+  font-weight: 550;
+  color: var(--color-ws-text-3);
+  transition: background-color 140ms var(--ease-out-expo), color 140ms var(--ease-out-expo);
+}
+.nova-chat-rail__tab:hover {
+  color: var(--color-ws-text);
+}
+.nova-chat-rail__tab--active {
+  background: color-mix(in srgb, var(--color-ws-accent) 16%, transparent);
+  color: var(--color-ws-text);
+}
+.nova-chat-rail__count {
+  display: inline-grid;
+  min-width: 1.0625rem;
+  height: 1.0625rem;
+  place-items: center;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-ws-text) 12%, transparent);
+  font-size: 0.5625rem;
+  font-family: var(--font-mono);
+}
+
+.nova-chat-rail__scroll {
+  min-height: 0;
+  flex: 1;
+  padding-right: 0.125rem;
+  overscroll-behavior: contain;
+}
+
+.nova-chat-rail__list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1875rem;
+  padding: 0;
+  list-style: none;
+}
+
+.nova-chat-rail__item {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  border-radius: 10px;
+  padding: 0.3125rem 0.375rem;
+  border: 1px solid transparent;
+  transition: background-color 140ms var(--ease-out-expo), border-color 140ms var(--ease-out-expo);
+}
+.nova-chat-rail__item:hover {
+  background: color-mix(in srgb, var(--color-ws-text) 6%, transparent);
+}
+.nova-chat-rail__item--active {
+  background: color-mix(in srgb, var(--color-ws-accent) 13%, transparent);
+  border-color: color-mix(in srgb, var(--color-ws-accent) 30%, transparent);
+}
+
+.nova-chat-rail__link {
+  display: block;
+  min-width: 0;
+  flex: 1;
+  border-radius: 6px;
+  color: inherit;
+}
+.nova-chat-rail__link-title {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: 0.78125rem;
+  color: var(--color-ws-text);
+}
+.nova-chat-rail__link-time {
+  display: block;
+  margin-top: 0.0625rem;
+  font-size: 0.625rem;
+  color: var(--color-ws-text-3);
+}
+
+.nova-chat-rail__actions {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  opacity: 0;
+  transition: opacity 140ms var(--ease-out-expo);
+}
+.nova-chat-rail__item:hover .nova-chat-rail__actions,
+.nova-chat-rail__item:focus-within .nova-chat-rail__actions,
+.nova-chat-rail__item--active .nova-chat-rail__actions {
+  opacity: 1;
+}
+@media (hover: none) {
+  .nova-chat-rail__actions {
+    opacity: 1;
+  }
+}
+
+/* ------------------------------------------------------------------- main */
+
+.nova-chat-main {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 0.625rem;
+}
+
+.nova-chat-head {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.5rem 0.625rem;
+  border-radius: 16px;
+  border: 1px solid var(--color-ws-line);
+  background: var(--ws-glass);
+  backdrop-filter: blur(20px) saturate(130%);
+  -webkit-backdrop-filter: blur(20px) saturate(130%);
+}
+
+.nova-chat-head__list {
+  flex-shrink: 0;
+  height: 2rem;
+  padding-inline: 0.5rem;
+  font-size: 0.6875rem;
+}
+
+.nova-chat-head__titles {
+  min-width: 0;
+  flex: 1;
+}
+.nova-chat-head__title {
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  font-size: 0.875rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--color-ws-text);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.nova-chat-head__sub {
+  display: flex;
+  align-items: center;
+  gap: 0.3125rem;
+  margin-top: 0.125rem;
+  font-family: var(--font-mono);
+  font-size: 0.5625rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-ws-text-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.nova-chat-head__dot {
+  width: 0.3125rem;
+  height: 0.3125rem;
+  border-radius: 999px;
+  background: var(--color-ws-success);
+  flex-shrink: 0;
+}
+.nova-chat-head__sep {
+  opacity: 0.5;
+}
+.nova-chat-head__actions {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 0.25rem;
+}
+.nova-chat-head__new {
+  border: 1px solid var(--color-ws-line);
+}
+
+/* ---------------------------------------------------------------- thread */
+
+.nova-chat-thread {
+  min-height: 0;
+  flex: 1;
+  border-radius: 18px;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+
+.nova-chat-thread:focus-visible {
+  outline: 2px solid var(--color-ws-accent);
+  outline-offset: 2px;
+}
+
+.nova-chat-empty {
+  display: flex;
+  min-height: 100%;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem 1rem 1.5rem;
+  text-align: center;
+}
+.nova-chat-empty__orb {
+  filter: drop-shadow(0 18px 34px rgba(0, 0, 0, 0.35));
+}
+.nova-chat-empty__title {
+  margin-top: 1rem;
+  font-size: 1.3125rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--color-ws-text);
+}
+.nova-chat-empty__body {
+  margin-top: 0.5rem;
+  max-width: 34rem;
+  font-size: 0.8125rem;
+  line-height: 1.6;
+  color: var(--color-ws-text-2);
+}
+.nova-chat-empty__suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.375rem;
+  margin-top: 1rem;
+}
+
+/* ----------------------------------------------------------- space news */
+
+.nova-chip--active {
+  border-color: color-mix(in srgb, var(--color-ws-accent) 55%, transparent);
+  background: color-mix(in srgb, var(--color-ws-accent) 14%, transparent);
+  color: var(--color-ws-accent-ink);
+}
+.nova-chip--muted {
+  color: var(--color-ws-text-3);
+}
+button.nova-chip {
+  cursor: pointer;
+  transition: border-color 160ms var(--ease-out-expo), background 160ms var(--ease-out-expo);
+}
+button.nova-chip:hover {
+  border-color: color-mix(in srgb, var(--color-ws-accent) 40%, transparent);
+}
+
+.nova-news-source {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.1875rem 0.5rem;
+  border-radius: 999px;
+  border: 1px solid var(--color-ws-line);
+  font-size: 0.6875rem;
+  color: var(--color-ws-text-2);
+}
+.nova-news-source .nova-dot {
+  background: var(--color-ws-success);
+}
+.nova-news-source--off {
+  color: var(--color-ws-text-3);
+  border-style: dashed;
+}
+.nova-news-source--off .nova-dot {
+  background: var(--color-ws-line-strong);
+}
+.nova-news-source--error {
+  border-color: color-mix(in srgb, var(--color-ws-danger, #d96a6a) 45%, transparent);
+}
+.nova-news-source--error .nova-dot {
+  background: var(--color-ws-danger, #d96a6a);
+}
+.nova-news-source__state {
+  font-family: var(--font-mono);
+  font-size: 0.5rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-ws-text-3);
+}
+
+.nova-news-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.75rem;
+}
+@media (min-width: 720px) {
+  .nova-news-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (min-width: 1080px) {
+  .nova-news-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.nova-news-card {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: 16px;
+  border: 1px solid var(--color-ws-line);
+  background: var(--ws-glass);
+  backdrop-filter: blur(18px) saturate(140%);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+  box-shadow: var(--ws-shadow-1);
+  transition: transform 180ms var(--ease-out-expo), border-color 180ms var(--ease-out-expo);
+}
+.nova-news-card:hover {
+  transform: translateY(-2px);
+  border-color: color-mix(in srgb, var(--color-ws-accent) 35%, transparent);
+}
+.nova-news-card__image {
+  width: 100%;
+  height: 8rem;
+  object-fit: cover;
+  border-bottom: 1px solid var(--color-ws-line);
+  background: color-mix(in srgb, var(--color-ws-text) 6%, transparent);
+}
+.nova-news-card__body {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 0.375rem;
+  padding: 0.8125rem;
+}
+.nova-news-card__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3125rem;
+  font-family: var(--font-mono);
+  font-size: 0.5625rem;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--color-ws-text-3);
+}
+.nova-news-card__title {
+  font-size: 0.84375rem;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--color-ws-text);
+  text-decoration: none;
+}
+.nova-news-card__title:hover {
+  color: var(--color-ws-accent-ink);
+}
+.nova-news-card__summary {
+  font-size: 0.75rem;
+  line-height: 1.55;
+  color: var(--color-ws-text-2);
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.nova-news-card__actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-top: auto;
+  padding-top: 0.375rem;
+}
+.nova-news-card__actions .nova-btn {
+  height: 1.75rem;
+  font-size: 0.6875rem;
+}
+.nova-news-card__link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.6875rem;
+  color: var(--color-ws-text-3);
+  text-decoration: none;
+}
+.nova-news-card__link:hover {
+  color: var(--color-ws-accent-ink);
+}
+
+.nova-paper {
+  min-width: 0;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--color-ws-line);
+}
+.nova-paper:first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+.nova-paper__title {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 0.25rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--color-ws-text);
+  text-decoration: none;
+}
+.nova-paper__title:hover {
+  color: var(--color-ws-accent-ink);
+}
+.nova-paper__meta {
+  margin-top: 0.1875rem;
+  font-family: var(--font-mono);
+  font-size: 0.5625rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--color-ws-text-3);
+}
+.nova-paper__summary {
+  margin-top: 0.25rem;
+  font-size: 0.75rem;
+  line-height: 1.55;
+  color: var(--color-ws-text-2);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* ------------------------------------------------------------- sky now */
+
+.nova-sky-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.75rem;
+}
+@media (min-width: 720px) {
+  .nova-sky-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.nova-sky-card {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.875rem;
+  border-radius: 16px;
+  border: 1px solid var(--color-ws-line);
+  background: var(--ws-glass);
+  backdrop-filter: blur(18px) saturate(140%);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+  box-shadow: var(--ws-shadow-1);
+}
+
+.nova-sky-card__head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+.nova-sky-card__icon {
+  display: grid;
+  width: 1.625rem;
+  height: 1.625rem;
+  flex: none;
+  place-items: center;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--color-ws-accent) 26%, transparent);
+  background: color-mix(in srgb, var(--color-ws-accent) 12%, transparent);
+  color: var(--color-ws-accent-ink);
+}
+.nova-sky-card__title {
+  min-width: 0;
+  flex: 1;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-ws-text);
+}
+.nova-sky-card__flag {
+  flex: none;
+  padding: 0.0625rem 0.375rem;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--color-ws-warning, #d9a441) 40%, transparent);
+  font-family: var(--font-mono);
+  font-size: 0.5rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-ws-text-3);
+}
+
+.nova-sky-card__body {
+  display: flex;
+  min-height: 3.25rem;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+.nova-sky-card__image {
+  width: 100%;
+  height: 5.25rem;
+  margin-bottom: 0.375rem;
+  border-radius: 10px;
+  border: 1px solid var(--color-ws-line);
+  object-fit: cover;
+}
+.nova-sky-card__value {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--color-ws-text);
+  overflow-wrap: anywhere;
+}
+.nova-sky-card__meta {
+  font-family: var(--font-mono);
+  font-size: 0.59375rem;
+  line-height: 1.5;
+  letter-spacing: 0.03em;
+  color: var(--color-ws-text-3);
+}
+.nova-sky-card__status {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: 0.71875rem;
+  color: var(--color-ws-text-3);
+}
+.nova-sky-card__status--error {
+  color: var(--color-ws-danger, #d96a6a);
+}
+.nova-sky-card__action {
+  margin-top: auto;
+  height: 1.875rem;
+  align-self: flex-start;
+  font-size: 0.6875rem;
+}
+
+/* ------------------------------------------------------- science starters */
+
+.nova-science-grid {
+  display: grid;
+  width: 100%;
+  max-width: 46rem;
+  grid-template-columns: 1fr;
+  gap: 0.625rem;
+}
+@media (min-width: 640px) {
+  .nova-science-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.nova-chat-empty .nova-science-grid {
+  margin-top: 1.375rem;
+}
+
+.nova-science-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.8125rem 0.875rem 0.75rem;
+  border-radius: 14px;
+  border: 1px solid var(--color-ws-line);
+  background: var(--ws-glass);
+  backdrop-filter: blur(18px) saturate(140%);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+  box-shadow: var(--ws-shadow-1);
+  text-align: left;
+  transition: transform 180ms var(--ease-out-expo), border-color 180ms var(--ease-out-expo),
+    box-shadow 180ms var(--ease-out-expo);
+}
+.nova-science-card:hover {
+  transform: translateY(-2px);
+  border-color: color-mix(in srgb, var(--color-ws-accent) 42%, transparent);
+  box-shadow: var(--ws-shadow-2);
+}
+.nova-science-card:active {
+  transform: translateY(0);
+}
+.nova-science-card:focus-visible {
+  outline: 2px solid var(--color-ws-accent);
+  outline-offset: 2px;
+}
+.nova-science-card__icon {
+  display: grid;
+  width: 1.875rem;
+  height: 1.875rem;
+  place-items: center;
+  border-radius: 9px;
+  border: 1px solid color-mix(in srgb, var(--color-ws-accent) 28%, transparent);
+  background: color-mix(in srgb, var(--color-ws-accent) 12%, transparent);
+  color: var(--color-ws-accent-ink);
+}
+.nova-science-card__title {
+  margin-top: 0.375rem;
+  font-size: 0.78125rem;
+  font-weight: 600;
+  color: var(--color-ws-text);
+}
+.nova-science-card__body {
+  font-size: 0.71875rem;
+  line-height: 1.5;
+  color: var(--color-ws-text-3);
+}
+.nova-science-card__level {
+  margin-top: 0.4375rem;
+  font-family: var(--font-mono);
+  font-size: 0.5625rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-ws-accent-ink);
+}
+
+.nova-science-deep {
+  display: flex;
+  width: 100%;
+  max-width: 46rem;
+  align-items: center;
+  gap: 0.6875rem;
+  margin-top: 0.625rem;
+  padding: 0.6875rem 0.875rem;
+  border-radius: 14px;
+  border: 1px solid color-mix(in srgb, var(--color-ws-accent-2) 38%, transparent);
+  background:
+    linear-gradient(100deg,
+      color-mix(in srgb, var(--color-ws-accent) 14%, transparent),
+      color-mix(in srgb, var(--color-ws-accent-2) 12%, transparent));
+  transition: border-color 180ms var(--ease-out-expo), transform 180ms var(--ease-out-expo);
+}
+.nova-science-deep:hover {
+  border-color: var(--color-ws-accent-2);
+  transform: translateY(-1px);
+}
+.nova-science-deep__icon {
+  display: grid;
+  width: 2rem;
+  height: 2rem;
+  flex-shrink: 0;
+  place-items: center;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-ws-accent-2) 24%, transparent);
+  color: var(--color-ws-text);
+}
+.nova-science-deep__title {
+  display: block;
+  font-size: 0.78125rem;
+  font-weight: 600;
+  color: var(--color-ws-text);
+}
+.nova-science-deep__body {
+  display: block;
+  font-size: 0.6875rem;
+  line-height: 1.5;
+  color: var(--color-ws-text-2);
+}
+.nova-science-deep__level {
+  margin-left: auto;
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+  font-size: 0.5625rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-ws-text-2);
+}
+
+/* -------------------------------------------------------------- messages */
+
+.nova-msg-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.875rem;
+  padding: 0.75rem 0.375rem 1rem;
+  list-style: none;
+}
+
+.nova-msg {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.625rem;
+}
+.nova-msg--user {
+  flex-direction: row-reverse;
+}
+
+.nova-msg__avatar {
+  display: grid;
+  width: 1.75rem;
+  height: 1.75rem;
+  flex-shrink: 0;
+  place-items: center;
+  margin-top: 0.125rem;
+  border-radius: 999px;
+}
+.nova-msg__avatar-initial {
+  display: grid;
+  width: 1.75rem;
+  height: 1.75rem;
+  place-items: center;
+  border-radius: 999px;
+  border: 1px solid var(--color-ws-line-strong);
+  background: color-mix(in srgb, var(--color-ws-text) 8%, transparent);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: var(--color-ws-text-2);
+}
+.nova-msg__avatar-nova {
+  display: grid;
+  width: 1.75rem;
+  height: 1.75rem;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 999px;
+}
+
+.nova-msg__body {
+  min-width: 0;
+  max-width: min(46rem, 90%);
+}
+.nova-msg--user .nova-msg__body {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.nova-msg__bubble {
+  border-radius: 16px;
+  border: 1px solid var(--color-ws-line);
+  background: var(--color-ws-surface);
+  padding: 0.625rem 0.8125rem;
+  box-shadow: var(--ws-shadow-1);
+}
+.nova-msg--user .nova-msg__bubble {
+  border-color: color-mix(in srgb, var(--color-ws-accent) 38%, transparent);
+  background: color-mix(in srgb, var(--color-ws-accent) 13%, var(--color-ws-surface));
+  border-bottom-right-radius: 6px;
+}
+.nova-msg--assistant .nova-msg__bubble {
+  border-bottom-left-radius: 6px;
+}
+.nova-msg--error .nova-msg__bubble {
+  border-color: color-mix(in srgb, var(--color-ws-danger) 45%, transparent);
+  background: color-mix(in srgb, var(--color-ws-danger) 10%, transparent);
+}
+
+.nova-msg__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3125rem;
+  margin-top: 0.3125rem;
+  padding-inline: 0.125rem;
+  font-size: 0.65625rem;
+  color: var(--color-ws-text-3);
+}
+.nova-msg--user .nova-msg__meta {
+  justify-content: flex-end;
+}
+.nova-msg__actions {
+  display: flex;
+  align-items: center;
+  gap: 0.0625rem;
+  margin-left: auto;
+  opacity: 0;
+  transition: opacity 140ms var(--ease-out-expo);
+}
+.nova-msg:hover .nova-msg__actions,
+.nova-msg:focus-within .nova-msg__actions {
+  opacity: 1;
+}
+@media (hover: none) {
+  .nova-msg__actions {
+    opacity: 1;
+  }
+}
+
+.nova-msg--pending .nova-msg__body {
+  padding-top: 0.25rem;
+}
+.nova-msg__pending {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.75rem;
+  color: var(--color-ws-text-2);
+}
+.nova-msg__dots {
+  display: inline-flex;
+  gap: 0.1875rem;
+}
+.nova-msg__dots i {
+  width: 0.3125rem;
+  height: 0.3125rem;
+  border-radius: 999px;
+  background: var(--color-ws-accent);
+  animation: nova-dot-bounce 1.1s ease-in-out infinite;
+}
+.nova-msg__dots i:nth-child(2) { animation-delay: 0.14s; }
+.nova-msg__dots i:nth-child(3) { animation-delay: 0.28s; }
+
+@keyframes nova-dot-bounce {
+  0%, 70%, 100% { opacity: 0.35; transform: translateY(0); }
+  35% { opacity: 1; transform: translateY(-2px); }
+}
+
+/* -------------------------------------------------------------- composer */
+
+.nova-chat-composer {
+  padding: 0.625rem 0.75rem 0.5rem;
+  border-radius: 20px;
+}
+
+.nova-chat-composer__input {
+  display: block;
+  width: 100%;
+  min-height: 3.25rem;
+  max-height: 11rem;
+  resize: vertical;
+  border: 0;
+  background: transparent;
+  padding: 0.25rem 0.375rem;
+  font-size: 0.84375rem;
+  line-height: 1.55;
+  color: var(--color-ws-text);
+  outline: none;
+}
+.nova-chat-composer__input::placeholder {
+  color: var(--color-ws-text-3);
+}
+
+.nova-chat-composer__bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.375rem 0.125rem 0;
+  border-top: 1px solid var(--color-ws-line);
+  margin-top: 0.25rem;
+}
+.nova-chat-composer__controls {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.nova-chat-composer__select {
+  height: 1.75rem;
+  max-width: 8.5rem;
+  border-radius: 8px;
+  border: 1px solid var(--color-ws-line);
+  background: color-mix(in srgb, var(--color-ws-bg) 55%, transparent);
+  padding-inline: 0.375rem;
+  font-size: 0.6875rem;
+  color: var(--color-ws-text-2);
+}
+.nova-chat-composer__select:hover {
+  border-color: var(--color-ws-line-strong);
+  color: var(--color-ws-text);
+}
+
+.nova-chat-composer__actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-left: auto;
+}
+.nova-chat-composer__hint {
+  display: none;
+  font-size: 0.625rem;
+  color: var(--color-ws-text-3);
+}
+@media (min-width: 640px) {
+  .nova-chat-composer__hint {
+    display: inline;
+  }
+}
+.nova-chat-composer__send {
+  display: grid;
+  width: 2.125rem;
+  height: 2.125rem;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--color-ws-accent-solid);
+  color: #ffffff;
+  box-shadow: 0 8px 20px -12px var(--color-ws-accent);
+  transition: transform 140ms var(--ease-out-expo), background-color 140ms var(--ease-out-expo);
+}
+.nova-chat-composer__send:hover:not([disabled]) {
+  background: color-mix(in srgb, var(--color-ws-accent-solid) 88%, var(--color-ws-text));
+  transform: translateY(-1px);
+}
+.nova-chat-composer__send[disabled] {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
+}
+.nova-chat-composer__send:focus-visible {
+  outline: 2px solid var(--color-ws-accent);
+  outline-offset: 2px;
+}
+.nova-chat-composer__stop {
+  height: 2rem;
+  font-size: 0.6875rem;
+}
+
+/* -------------------------------------------------------- home composer bar */
+
+.nova-home-composer__bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0 0.375rem 0.125rem;
+}
+.nova-home-composer__hint {
+  display: none;
+  align-items: center;
+  gap: 0.3125rem;
+  font-size: 0.65625rem;
+  color: var(--color-ws-text-3);
+}
+@media (min-width: 640px) {
+  .nova-home-composer__hint {
+    display: inline-flex;
+  }
+}
+
+/* -------------------------------------------------------- reasoning ladder */
+
+.nova-ladder-row {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  padding: 0.25rem 0.4375rem;
+  font-size: 0.71875rem;
+  color: var(--color-ws-text-2);
+  transition: background-color 140ms var(--ease-out-expo), border-color 140ms var(--ease-out-expo),
+    color 140ms var(--ease-out-expo);
+}
+.nova-ladder-row:hover {
+  background: color-mix(in srgb, var(--color-ws-text) 6%, transparent);
+  color: var(--color-ws-text);
+}
+.nova-ladder-row--active {
+  border-color: color-mix(in srgb, var(--color-ws-accent) 34%, transparent);
+  background: color-mix(in srgb, var(--color-ws-accent) 12%, transparent);
+  color: var(--color-ws-text);
+}
+.nova-ladder-row__dots {
+  font-size: 0.5625rem;
+  letter-spacing: 0.12em;
+  color: var(--color-ws-accent-ink);
+}
+
+/* ---------------------------------------------------------- thinking picker */
+
+.nova-thinking {
+  position: relative;
+  display: inline-flex;
+  min-width: 0;
+}
+
+.nova-thinking__trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  height: 1.75rem;
+  padding-inline: 0.4375rem 0.4375rem;
+  border-radius: 999px;
+  border: 1px solid var(--color-ws-line);
+  background: color-mix(in srgb, var(--color-ws-bg) 50%, transparent);
+  font-size: 0.6875rem;
+  font-weight: 550;
+  color: var(--color-ws-text-2);
+  transition: border-color 140ms var(--ease-out-expo), color 140ms var(--ease-out-expo),
+    background-color 140ms var(--ease-out-expo);
+}
+.nova-thinking__trigger:hover:not([disabled]) {
+  border-color: color-mix(in srgb, var(--color-ws-accent) 42%, transparent);
+  color: var(--color-ws-text);
+}
+.nova-thinking__trigger[aria-expanded='true'] {
+  border-color: var(--color-ws-accent);
+  color: var(--color-ws-text);
+  background: color-mix(in srgb, var(--color-ws-accent) 12%, transparent);
+}
+.nova-thinking__trigger[disabled] {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.nova-thinking__trigger:focus-visible {
+  outline: 2px solid var(--color-ws-accent);
+  outline-offset: 2px;
+}
+.nova-thinking__icon {
+  display: grid;
+  place-items: center;
+  color: var(--color-ws-accent-ink);
+}
+.nova-thinking__label {
+  max-width: 7.5rem;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.nova-thinking__dots {
+  font-size: 0.5rem;
+  letter-spacing: 0.1em;
+  color: var(--color-ws-accent-ink);
+}
+.nova-thinking__chevron {
+  color: var(--color-ws-text-3);
+}
+
+.nova-thinking__menu {
+  position: absolute;
+  z-index: 40;
+  top: calc(100% + 0.4375rem);
+  left: 0;
+  width: 17.5rem;
+  max-height: 20rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0.375rem;
+  border-radius: 14px;
+  border: 1px solid var(--color-ws-line-strong);
+  background: var(--ws-glass-strong);
+  backdrop-filter: blur(26px) saturate(150%);
+  -webkit-backdrop-filter: blur(26px) saturate(150%);
+  box-shadow: var(--ws-shadow-2);
+  scrollbar-width: thin;
+}
+.nova-chat-head .nova-thinking__menu {
+  right: 0;
+  left: auto;
+}
+.nova-chat-composer .nova-thinking__menu,
+.nova-home-composer__bar .nova-thinking__menu {
+  top: auto;
+  bottom: calc(100% + 0.4375rem);
+}
+
+.nova-thinking__menu-title {
+  padding: 0.1875rem 0.4375rem 0.3125rem;
+  font-family: var(--font-mono);
+  font-size: 0.5rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--color-ws-text-3);
+}
+
+.nova-thinking__option {
+  display: flex;
+  width: 100%;
+  align-items: flex-start;
+  gap: 0.5rem;
+  border-radius: 9px;
+  border: 1px solid transparent;
+  padding: 0.375rem 0.4375rem;
+  text-align: left;
+  transition: background-color 120ms var(--ease-out-expo), border-color 120ms var(--ease-out-expo);
+}
+.nova-thinking__option:hover {
+  background: color-mix(in srgb, var(--color-ws-text) 6%, transparent);
+}
+.nova-thinking__option--selected {
+  border-color: color-mix(in srgb, var(--color-ws-accent) 36%, transparent);
+  background: color-mix(in srgb, var(--color-ws-accent) 13%, transparent);
+}
+.nova-thinking__option:focus-visible {
+  outline: 2px solid var(--color-ws-accent);
+  outline-offset: -2px;
+}
+.nova-thinking__option-icon {
+  display: grid;
+  width: 1.375rem;
+  height: 1.375rem;
+  flex-shrink: 0;
+  place-items: center;
+  margin-top: 0.0625rem;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--color-ws-accent) 12%, transparent);
+  color: var(--color-ws-accent-ink);
+}
+.nova-thinking__option-label {
+  display: flex;
+  align-items: center;
+  gap: 0.3125rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-ws-text);
+}
+.nova-thinking__option-dots {
+  font-size: 0.5rem;
+  letter-spacing: 0.1em;
+  color: var(--color-ws-accent-ink);
+}
+.nova-thinking__option-hint {
+  display: block;
+  margin-top: 0.0625rem;
+  font-size: 0.65625rem;
+  line-height: 1.45;
+  color: var(--color-ws-text-3);
+}
+.nova-thinking__check {
+  flex-shrink: 0;
+  margin-top: 0.1875rem;
+  color: var(--color-ws-accent-ink);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nova-science-card:hover,
+  .nova-science-deep:hover,
+  .nova-chat-composer__send:hover:not([disabled]) {
+    transform: none;
+  }
+  .nova-msg__dots i {
+    animation: none;
+    opacity: 0.7;
+  }
+}
+:root[data-nova-motion='reduced'] .nova-science-card:hover,
+:root[data-nova-motion='reduced'] .nova-science-deep:hover,
+:root[data-nova-motion='reduced'] .nova-chat-composer__send:hover:not([disabled]) {
+  transform: none;
+}
+:root[data-nova-motion='reduced'] .nova-msg__dots i {
+  animation: none;
+  opacity: 0.7;
+}
+
+/* -------------------------------------------------- live-data grounding row */
+
+.nova-ground-row {
+  display: flex;
+  width: 100%;
+  max-width: 46rem;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.375rem;
+  margin-top: 0.625rem;
+}
+
+.nova-ground-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.5625rem;
+  padding: 0.5625rem 0.75rem;
+  border-radius: 12px;
+  border: 1px dashed color-mix(in srgb, var(--color-ws-accent) 40%, transparent);
+  background: color-mix(in srgb, var(--color-ws-accent) 7%, transparent);
+  text-align: left;
+  transition: border-color 160ms var(--ease-out-expo), background-color 160ms var(--ease-out-expo);
+}
+.nova-ground-btn:hover:not([disabled]) {
+  border-color: var(--color-ws-accent);
+  background: color-mix(in srgb, var(--color-ws-accent) 12%, transparent);
+}
+.nova-ground-btn[disabled] {
+  opacity: 0.7;
+  cursor: progress;
+}
+.nova-ground-btn__icon {
+  display: grid;
+  width: 1.625rem;
+  height: 1.625rem;
+  flex-shrink: 0;
+  place-items: center;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-ws-accent) 18%, transparent);
+  color: var(--color-ws-accent-ink);
+}
+.nova-ground-btn__title {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-ws-text);
+}
+.nova-ground-btn__body {
+  display: block;
+  font-size: 0.65625rem;
+  line-height: 1.45;
+  color: var(--color-ws-text-3);
+}
+.nova-ground-note {
+  font-size: 0.65625rem;
+  line-height: 1.45;
+  color: var(--color-ws-text-3);
+  padding-inline: 0.25rem;
+}
+
+.nova-spin {
+  animation: nova-spin 900ms linear infinite;
+}
+@keyframes nova-spin {
+  to { transform: rotate(360deg); }
+}
+:root[data-nova-motion='reduced'] .nova-spin {
+  animation-duration: 2.4s;
+}
+
+.nova-composer__tool {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  height: 1.75rem;
+  padding-inline: 0.4375rem;
+  border-radius: 999px;
+  border: 1px solid var(--color-ws-line);
+  background: color-mix(in srgb, var(--color-ws-bg) 50%, transparent);
+  font-size: 0.65625rem;
+  color: var(--color-ws-text-2);
+  transition: border-color 140ms var(--ease-out-expo), color 140ms var(--ease-out-expo);
+}
+.nova-composer__tool:hover:not([disabled]) {
+  border-color: color-mix(in srgb, var(--color-ws-accent) 42%, transparent);
+  color: var(--color-ws-text);
+}
+.nova-composer__tool[disabled] {
+  opacity: 0.6;
+  cursor: progress;
+}
+.nova-composer__tool-label {
+  display: none;
+}
+@media (min-width: 900px) {
+  .nova-composer__tool-label {
+    display: inline;
+  }
+}
+
+/* ------------------------------------------------------------------ polish */
+
+/* Primary actions read as one family: a soft vertical gradient over the solid
+   token, so the button keeps its AA contrast while gaining depth. */
+.nova-btn--primary {
+  background-image: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--color-ws-accent-solid) 88%, #ffffff),
+    var(--color-ws-accent-solid)
+  );
+  box-shadow: 0 10px 24px -18px var(--color-ws-accent);
+}
+
+.nova-sidebar__brand {
+  border-bottom: 1px solid transparent;
+}
+
+.nova-nav-item:active {
+  transform: translateY(1px);
+}
+
+/* Slightly stronger separation between the shell chrome and the surface. */
+.nova-topbar {
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--color-ws-text) 4%, transparent);
+}
+
+/* The chat surface should never inherit a document scrollbar: it owns its own
+   height and both of its panes scroll independently. */
+.nova-chat-shell {
+  overflow: hidden;
+}
+
+.nova-thinking__option--offline {
+  opacity: 0.62;
+  cursor: not-allowed;
+}
+.nova-thinking__option--offline:hover {
+  background: transparent;
+}
+.nova-thinking__option--offline.nova-thinking__option--selected {
+  opacity: 0.8;
+}
+
+/* ------------------------------------------------------------- guest notice */
+
+.nova-chat-guest {
+  border-radius: 12px;
+  border: 1px dashed color-mix(in srgb, var(--color-ws-accent) 36%, transparent);
+  background: color-mix(in srgb, var(--color-ws-accent) 7%, transparent);
+  padding: 0.5rem 0.5625rem;
+}
+.nova-chat-guest__title {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: var(--color-ws-text);
+}
+.nova-chat-guest__body {
+  margin-top: 0.125rem;
+  font-size: 0.625rem;
+  line-height: 1.5;
+  color: var(--color-ws-text-3);
+}
+.nova-chat-guest__cta {
+  display: inline-block;
+  margin-top: 0.3125rem;
+  font-size: 0.65625rem;
+  font-weight: 550;
+  color: var(--color-ws-accent-ink);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}

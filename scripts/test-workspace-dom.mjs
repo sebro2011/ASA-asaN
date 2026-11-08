@@ -124,11 +124,14 @@ test('workspace shell renders, searches, switches theme and explains planned mod
     `every planned module is flagged (model ${plannedItems.length}, rendered ${plannedFlags.length})`,
   );
 
-  // 3. No AI provider is configured in the test server → the offline truth.
+  // 3. The provider inventory lives on Settings now; Home keeps the reasoning
+  //    ladder and its honesty note about online models.
   await act(async () => {
     await new Promise((resolve) => setTimeout(resolve, 30));
   });
-  assert.match(container.textContent, /AI providers/);
+  assert.match(container.textContent, /Reasoning ladder/);
+  assert.match(container.textContent, /served by an online model/);
+  assert.equal(container.textContent.includes('AI providers'), false, 'the provider card is off the dashboard');
 
   // 4. Command palette: opens on ⌘K, filters, closes on Escape.
   await act(async () => {
@@ -418,7 +421,7 @@ test('responsive shell: desktop, tablet and phone expose different affordances',
     for (const href of ['/chat', '/projects', '/documents', '/explore', '/settings']) {
       assert.ok(snapshot.opened.hrefs.includes(href), `drawer links ${href}`);
     }
-    assert.match(snapshot.opened.text, /Writing Studio/, 'drawer labels destinations');
+    assert.match(snapshot.opened.text, /Research Journal/, 'drawer labels destinations');
     assert.equal(snapshot.opened.scrollKeyboard, '0', 'drawer scroll container is keyboard reachable');
     assert.equal(snapshot.closedByEscape, true, 'Escape closes the drawer');
   }
@@ -476,8 +479,8 @@ test('the shell renders in Sinhala and Tamil, not only English', async () => {
     assert.ok(ta.includes(workspaceCopy.ta[key]), `Tamil shell shows ${key}`);
   }
   // No English leakage into the navigation labels.
-  assert.equal(si.includes('Writing Studio'), false, 'Sinhala shell has no English nav label');
-  assert.equal(ta.includes('Knowledge Space'), false, 'Tamil shell has no English nav label');
+  assert.equal(si.includes('Research Journal'), false, 'Sinhala shell has no English nav label');
+  assert.equal(ta.includes('Star Library'), false, 'Tamil shell has no English nav label');
   assert.ok(direction, '<html lang> is set for the active language');
 });
 
@@ -526,10 +529,13 @@ test('the front door is the NASA Space Explorer, not the NOVA workspace', async 
     // Workspace chrome must not be on the front door any more.
     assert.equal(document.querySelector('.nova-sidebar'), null);
     assert.equal(text.includes('New chat'), false);
-    // The NOVA assistant still ships inside Explore.
+    // The legacy in-Explore assistant tab is retired: the one AI surface is the
+    // workspace chat, and the header's "Ask NOVA" button leads there.
+    const buttons = [...document.querySelectorAll('button')].map((button) => button.textContent || '');
+    assert.equal(buttons.some((label) => /NOVA Assistant/i.test(label)), false, 'no legacy assistant tab');
     assert.ok(
-      [...document.querySelectorAll('button')].some((button) => /assistant/i.test(button.textContent || '') || /AI/i.test(button.textContent || '')),
-      'the assistant entry point is still reachable',
+      buttons.some((label) => /Ask NOVA/i.test(label)),
+      'the AI entry point is still reachable and now points at the chat workspace',
     );
   } finally {
     await act(async () => {

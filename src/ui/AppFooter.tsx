@@ -38,7 +38,7 @@ export default function AppFooter({
     { title: 'Explore', ids: ['space-shorts', 'apod', '3d', 'missions', 'news', 'quiz'] },
     { title: 'Earth', ids: ['earth', 'epic', 'iss'] },
     { title: 'Solar system', ids: ['asteroids', 'exoplanets', 'launch'] },
-    { title: 'Assistant', ids: ['assistant', 'saved'] }
+    { title: 'Library', ids: ['saved'] }
   ];
 
   return (
