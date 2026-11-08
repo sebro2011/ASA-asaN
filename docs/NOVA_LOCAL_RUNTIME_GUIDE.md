@@ -157,6 +157,8 @@ That is the honest state, not a failure of the app.
 | `LOCAL_ONLY_BLOCKED` (403) | a cloud provider was requested in local-only mode | unset `NOVA_LOCAL_ONLY` if you really want cloud |
 | `PROVIDER_NOT_CONFIGURED` | no key/base URL for that provider | set the key or leave it disabled |
 | `PROVIDER_UNREACHABLE` / `AI_TIMEOUT` | no answer within `timeoutMs` (60 s default, 180 s max) | start the server, pull the model, or raise the timeout |
+| `PROVIDER_AUTH_ERROR` after a timeout | the generation probe timed out, then the metadata key check was rejected | the key is invalid/expired — issue a new one; the diagnostics payload carries `keyValid: false` |
+| `AI_TIMEOUT` with `keyValid: true` | the key is fine, the model did not answer in 20 s | check quota/model availability; the probe no longer blames the key |
 | `TOOL_DISABLED` | `tests.run` was called with execution off | `NOVA_LIFE_ALLOW_EXECUTE=1` (and grant + approval) |
 | `EXECUTION_DISABLED` | direct call reached the tool's own guard | same as above |
 | `LOCAL_ONLY` in provider detail | health check refused a cloud call by policy | expected |
@@ -167,6 +169,6 @@ That is the honest state, not a failure of the app.
 ## 10. Resource expectations
 
 Measured on this branch: the seven benchmark cases finish in ~27 ms total on an
-in-memory database, and the full 396-test suite runs in about 90 s. Nothing in
+in-memory database, and the full 401-test suite runs in about 90 s. Nothing in
 the engine keeps a timer alive after a request; the test scripts pass
 `--test-force-exit` because the SQLite handle stays open otherwise.

@@ -29,6 +29,9 @@ interface ProviderReport {
   httpStatus?: number;
   ms?: number;
   reason?: string;
+  /** Only present after a metadata key check ran (a generation probe timed out). */
+  keyValid?: boolean | null;
+  keyCheck?: { request: string; httpStatus: number; ms: number; code: string; reason?: string };
 }
 
 interface DiagnosticsReport {
@@ -161,6 +164,14 @@ export default function AiStatusCard() {
                     <span className="text-[11px] text-ws-text-3">{labelFor(entry.status)}</span>
                   </div>
                   <p className="mt-0.5 break-words text-[11px] text-ws-text-3">{detail}</p>
+                  {typeof entry.keyValid === 'boolean' ? (
+                    <p
+                      className={`mt-0.5 text-[11px] ${entry.keyValid ? 'text-ws-text-3' : 'text-ws-warn'}`}
+                      data-testid={`ai-status-key-${key}`}
+                    >
+                      {entry.keyValid ? t('wsAiKeyValid') : t('wsAiKeyRejected')}
+                    </p>
+                  ) : null}
                   {entry.reason ? (
                     <p className="mt-0.5 break-words text-[11px] text-ws-text-2" data-testid={`ai-status-reason-${key}`}>
                       {entry.reason}

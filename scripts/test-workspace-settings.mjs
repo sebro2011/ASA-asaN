@@ -144,6 +144,7 @@ function installDom({ diagnostics } = {}) {
             status: 'error',
             code: 'PROVIDER_AUTH_ERROR',
             httpStatus: 401,
+            keyValid: false,
             ms: 180,
             reason: 'API key not valid. Please pass a valid API key.',
           },
@@ -367,6 +368,7 @@ test('the AI status card names each provider and its failure reason', async () =
     assert.match(text, /Working/);
     assert.match(text, /Google Gemini/);
     assert.match(text, /PROVIDER_AUTH_ERROR \(HTTP 401\)/);
+    assert.match(text, /API key rejected by the provider/);
     assert.match(text, /Arena AI/);
     assert.match(text, /PROVIDER_MODEL_NOT_FOUND/);
     assert.match(text, /NOVA Local Space Engine/);

@@ -88,7 +88,7 @@ value is returned by any endpoint.
 npm run lint                    # tsc --noEmit
 npm run test:life               # 48 engine tests
 npm run test:workspace-intelligence   # 5 UI tests
-npm test                        # 396 tests total
+npm test                        # 401 tests total
 npm run build                   # bundle
 ```
 
@@ -138,9 +138,13 @@ run the server as root.
 ## 9. Deployment notes
 
 - The app must serve `/api/nova/life` from a Node runtime. On Vercel that is the
-  existing serverless function; SQLite is **not** durable on serverless — use the
-  Supabase mirror there, or mount persistent storage. This is a real limitation,
-  not a configuration detail.
+  existing serverless function. The deployment directory is read-only, so when
+  `NOVA_LIFE_DB` is unset the engine falls back to the OS temp directory
+  (`/tmp/nova-life/life.sqlite`) instead of failing with `ENOENT`, and `/status`
+  reports `storage.path: "temporary file"` with `storage.ephemeral: true` (the
+  UI shows a **Temporary storage** chip). That database does **not** survive a
+  restart — set `NOVA_LIFE_DB` to persistent storage, or use the Supabase mirror,
+  if the records must last.
 - The life router has no authentication of its own (see
   `NOVA_SECURITY_MODEL.md` §8). Put it behind the platform's auth if it is
   publicly reachable.

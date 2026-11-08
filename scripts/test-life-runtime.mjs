@@ -15,6 +15,10 @@ import { after, before, test } from 'node:test';
 import { createLifeEngine } from '../server/life/index.js';
 import { contextBudget, detectHardware, estimateModelMemoryGb, inferProfile } from '../server/life/hardware.js';
 import { detectLanguage, expandQueryTerms, isWellFormedUnicode, languageInstruction, normalizeText, statusCopy } from '../server/life/language.js';
+import { defaultDbPath, isEphemeralPath } from '../server/life/store.js';
+import { chmodSync, mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 let server;
 let baseUrl;
@@ -250,6 +254,43 @@ test('model selection respects capability requirements and the hardware budget',
 
   assert.ok(contextBudget({ profile: { contextTokens: 2048 } }, 999_999) === 2048);
   life.close();
+});
+
+test('the database path prefers an explicit setting and falls back to temp on a read-only cwd', () => {
+  assert.equal(defaultDbPath({ NOVA_LIFE_DB: '/var/data/life.sqlite' }), '/var/data/life.sqlite');
+
+  // A serverless deployment mounts the project directory read-only; the engine
+  // must not fail every request with ENOENT, so it moves to the OS temp dir.
+  const sandbox = mkdtempSync(join(tmpdir(), 'nova-life-ro-'));
+  const previous = process.cwd();
+  try {
+    process.chdir(sandbox);
+    chmodSync(sandbox, 0o500);
+    const fallback = defaultDbPath({});
+    assert.ok(fallback.startsWith(tmpdir()), `expected a temp path, got ${fallback}`);
+    assert.ok(fallback.endsWith(join('nova-life', 'life.sqlite')));
+  } finally {
+    try {
+      chmodSync(sandbox, 0o700);
+    } catch {
+      /* already restored */
+    }
+    process.chdir(previous);
+    rmSync(sandbox, { recursive: true, force: true });
+  }
+});
+
+test('the status endpoint marks a temporary database as ephemeral', () => {
+  assert.equal(isEphemeralPath(':memory:'), true);
+  assert.equal(isEphemeralPath('/var/data/life.sqlite'), false);
+  assert.equal(isEphemeralPath(join(tmpdir(), 'nova-life', 'life.sqlite')), true);
+
+  const ephemeral = createLifeEngine({ inMemory: true });
+  try {
+    assert.equal(ephemeral.status().storage.ephemeral, true);
+  } finally {
+    ephemeral.store.close();
+  }
 });
 
 test('hardware profiles are derived conservatively and never invent a GPU', () => {

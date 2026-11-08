@@ -4,7 +4,7 @@
  * One function wires the modules with explicit dependencies, so every part is
  * independently testable and the router is only HTTP plumbing.
  */
-import { defaultDbPath, openLifeStore } from './store.js';
+import { defaultDbPath, isEphemeralPath, openLifeStore } from './store.js';
 import { createSecurityKernel } from './security.js';
 import { detectHardware } from './hardware.js';
 import { createModelFabric } from './modelFabric.js';
@@ -72,7 +72,15 @@ export function createLifeEngine({
       architecture: 'NOVA L.I.F.E. — Local Intelligence, Feedback & Evolution',
       version: 1,
       schemaVersion: store.schemaVersion,
-      storage: { engine: 'sqlite', fts: store.hasFts, path: path === ':memory:' ? ':memory:' : 'local file' },
+      storage: {
+        engine: 'sqlite',
+        fts: store.hasFts,
+        path:
+          path === ':memory:' ? ':memory:' : isEphemeralPath(path) ? 'temporary file' : 'local file',
+        // Serverless runtimes have no writable project directory, so the engine
+        // falls back to a temp database. Say so instead of implying durability.
+        ephemeral: isEphemeralPath(path),
+      },
       mode: { localOnly: fabric.localOnly, executionEnabled: String(env.NOVA_LIFE_ALLOW_EXECUTE || '') === '1' },
       hardware: hardware.profile,
       language: detectLanguage(language).language,

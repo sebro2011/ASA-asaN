@@ -26,8 +26,12 @@ import {
 
 // One probe may now take longer than the old 6 s: probes run in parallel, so the
 // worst case for the whole endpoint is a single timeout, not the sum of three.
-// Gemini 3.x needs the headroom even at the "low" thinking level.
-const PROBE_TIMEOUT_MS = 12_000;
+// Gemini 3.x needs the headroom even at the "low" thinking level; 20 s leaves
+// room for a cold model without holding the request for a minute.
+const PROBE_TIMEOUT_MS = 20_000;
+// A key check is a metadata call (no tokens). It only runs after a generation
+// probe timed out, to tell "the key is rejected" apart from "the model is slow".
+const KEY_CHECK_TIMEOUT_MS = 6_000;
 const PROBE_COOLDOWN_MS = 10_000;
 const MAX_REASON_CHARS = 180;
 
@@ -51,6 +55,24 @@ export function redactReason(text, secrets = []) {
     .trim();
   return out.length > MAX_REASON_CHARS ? `${out.slice(0, MAX_REASON_CHARS - 1)}…` : out;
 }
+
+/**
+ * Cheap metadata calls that validate a key without spending tokens.
+ * `openrouter` GET /api/v1/key returns the key's label and limits;
+ * Gemini's models list is authorised by the same key as generation.
+ */
+const KEY_CHECKS = {
+  openrouter: (key) => ({
+    label: 'GET /api/v1/key',
+    url: 'https://openrouter.ai/api/v1/key',
+    init: { method: 'GET', headers: { Authorization: `Bearer ${key}` } },
+  }),
+  gemini: (key) => ({
+    label: 'GET /v1beta/models',
+    url: 'https://generativelanguage.googleapis.com/v1beta/models?pageSize=1',
+    init: { method: 'GET', headers: { 'x-goog-api-key': key } },
+  }),
+};
 
 /** A provider-specific one-token request. Returns `{url, init}`. */
 function probeRequest(provider, { keys, models }) {
@@ -131,6 +153,42 @@ function hostOf(url) {
   }
 }
 
+/**
+ * Validate a key with a token-free request.
+ * @returns {Promise<{ valid: boolean|null, httpStatus: number, ms: number, code: string, check: string }|null>}
+ */
+async function validateKey({ fetchImpl, provider, keys, secrets, timeoutMs, now }) {
+  const build = KEY_CHECKS[provider];
+  if (!build || !keys[provider]) return null;
+  const { label, url, init } = build(keys[provider]);
+  const started = now();
+  const controller = typeof AbortController === 'function' ? new AbortController() : null;
+  const timer = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
+  try {
+    const response = await fetchImpl(url, controller ? { ...init, signal: controller.signal } : init);
+    const status = typeof response?.status === 'number' ? response.status : 0;
+    return {
+      valid: status >= 200 && status < 300 ? true : status === 401 || status === 403 ? false : null,
+      httpStatus: status,
+      ms: now() - started,
+      code: codeForStatus(status),
+      check: label,
+    };
+  } catch (error) {
+    const aborted = error?.name === 'AbortError';
+    return {
+      valid: null,
+      httpStatus: 0,
+      ms: now() - started,
+      code: aborted ? 'AI_TIMEOUT' : 'UPSTREAM_NETWORK_ERROR',
+      check: label,
+      reason: redactReason(aborted ? `key check timed out after ${timeoutMs} ms` : error?.message || 'network error', secrets),
+    };
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
 async function probe({ fetchImpl, provider, keys, models, secrets, timeoutMs, now }) {
   const { url, init } = probeRequest(provider, { keys, models });
   const started = now();
@@ -189,6 +247,7 @@ export function createDiagnosticsHandler({
   fetchImpl = (...args) => globalThis.fetch(...args),
   env = typeof process !== 'undefined' ? process.env : {},
   timeoutMs = PROBE_TIMEOUT_MS,
+  keyCheckTimeoutMs = KEY_CHECK_TIMEOUT_MS,
   now = Date.now,
 } = {}) {
   let lastProbeAt = 0;
@@ -252,6 +311,29 @@ export function createDiagnosticsHandler({
         entry.ms = outcome.ms;
         entry.reachable = outcome.reachable;
         if (outcome.reason) entry.reason = outcome.reason;
+
+        // A timeout says nothing about the key. Ask a metadata endpoint, so the
+        // answer distinguishes a rejected/expired key from a slow model.
+        if (outcome.code === 'AI_TIMEOUT' || outcome.code === 'UPSTREAM_NETWORK_ERROR' || outcome.code === 'PROVIDER_UNAVAILABLE') {
+          const check = await validateKey({
+            fetchImpl,
+            provider,
+            keys,
+            secrets,
+            timeoutMs: keyCheckTimeoutMs,
+            now,
+          });
+          if (check) {
+            entry.keyValid = check.valid;
+            entry.keyCheck = { request: check.check, httpStatus: check.httpStatus, ms: check.ms, code: check.code };
+            if (check.reason) entry.keyCheck.reason = check.reason;
+            if (check.valid === false) {
+              // The key itself is the problem, so report that rather than a timeout.
+              entry.code = 'PROVIDER_AUTH_ERROR';
+              entry.status = 'error';
+            }
+          }
+        }
         return entry;
       }),
     );

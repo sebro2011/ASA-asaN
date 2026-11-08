@@ -12,6 +12,7 @@
  *   - `deleteUser()` and `exportAll()` are the data-rights pair.
  */
 import { mkdirSync, existsSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { FTS_SQL, LATEST_SCHEMA_VERSION, MIGRATIONS } from './schema.js';
@@ -209,8 +210,36 @@ export function openLifeStore({
 }
 
 /** Directory for the default local database, created on demand. */
+function canCreate(dir) {
+  try {
+    mkdirSync(dir, { recursive: true });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Where the database lives when the operator does not choose.
+ *
+ * Serverless platforms mount the deployment read-only (`/var/task` on Vercel), so
+ * a directory under the working directory cannot be created there. Rather than
+ * failing every request with ENOENT, fall back to the OS temp directory — the
+ * data is then *ephemeral* and the status endpoint says so. `NOVA_LIFE_DB` always
+ * wins, so a deployment with persistent storage keeps it.
+ */
 export function defaultDbPath(env = process.env) {
-  return env.NOVA_LIFE_DB || join(process.cwd(), '.nova-life', 'life.sqlite');
+  if (env.NOVA_LIFE_DB) return env.NOVA_LIFE_DB;
+  const preferred = join(process.cwd(), '.nova-life', 'life.sqlite');
+  if (canCreate(dirname(preferred))) return preferred;
+  return join(tmpdir(), 'nova-life', 'life.sqlite');
+}
+
+/** True when a path lives in the OS temp directory, i.e. it will not survive a restart. */
+export function isEphemeralPath(path) {
+  if (!path || path === ':memory:') return path === ':memory:';
+  const temp = tmpdir();
+  return path === temp || path.startsWith(`${temp}/`);
 }
 
 /** True when the configured path already exists (used by the status endpoint). */
