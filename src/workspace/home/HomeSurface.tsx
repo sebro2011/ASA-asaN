@@ -10,18 +10,23 @@
  * only claims to send text — the deployment has no upload or speech endpoint, so
  * no attachment or microphone button is drawn.
  */
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   ArrowRight,
   ArrowUpRight,
+  Brain,
   CheckCircle2,
   Compass,
+  Leaf,
   MessageSquare,
+  Rocket,
   Send,
   Settings2,
   ShieldCheck,
   Sparkles,
+  Target,
+  Telescope,
   UserRound,
 } from 'lucide-react';
 import { Link, navigate } from '../../app/router';
@@ -32,7 +37,18 @@ import { onlineProviderNames, useProviderConfig } from '../useProviderConfig';
 import { useOptionalAuth } from '../../auth/AuthProvider';
 import SyncBadge from '../../auth/SyncBadge';
 import NovaOrb, { type OrbState } from './NovaOrb';
-import { queuePrompt } from '../chat/pendingPrompt';
+import { queuePrompt, queueThinking } from '../chat/pendingPrompt';
+import ThinkingMenu from '../chat/ThinkingMenu';
+import {
+  readThinkingPreference,
+  thinkingDepthDots,
+  thinkingMeta,
+  THINKING_ORDER,
+  unavailableThinkingLevels,
+  writeThinkingPreference,
+  type ThinkingLevel,
+} from '../chat/thinking';
+import { SCIENCE_PROMPTS } from '../chat/sciencePrompts';
 
 function greetingKey(hour: number): string {
   if (hour < 12) return 'wsGoodMorning';
@@ -136,8 +152,27 @@ function ProviderStatus() {
   );
 }
 
+function ScienceGlyph({ id, size = 15 }: { id: string; size?: number }) {
+  const props = { size, strokeWidth: 1.8, 'aria-hidden': true } as const;
+  if (id === 'mission') return <Rocket {...props} />;
+  if (id === 'sky') return <Telescope {...props} />;
+  if (id === 'neo') return <Target {...props} />;
+  if (id === 'earth') return <Leaf {...props} />;
+  return <Brain {...props} />;
+}
+
 /** The floating glass composer. Sending queues the prompt for `/chat`. */
-function HomeComposer({ onSend }: { onSend: (text: string) => void }) {
+function HomeComposer({
+  onSend,
+  thinking,
+  onThinkingChange,
+  unavailable,
+}: {
+  onSend: (text: string) => void;
+  thinking: ThinkingLevel;
+  onThinkingChange: (level: ThinkingLevel) => void;
+  unavailable: ThinkingLevel[];
+}) {
   const { t } = useTranslation();
   const [draft, setDraft] = useState('');
   const [focused, setFocused] = useState(false);
@@ -182,11 +217,14 @@ function HomeComposer({ onSend }: { onSend: (text: string) => void }) {
         placeholder={t('wsHomeComposerPlaceholder')}
         className="nova-scroll block max-h-40 min-h-[2.75rem] w-full resize-none bg-transparent px-3 py-2.5 text-[14px] leading-relaxed text-ws-text outline-none placeholder:text-ws-text-3"
       />
-      <div className="flex items-center justify-between gap-2 px-1.5 pb-0.5 pt-1">
-        <span className="hidden items-center gap-1.5 text-[11px] text-ws-text-3 sm:flex">
-          <Sparkles size={12} strokeWidth={1.9} aria-hidden="true" className="text-ws-accent-ink" />
-          {t('wsHomeComposerHint')}
-        </span>
+      <div className="nova-home-composer__bar">
+        <div className="flex min-w-0 items-center gap-2">
+          <ThinkingMenu value={thinking} onChange={onThinkingChange} unavailable={unavailable} />
+          <span className="nova-home-composer__hint">
+            <Sparkles size={11} strokeWidth={1.9} aria-hidden="true" className="text-ws-accent-ink" />
+            {t('wsHomeComposerHint')}
+          </span>
+        </div>
         <button
           type="submit"
           className="nova-btn nova-btn--primary ml-auto"
@@ -223,26 +261,38 @@ export default function HomeSurface() {
   const auth = useOptionalAuth();
   const signedIn = auth?.status === 'signed-in';
   const [orbState, setOrbState] = useState<OrbState>('idle');
+  const [thinking, setThinking] = useState<ThinkingLevel>(readThinkingPreference);
+  const { thinking: thinkingCatalogue } = useProviderConfig();
+  const unavailable = unavailableThinkingLevels(thinkingCatalogue?.levels);
   const resetTimer = useRef<number | null>(null);
+
+  useEffect(() => {
+    writeThinkingPreference(thinking);
+  }, [thinking]);
+
+  useEffect(() => {
+    if (unavailable.includes(thinking)) setThinking('auto');
+  }, [unavailable, thinking]);
 
   /**
    * Hand the prompt to the chat surface. Signed-out visitors are sent to sign-in
    * instead — the conversation would have nowhere to be stored otherwise.
    */
   const sendPrompt = useCallback(
-    (text: string) => {
+    (text: string, level: ThinkingLevel = thinking) => {
       if (!signedIn) {
         navigate('/profile');
         return;
       }
       if (!queuePrompt(text)) return;
+      queueThinking(unavailable.includes(level) ? 'auto' : level);
       setOrbState('thinking');
       if (resetTimer.current !== null) window.clearTimeout(resetTimer.current);
       // The orb is left "thinking" just long enough to acknowledge the send.
       resetTimer.current = window.setTimeout(() => setOrbState('idle'), 1_200);
       navigate('/chat');
     },
-    [signedIn],
+    [signedIn, thinking, unavailable],
   );
 
   const quickActions = [
@@ -283,7 +333,12 @@ export default function HomeSurface() {
           </p>
 
           <div className="mt-6 w-full max-w-[720px]">
-            <HomeComposer onSend={sendPrompt} />
+            <HomeComposer
+              onSend={sendPrompt}
+              thinking={thinking}
+              onThinkingChange={setThinking}
+              unavailable={unavailable}
+            />
             {!signedIn && auth?.status !== 'unconfigured' ? (
               <p className="mt-2.5 text-[11.5px] text-ws-text-3" role="note">
                 {t('wsHomeSignInNote')}{' '}
@@ -332,6 +387,44 @@ export default function HomeSurface() {
               </Link>
             );
           })}
+        </div>
+      </section>
+
+      {/* ------------------------------------------------- astronomy studio */}
+      <section aria-labelledby="nova-science-heading" className="mt-6">
+        <div className="flex flex-wrap items-end justify-between gap-2">
+          <div className="min-w-0">
+            <h2 id="nova-science-heading" className="nova-section-title">
+              {t('wsScienceTitle')}
+            </h2>
+            <p className="mt-1 max-w-[42rem] text-[12px] leading-relaxed text-ws-text-3">
+              {t('wsScienceBody')}
+            </p>
+          </div>
+          <span className="nova-chip">
+            <Brain size={11} strokeWidth={2} aria-hidden="true" />
+            {t('wsThinkingLabel')}
+          </span>
+        </div>
+
+        <div className="nova-science-grid mt-3">
+          {SCIENCE_PROMPTS.map((card) => (
+            <button
+              key={card.id}
+              type="button"
+              className="nova-science-card"
+              onClick={() => sendPrompt(t(card.promptKey), card.thinking)}
+            >
+              <span className="nova-science-card__icon" aria-hidden="true">
+                <ScienceGlyph id={card.id} />
+              </span>
+              <span className="nova-science-card__title">{t(card.titleKey)}</span>
+              <span className="nova-science-card__body">{t(card.bodyKey)}</span>
+              <span className="nova-science-card__level">
+                {t(thinkingMeta(card.thinking).labelKey)}
+              </span>
+            </button>
+          ))}
         </div>
       </section>
 
@@ -409,6 +502,41 @@ export default function HomeSurface() {
             <div className="mt-3">
               <ThemeOptions compact />
             </div>
+          </section>
+
+          <section className="nova-card p-4" aria-labelledby="nova-thinking-heading">
+            <div className="flex items-center justify-between gap-2">
+              <h2 id="nova-thinking-heading" className="text-[12.5px] font-medium text-ws-text">
+                {t('wsThinkingLadderTitle')}
+              </h2>
+              <span className="nova-chip">{t(thinkingMeta(thinking).labelKey)}</span>
+            </div>
+            <p className="mt-1.5 text-[11.5px] leading-relaxed text-ws-text-3">
+              {t('wsThinkingLadderBody')}
+            </p>
+            <ul className="mt-3 flex list-none flex-col gap-1 p-0">
+              {THINKING_ORDER.map((level) => {
+                const meta = thinkingMeta(level);
+                const current = level === thinking;
+                return (
+                  <li key={level}>
+                    <button
+                      type="button"
+                      className={`nova-ladder-row ${current ? 'nova-ladder-row--active' : ''}`}
+                      aria-pressed={current}
+                      onClick={() => setThinking(level)}
+                      title={t(meta.hintKey)}
+                    >
+                      <span className="nova-ladder-row__name">{t(meta.labelKey)}</span>
+                      <span className="nova-ladder-row__dots font-mono" aria-hidden="true">
+                        {thinkingDepthDots(level)}
+                      </span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+            <p className="mt-2.5 text-[10.5px] leading-relaxed text-ws-text-3">{t('wsThinkingLadderHint')}</p>
           </section>
 
           <ProviderStatus />

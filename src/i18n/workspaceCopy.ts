@@ -293,6 +293,66 @@ const en: Copy = {
   wsChatOfflineNote: 'Answered offline — the online providers did not respond.',
   wsChatErrUnknown: 'NOVA could not process this request. Please retry.',
 
+  /* ------------------------------------------------- thinking ladder (v5) */
+  wsThinkingLabel: 'Thinking level',
+  wsThinkingMenuTitle: 'Reasoning depth',
+  wsThinkingAuto: 'Auto',
+  wsThinkingAutoHint: 'NOVA uses this deployment’s default — the fastest route to a good answer.',
+  wsThinkingStatusAuto: 'NOVA is answering…',
+  wsThinkingFlash: 'Flash',
+  wsThinkingFlashHint: 'Instant answers for quick facts and definitions.',
+  wsThinkingStatusFlash: 'NOVA is answering quickly…',
+  wsThinkingFlashThinking: 'Flash thinking',
+  wsThinkingFlashThinkingHint: 'A little reasoning, still fast — good for short explanations.',
+  wsThinkingStatusFlashThinking: 'NOVA is reasoning briefly…',
+  wsThinkingThinking: 'Thinking',
+  wsThinkingThinkingHint: 'Balanced step-by-step reasoning for multi-part questions.',
+  wsThinkingStatusThinking: 'NOVA is thinking it through…',
+  wsThinkingDeep: 'Deep thinking',
+  wsThinkingDeepHint: 'Long, careful reasoning for hard astronomy or mission problems.',
+  wsThinkingStatusDeep: 'NOVA is reasoning deeply — this can take a moment…',
+  wsThinkingNotConfigured: 'Not configured on this server',
+  wsThinkingLadderTitle: 'Reasoning ladder',
+  wsThinkingLadderBody:
+    'One ladder over the AI models this server can reach: from instant answers to extended reasoning.',
+  wsThinkingLadderHint:
+    'A level is served by an online model only when the deployment has a provider key for it; otherwise NOVA answers from the offline space engine and says so.',
+  wsChatComposerHint: 'Enter to send · Shift+Enter for a new line',
+  wsChatErrThinking: 'That thinking level is not valid. Choose Auto or another level.',
+
+  /* -------------------------------------------------- astronomy studio (v5) */
+  wsScienceTitle: 'Astronomy studio',
+  wsScienceBody:
+    'Grounded starters for space science. Each one picks the reasoning depth that suits it, and NOVA states uncertainty instead of pretending to have live telemetry.',
+  wsScienceMissionTitle: 'Mission briefing',
+  wsScienceMissionBody: 'Objectives, hardware and next milestones — with uncertainty stated.',
+  wsScienceMissionPrompt:
+    'Give me a briefing on the Artemis programme: the objectives, the hardware involved, and the next milestones. Separate what is settled from what has changed recently, and say where you are unsure.',
+  wsScienceSkyTitle: 'Visible sky',
+  wsScienceSkyBody: 'How to find the Moon, planets and bright stars tonight.',
+  wsScienceSkyPrompt:
+    'Explain what a beginner can see in tonight’s sky and how to find it: the Moon, the bright planets and a few easy constellations. Ask me for my hemisphere or latitude if that matters, and do not invent precise times.',
+  wsScienceNeoTitle: 'NEO risk',
+  wsScienceNeoBody: 'How near-Earth object risk is actually classified.',
+  wsScienceNeoPrompt:
+    'Explain how NASA classifies near-Earth object risk, including the Torino scale and the difference between size, orbit uncertainty and impact probability. Use one worked example.',
+  wsScienceEarthTitle: 'Earth observation',
+  wsScienceEarthBody: 'Read climate and vegetation signals like a scientist.',
+  wsScienceEarthPrompt:
+    'Explain what NASA POWER and GIBS measure, and how to read a vegetation or land-surface temperature map without over-claiming. Point out the limits of the data.',
+  wsScienceDeepTitle: 'Deep space question',
+  wsScienceDeepBody: 'A long, careful derivation for a hard astrophysics question.',
+  wsScienceDeepPrompt:
+    'Work through a hard astrophysics question with me step by step: how we infer the mass of a supermassive black hole from the motion of stars around it. Derive the relation, state the assumptions and where they break down.',
+  wsScienceApodTitle: 'Picture of the day',
+  wsScienceApodBody: 'Ground the question in today’s real NASA APOD.',
+  wsScienceApodLoading: 'Loading today’s APOD…',
+  wsScienceApodError: 'Today’s APOD could not be loaded right now. The other starters still work.',
+  wsScienceApodFallback: 'The live feed is unavailable, so NOVA used a labelled reference entry.',
+  wsScienceApodPrompt:
+    'Today’s NASA Astronomy Picture of the Day is “{{title}}” ({{date}}). Its caption says: “{{explanation}}” Explain the physics in this image for a curious beginner. Separate what the image actually shows from interpretation, name the kind of object or phenomenon, and say when the caption alone is not enough.',
+
+
   wsSettingsTitle: 'Settings',
   wsSettingsIntro: 'Appearance and language are stored on this device; the chat provider default is stored with your account.',
   wsSettingsAppearance: 'Appearance',
@@ -633,6 +693,66 @@ const si: Copy = {
   wsChatErrInvalid: 'එම ඉල්ලීම වලංගු නොවේ. නැවත උත්සාහ කරන්න.',
   wsChatOfflineNote: 'නොබැඳි (offline) පිළිතුරක් — මාර්ගගත AI සේවා ප්‍රතිචාර දුන්නේ නැත.',
   wsChatErrUnknown: 'NOVA ට මෙය සකසන්න නොහැකි විය. නැවත උත්සාහ කරන්න.',
+
+  /* ------------------------------------------------- thinking ladder (v5) */
+  wsThinkingLabel: 'සිතුම් මට්ටම',
+  wsThinkingMenuTitle: 'තර්කණ ගැඹුර',
+  wsThinkingAuto: 'ස්වයංක්‍රීය',
+  wsThinkingAutoHint: 'NOVA මෙම සේවාදායකයේ පෙරනිමිය භාවිත කරයි — හොඳ පිළිතුරකට වේගවත්ම මාර්ගය.',
+  wsThinkingStatusAuto: 'NOVA පිළිතුරු දෙමින්…',
+  wsThinkingFlash: 'ෆ්ලෑෂ්',
+  wsThinkingFlashHint: 'ඉක්මන් කරුණු සහ අර්ථ දැක්වීම් සඳහා ක්ෂණික පිළිතුරු.',
+  wsThinkingStatusFlash: 'NOVA ඉක්මනින් පිළිතුරු දෙමින්…',
+  wsThinkingFlashThinking: 'ෆ්ලෑෂ් සිතුම්',
+  wsThinkingFlashThinkingHint: 'යම් තර්කණයක් සමඟ තවමත් වේගවත් — කෙටි පැහැදිලි කිරීම් සඳහා.',
+  wsThinkingStatusFlashThinking: 'NOVA කෙටියෙන් තර්ක කරමින්…',
+  wsThinkingThinking: 'සිතුම්',
+  wsThinkingThinkingHint: 'කොටස් කිහිපයක ප්‍රශ්න සඳහා සමතුලිත පියවරෙන් පියවර තර්කණය.',
+  wsThinkingStatusThinking: 'NOVA මේ ගැන සිතමින්…',
+  wsThinkingDeep: 'ගැඹුරු සිතුම්',
+  wsThinkingDeepHint: 'අමාරු තාරකා විද්‍යා හෝ මෙහෙයුම් ගැටලු සඳහා දිගු, පරෙස්සම් තර්කණය.',
+  wsThinkingStatusDeep: 'NOVA ගැඹුරින් තර්ක කරමින් — මොහොතක් ගත විය හැක…',
+  wsThinkingNotConfigured: 'මෙම සේවාදායකයේ වින්‍යාසගත නොවේ',
+  wsThinkingLadderTitle: 'තර්කණ ඉණිමඟ',
+  wsThinkingLadderBody:
+    'මෙම සේවාදායකයට ළඟා විය හැකි AI ආකෘති මත එක් ඉණිමඟක්: ක්ෂණික පිළිතුරුවල සිට දිගු තර්කණය දක්වා.',
+  wsThinkingLadderHint:
+    'මට්ටමක් සබැඳි ආකෘතියකින් ලැබෙන්නේ එයට අදාළ සේවා සැපයුම්කරු යතුර මෙම සේවාදායකයේ ඇති විටය; එසේ නොවේ නම් NOVA නොබැඳි අභ්‍යවකාශ එන්ජිමෙන් පිළිතුරු දෙන බව පවසයි.',
+  wsChatComposerHint: 'යැවීමට Enter · නව පේළියකට Shift+Enter',
+  wsChatErrThinking: 'එම සිතුම් මට්ටම වලංගු නොවේ. ස්වයංක්‍රීය හෝ වෙනත් මට්ටමක් තෝරන්න.',
+
+  /* -------------------------------------------------- astronomy studio (v5) */
+  wsScienceTitle: 'තාරකා විද්‍යා අධ්‍යයනාගාරය',
+  wsScienceBody:
+    'අභ්‍යවකාශ විද්‍යාව සඳහා පදනම් සහිත ආරම්භකයන්. එක් එක් එකට ගැළපෙන තර්කණ ගැඹුර තෝරන අතර, NOVA සජීවී දත්ත ඇති බව නොපවසා අවිනිශ්චිතතාව පවසයි.',
+  wsScienceMissionTitle: 'මෙහෙයුම් සාරාංශය',
+  wsScienceMissionBody: 'අරමුණු, උපකරණ සහ ඊළඟ සන්ධිස්ථාන — අවිනිශ්චිතතාව සමඟ.',
+  wsScienceMissionPrompt:
+    'ආටෙමිස් වැඩසටහන පිළිබඳ සාරාංශයක් දෙන්න: අරමුණු, සම්බන්ධ උපකරණ සහ ඊළඟ සන්ධිස්ථාන. ස්ථිර වූ දේ සහ මෑතකදී වෙනස් වූ දේ වෙන් කරන්න, ඔබට විශ්වාස නැති තැන පවසන්න.',
+  wsScienceSkyTitle: 'දෘශ්‍ය අහස',
+  wsScienceSkyBody: 'අද රාත්‍රියේ චන්ද්‍රයා, ග්‍රහලෝක සහ දීප්තිමත් තාරකා සොයාගන්නේ කෙසේද.',
+  wsScienceSkyPrompt:
+    'ආරම්භකයෙකුට අද රාත්‍රියේ අහසේ දැකිය හැක්කේ කුමක්ද සහ එය සොයාගන්නේ කෙසේද යන්න පැහැදිලි කරන්න: චන්ද්‍රයා, දීප්තිමත් ග්‍රහලෝක සහ පහසු තාරකා රාශි කිහිපයක්. අවශ්‍ය නම් මගේ අර්ධගෝලය හෝ අක්ෂාංශ අසන්න, නිශ්චිත වේලාවන් නිර්මාණය නොකරන්න.',
+  wsScienceNeoTitle: 'NEO අවදානම',
+  wsScienceNeoBody: 'පෘථිවියට සමීප වස්තු අවදානම සැබවින්ම වර්ගීකරණය කරන්නේ කෙසේද.',
+  wsScienceNeoPrompt:
+    'නාසා පෘථිවියට සමීප වස්තු අවදානම වර්ගීකරණය කරන්නේ කෙසේද පැහැදිලි කරන්න — Torino පරිමාණය, ප්‍රමාණය, කක්ෂීය අවිනිශ්චිතතාව සහ ගැටුම් සම්භාවිතාව අතර වෙනස ඇතුළුව. එක් උදාහරණයක් භාවිත කරන්න.',
+  wsScienceEarthTitle: 'පෘථිවි නිරීක්ෂණය',
+  wsScienceEarthBody: 'දේශගුණික සහ වෘක්ෂලතා සංඥා විද්‍යාඥයෙකු මෙන් කියවන්න.',
+  wsScienceEarthPrompt:
+    'නාසා POWER සහ GIBS මනින්නේ කුමක්ද සහ වෘක්ෂලතා හෝ භූමි පෘෂ්ඨ උෂ්ණත්ව සිතියමක් අධික ලෙස අර්ථ නොකර කියවන්නේ කෙසේද පැහැදිලි කරන්න. දත්තවල සීමා පෙන්වන්න.',
+  wsScienceDeepTitle: 'ගැඹුරු අභ්‍යවකාශ ප්‍රශ්නය',
+  wsScienceDeepBody: 'අමාරු තාරකා භෞතික විද්‍යා ප්‍රශ්නයක් සඳහා දිගු, පරෙස්සම් ව්‍යුත්පන්නයක්.',
+  wsScienceDeepPrompt:
+    'අමාරු තාරකා භෞතික ප්‍රශ්නයක් මා සමඟ පියවරෙන් පියවර විසඳන්න: තාරකා චලනයෙන් සුපිරි විශාල කළු කුහරයක ස්කන්ධය අප අනුමාන කරන්නේ කෙසේද. සම්බන්ධතාව ව්‍යුත්පන්න කරන්න, උපකල්පන සහ ඒවා බිඳෙන තැන් පවසන්න.',
+  wsScienceApodTitle: 'දවසේ ඡායාරූපය',
+  wsScienceApodBody: 'ප්‍රශ්නය අද දිනයේ සැබෑ නාසා APOD මත පදනම් කරන්න.',
+  wsScienceApodLoading: 'අද APOD පූරණය වෙමින්…',
+  wsScienceApodError: 'අද APOD දැන් පූරණය කළ නොහැක. අනෙක් ආරම්භකයන් තවමත් ක්‍රියා කරයි.',
+  wsScienceApodFallback: 'සජීවී සබැඳිය නොමැති නිසා NOVA ලේබල් කළ යොමු ඇතුළත් කිරීමක් භාවිත කළේය.',
+  wsScienceApodPrompt:
+    'අද නාසා තාරකා විද්‍යා දවසේ ඡායාරූපය “{{title}}” ({{date}}). එහි විස්තරය: “{{explanation}}” මෙම රූපයේ භෞතික විද්‍යාව කුතුහලයෙන් යුත් ආරම්භකයෙකුට පැහැදිලි කරන්න. රූපය සැබවින්ම පෙන්වන දේ අර්ථ නිරූපණයෙන් වෙන් කරන්න, වස්තුවේ හෝ සංසිද්ධියේ වර්ගය නම් කරන්න, විස්තරය පමණක් ප්‍රමාණවත් නොවන තැන පවසන්න.',
+
 
   wsSettingsTitle: 'සැකසුම්',
   wsSettingsIntro: 'පෙනුම සහ භාෂාව මෙම උපාංගයේ ගබඩා වේ; chat සැපයුම්කරුගේ පෙරනිමිය ඔබේ ගිණුම සමඟ ගබඩා වේ.',
@@ -975,6 +1095,66 @@ const ta: Copy = {
   wsChatErrInvalid: 'கோரிக்கை செல்லாதது. மீண்டும் முயற்சிக்கவும்.',
   wsChatOfflineNote: 'இணையமில்லா (offline) பதில் — இணைய AI சேவைகள் பதிலளிக்கவில்லை.',
   wsChatErrUnknown: 'NOVA இதைச் செயலாக்க முடியவில்லை. மீண்டும் முயற்சிக்கவும்.',
+
+  /* ------------------------------------------------- thinking ladder (v5) */
+  wsThinkingLabel: 'சிந்தனை நிலை',
+  wsThinkingMenuTitle: 'பகுத்தறிவு ஆழம்',
+  wsThinkingAuto: 'தானியங்கி',
+  wsThinkingAutoHint: 'NOVA இந்தச் சேவையகத்தின் இயல்புநிலையைப் பயன்படுத்துகிறது — நல்ல பதிலுக்கு வேகமான வழி.',
+  wsThinkingStatusAuto: 'NOVA பதிலளிக்கிறது…',
+  wsThinkingFlash: 'ஃபிளாஷ்',
+  wsThinkingFlashHint: 'விரைவான தகவல்கள் மற்றும் வரையறைகளுக்கு உடனடிப் பதில்கள்.',
+  wsThinkingStatusFlash: 'NOVA விரைவாகப் பதிலளிக்கிறது…',
+  wsThinkingFlashThinking: 'ஃபிளாஷ் சிந்தனை',
+  wsThinkingFlashThinkingHint: 'சிறிது பகுத்தறிவுடன், இன்னும் வேகமாக — சுருக்கமான விளக்கங்களுக்கு.',
+  wsThinkingStatusFlashThinking: 'NOVA சுருக்கமாகச் சிந்திக்கிறது…',
+  wsThinkingThinking: 'சிந்தனை',
+  wsThinkingThinkingHint: 'பல பகுதிக் கேள்விகளுக்கு சமநிலையான படிப்படியான பகுத்தறிவு.',
+  wsThinkingStatusThinking: 'NOVA இதைச் சிந்திக்கிறது…',
+  wsThinkingDeep: 'ஆழ்ந்த சிந்தனை',
+  wsThinkingDeepHint: 'கடினமான வானியல் அல்லது பயணச் சிக்கல்களுக்கு நீண்ட, கவனமான பகுத்தறிவு.',
+  wsThinkingStatusDeep: 'NOVA ஆழமாகச் சிந்திக்கிறது — சிறிது நேரம் ஆகலாம்…',
+  wsThinkingNotConfigured: 'இந்தச் சேவையகத்தில் அமைக்கப்படவில்லை',
+  wsThinkingLadderTitle: 'பகுத்தறிவு ஏணி',
+  wsThinkingLadderBody:
+    'இந்தச் சேவையகம் அடையக்கூடிய AI மாதிரிகளின் மேல் ஒரு ஏணி: உடனடிப் பதில்களிலிருந்து நீண்ட பகுத்தறிவு வரை.',
+  wsThinkingLadderHint:
+    'ஒரு நிலை, அதற்கான வழங்குநர் விசை இந்தச் சேவையகத்தில் இருந்தால் மட்டுமே இணைய மாதிரியால் வழங்கப்படும்; இல்லையெனில் NOVA ஆஃப்லைன் விண்வெளி இயந்திரத்திலிருந்து பதிலளிப்பதாகத் தெரிவிக்கும்.',
+  wsChatComposerHint: 'அனுப்ப Enter · புதிய வரிக்கு Shift+Enter',
+  wsChatErrThinking: 'அந்தச் சிந்தனை நிலை செல்லாதது. தானியங்கி அல்லது வேறு நிலையைத் தேர்ந்தெடுக்கவும்.',
+
+  /* -------------------------------------------------- astronomy studio (v5) */
+  wsScienceTitle: 'வானியல் அரங்கம்',
+  wsScienceBody:
+    'விண்வெளி அறிவியலுக்கான அடிப்படைத் தொடக்கங்கள். ஒவ்வொன்றும் பொருத்தமான பகுத்தறிவு ஆழத்தைத் தேர்ந்தெடுக்கும்; NOVA நேரடித் தரவு இருப்பதாகக் கூறாமல் நிச்சயமின்மையைத் தெரிவிக்கும்.',
+  wsScienceMissionTitle: 'பயண விவரம்',
+  wsScienceMissionBody: 'நோக்கங்கள், கருவிகள் மற்றும் அடுத்த மைல்கற்கள் — நிச்சயமின்மையுடன்.',
+  wsScienceMissionPrompt:
+    'ஆர்ட்டெமிஸ் திட்டம் பற்றிய விவரத்தைத் தாருங்கள்: நோக்கங்கள், ஈடுபட்ட கருவிகள் மற்றும் அடுத்த மைல்கற்கள். உறுதியானவை, சமீபத்தில் மாறியவை ஆகியவற்றைப் பிரித்து, உறுதியில்லாத இடங்களைத் தெரிவியுங்கள்.',
+  wsScienceSkyTitle: 'தெரியும் வானம்',
+  wsScienceSkyBody: 'இன்றிரவு நிலா, கோள்கள், பிரகாசமான நட்சத்திரங்களை எப்படிக் கண்டுபிடிப்பது.',
+  wsScienceSkyPrompt:
+    'ஒரு தொடக்கநிலையாளர் இன்றிரவு வானில் என்ன பார்க்கலாம், அதை எப்படிக் கண்டுபிடிப்பது என்பதை விளக்குங்கள்: நிலா, பிரகாசமான கோள்கள், சில எளிய விண்மீன் கூட்டங்கள். தேவைப்பட்டால் என் அரைக்கோளம் அல்லது அட்சரேகையைக் கேளுங்கள், துல்லியமான நேரங்களைக் கற்பனை செய்ய வேண்டாம்.',
+  wsScienceNeoTitle: 'NEO அபாயம்',
+  wsScienceNeoBody: 'பூமிக்கு அருகில் உள்ள பொருட்களின் அபாயம் உண்மையில் எப்படி வகைப்படுத்தப்படுகிறது.',
+  wsScienceNeoPrompt:
+    'நாசா பூமிக்கு அருகிலுள்ள பொருட்களின் அபாயத்தை எப்படி வகைப்படுத்துகிறது என்பதை விளக்குங்கள் — Torino அளவுகோல், அளவு, சுற்றுப்பாதை நிச்சயமின்மை, மோதல் நிகழ்தகவு ஆகியவற்றின் வேறுபாடு உட்பட. ஒரு எடுத்துக்காட்டைப் பயன்படுத்துங்கள்.',
+  wsScienceEarthTitle: 'பூமி கண்காணிப்பு',
+  wsScienceEarthBody: 'காலநிலை மற்றும் தாவரச் சமிக்ஞைகளை விஞ்ஞானி போலப் படியுங்கள்.',
+  wsScienceEarthPrompt:
+    'நாசா POWER மற்றும் GIBS எதை அளக்கின்றன, தாவர அல்லது நிலப்பரப்பு வெப்பநிலை வரைபடத்தை மிகைப்படுத்தாமல் எப்படிப் படிப்பது என்பதை விளக்குங்கள். தரவின் வரம்புகளைச் சுட்டுங்கள்.',
+  wsScienceDeepTitle: 'ஆழ்ந்த விண்வெளிக் கேள்வி',
+  wsScienceDeepBody: 'கடினமான வானியற்பியல் கேள்விக்கு நீண்ட, கவனமான வழித்தோன்றல்.',
+  wsScienceDeepPrompt:
+    'கடினமான வானியற்பியல் கேள்வியை என்னுடன் படிப்படியாகத் தீர்க்கவும்: நட்சத்திரங்களின் இயக்கத்திலிருந்து மிகப்பெரிய கருந்துளையின் நிறையை எப்படி ஊகிக்கிறோம். உறவை வழித்தோன்றுங்கள், அனுமானங்களையும் அவை தோல்வியடையும் இடங்களையும் தெரிவியுங்கள்.',
+  wsScienceApodTitle: 'நாளின் படம்',
+  wsScienceApodBody: 'கேள்வியை இன்றைய உண்மையான நாசா APOD-ல் நிலைநிறுத்துங்கள்.',
+  wsScienceApodLoading: 'இன்றைய APOD ஏற்றப்படுகிறது…',
+  wsScienceApodError: 'இன்றைய APOD-ஐ இப்போது ஏற்ற முடியவில்லை. மற்ற தொடக்கங்கள் வேலை செய்யும்.',
+  wsScienceApodFallback: 'நேரலை ஊட்டம் கிடைக்காததால் NOVA ஒரு குறிக்கப்பட்ட குறிப்பு உள்ளீட்டைப் பயன்படுத்தியது.',
+  wsScienceApodPrompt:
+    'இன்றைய நாசா வானியல் நாளின் படம் “{{title}}” ({{date}}). அதன் விளக்கம்: “{{explanation}}” இந்தப் படத்தில் உள்ள இயற்பியலை ஆர்வமுள்ள தொடக்கநிலையாளருக்கு விளக்குங்கள். படம் உண்மையில் காட்டுவதை விளக்கத்திலிருந்து பிரிக்கவும், பொருள் அல்லது நிகழ்வின் வகையைக் குறிப்பிடவும், விளக்கம் மட்டும் போதாத இடங்களைத் தெரிவிக்கவும்.',
+
 
   wsSettingsTitle: 'அமைப்புகள்',
   wsSettingsIntro: 'தோற்றமும் மொழியும் இந்தச் சாதனத்தில் சேமிக்கப்படும்; அரட்டை வழங்குநர் இயல்புநிலை உங்கள் கணக்கில் சேமிக்கப்படும்.',

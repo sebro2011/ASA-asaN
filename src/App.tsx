@@ -11,8 +11,8 @@
  * It is not modified — `src/explore/ExploreApp.tsx` is the original tab shell
  * with the URL now owned by the router.
  */
-import { lazy, Suspense } from 'react';
-import { useNavigate, useRoute, type AppRoute } from './app/router';
+import { lazy, Suspense, useEffect } from 'react';
+import { navigate, normalisePath, useNavigate, useRoute, type AppRoute } from './app/router';
 import AppShell from './app/AppShell';
 import { navItemForRoute } from './app/navConfig';
 import HomeSurface from './workspace/home/HomeSurface';
@@ -61,6 +61,7 @@ function ExploreSurface({ route }: { route: AppRoute }) {
           navigate(next === 'home' ? '/explore' : next === 'space-shorts' ? '/cosmovision' : `/explore/${next}`);
         }}
         onExitToWorkspace={() => navigate('/workspace')}
+        onOpenChat={() => navigate('/chat')}
       />
     </Suspense>
   );
@@ -128,6 +129,15 @@ function WorkspaceSurface({ route }: { route: AppRoute }) {
 
 export default function App() {
   const route = useRoute();
+
+  // `/explore/assistant` was the old NOVA assistant tab. It is retired; the URL
+  // is rewritten once so a bookmark lands in the chat workspace cleanly.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (normalisePath(window.location.pathname) === '/explore/assistant') {
+      navigate('/chat', { replace: true });
+    }
+  }, [route.path]);
 
   // NASA Space Explorer is the product. It owns `/` and every science
   // destination; the NOVA workspace is a destination of its own at /workspace,

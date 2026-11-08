@@ -2514,6 +2514,121 @@ function generateLocalSpaceResponse(userQuery = "", userLang) {
   };
 }
 
+// server/novaThinking.js
+var NOVA_THINKING_LEVELS = ["auto", "flash", "flash-thinking", "thinking", "deep-thinking"];
+var DEFAULT_THINKING_LEVEL = "auto";
+var NOVA_THINKING_PRESETS = {
+  auto: {
+    id: "auto",
+    effort: null,
+    maxTokens: 1200,
+    temperature: 0.7,
+    geminiLevel: null,
+    envKey: null,
+    guidance: ""
+  },
+  flash: {
+    id: "flash",
+    effort: null,
+    maxTokens: 700,
+    temperature: 0.4,
+    geminiLevel: "low",
+    envKey: "NOVA_OPENROUTER_FLASH_MODEL",
+    guidance: ""
+  },
+  "flash-thinking": {
+    id: "flash-thinking",
+    effort: "low",
+    maxTokens: 1400,
+    temperature: null,
+    geminiLevel: "medium",
+    envKey: "NOVA_OPENROUTER_FLASH_THINKING_MODEL",
+    guidance: ""
+  },
+  thinking: {
+    id: "thinking",
+    effort: "medium",
+    maxTokens: 2200,
+    temperature: null,
+    geminiLevel: "medium",
+    envKey: "NOVA_OPENROUTER_THINKING_MODEL",
+    guidance: ""
+  },
+  "deep-thinking": {
+    id: "deep-thinking",
+    effort: "high",
+    maxTokens: 3200,
+    temperature: null,
+    geminiLevel: "high",
+    envKey: "NOVA_OPENROUTER_DEEP_THINKING_MODEL",
+    guidance: "Deep thinking is on: reason carefully and step by step before answering, state assumptions, and prefer a correct, well-structured derivation over speed."
+  }
+};
+var THINKING_LEVEL_SET = new Set(NOVA_THINKING_LEVELS);
+function normaliseThinkingLevel(value) {
+  if (value === void 0 || value === null || value === "") return DEFAULT_THINKING_LEVEL;
+  if (typeof value !== "string") return null;
+  const level = value.trim().toLowerCase().replace(/[\s_]+/g, "-");
+  return THINKING_LEVEL_SET.has(level) ? level : null;
+}
+function thinkingPreset(level) {
+  return NOVA_THINKING_PRESETS[level] || NOVA_THINKING_PRESETS[DEFAULT_THINKING_LEVEL];
+}
+function openRouterThinkingFields(level) {
+  const preset = thinkingPreset(level);
+  const fields = { max_tokens: preset.maxTokens };
+  if (preset.temperature !== null) fields.temperature = preset.temperature;
+  if (preset.effort) fields.reasoning = { effort: preset.effort };
+  return fields;
+}
+function geminiThinkingConfig(model, level) {
+  const isGemini3 = /^gemini-3/i.test(String(model || ""));
+  const preset = thinkingPreset(level);
+  if (level === "auto") {
+    if (isGemini3) {
+      return { maxOutputTokens: 1200, thinkingConfig: { thinkingLevel: "low" } };
+    }
+    return { temperature: 0.7, maxOutputTokens: 1200 };
+  }
+  if (isGemini3) {
+    return {
+      maxOutputTokens: preset.maxTokens,
+      thinkingConfig: { thinkingLevel: preset.geminiLevel || "low" }
+    };
+  }
+  return { maxOutputTokens: preset.maxTokens, ...preset.temperature !== null ? { temperature: preset.temperature } : {} };
+}
+function thinkingGuidance(level) {
+  return thinkingPreset(level).guidance;
+}
+function resolveOpenRouterModel({ baseModel, level, readEnv }) {
+  const preset = thinkingPreset(level);
+  if (!preset.envKey || typeof readEnv !== "function") return baseModel;
+  try {
+    const override = readEnv(preset.envKey);
+    return typeof override === "string" && override.trim() ? override.trim().slice(0, 160) : baseModel;
+  } catch {
+    return baseModel;
+  }
+}
+function publicThinkingCatalog({ onlineConfigured = false, env = {} } = {}) {
+  return {
+    default: DEFAULT_THINKING_LEVEL,
+    levels: NOVA_THINKING_LEVELS.map((id) => {
+      const preset = NOVA_THINKING_PRESETS[id];
+      const override = preset.envKey && typeof env[preset.envKey] === "string" ? env[preset.envKey].trim() : "";
+      return {
+        id,
+        effort: preset.effort,
+        maxTokens: preset.maxTokens,
+        requiresReasoning: Boolean(preset.effort),
+        model: override || null,
+        available: id === "auto" ? true : onlineConfigured || Boolean(override)
+      };
+    })
+  };
+}
+
 // server/novaChat.js
 var OPENROUTER_CHAT_COMPLETIONS_URL = "https://openrouter.ai/api/v1/chat/completions";
 var GEMINI_GENERATE_CONTENT_URL = "https://generativelanguage.googleapis.com/v1beta/models";
@@ -2651,6 +2766,16 @@ function validateChatRequest(body) {
       return { error: errorResult(400, "INVALID_LANGUAGE", "Language must be English, Sinhala, or Tamil.") };
     }
   }
+  const thinking = normaliseThinkingLevel(body.thinking);
+  if (thinking === null) {
+    return {
+      error: errorResult(
+        400,
+        "INVALID_THINKING",
+        "Thinking level must be auto, flash, flash-thinking, thinking, or deep-thinking."
+      )
+    };
+  }
   let provider = "auto";
   if (body.provider !== void 0) {
     if (typeof body.provider !== "string" || !SUPPORTED_PROVIDERS.has(body.provider.trim().toLowerCase())) {
@@ -2658,7 +2783,7 @@ function validateChatRequest(body) {
     }
     provider = body.provider.trim().toLowerCase();
   }
-  return { messages, language, provider };
+  return { messages, language, provider, thinking };
 }
 function createNovaRateLimiter({ limit = RATE_LIMIT_REQUESTS, windowMs = RATE_LIMIT_WINDOW_MS, now = Date.now } = {}) {
   const clients = /* @__PURE__ */ new Map();
@@ -2688,12 +2813,14 @@ function createNovaRateLimiter({ limit = RATE_LIMIT_REQUESTS, windowMs = RATE_LI
     return { allowed: true, retryAfterSeconds: 0 };
   };
 }
-function makeSystemPrompt(language) {
+function makeSystemPrompt(language, thinking = DEFAULT_THINKING_LEVEL) {
+  const guidance = thinkingGuidance(thinking);
   return [
     "You are NOVA, a helpful AI assistant for NASA missions, astronomy, and space exploration.",
     "Answer accurately and accessibly. Do not claim to be an official NASA service or to have live NASA telemetry, current web access, or data that was not supplied in the conversation. State uncertainty when facts may have changed.",
     `Language preference: ${LANGUAGE_GUIDANCE[language]} Always prioritize the language used in the latest user message if it differs from this hint.`,
-    "Use readable Markdown. End with up to three short, relevant follow-up questions on one line using exactly: SUGGESTIONS: [Question 1] | [Question 2] | [Question 3]. Write those questions in the response language."
+    "Use readable Markdown. End with up to three short, relevant follow-up questions on one line using exactly: SUGGESTIONS: [Question 1] | [Question 2] | [Question 3]. Write those questions in the response language.",
+    ...guidance ? [guidance] : []
   ].join("\n\n");
 }
 function extractText(content) {
@@ -2724,18 +2851,14 @@ function getReferer() {
   if (vercelUrl && /^[a-z0-9.-]+(?::\d+)?$/i.test(vercelUrl)) return `https://${vercelUrl}`;
   return "";
 }
-function geminiGenerationConfig(model) {
-  const isGemini3 = /^gemini-3/i.test(String(model || ""));
-  if (isGemini3) {
-    return {
-      maxOutputTokens: 1200,
-      thinkingConfig: { thinkingLevel: "low" }
-    };
-  }
-  return {
-    temperature: 0.7,
-    maxOutputTokens: 1200
-  };
+function geminiGenerationConfig(model, thinking = DEFAULT_THINKING_LEVEL) {
+  return geminiThinkingConfig(model, thinking);
+}
+function arenaThinkingFields(thinking) {
+  const preset = thinkingPreset(thinking);
+  const fields = { max_tokens: preset.maxTokens };
+  if (preset.temperature !== null) fields.temperature = preset.temperature;
+  return fields;
 }
 function providerError(status, provider, model) {
   let response;
@@ -2776,7 +2899,7 @@ function withProvider(response, provider) {
     }
   };
 }
-function getLocalResponse(query, language, { fallback = false, chain = [] } = {}) {
+function getLocalResponse(query, language, { fallback = false, chain = [], thinking = DEFAULT_THINKING_LEVEL } = {}) {
   const local = generateLocalSpaceResponse(query, language);
   return result(200, {
     text: local.text,
@@ -2784,6 +2907,7 @@ function getLocalResponse(query, language, { fallback = false, chain = [] } = {}
     model: "nasa-local-engine",
     provider: PROVIDER_NAMES.local,
     lang: language,
+    thinking,
     fallback,
     // Why every online provider was skipped: safe (codes and statuses only) and
     // essential, because an offline answer that does not say why is a dead end.
@@ -2834,7 +2958,7 @@ async function fetchProviderJson({ fetchImpl, url, init, timeoutMs, provider, mo
     clearTimeout(timeout);
   }
 }
-async function callOpenRouter({ fetchImpl, apiKey, model, messages, language, timeoutMs }) {
+async function callOpenRouter({ fetchImpl, apiKey, model, messages, language, thinking = DEFAULT_THINKING_LEVEL, timeoutMs }) {
   const headers = {
     Authorization: `Bearer ${apiKey}`,
     "Content-Type": "application/json",
@@ -2851,11 +2975,10 @@ async function callOpenRouter({ fetchImpl, apiKey, model, messages, language, ti
       body: JSON.stringify({
         model,
         messages: [
-          { role: "system", content: makeSystemPrompt(language) },
+          { role: "system", content: makeSystemPrompt(language, thinking) },
           ...messages
         ],
-        temperature: 0.7,
-        max_tokens: 1200
+        ...openRouterThinkingFields(thinking)
       })
     },
     timeoutMs,
@@ -2877,10 +3000,11 @@ async function callOpenRouter({ fetchImpl, apiKey, model, messages, language, ti
     model: typeof upstreamResult.data?.model === "string" && upstreamResult.data.model.length <= 160 ? upstreamResult.data.model : model,
     provider: PROVIDER_NAMES.openrouter,
     lang: language,
+    thinking,
     fallback: false
   });
 }
-async function callGemini({ fetchImpl, apiKey, model, messages, language, timeoutMs }) {
+async function callGemini({ fetchImpl, apiKey, model, messages, language, thinking = DEFAULT_THINKING_LEVEL, timeoutMs }) {
   const url = `${GEMINI_GENERATE_CONTENT_URL}/${encodeURIComponent(model)}:generateContent`;
   const contents = messages.map((message) => ({
     role: message.role === "assistant" ? "model" : "user",
@@ -2896,9 +3020,9 @@ async function callGemini({ fetchImpl, apiKey, model, messages, language, timeou
         "x-goog-api-key": apiKey
       },
       body: JSON.stringify({
-        systemInstruction: { parts: [{ text: makeSystemPrompt(language) }] },
+        systemInstruction: { parts: [{ text: makeSystemPrompt(language, thinking) }] },
         contents,
-        generationConfig: geminiGenerationConfig(model)
+        generationConfig: geminiGenerationConfig(model, thinking)
       })
     },
     timeoutMs,
@@ -2920,10 +3044,11 @@ async function callGemini({ fetchImpl, apiKey, model, messages, language, timeou
     model,
     provider: PROVIDER_NAMES.gemini,
     lang: language,
+    thinking,
     fallback: false
   });
 }
-async function callArena({ fetchImpl, apiKey, model, messages, language, timeoutMs }) {
+async function callArena({ fetchImpl, apiKey, model, messages, language, thinking = DEFAULT_THINKING_LEVEL, timeoutMs }) {
   const headers = {
     Authorization: `Bearer ${apiKey}`,
     "Content-Type": "application/json"
@@ -2937,11 +3062,10 @@ async function callArena({ fetchImpl, apiKey, model, messages, language, timeout
       body: JSON.stringify({
         model,
         messages: [
-          { role: "system", content: makeSystemPrompt(language) },
+          { role: "system", content: makeSystemPrompt(language, thinking) },
           ...messages
         ],
-        temperature: 0.7,
-        max_tokens: 1200,
+        ...arenaThinkingFields(thinking),
         stream: false
       })
     },
@@ -2964,6 +3088,7 @@ async function callArena({ fetchImpl, apiKey, model, messages, language, timeout
     model: typeof upstreamResult.data?.model === "string" && upstreamResult.data.model.length <= 160 ? upstreamResult.data.model : model,
     provider: PROVIDER_NAMES.arena,
     lang: language,
+    thinking,
     fallback: false
   });
 }
@@ -2982,14 +3107,19 @@ function deploymentLabel(value, fallback = null) {
 }
 function getNovaPublicConfig({ env = getProcessEnv() } = {}) {
   const commit = deploymentLabel(env.VERCEL_GIT_COMMIT_SHA);
+  const openrouter = typeof env.OPENROUTER_API_KEY === "string" && Boolean(env.OPENROUTER_API_KEY.trim());
+  const gemini = typeof env.GEMINI_API_KEY === "string" && Boolean(env.GEMINI_API_KEY.trim());
+  const arena = typeof env.ARENA_API_KEY === "string" && Boolean(env.ARENA_API_KEY.trim());
   return {
     providers: {
       auto: true,
       local: true,
-      gemini: typeof env.GEMINI_API_KEY === "string" && Boolean(env.GEMINI_API_KEY.trim()),
-      openrouter: typeof env.OPENROUTER_API_KEY === "string" && Boolean(env.OPENROUTER_API_KEY.trim()),
-      arena: typeof env.ARENA_API_KEY === "string" && Boolean(env.ARENA_API_KEY.trim())
+      gemini,
+      openrouter,
+      arena
     },
+    // Ordered thinking ladder (auto → deep). Keys never appear here.
+    thinking: publicThinkingCatalog({ onlineConfigured: openrouter || gemini || arena, env }),
     deployment: {
       environment: deploymentLabel(env.VERCEL_ENV, "development"),
       commit: commit && /^[0-9a-f]{7,40}$/i.test(commit) ? commit.slice(0, 7) : null,
@@ -3026,15 +3156,22 @@ function createNovaChatHandler({
       );
     }
     if (validated.provider === "local") {
-      return getLocalResponse(validated.messages.at(-1).content, validated.language);
+      return getLocalResponse(validated.messages.at(-1).content, validated.language, {
+        thinking: validated.thinking
+      });
     }
     const keys = {
       openrouter: readKey(readOpenRouterKey),
       gemini: readKey(getGeminiApiKey),
       arena: readKey(getArenaApiKey)
     };
+    const baseOpenRouterModel = cleanModelName(readKey(getOpenRouterModel), OPENROUTER_FREE_MODEL);
     const models = {
-      openrouter: cleanModelName(readKey(getOpenRouterModel), OPENROUTER_FREE_MODEL),
+      openrouter: resolveOpenRouterModel({
+        baseModel: baseOpenRouterModel,
+        level: validated.thinking,
+        readEnv: (key) => getProcessEnv()[key]
+      }),
       gemini: cleanModelName(readKey(getGeminiModel), DEFAULT_GEMINI_MODEL),
       arena: cleanModelName(readKey(getArenaModel), "arena_smart.aria")
     };
@@ -3049,7 +3186,10 @@ function createNovaChatHandler({
       );
     }
     if (providerOrder.length === 0) {
-      return getLocalResponse(validated.messages.at(-1).content, validated.language, { fallback: true });
+      return getLocalResponse(validated.messages.at(-1).content, validated.language, {
+        fallback: true,
+        thinking: validated.thinking
+      });
     }
     let lastError = null;
     const chain = [];
@@ -3066,6 +3206,7 @@ function createNovaChatHandler({
           model: models.arena,
           messages: validated.messages,
           language: validated.language,
+          thinking: validated.thinking,
           timeoutMs: providerTimeout
         });
       } else if (provider === "openrouter") {
@@ -3075,6 +3216,7 @@ function createNovaChatHandler({
           model: models.openrouter,
           messages: validated.messages,
           language: validated.language,
+          thinking: validated.thinking,
           timeoutMs: providerTimeout
         });
       } else {
@@ -3084,6 +3226,7 @@ function createNovaChatHandler({
           model: models.gemini,
           messages: validated.messages,
           language: validated.language,
+          thinking: validated.thinking,
           timeoutMs: providerTimeout
         });
       }
@@ -3097,7 +3240,11 @@ function createNovaChatHandler({
       if (validated.provider !== "auto") return response;
     }
     if (validated.provider === "auto") {
-      return getLocalResponse(validated.messages.at(-1).content, validated.language, { fallback: true, chain });
+      return getLocalResponse(validated.messages.at(-1).content, validated.language, {
+        fallback: true,
+        chain,
+        thinking: validated.thinking
+      });
     }
     return lastError || errorResult(503, "PROVIDER_UNAVAILABLE", "NOVA could not complete this request. Please retry.");
   };

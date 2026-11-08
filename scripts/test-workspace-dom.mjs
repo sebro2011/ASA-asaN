@@ -526,10 +526,13 @@ test('the front door is the NASA Space Explorer, not the NOVA workspace', async 
     // Workspace chrome must not be on the front door any more.
     assert.equal(document.querySelector('.nova-sidebar'), null);
     assert.equal(text.includes('New chat'), false);
-    // The NOVA assistant still ships inside Explore.
+    // The legacy in-Explore assistant tab is retired: the one AI surface is the
+    // workspace chat, and the header's "Ask NOVA" button leads there.
+    const buttons = [...document.querySelectorAll('button')].map((button) => button.textContent || '');
+    assert.equal(buttons.some((label) => /NOVA Assistant/i.test(label)), false, 'no legacy assistant tab');
     assert.ok(
-      [...document.querySelectorAll('button')].some((button) => /assistant/i.test(button.textContent || '') || /AI/i.test(button.textContent || '')),
-      'the assistant entry point is still reachable',
+      buttons.some((label) => /Ask NOVA/i.test(label)),
+      'the AI entry point is still reachable and now points at the chat workspace',
     );
   } finally {
     await act(async () => {

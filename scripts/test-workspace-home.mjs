@@ -257,6 +257,74 @@ test('the greeting, subtitle and composer are on the page', async () => {
   }
 });
 
+test('the thinking picker lists all five levels in order and remembers the choice', async () => {
+  const dom = installDom();
+  try {
+    stubFetch();
+    const app = await mountHome();
+
+    const trigger = [...document.querySelectorAll('button')].find((button) =>
+      (button.getAttribute('aria-label') || '').startsWith('Thinking level'),
+    );
+    assert.ok(trigger, 'the composer carries a thinking picker');
+    assert.match(trigger.textContent || '', /Auto/);
+
+    await app.act(async () => {
+      trigger.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+    });
+
+    const options = [...document.querySelectorAll('[role="option"]')];
+    assert.equal(options.length, 5, 'all five rungs are offered');
+    assert.deepEqual(
+      options.map((option) =>
+        (option.querySelector('.nova-thinking__option-label')?.textContent || '')
+          .replace(/[·●]/g, '')
+          .trim(),
+      ),
+      ['Auto', 'Flash', 'Flash thinking', 'Thinking', 'Deep thinking'],
+      'the ladder is ordered auto → deep',
+    );
+    assert.equal(options[0].getAttribute('aria-selected'), 'true', 'auto is the default');
+
+    await app.act(async () => {
+      options[4].dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+    });
+    await settle(app.act, 40);
+
+    assert.equal(window.localStorage.getItem('nova_thinking_level_v1'), 'deep-thinking');
+    assert.match(trigger.textContent || '', /Deep thinking/);
+    assert.equal(document.querySelectorAll('[role="option"]').length, 0, 'the list closes after choosing');
+    await app.unmount();
+  } finally {
+    dom.window.close();
+  }
+});
+
+test('a starter chosen on Home carries its thinking level into the chat queue', async () => {
+  const dom = installDom();
+  try {
+    stubFetch();
+    window.sessionStorage.clear();
+    const app = await mountHome();
+
+    const card = [...document.querySelectorAll('.nova-science-card')].find((node) =>
+      /Mission briefing/.test(node.textContent || ''),
+    );
+    assert.ok(card, 'the astronomy studio offers a mission briefing starter');
+    await app.act(async () => {
+      card.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+    });
+    await settle(app.act, 40);
+
+    assert.equal(window.location.pathname, '/chat');
+    assert.match(window.sessionStorage.getItem('nova_pending_prompt') || '', /Artemis/);
+    assert.equal(window.sessionStorage.getItem('nova_pending_thinking'), 'thinking');
+    await app.unmount();
+  } finally {
+    dom.window.close();
+  }
+});
+
 test('sending from Home queues the prompt and opens the chat', async () => {
   const dom = installDom();
   try {
