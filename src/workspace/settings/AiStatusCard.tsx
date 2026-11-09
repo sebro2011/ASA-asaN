@@ -32,6 +32,11 @@ interface ProviderReport {
   /** Only present after a metadata key check ran (a generation probe timed out). */
   keyValid?: boolean | null;
   keyCheck?: { request: string; httpStatus: number; ms: number; code: string; reason?: string };
+  /** The provider does own this model id; the configured id does not exist. */
+  modelInvalid?: boolean;
+  /** What the probe got when it retried with the default model id. */
+  fallbackModel?: { model: string; ok: boolean; httpStatus?: number; code: string; ms?: number };
+  hint?: string;
 }
 
 interface DiagnosticsReport {
@@ -170,6 +175,12 @@ export default function AiStatusCard() {
                       data-testid={`ai-status-key-${key}`}
                     >
                       {entry.keyValid ? t('wsAiKeyValid') : t('wsAiKeyRejected')}
+                    </p>
+                  ) : null}
+                  {entry.modelInvalid ? (
+                    <p className="mt-0.5 break-words text-[11px] text-ws-warn" data-testid={`ai-status-model-${key}`}>
+                      {t('wsAiModelInvalid')}
+                      {entry.fallbackModel?.ok ? ` ${t('wsAiModelFallbackWorking')}` : ''}
                     </p>
                   ) : null}
                   {entry.reason ? (

@@ -27,7 +27,8 @@ const INTERNAL_ONLY = new Set([
 const FRIENDLY: Record<string, string> = {
   'openrouter/free': 'OpenRouter Free',
   'arena_smart.aria': 'Arena Smart',
-  'gemini-3.8-flash': 'Gemini 3.8 Flash',
+  'gemini-flash-latest': 'Gemini Flash (latest)',
+  'gemini-3.8-flash': 'Gemini 3.8 Flash', // legacy id, kept so old records still label
   'gemini-2.5-flash': 'Gemini 2.5 Flash',
   'gemini-2.0-flash': 'Gemini 2.0 Flash',
   'gpt-4o-mini': 'GPT-4o mini',

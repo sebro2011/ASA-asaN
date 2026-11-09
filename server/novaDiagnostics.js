@@ -312,6 +312,26 @@ export function createDiagnosticsHandler({
         entry.reachable = outcome.reachable;
         if (outcome.reason) entry.reason = outcome.reason;
 
+        // A 404 from the Gemini endpoint means the *model id* does not exist.
+        // That is a configuration error, not an outage, and it used to be
+        // indistinguishable from a timeout. Name it, then retry with the
+        // known-good default so the report can also say whether the key works.
+        if (provider === 'gemini' && (outcome.status === 404 || outcome.status === 422) && models.gemini !== DEFAULT_GEMINI_MODEL) {
+          entry.modelInvalid = true;
+          entry.hint = `NOVA_GEMINI_MODEL="${models.gemini}" is not a Gemini model id. Set it to a real one (for example ${DEFAULT_GEMINI_MODEL}) or unset it.`;
+          const retry = await probe({ fetchImpl, provider, keys, models: { ...models, gemini: DEFAULT_GEMINI_MODEL }, secrets, timeoutMs, now });
+          entry.fallbackModel = {
+            model: DEFAULT_GEMINI_MODEL,
+            ok: retry.ok,
+            httpStatus: retry.status,
+            code: retry.code,
+            ms: retry.ms,
+          };
+          if (retry.ok) {
+            entry.hint += ` The default model answered, so the API key itself still works and chat falls back to ${DEFAULT_GEMINI_MODEL}.`;
+          }
+        }
+
         // A timeout says nothing about the key. Ask a metadata endpoint, so the
         // answer distinguishes a rejected/expired key from a slow model.
         if (outcome.code === 'AI_TIMEOUT' || outcome.code === 'UPSTREAM_NETWORK_ERROR' || outcome.code === 'PROVIDER_UNAVAILABLE') {

@@ -442,6 +442,8 @@ const en: Copy = {
   wsAiProbeFailed: 'The status check itself failed — the server did not answer.',
   wsAiKeyValid: 'API key is valid — the model itself did not answer in time.',
   wsAiKeyRejected: 'API key rejected by the provider.',
+  wsAiModelInvalid: 'The configured model id does not exist at the provider — check NOVA_GEMINI_MODEL.',
+  wsAiModelFallbackWorking: 'Requests fall back to the default model, which answered.',
   wsAiProbeCheckedAt: 'Checked',
 
   /* ---------------------------------------------------------------- search */
@@ -1131,6 +1133,8 @@ const si: Copy = {
   wsAiProbeFailed: 'පරීක්ෂාවම අසාර්ථක වුණා — සර්වර් එක පිළිතුරු දුන්නේ නෑ.',
   wsAiKeyValid: 'API යතුර වලංගුයි — මොඩලය විනාඩියක් තුළ පිළිතුරු දුන්නේ නෑ.',
   wsAiKeyRejected: 'සැපයුම්කරු API යතුර ප්‍රතික්ෂේප කළා.',
+  wsAiModelInvalid: 'වින්‍යාසගත මොඩලයේ හැඳුනුම සැපයුම්කරු ළඟ නැහැ — NOVA_GEMINI_MODEL පරීක්ෂා කරන්න.',
+  wsAiModelFallbackWorking: 'ඉල්ලීම් පෙරනිමි මොඩලයට මාරු වෙනවා, එය පිළිතුරු දුන්නා.',
   wsAiProbeCheckedAt: 'පරීක්ෂා කළේ',
 
   /* ---------------------------------------------------------------- search */
@@ -1821,6 +1825,8 @@ const ta: Copy = {
   wsAiProbeFailed: 'சரிபார்ப்பே தோல்வியடைந்தது — சேவையகம் பதிலளிக்கவில்லை.',
   wsAiKeyValid: 'API விசை செல்லுபடியாகும் — மாதிரியே நேரத்தில் பதிலளிக்கவில்லை.',
   wsAiKeyRejected: 'வழங்குநர் API விசையை நிராகரித்தார்.',
+  wsAiModelInvalid: 'கட்டமைக்கப்பட்ட மாதிரி அடையாளம் வழங்குநரிடம் இல்லை — NOVA_GEMINI_MODEL சரிபார்க்கவும்.',
+  wsAiModelFallbackWorking: 'கோரிக்கைகள் இயல்புநிலை மாதிரிக்கு மாறுகின்றன, அது பதிலளித்தது.',
   wsAiProbeCheckedAt: 'சரிபார்த்தது',
 
   /* ---------------------------------------------------------------- search */

@@ -13,7 +13,24 @@ import {
 export const OPENROUTER_CHAT_COMPLETIONS_URL = 'https://openrouter.ai/api/v1/chat/completions';
 export const GEMINI_GENERATE_CONTENT_URL = 'https://generativelanguage.googleapis.com/v1beta/models';
 export const OPENROUTER_FREE_MODEL = 'openrouter/free';
-export const DEFAULT_GEMINI_MODEL = 'gemini-3.8-flash';
+// `gemini-3.8-flash` never existed on the Gemini API: every call returned 404
+// NOT_FOUND, which surfaced as a "timeout" for months. `gemini-flash-latest` is
+// Google's own alias for the current Flash model, so it does not rot the way a
+// pinned version does; the second id is a pinned, long-lived fallback.
+export const DEFAULT_GEMINI_MODEL = 'gemini-flash-latest';
+export const GEMINI_MODEL_FALLBACKS = ['gemini-flash-latest', 'gemini-2.5-flash'];
+
+// A configured model id that the API does not know is a configuration error, not
+// an outage. Rather than failing the whole chat, try the known-good ids in order
+// and say which one actually answered.
+export function geminiModelCandidates(model) {
+  const requested = String(model || '').trim();
+  const candidates = requested ? [requested] : [];
+  for (const fallback of GEMINI_MODEL_FALLBACKS) {
+    if (!candidates.includes(fallback)) candidates.push(fallback);
+  }
+  return candidates;
+}
 
 // Arena AI uses an OpenAI-compatible chat completions endpoint. The exact base
 // URL is instance-specific and shown on the Arena key creation screen.
@@ -484,30 +501,40 @@ async function callOpenRouter({ fetchImpl, apiKey, model, messages, language, th
 }
 
 async function callGemini({ fetchImpl, apiKey, model, messages, language, thinking = DEFAULT_THINKING_LEVEL, timeoutMs }) {
-  const url = `${GEMINI_GENERATE_CONTENT_URL}/${encodeURIComponent(model)}:generateContent`;
   const contents = messages.map((message) => ({
     role: message.role === 'assistant' ? 'model' : 'user',
     parts: [{ text: message.content }],
   }));
-  const upstreamResult = await fetchProviderJson({
-    fetchImpl,
-    url,
-    init: {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-goog-api-key': apiKey,
+  let upstreamResult = null;
+  let usedModel = model;
+  for (const candidate of geminiModelCandidates(model)) {
+    usedModel = candidate;
+    const url = `${GEMINI_GENERATE_CONTENT_URL}/${encodeURIComponent(candidate)}:generateContent`;
+    upstreamResult = await fetchProviderJson({
+      fetchImpl,
+      url,
+      init: {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-goog-api-key': apiKey,
+        },
+        body: JSON.stringify({
+          systemInstruction: { parts: [{ text: makeSystemPrompt(language, thinking) }] },
+          contents,
+          generationConfig: geminiGenerationConfig(candidate, thinking),
+        }),
       },
-      body: JSON.stringify({
-        systemInstruction: { parts: [{ text: makeSystemPrompt(language, thinking) }] },
-        contents,
-        generationConfig: geminiGenerationConfig(model, thinking),
-      }),
-    },
-    timeoutMs,
-    provider: 'gemini',
-    model,
-  });
+      timeoutMs,
+      provider: 'gemini',
+      model: candidate,
+    });
+    if (!upstreamResult.error) break;
+    // Only a missing model id deserves another attempt. A 429, a rejected key or
+    // an upstream 5xx must be reported as it is, not retried against other ids.
+    const upstreamStatus = upstreamResult.error.body?.upstreamStatus;
+    if (upstreamStatus !== 404 && upstreamStatus !== 422) break;
+  }
   if (upstreamResult.error) return upstreamResult.error;
 
   const rawText = extractText(upstreamResult.data?.candidates?.[0]?.content?.parts);
@@ -519,15 +546,22 @@ async function callGemini({ fetchImpl, apiKey, model, messages, language, thinki
   }
 
   const parsed = extractSuggestions(rawText, language);
-  return result(200, {
+  const body = {
     text: parsed.text || rawText,
     suggestions: parsed.suggestions,
-    model,
+    model: usedModel,
     provider: PROVIDER_NAMES.gemini,
     lang: language,
     thinking,
     fallback: false,
-  });
+  };
+  if (usedModel !== model) {
+    // Say which model answered and which one was asked for: silently reporting
+    // the requested id would hide a broken NOVA_GEMINI_MODEL forever.
+    body.requestedModel = model;
+    body.modelFallback = true;
+  }
+  return result(200, body);
 }
 
 async function callArena({ fetchImpl, apiKey, model, messages, language, thinking = DEFAULT_THINKING_LEVEL, timeoutMs }) {
