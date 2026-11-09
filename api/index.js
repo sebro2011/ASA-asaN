@@ -3629,6 +3629,22 @@ var handleNovaDiagnostics = createDiagnosticsHandler();
 
 // server/nasaRoutes.ts
 import { Type as Type2 } from "@google/genai";
+var API_KEY_PATTERN = /api_key=[^&"'\s\\]+/gi;
+function redactApiKeys(payload) {
+  if (payload === null || payload === void 0) return payload;
+  let text;
+  try {
+    text = JSON.stringify(payload);
+  } catch {
+    return payload;
+  }
+  if (!text || !/api_key=/i.test(text)) return payload;
+  try {
+    return JSON.parse(text.replace(API_KEY_PATTERN, "api_key=[redacted]"));
+  } catch {
+    return payload;
+  }
+}
 var translationCache = /* @__PURE__ */ new Map();
 var apodCache = /* @__PURE__ */ new Map();
 var APOD_TODAY_TTL_MS = 15 * 6e4;
@@ -4099,11 +4115,11 @@ function setupNasaRoutes(app2, ai2) {
           controller.abort(new DOMException("Request timeout", "AbortError"));
         } catch (_) {
         }
-      }, 3500);
+      }, 8e3);
       const nasaRes = await fetch(url, { signal: controller.signal });
       upstreamStatus = nasaRes.status;
       if (nasaRes.ok) {
-        const data = await nasaRes.json();
+        const data = redactApiKeys(await nasaRes.json());
         if (data && data.title && data.url) {
           if (date) apodCache.set(date, data);
           apodCache.set("today", data);
@@ -4152,7 +4168,7 @@ function setupNasaRoutes(app2, ai2) {
       }, 4e3);
       const nasaRes = await fetch(url, { signal: controller.signal });
       if (nasaRes.ok) {
-        const data = await nasaRes.json();
+        const data = redactApiKeys(await nasaRes.json());
         return res.json({ success: true, data });
       }
     } catch (err) {
@@ -4312,7 +4328,7 @@ function setupNasaRoutes(app2, ai2) {
       }, 4e3);
       const nasaRes = await fetch(url, { signal: controller.signal });
       if (nasaRes.ok) {
-        const data = await nasaRes.json();
+        const data = redactApiKeys(await nasaRes.json());
         if (Array.isArray(data) && data.length > 0) {
           const formattedFrames = data.slice(0, 12).map((item) => {
             const dateStr = item.date.split(" ")[0];
@@ -4424,7 +4440,7 @@ function setupNasaRoutes(app2, ai2) {
       }, 4e3);
       const tapRes = await fetch(tapUrl, { signal: controller.signal });
       if (tapRes.ok) {
-        const data = await tapRes.json();
+        const data = redactApiKeys(await tapRes.json());
         if (Array.isArray(data) && data.length > 0) {
           return res.json({ success: true, exoplanets: data.slice(0, 30) });
         }
@@ -4649,7 +4665,7 @@ Explanation to translate: "${explanation}"`;
       }, 5e3);
       const nasaRes = await fetch(url, { signal: controller.signal });
       if (nasaRes.ok) {
-        const data = await nasaRes.json();
+        const data = redactApiKeys(await nasaRes.json());
         return res.json({ success: true, data });
       }
     } catch (err) {
@@ -4673,7 +4689,7 @@ Explanation to translate: "${explanation}"`;
     try {
       const resIss = await fetch("https://api.wheretheiss.at/v1/satellites/25544", { signal: AbortSignal.timeout(4e3) });
       if (resIss.ok) {
-        const data = await resIss.json();
+        const data = redactApiKeys(await resIss.json());
         lastKnownIssData = {
           latitude: data.latitude,
           longitude: data.longitude,
@@ -4697,7 +4713,7 @@ Explanation to translate: "${explanation}"`;
       const url = "https://services.swpc.noaa.gov/json/planetary_k_index.json";
       const nasaRes = await fetch(url, { signal: AbortSignal.timeout(4e3) });
       if (nasaRes.ok) {
-        const data = await nasaRes.json();
+        const data = redactApiKeys(await nasaRes.json());
         return res.json({ success: true, data, source: "NOAA SWPC" });
       }
     } catch {
