@@ -7,6 +7,30 @@ import { GoogleGenAI, Type } from '@google/genai';
 // All NASA API endpoints live here; server.ts delegates to setupNasaRoutes.
 // ====================================================
 
+// NASA echoes the request URL back inside `links` (and inside `nasa_jpl_url` for
+// some feeds). Those URLs carry `api_key=...`, so passing an upstream body
+// through untouched published the owner's key to every anonymous visitor.
+// Redacting here keeps the payload shape identical but removes the credential.
+export const API_KEY_PATTERN = /api_key=[^&"'\s\\]+/gi;
+
+export function redactApiKeys<T>(payload: T): T {
+  if (payload === null || payload === undefined) return payload;
+  let text: string;
+  try {
+    text = JSON.stringify(payload);
+  } catch {
+    return payload;
+  }
+  if (!text || !/api_key=/i.test(text)) return payload;
+  try {
+    return JSON.parse(text.replace(API_KEY_PATTERN, 'api_key=[redacted]')) as T;
+  } catch {
+    // Never let redaction turn a usable response into an error: fall back to the
+    // original payload rather than throwing.
+    return payload;
+  }
+}
+
 // In-memory translation cache: `${targetLang}_${hash}` -> { title, explanation }
 export const translationCache = new Map<string, { title: string; explanation: string }>();
 
@@ -533,15 +557,17 @@ export function setupNasaRoutes(app: any, ai: GoogleGenAI) {
     let failureKind: 'network' | 'rate-limited' | 'upstream' | 'shape' = 'network';
     try {
       const controller = new AbortController();
-      // Fast 3.5s timeout for high responsiveness
+      // APOD is the slowest api.nasa.gov endpoint; 3.5 s aborted genuine
+      // responses from the deployed region and pushed the app onto the fallback
+      // image while the same key worked for NeoWs.
       timeout = setTimeout(() => {
         try { controller.abort(new DOMException('Request timeout', 'AbortError')); } catch (_) {}
-      }, 3500);
+      }, 8000);
       const nasaRes = await fetch(url, { signal: controller.signal });
       upstreamStatus = nasaRes.status;
 
       if (nasaRes.ok) {
-        const data = await nasaRes.json();
+        const data = redactApiKeys(await nasaRes.json());
         if (data && data.title && data.url) {
           if (date) apodCache.set(date, data);
           apodCache.set('today', data);
@@ -604,7 +630,7 @@ export function setupNasaRoutes(app: any, ai: GoogleGenAI) {
       const nasaRes = await fetch(url, { signal: controller.signal });
 
       if (nasaRes.ok) {
-        const data = await nasaRes.json();
+        const data = redactApiKeys(await nasaRes.json());
         return res.json({ success: true, data });
       }
     } catch (err: any) {
@@ -771,7 +797,7 @@ export function setupNasaRoutes(app: any, ai: GoogleGenAI) {
       const nasaRes = await fetch(url, { signal: controller.signal });
 
       if (nasaRes.ok) {
-        const data = await nasaRes.json();
+        const data = redactApiKeys(await nasaRes.json());
         if (Array.isArray(data) && data.length > 0) {
           const formattedFrames = data.slice(0, 12).map((item: any) => {
             const dateStr = item.date.split(' ')[0];
@@ -892,7 +918,7 @@ export function setupNasaRoutes(app: any, ai: GoogleGenAI) {
       const tapRes = await fetch(tapUrl, { signal: controller.signal });
 
       if (tapRes.ok) {
-        const data = await tapRes.json();
+        const data = redactApiKeys(await tapRes.json());
         if (Array.isArray(data) && data.length > 0) {
           return res.json({ success: true, exoplanets: data.slice(0, 30) });
         }
@@ -1156,7 +1182,7 @@ Explanation to translate: "${explanation}"`;
       const nasaRes = await fetch(url, { signal: controller.signal });
 
       if (nasaRes.ok) {
-        const data = await nasaRes.json();
+        const data = redactApiKeys(await nasaRes.json());
         return res.json({ success: true, data });
       }
     } catch (err: any) {
@@ -1186,7 +1212,7 @@ Explanation to translate: "${explanation}"`;
     try {
       const resIss = await fetch('https://api.wheretheiss.at/v1/satellites/25544', { signal: AbortSignal.timeout(4000) });
       if (resIss.ok) {
-        const data = await resIss.json();
+        const data = redactApiKeys(await resIss.json());
         lastKnownIssData = {
           latitude: data.latitude,
           longitude: data.longitude,
@@ -1215,7 +1241,7 @@ Explanation to translate: "${explanation}"`;
       const url = 'https://services.swpc.noaa.gov/json/planetary_k_index.json';
       const nasaRes = await fetch(url, { signal: AbortSignal.timeout(4000) });
       if (nasaRes.ok) {
-        const data = await nasaRes.json();
+        const data = redactApiKeys(await nasaRes.json());
         return res.json({ success: true, data, source: 'NOAA SWPC' });
       }
     } catch {
