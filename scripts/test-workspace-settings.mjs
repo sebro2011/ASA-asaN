@@ -442,3 +442,55 @@ test('a saved default that is no longer configured is called out', async () => {
     dom.window.close();
   }
 });
+
+test('an invalid model id is shown as a configuration problem, not an outage', async () => {
+  const dom = installDom({ diagnostics: {
+    checkedAt: '2026-11-08T17:20:00.000Z',
+    deployment: 'production · ec749df',
+    probed: true,
+    throttled: false,
+    providers: {
+      openrouter: {
+        provider: 'OpenRouter',
+        configured: true,
+        endpoint: 'openrouter.ai',
+        model: 'openrouter/free',
+        status: 'ok',
+        code: 'OK',
+        httpStatus: 200,
+        ms: 165,
+      },
+      gemini: {
+        provider: 'Google Gemini',
+        configured: true,
+        endpoint: 'generativelanguage.googleapis.com',
+        model: 'gemini-3.8-flash',
+        status: 'error',
+        code: 'PROVIDER_MODEL_NOT_FOUND',
+        httpStatus: 404,
+        ms: 96,
+        modelInvalid: true,
+        hint: 'NOVA_GEMINI_MODEL="gemini-3.8-flash" is not a Gemini model id.',
+        fallbackModel: { model: 'gemini-flash-latest', ok: true, httpStatus: 200, code: 'OK', ms: 410 },
+      },
+      arena: { provider: 'Arena AI', configured: false, endpoint: 'api.arena.ai', model: 'arena_smart.aria', status: 'not-configured', code: 'PROVIDER_NOT_CONFIGURED' },
+      local: { provider: 'NOVA Local Space Engine', configured: true, endpoint: 'in-process', model: 'nasa-local-engine', status: 'ok', code: 'OK' },
+    },
+  } });
+  try {
+    const { client } = createFakeClient();
+    const app = await mountSettings({ client });
+    await app.act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 120));
+    });
+
+    const line = document.querySelector('[data-testid="ai-status-model-gemini"]');
+    assert.ok(line, 'the model problem has its own line');
+    assert.match(line.textContent, /configured model id does not exist/);
+    assert.match(line.textContent, /fall back to the default model, which answered/);
+    // It must not be dressed up as a key problem: no key verdict was reported.
+    assert.equal(document.querySelector('[data-testid="ai-status-key-gemini"]'), null);
+  } finally {
+    dom.window.close();
+  }
+});

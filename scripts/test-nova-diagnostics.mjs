@@ -309,3 +309,48 @@ test('probes run concurrently, so one slow model does not spend another budget',
     assert.equal(report.providers[provider].status, 'ok', `${provider} should still be probed`);
   }
 });
+
+test('a bad NOVA_GEMINI_MODEL is named, not reported as a timeout', async () => {
+  const calls = [];
+  const impl = async (url, init) => {
+    calls.push(String(url));
+    // The bogus id 404s; the default id the handler retries answers normally.
+    if (String(url).includes('gemini-3.8-flash')) {
+      return { status: 404, ok: false, text: async () => '{"error":{"code":404,"message":"models/gemini-3.8-flash is not found"}}', json: async () => ({}) };
+    }
+    return { status: 200, ok: true, text: async () => '{"candidates":[]}', json: async () => ({ candidates: [] }) };
+  };
+
+  const handler = createDiagnosticsHandler({
+    fetchImpl: impl,
+    env: envWith({ NOVA_GEMINI_MODEL: 'gemini-3.8-flash' }),
+  });
+  const report = await handler({ probe: true });
+  const gemini = report.providers.gemini;
+
+  assert.equal(gemini.model, 'gemini-3.8-flash');
+  assert.equal(gemini.modelInvalid, true, 'the report says the model id is wrong');
+  assert.equal(gemini.code, 'PROVIDER_MODEL_NOT_FOUND');
+  assert.match(gemini.hint, /gemini-flash-latest/, 'the hint names a real model id');
+  assert.equal(gemini.fallbackModel.model, 'gemini-flash-latest');
+  assert.equal(gemini.fallbackModel.ok, true, 'the retry proves the key still works');
+  assert.match(gemini.hint, /chat falls back/, 'and says what chat does about it');
+
+  const defaultCall = calls.find((url) => url.includes('gemini-flash-latest'));
+  assert.ok(defaultCall, 'the default model was actually probed');
+  assert.equal(calls.filter((url) => url.includes('gemini-3.8-flash')).length, 1, 'the bad id is tried once, not looped');
+});
+
+test('a default model id is not retried against itself', async () => {
+  const calls = [];
+  const impl = async (url) => {
+    calls.push(String(url));
+    return { status: 404, ok: false, text: async () => '{"error":"not found"}', json: async () => ({}) };
+  };
+  const handler = createDiagnosticsHandler({ fetchImpl: impl, env: envWith() });
+  const report = await handler({ probe: true });
+  // envWith() sets no NOVA_GEMINI_MODEL, so the default is already in use.
+  assert.equal(report.providers.gemini.modelInvalid, undefined);
+  assert.equal(report.providers.gemini.fallbackModel, undefined);
+  assert.equal(calls.filter((url) => url.includes('/models/')).length, 1);
+});

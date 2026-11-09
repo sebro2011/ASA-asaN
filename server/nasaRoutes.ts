@@ -1,5 +1,6 @@
 import type { Request, Response, NextFunction } from 'express';
 import { GoogleGenAI, Type } from '@google/genai';
+import { DEFAULT_GEMINI_MODEL } from './novaChat.js';
 
 // ====================================================
 // NASA API Routes Module
@@ -1076,7 +1077,7 @@ Explanation to translate: "${explanation}"`;
 
       try {
         const geminiCall = ai.models.generateContent({
-          model: 'gemini-3.8-flash',
+          model: DEFAULT_GEMINI_MODEL,
           contents: prompt,
           config: {
             responseMimeType: 'application/json',

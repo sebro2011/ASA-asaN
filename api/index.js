@@ -1027,7 +1027,7 @@ earthRouter.get("/firms/hotspots", rateLimit("firms", 30, 6e4), async (req, res)
   }
 });
 var aiClient = process.env.GEMINI_API_KEY ? new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY, httpOptions: { headers: { "User-Agent": "nasa-space-explorer-earth-lab" } } }) : null;
-var ANALYST_MODEL = "gemini-3.8-flash";
+var ANALYST_MODEL = "gemini-flash-latest";
 var ANALYST_SYSTEM_INSTRUCTION = `You are the Earth Science Analyst inside the NASA Space Explorer Earth Intelligence Lab.
 
 Absolute rules:
@@ -2719,7 +2719,16 @@ function publicThinkingCatalog({ onlineConfigured = false, env = {} } = {}) {
 var OPENROUTER_CHAT_COMPLETIONS_URL = "https://openrouter.ai/api/v1/chat/completions";
 var GEMINI_GENERATE_CONTENT_URL = "https://generativelanguage.googleapis.com/v1beta/models";
 var OPENROUTER_FREE_MODEL = "openrouter/free";
-var DEFAULT_GEMINI_MODEL = "gemini-3.8-flash";
+var DEFAULT_GEMINI_MODEL = "gemini-flash-latest";
+var GEMINI_MODEL_FALLBACKS = ["gemini-flash-latest", "gemini-2.5-flash"];
+function geminiModelCandidates(model) {
+  const requested = String(model || "").trim();
+  const candidates = requested ? [requested] : [];
+  for (const fallback of GEMINI_MODEL_FALLBACKS) {
+    if (!candidates.includes(fallback)) candidates.push(fallback);
+  }
+  return candidates;
+}
 var ARENA_BASE_URL = (() => {
   try {
     const configured = process.env.ARENA_BASE_URL;
@@ -3103,30 +3112,38 @@ async function callOpenRouter({ fetchImpl, apiKey, model, messages, language, th
   });
 }
 async function callGemini({ fetchImpl, apiKey, model, messages, language, thinking = DEFAULT_THINKING_LEVEL, timeoutMs }) {
-  const url = `${GEMINI_GENERATE_CONTENT_URL}/${encodeURIComponent(model)}:generateContent`;
   const contents = messages.map((message) => ({
     role: message.role === "assistant" ? "model" : "user",
     parts: [{ text: message.content }]
   }));
-  const upstreamResult = await fetchProviderJson({
-    fetchImpl,
-    url,
-    init: {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-goog-api-key": apiKey
+  let upstreamResult = null;
+  let usedModel = model;
+  for (const candidate of geminiModelCandidates(model)) {
+    usedModel = candidate;
+    const url = `${GEMINI_GENERATE_CONTENT_URL}/${encodeURIComponent(candidate)}:generateContent`;
+    upstreamResult = await fetchProviderJson({
+      fetchImpl,
+      url,
+      init: {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-goog-api-key": apiKey
+        },
+        body: JSON.stringify({
+          systemInstruction: { parts: [{ text: makeSystemPrompt(language, thinking) }] },
+          contents,
+          generationConfig: geminiGenerationConfig(candidate, thinking)
+        })
       },
-      body: JSON.stringify({
-        systemInstruction: { parts: [{ text: makeSystemPrompt(language, thinking) }] },
-        contents,
-        generationConfig: geminiGenerationConfig(model, thinking)
-      })
-    },
-    timeoutMs,
-    provider: "gemini",
-    model
-  });
+      timeoutMs,
+      provider: "gemini",
+      model: candidate
+    });
+    if (!upstreamResult.error) break;
+    const upstreamStatus = upstreamResult.error.body?.upstreamStatus;
+    if (upstreamStatus !== 404 && upstreamStatus !== 422) break;
+  }
   if (upstreamResult.error) return upstreamResult.error;
   const rawText = extractText(upstreamResult.data?.candidates?.[0]?.content?.parts);
   if (!rawText) {
@@ -3136,15 +3153,20 @@ async function callGemini({ fetchImpl, apiKey, model, messages, language, thinki
     );
   }
   const parsed = extractSuggestions(rawText, language);
-  return result(200, {
+  const body = {
     text: parsed.text || rawText,
     suggestions: parsed.suggestions,
-    model,
+    model: usedModel,
     provider: PROVIDER_NAMES.gemini,
     lang: language,
     thinking,
     fallback: false
-  });
+  };
+  if (usedModel !== model) {
+    body.requestedModel = model;
+    body.modelFallback = true;
+  }
+  return result(200, body);
 }
 async function callArena({ fetchImpl, apiKey, model, messages, language, thinking = DEFAULT_THINKING_LEVEL, timeoutMs }) {
   const headers = {
@@ -3587,6 +3609,21 @@ function createDiagnosticsHandler({
         entry.ms = outcome.ms;
         entry.reachable = outcome.reachable;
         if (outcome.reason) entry.reason = outcome.reason;
+        if (provider === "gemini" && (outcome.status === 404 || outcome.status === 422) && models.gemini !== DEFAULT_GEMINI_MODEL) {
+          entry.modelInvalid = true;
+          entry.hint = `NOVA_GEMINI_MODEL="${models.gemini}" is not a Gemini model id. Set it to a real one (for example ${DEFAULT_GEMINI_MODEL}) or unset it.`;
+          const retry = await probe({ fetchImpl, provider, keys, models: { ...models, gemini: DEFAULT_GEMINI_MODEL }, secrets, timeoutMs, now });
+          entry.fallbackModel = {
+            model: DEFAULT_GEMINI_MODEL,
+            ok: retry.ok,
+            httpStatus: retry.status,
+            code: retry.code,
+            ms: retry.ms
+          };
+          if (retry.ok) {
+            entry.hint += ` The default model answered, so the API key itself still works and chat falls back to ${DEFAULT_GEMINI_MODEL}.`;
+          }
+        }
         if (outcome.code === "AI_TIMEOUT" || outcome.code === "UPSTREAM_NETWORK_ERROR" || outcome.code === "PROVIDER_UNAVAILABLE") {
           const check = await validateKey({
             fetchImpl,
@@ -4583,7 +4620,7 @@ Explanation to translate: "${explanation}"`;
       let parsedResult = null;
       try {
         const geminiCall = ai2.models.generateContent({
-          model: "gemini-3.8-flash",
+          model: DEFAULT_GEMINI_MODEL,
           contents: prompt,
           config: {
             responseMimeType: "application/json",
@@ -11518,7 +11555,7 @@ function buildProviders(env, fetchImpl) {
       label: "Google Gemini",
       kind: "cloud",
       baseUrl: "https://generativelanguage.googleapis.com/v1beta",
-      defaultModel: env.NOVA_GEMINI_MODEL || "gemini-3.8-flash",
+      defaultModel: env.NOVA_GEMINI_MODEL || "gemini-flash-latest",
       capabilities: {
         stream: false,
         json: true,
@@ -11530,7 +11567,7 @@ function buildProviders(env, fetchImpl) {
         local: false
       },
       configured: () => Boolean(geminiKey),
-      preferredModel: () => env.NOVA_GEMINI_MODEL || "gemini-3.8-flash",
+      preferredModel: () => env.NOVA_GEMINI_MODEL || "gemini-flash-latest",
       models: async () => {
         const response = await fetchImpl(
           `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(geminiKey)}`
