@@ -221,3 +221,42 @@ test('a same-origin request is echoed back so the browser will read the body', a
     server.close();
   }
 });
+
+test('upstream NASA payloads never carry the api_key back to the client', async () => {
+  const { redactApiKeys } = await import('../server/nasaRoutes.ts');
+
+  const payload = {
+    element_count: 1,
+    links: {
+      next: 'http://api.nasa.gov/neo/rest/v1/feed?start_date=2026-11-15&api_key=gO6U24oJyJXepNqHc2DHk4qKYrHE6Ddj8EaNvCa7',
+      self: 'http://api.nasa.gov/neo/rest/v1/feed?api_key=SECRETVALUE&detailed=false',
+    },
+    near_earth_objects: { '2026-11-09': [{ name: '(1998 VE31)', nasa_jpl_url: 'https://ssd.jpl.nasa.gov/tools/sbdb_lookup.html#/?sstr=3092201' }] },
+  };
+
+  const clean = redactApiKeys(payload);
+  const text = JSON.stringify(clean);
+  assert.equal(/SECRETVALUE|gO6U24o/.test(text), false, 'no key material survives redaction');
+  assert.match(clean.links.self, /api_key=\[redacted\]/);
+  assert.match(clean.links.next, /start_date=2026-11-15/, 'the rest of the URL is preserved');
+  assert.equal(clean.element_count, 1);
+  assert.equal(clean.near_earth_objects['2026-11-09'][0].name, '(1998 VE31)');
+
+  // Payloads without a key are returned by reference, not copied.
+  const plain = { title: 'APOD' };
+  assert.equal(redactApiKeys(plain), plain);
+  assert.equal(redactApiKeys(null), null);
+
+  // The served body is what actually leaked, so check the live route too.
+  const { server, base } = await startServer();
+  try {
+    const response = await fetch(`${base}/api/asteroids/neows`, {
+      headers: { Accept: 'application/json' },
+      signal: AbortSignal.timeout(20_000),
+    });
+    const body = await response.text();
+    assert.equal(/api_key=(?!\[redacted\])/.test(body), false, 'the served body is key-free');
+  } finally {
+    server.close();
+  }
+});
