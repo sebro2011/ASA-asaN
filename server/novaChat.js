@@ -13,11 +13,11 @@ import {
 export const OPENROUTER_CHAT_COMPLETIONS_URL = 'https://openrouter.ai/api/v1/chat/completions';
 export const GEMINI_GENERATE_CONTENT_URL = 'https://generativelanguage.googleapis.com/v1beta/models';
 export const OPENROUTER_FREE_MODEL = 'openrouter/free';
-// `gemini-3.8-flash` never existed on the Gemini API: every call returned 404
-// NOT_FOUND, which surfaced as a "timeout" for months. `gemini-flash-latest` is
-// Google's own alias for the current Flash model, so it does not rot the way a
-// pinned version does; the second id is a pinned, long-lived fallback.
-export const DEFAULT_GEMINI_MODEL = 'gemini-flash-latest';
+// Verified against the live API: `gemini-3.8-flash` is a real model — a bad id
+// answers 404 NOT_FOUND, while this one answers 503 "high demand". So the id
+// stays, and the fallbacks below exist only for the case where the API starts
+// rejecting it (retired ids) — `gemini-flash-latest` is Google's moving alias.
+export const DEFAULT_GEMINI_MODEL = 'gemini-3.8-flash';
 export const GEMINI_MODEL_FALLBACKS = ['gemini-flash-latest', 'gemini-2.5-flash'];
 
 // A configured model id that the API does not know is a configuration error, not
@@ -26,7 +26,9 @@ export const GEMINI_MODEL_FALLBACKS = ['gemini-flash-latest', 'gemini-2.5-flash'
 export function geminiModelCandidates(model) {
   const requested = String(model || '').trim();
   const candidates = requested ? [requested] : [];
-  for (const fallback of GEMINI_MODEL_FALLBACKS) {
+  // The pinned default comes before the moving alias: if a configured id turns
+  // out to be retired, the known-good versioned id is the better first answer.
+  for (const fallback of [DEFAULT_GEMINI_MODEL, ...GEMINI_MODEL_FALLBACKS]) {
     if (!candidates.includes(fallback)) candidates.push(fallback);
   }
   return candidates;
@@ -506,6 +508,7 @@ async function callGemini({ fetchImpl, apiKey, model, messages, language, thinki
     parts: [{ text: message.content }],
   }));
   let upstreamResult = null;
+  let firstError = null;
   let usedModel = model;
   for (const candidate of geminiModelCandidates(model)) {
     usedModel = candidate;
@@ -530,12 +533,16 @@ async function callGemini({ fetchImpl, apiKey, model, messages, language, thinki
       model: candidate,
     });
     if (!upstreamResult.error) break;
-    // Only a missing model id deserves another attempt. A 429, a rejected key or
-    // an upstream 5xx must be reported as it is, not retried against other ids.
+    if (!firstError) firstError = upstreamResult.error;
+    // Only a missing or withdrawn model id deserves another attempt. A 429, a
+    // rejected key or an upstream 5xx must be reported as it is, not retried
+    // against other ids.
     const upstreamStatus = upstreamResult.error.body?.upstreamStatus;
     if (upstreamStatus !== 404 && upstreamStatus !== 422) break;
   }
-  if (upstreamResult.error) return upstreamResult.error;
+  // Report the configured model's error, not the last fallback's: "your model is
+  // overloaded" is the truth, "the alias 404'd" is an artefact of the retry.
+  if (upstreamResult.error) return firstError || upstreamResult.error;
 
   const rawText = extractText(upstreamResult.data?.candidates?.[0]?.content?.parts);
   if (!rawText) {

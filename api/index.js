@@ -1027,7 +1027,7 @@ earthRouter.get("/firms/hotspots", rateLimit("firms", 30, 6e4), async (req, res)
   }
 });
 var aiClient = process.env.GEMINI_API_KEY ? new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY, httpOptions: { headers: { "User-Agent": "nasa-space-explorer-earth-lab" } } }) : null;
-var ANALYST_MODEL = "gemini-flash-latest";
+var ANALYST_MODEL = "gemini-3.8-flash";
 var ANALYST_SYSTEM_INSTRUCTION = `You are the Earth Science Analyst inside the NASA Space Explorer Earth Intelligence Lab.
 
 Absolute rules:
@@ -2719,12 +2719,12 @@ function publicThinkingCatalog({ onlineConfigured = false, env = {} } = {}) {
 var OPENROUTER_CHAT_COMPLETIONS_URL = "https://openrouter.ai/api/v1/chat/completions";
 var GEMINI_GENERATE_CONTENT_URL = "https://generativelanguage.googleapis.com/v1beta/models";
 var OPENROUTER_FREE_MODEL = "openrouter/free";
-var DEFAULT_GEMINI_MODEL = "gemini-flash-latest";
+var DEFAULT_GEMINI_MODEL = "gemini-3.8-flash";
 var GEMINI_MODEL_FALLBACKS = ["gemini-flash-latest", "gemini-2.5-flash"];
 function geminiModelCandidates(model) {
   const requested = String(model || "").trim();
   const candidates = requested ? [requested] : [];
-  for (const fallback of GEMINI_MODEL_FALLBACKS) {
+  for (const fallback of [DEFAULT_GEMINI_MODEL, ...GEMINI_MODEL_FALLBACKS]) {
     if (!candidates.includes(fallback)) candidates.push(fallback);
   }
   return candidates;
@@ -3117,6 +3117,7 @@ async function callGemini({ fetchImpl, apiKey, model, messages, language, thinki
     parts: [{ text: message.content }]
   }));
   let upstreamResult = null;
+  let firstError = null;
   let usedModel = model;
   for (const candidate of geminiModelCandidates(model)) {
     usedModel = candidate;
@@ -3141,10 +3142,11 @@ async function callGemini({ fetchImpl, apiKey, model, messages, language, thinki
       model: candidate
     });
     if (!upstreamResult.error) break;
+    if (!firstError) firstError = upstreamResult.error;
     const upstreamStatus = upstreamResult.error.body?.upstreamStatus;
     if (upstreamStatus !== 404 && upstreamStatus !== 422) break;
   }
-  if (upstreamResult.error) return upstreamResult.error;
+  if (upstreamResult.error) return firstError || upstreamResult.error;
   const rawText = extractText(upstreamResult.data?.candidates?.[0]?.content?.parts);
   if (!rawText) {
     return withProvider(
@@ -3609,19 +3611,23 @@ function createDiagnosticsHandler({
         entry.ms = outcome.ms;
         entry.reachable = outcome.reachable;
         if (outcome.reason) entry.reason = outcome.reason;
-        if (provider === "gemini" && (outcome.status === 404 || outcome.status === 422) && models.gemini !== DEFAULT_GEMINI_MODEL) {
-          entry.modelInvalid = true;
-          entry.hint = `NOVA_GEMINI_MODEL="${models.gemini}" is not a Gemini model id. Set it to a real one (for example ${DEFAULT_GEMINI_MODEL}) or unset it.`;
-          const retry = await probe({ fetchImpl, provider, keys, models: { ...models, gemini: DEFAULT_GEMINI_MODEL }, secrets, timeoutMs, now });
+        const alternativeModel = [...GEMINI_MODEL_FALLBACKS, DEFAULT_GEMINI_MODEL].find((candidate) => candidate !== models.gemini);
+        if (provider === "gemini" && !outcome.ok && alternativeModel) {
+          const modelMissing = outcome.status === 404 || outcome.status === 422;
+          if (modelMissing) {
+            entry.modelInvalid = true;
+            entry.hint = `NOVA_GEMINI_MODEL="${models.gemini}" is not a Gemini model id. Set it to a real one (for example ${DEFAULT_GEMINI_MODEL}) or unset it.`;
+          }
+          const retry = await probe({ fetchImpl, provider, keys, models: { ...models, gemini: alternativeModel }, secrets, timeoutMs, now });
           entry.fallbackModel = {
-            model: DEFAULT_GEMINI_MODEL,
+            model: alternativeModel,
             ok: retry.ok,
             httpStatus: retry.status,
             code: retry.code,
             ms: retry.ms
           };
           if (retry.ok) {
-            entry.hint += ` The default model answered, so the API key itself still works and chat falls back to ${DEFAULT_GEMINI_MODEL}.`;
+            entry.hint = `${entry.hint ? `${entry.hint} ` : ""}${alternativeModel} answered with the same key, so this is a model problem and not a key problem \u2014 ${alternativeModel} works today.`;
           }
         }
         if (outcome.code === "AI_TIMEOUT" || outcome.code === "UPSTREAM_NETWORK_ERROR" || outcome.code === "PROVIDER_UNAVAILABLE") {
@@ -3681,6 +3687,21 @@ function redactApiKeys(payload) {
   } catch {
     return payload;
   }
+}
+function apodFallbackHint({ failureKind, upstreamStatus, usingDemoKey }) {
+  if (usingDemoKey) {
+    return "No NASA_API_KEY is configured, so the shared DEMO_KEY is used and rate limits are expected. Set NASA_API_KEY to restore live images.";
+  }
+  if (failureKind === "upstream" && typeof upstreamStatus === "number" && upstreamStatus >= 500) {
+    return `api.nasa.gov answered HTTP ${upstreamStatus} for the astronomy picture. The key is in use and works for other NASA endpoints; the bundled reference entry is shown until the upstream recovers.`;
+  }
+  if (failureKind === "rate-limited") {
+    return `api.nasa.gov refused the request with HTTP ${upstreamStatus} (rate limit or key restriction). The bundled reference entry is shown.`;
+  }
+  if (failureKind === "shape") {
+    return "api.nasa.gov answered, but not with a usable picture entry. The bundled reference entry is shown.";
+  }
+  return "api.nasa.gov did not answer in time; the bundled reference entry is shown.";
 }
 var translationCache = /* @__PURE__ */ new Map();
 var apodCache = /* @__PURE__ */ new Map();
@@ -4183,7 +4204,7 @@ function setupNasaRoutes(app2, ai2) {
       fallbackReason: failureKind,
       upstreamStatus: upstreamStatus || void 0,
       keySource: usingDemoKey ? "DEMO_KEY" : "configured",
-      hint: usingDemoKey ? "No NASA_API_KEY is configured, so the shared DEMO_KEY is used and rate limits are expected. Set NASA_API_KEY to restore live images." : "The configured NASA_API_KEY was rejected or the API was unreachable; the bundled reference entry is shown."
+      hint: apodFallbackHint({ failureKind, upstreamStatus, usingDemoKey })
     });
   });
   app2.get("/api/asteroids/neows", async (req, res) => {
@@ -11555,7 +11576,7 @@ function buildProviders(env, fetchImpl) {
       label: "Google Gemini",
       kind: "cloud",
       baseUrl: "https://generativelanguage.googleapis.com/v1beta",
-      defaultModel: env.NOVA_GEMINI_MODEL || "gemini-flash-latest",
+      defaultModel: env.NOVA_GEMINI_MODEL || "gemini-3.8-flash",
       capabilities: {
         stream: false,
         json: true,
@@ -11567,7 +11588,7 @@ function buildProviders(env, fetchImpl) {
         local: false
       },
       configured: () => Boolean(geminiKey),
-      preferredModel: () => env.NOVA_GEMINI_MODEL || "gemini-flash-latest",
+      preferredModel: () => env.NOVA_GEMINI_MODEL || "gemini-3.8-flash",
       models: async () => {
         const response = await fetchImpl(
           `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(geminiKey)}`

@@ -636,7 +636,7 @@ function buildProviders(env, fetchImpl) {
       label: 'Google Gemini',
       kind: 'cloud',
       baseUrl: 'https://generativelanguage.googleapis.com/v1beta',
-      defaultModel: env.NOVA_GEMINI_MODEL || 'gemini-flash-latest',
+      defaultModel: env.NOVA_GEMINI_MODEL || 'gemini-3.8-flash',
       capabilities: {
         stream: false,
         json: true,
@@ -648,7 +648,7 @@ function buildProviders(env, fetchImpl) {
         local: false,
       },
       configured: () => Boolean(geminiKey),
-      preferredModel: () => env.NOVA_GEMINI_MODEL || 'gemini-flash-latest',
+      preferredModel: () => env.NOVA_GEMINI_MODEL || 'gemini-3.8-flash',
       models: async () => {
         const response = await fetchImpl(
           `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(geminiKey)}`,

@@ -1287,10 +1287,10 @@ test('a configured model id the API rejects falls back, and says so', async () =
   const handler = createNovaChatHandler({
     getApiKey: () => '',
     getGeminiApiKey: () => TEST_API_KEY,
-    getGeminiModel: () => 'gemini-3.8-flash', // not a real id; the API 404s it
+    getGeminiModel: () => 'gemini-9.9-ultra', // no such model; the API 404s it
     fetchImpl: async (url) => {
       urls.push(String(url));
-      if (String(url).includes('gemini-3.8-flash')) {
+      if (String(url).includes('gemini-9.9-ultra')) {
         return {
           ok: false,
           status: 404,
@@ -1309,7 +1309,7 @@ test('a configured model id the API rejects falls back, and says so', async () =
 
   assert.equal(response.status, 200, 'the answer is real, not an error page');
   assert.equal(response.body.model, DEFAULT_GEMINI_MODEL, 'the answering model is reported');
-  assert.equal(response.body.requestedModel, 'gemini-3.8-flash', 'the configured id is not hidden');
+  assert.equal(response.body.requestedModel, 'gemini-9.9-ultra', 'the configured id is not hidden');
   assert.equal(response.body.modelFallback, true);
   assert.equal(urls.length, 2, 'one retry, not a loop');
   assert.match(urls[1], new RegExp(`${DEFAULT_GEMINI_MODEL}:generateContent`));
@@ -1320,7 +1320,7 @@ test('a rejected key is never retried against other model ids', async () => {
   const handler = createNovaChatHandler({
     getApiKey: () => '',
     getGeminiApiKey: () => TEST_API_KEY,
-    getGeminiModel: () => 'gemini-3.8-flash',
+    getGeminiModel: () => 'gemini-9.9-ultra',
     fetchImpl: async (url) => {
       urls.push(String(url));
       return { ok: false, status: 401, json: async () => ({ error: { code: 401, message: 'API key not valid' } }), text: async () => '{"error":{"code":401}}' };
@@ -1335,4 +1335,33 @@ test('a rejected key is never retried against other model ids', async () => {
   assert.equal(response.status, 503);
   assert.equal(response.body.code, 'PROVIDER_AUTH_ERROR');
   assert.equal(urls.length, 1, 'an auth failure is reported as it is');
+});
+
+test('an overloaded model (503) is reported as overloaded, not retried', async () => {
+  const urls = [];
+  const handler = createNovaChatHandler({
+    getApiKey: () => '',
+    getGeminiApiKey: () => TEST_API_KEY,
+    getGeminiModel: () => 'gemini-3.8-flash',
+    fetchImpl: async (url) => {
+      urls.push(String(url));
+      return {
+        ok: false,
+        status: 503,
+        json: async () => ({ error: { code: 503, message: 'This model is currently experiencing high demand.' } }),
+        text: async () => '{"error":{"code":503}}',
+      };
+    },
+  });
+  const response = await handler({
+    body: { lang: 'en', provider: 'gemini', messages: [{ role: 'user', content: 'hi' }] },
+    ip: '198.51.100.80',
+  });
+  // The user still gets an answer, from the local engine, and the chain names the
+  // real reason: the Gemini model was overloaded, not misconfigured.
+  assert.equal(response.status, 200);
+  assert.equal(response.body.fallback, true);
+  assert.equal(response.body.provider, 'NOVA Local Space Engine');
+  assert.deepEqual(response.body.fallbackChain[0], { provider: 'Google Gemini', code: 'PROVIDER_UNAVAILABLE', status: 503 });
+  assert.equal(urls.length, 1, 'capacity trouble is not a reason to try other model ids');
 });

@@ -33,11 +33,32 @@ The same information is in the app: **Settings → AI providers → Re-check**.
 | `PROVIDER_NOT_CONFIGURED` | no key in this deployment | add the env var, then redeploy |
 | `PROVIDER_AUTH_ERROR` (401/403) | key rejected | issue a new key in the provider's console |
 | `PROVIDER_CREDIT_REQUIRED` (402) | out of credit / free quota | top up, or stay on the local engine |
-| `PROVIDER_MODEL_NOT_FOUND` (404) | the model id is not available to this key | set `NOVA_*_MODEL` to a model the key may use |
+| `PROVIDER_MODEL_NOT_FOUND` (404) | the model id does not exist (or was withdrawn) | set `NOVA_*_MODEL` to a model the key may use |
 | `UPSTREAM_RATE_LIMITED` (429) | provider quota exhausted | wait; OpenRouter's free tier is 50 requests/day |
 | `PROVIDER_UNAVAILABLE` (5xx) | provider-side outage | retry later; Auto falls back to local |
 | `UPSTREAM_NETWORK_ERROR` | the function could not reach the host | check egress/DNS, not the key |
 | `AI_TIMEOUT` | no answer inside the budget | provider is slow; retry |
+
+### 404 is not 503 — and neither is a timeout
+
+Both used to arrive as `AI_TIMEOUT`, which is why "Gemini does not work" stayed
+unexplained for so long. They mean different things:
+
+| What the API said | Field | Meaning |
+| --- | --- | --- |
+| `404 NOT_FOUND` | `modelInvalid: true` | the configured model id does not exist — a configuration error, not an outage |
+| `503 UNAVAILABLE` | `code: PROVIDER_UNAVAILABLE` | the model exists and is overloaded right now — retry later, nothing to fix in config |
+| no answer | `keyValid` + `keyCheck` | the generation call was too slow; the separate metadata check says whether the key itself is fine |
+
+When the model is the problem, the probe also retries the default id and reports
+`fallbackModel`, so one report answers both questions: *is the key good?* and *is
+the model good?* In the app, **Settings → AI providers** shows the model problem
+on its own line, separately from a key problem, in English, Sinhala and Tamil.
+
+Measured on production `3a3c1a1` (2026-11-09 15:23 UTC):
+`gemini-3.8-flash` answered **503 "currently experiencing high demand"** while the
+key check against `GET /v1beta/models` answered **200** — a busy model with a
+healthy key, and the report said exactly that.
 
 ## 2. What NOVA does with a failure
 
@@ -48,13 +69,13 @@ The same information is in the app: **Settings → AI providers → Re-check**.
 * **An explicitly chosen provider** never falls back silently: it returns the
   real error code, and the chat surface shows it.
 
-## 3. Known issues on this deployment (checked 2026-11-06)
+## 3. Known issues on this deployment (checked 2026-11-09)
 
 | Provider | Observation |
 | --- | --- |
 | Arena | `ARENA_BASE_URL` is **not set**, so the code falls back to `https://api.arena.ai/v1/chat/completions` with model `arena_smart.aria`. Arena's own documentation shows the gateway at `https://api.arena.ai` (no `/v1`) with **workspace-specific model ids** (for example `coding-router-preview`). Neither the URL nor the model id has been confirmed for this key, so treat Arena as unverified until the probe says `OK`. |
 | OpenRouter | `openrouter/free` is a valid model id. The free tier is 20 requests/minute and **50 requests/day** (1,000/day after a one-off $10 top-up); a `429` here is a quota problem, not a broken key. |
-| Gemini | `gemini-3.8-flash` is the default (`gemini-2.5-flash` was retired for new keys — a `404 PROVIDER_MODEL_NOT_FOUND` names the replacement). A `400`/`403` usually means the key is invalid or restricted. |
+| Gemini | `gemini-3.8-flash` is the default and **exists** — verified live: a wrong id answers `404 NOT_FOUND`, this one answers `503 UNAVAILABLE` when it is busy. A `400`/`403` usually means the key is invalid or restricted. If the id is ever withdrawn, chat retries `gemini-flash-latest` then `gemini-2.5-flash`, reports which model answered (`model`), which was asked for (`requestedModel`) and `modelFallback: true`. |
 | Local | Always available; it is the bundled space-knowledge engine, not a model provider. |
 
 ## 4. Fixing Arena properly

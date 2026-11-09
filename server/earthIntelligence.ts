@@ -505,8 +505,9 @@ const aiClient = process.env.GEMINI_API_KEY
   ? new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY, httpOptions: { headers: { 'User-Agent': 'nasa-space-explorer-earth-lab' } } })
   : null;
 
-// `gemini-3.8-flash` is not a real model id; every analyst call 404'd.
-const ANALYST_MODEL = 'gemini-flash-latest';
+// Verified live: `gemini-3.8-flash` is a real id (a bad one answers 404, this
+// one answers 503 under load).
+const ANALYST_MODEL = 'gemini-3.8-flash';
 
 const ANALYST_SYSTEM_INSTRUCTION = `You are the Earth Science Analyst inside the NASA Space Explorer Earth Intelligence Lab.
 
