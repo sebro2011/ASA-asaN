@@ -32,6 +32,32 @@ export function redactApiKeys<T>(payload: T): T {
   }
 }
 
+export type ApodFailureKind = 'network' | 'rate-limited' | 'upstream' | 'shape';
+
+/**
+ * The hint has to name the *actual* cause. "Your key was rejected" was wrong for
+ * a 500 from api.nasa.gov, and a 3.5 s abort is not a rate limit either.
+ */
+export function apodFallbackHint({ failureKind, upstreamStatus, usingDemoKey }: {
+  failureKind: ApodFailureKind;
+  upstreamStatus?: number;
+  usingDemoKey: boolean;
+}): string {
+  if (usingDemoKey) {
+    return 'No NASA_API_KEY is configured, so the shared DEMO_KEY is used and rate limits are expected. Set NASA_API_KEY to restore live images.';
+  }
+  if (failureKind === 'upstream' && typeof upstreamStatus === 'number' && upstreamStatus >= 500) {
+    return `api.nasa.gov answered HTTP ${upstreamStatus} for the astronomy picture. The key is in use and works for other NASA endpoints; the bundled reference entry is shown until the upstream recovers.`;
+  }
+  if (failureKind === 'rate-limited') {
+    return `api.nasa.gov refused the request with HTTP ${upstreamStatus} (rate limit or key restriction). The bundled reference entry is shown.`;
+  }
+  if (failureKind === 'shape') {
+    return 'api.nasa.gov answered, but not with a usable picture entry. The bundled reference entry is shown.';
+  }
+  return 'api.nasa.gov did not answer in time; the bundled reference entry is shown.';
+}
+
 // In-memory translation cache: `${targetLang}_${hash}` -> { title, explanation }
 export const translationCache = new Map<string, { title: string; explanation: string }>();
 
@@ -602,9 +628,7 @@ export function setupNasaRoutes(app: any, ai: GoogleGenAI) {
       fallbackReason: failureKind,
       upstreamStatus: upstreamStatus || undefined,
       keySource: usingDemoKey ? 'DEMO_KEY' : 'configured',
-      hint: usingDemoKey
-        ? 'No NASA_API_KEY is configured, so the shared DEMO_KEY is used and rate limits are expected. Set NASA_API_KEY to restore live images.'
-        : 'The configured NASA_API_KEY was rejected or the API was unreachable; the bundled reference entry is shown.',
+      hint: apodFallbackHint({ failureKind, upstreamStatus, usingDemoKey }),
     });
   });
 

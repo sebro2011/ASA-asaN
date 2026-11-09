@@ -260,3 +260,26 @@ test('upstream NASA payloads never carry the api_key back to the client', async 
     server.close();
   }
 });
+
+test('the APOD fallback hint names the real cause, never a guess', async () => {
+  const { apodFallbackHint } = await import('../server/nasaRoutes.ts');
+
+  // Observed live: api.nasa.gov answered 500 while the same key worked for NeoWs.
+  const upstream = apodFallbackHint({ failureKind: 'upstream', upstreamStatus: 500, usingDemoKey: false });
+  assert.match(upstream, /HTTP 500/);
+  assert.match(upstream, /works for other NASA endpoints/);
+  assert.doesNotMatch(upstream, /rejected/, 'a 500 is not a rejected key');
+
+  const limited = apodFallbackHint({ failureKind: 'rate-limited', upstreamStatus: 429, usingDemoKey: false });
+  assert.match(limited, /HTTP 429/);
+  assert.match(limited, /rate limit/);
+
+  const slow = apodFallbackHint({ failureKind: 'network', upstreamStatus: 0, usingDemoKey: false });
+  assert.match(slow, /did not answer in time/);
+
+  const noKey = apodFallbackHint({ failureKind: 'rate-limited', upstreamStatus: 429, usingDemoKey: true });
+  assert.match(noKey, /DEMO_KEY/);
+
+  // Every branch still says the payload is the bundled reference entry.
+  for (const hint of [upstream, limited, slow]) assert.match(hint, /reference entry/);
+});

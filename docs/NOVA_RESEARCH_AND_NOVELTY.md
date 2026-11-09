@@ -75,7 +75,7 @@ above as a description of this codebase, not as a priority claim.
 ## 4. Open questions
 
 1. **Does evidence-gating change behaviour?** Without a live model in the loop we
-   can measure the gate (7/7 benchmark checks, 401 tests) but not whether a model
+   can measure the gate (7/7 benchmark checks, 479 tests) but not whether a model
    given feedback produces better plans. Needs an ablation with a real local
    model and a task suite.
 2. **How far does the glossary bridge generalise?** The `mem-si-cross` case

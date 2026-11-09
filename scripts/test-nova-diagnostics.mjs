@@ -310,47 +310,74 @@ test('probes run concurrently, so one slow model does not spend another budget',
   }
 });
 
-test('a bad NOVA_GEMINI_MODEL is named, not reported as a timeout', async () => {
+test('a bogus NOVA_GEMINI_MODEL is named, and the default is probed instead', async () => {
   const calls = [];
-  const impl = async (url, init) => {
+  const impl = async (url) => {
     calls.push(String(url));
-    // The bogus id 404s; the default id the handler retries answers normally.
-    if (String(url).includes('gemini-3.8-flash')) {
-      return { status: 404, ok: false, text: async () => '{"error":{"code":404,"message":"models/gemini-3.8-flash is not found"}}', json: async () => ({}) };
+    // A model id that does not exist: 404 NOT_FOUND. The default id answers.
+    if (String(url).includes('gemini-9.9-ultra')) {
+      return { status: 404, ok: false, text: async () => '{"error":{"code":404,"message":"models/gemini-9.9-ultra is not found"}}', json: async () => ({}) };
     }
     return { status: 200, ok: true, text: async () => '{"candidates":[]}', json: async () => ({ candidates: [] }) };
   };
 
   const handler = createDiagnosticsHandler({
     fetchImpl: impl,
-    env: envWith({ NOVA_GEMINI_MODEL: 'gemini-3.8-flash' }),
+    env: envWith({ NOVA_GEMINI_MODEL: 'gemini-9.9-ultra' }),
   });
   const report = await handler({ probe: true });
   const gemini = report.providers.gemini;
 
-  assert.equal(gemini.model, 'gemini-3.8-flash');
+  assert.equal(gemini.model, 'gemini-9.9-ultra');
   assert.equal(gemini.modelInvalid, true, 'the report says the model id is wrong');
   assert.equal(gemini.code, 'PROVIDER_MODEL_NOT_FOUND');
-  assert.match(gemini.hint, /gemini-flash-latest/, 'the hint names a real model id');
-  assert.equal(gemini.fallbackModel.model, 'gemini-flash-latest');
-  assert.equal(gemini.fallbackModel.ok, true, 'the retry proves the key still works');
-  assert.match(gemini.hint, /chat falls back/, 'and says what chat does about it');
-
-  const defaultCall = calls.find((url) => url.includes('gemini-flash-latest'));
-  assert.ok(defaultCall, 'the default model was actually probed');
-  assert.equal(calls.filter((url) => url.includes('gemini-3.8-flash')).length, 1, 'the bad id is tried once, not looped');
+  assert.match(gemini.hint, /is not a Gemini model id/);
+  assert.match(gemini.fallbackModel.model, /^gemini-/);
+  assert.equal(gemini.fallbackModel.ok, true, 'the retry proves another model works with this key');
+  assert.match(gemini.hint, /not a key problem/);
+  assert.equal(calls.filter((url) => url.includes('gemini-9.9-ultra')).length, 1, 'the bad id is tried once, not looped');
 });
 
-test('a default model id is not retried against itself', async () => {
+test('an overloaded model is reported as overloaded, not as a bad model id', async () => {
+  // This is what the live API actually said about the default model: 503, high
+  // demand. It must not be dressed up as a configuration error.
+  const impl = async () => ({
+    status: 503,
+    ok: false,
+    text: async () => '{"error":{"code":503,"message":"This model is currently experiencing high demand."}}',
+    json: async () => ({}),
+  });
+  const handler = createDiagnosticsHandler({ fetchImpl: impl, env: envWith() });
+  const report = await handler({ probe: true });
+  const gemini = report.providers.gemini;
+
+  assert.equal(gemini.code, 'PROVIDER_UNAVAILABLE');
+  assert.equal(gemini.httpStatus, 503);
+  assert.equal(gemini.modelInvalid, undefined, 'a valid but busy model is not "invalid"');
+});
+
+test('the busy default is compared against the alias, without probing the same id twice', async () => {
   const calls = [];
   const impl = async (url) => {
     calls.push(String(url));
-    return { status: 404, ok: false, text: async () => '{"error":"not found"}', json: async () => ({}) };
+    // The default model is overloaded; the alias is fine.
+    if (String(url).includes('gemini-3.8-flash')) {
+      return { status: 503, ok: false, text: async () => '{"error":{"code":503}}', json: async () => ({}) };
+    }
+    return { status: 200, ok: true, text: async () => '{"candidates":[]}', json: async () => ({ candidates: [] }) };
   };
   const handler = createDiagnosticsHandler({ fetchImpl: impl, env: envWith() });
   const report = await handler({ probe: true });
-  // envWith() sets no NOVA_GEMINI_MODEL, so the default is already in use.
-  assert.equal(report.providers.gemini.modelInvalid, undefined);
-  assert.equal(report.providers.gemini.fallbackModel, undefined);
-  assert.equal(calls.filter((url) => url.includes('/models/')).length, 1);
+  const gemini = report.providers.gemini;
+
+  // envWith() sets no NOVA_GEMINI_MODEL, so the default is what was probed.
+  assert.equal(gemini.modelInvalid, undefined, 'a busy model is not an invalid model');
+  assert.notEqual(gemini.fallbackModel.model, 'gemini-3.8-flash');
+  assert.equal(gemini.fallbackModel.ok, true);
+  assert.match(gemini.hint, /model problem and not a key problem/);
+
+  const modelUrls = calls.filter((url) => url.includes('/models/'));
+  assert.equal(new Set(modelUrls).size, modelUrls.length, 'no model id is probed twice');
 });
+
+
