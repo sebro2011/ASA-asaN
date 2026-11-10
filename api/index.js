@@ -2720,7 +2720,7 @@ var OPENROUTER_CHAT_COMPLETIONS_URL = "https://openrouter.ai/api/v1/chat/complet
 var GEMINI_GENERATE_CONTENT_URL = "https://generativelanguage.googleapis.com/v1beta/models";
 var OPENROUTER_FREE_MODEL = "openrouter/free";
 var DEFAULT_GEMINI_MODEL = "gemini-3.8-flash";
-var GEMINI_MODEL_FALLBACKS = ["gemini-flash-latest", "gemini-2.5-flash"];
+var GEMINI_MODEL_FALLBACKS = ["gemini-flash-latest", "gemini-2.5-pro", "gemini-2.5-flash-lite", "gemini-2.5-flash"];
 var GEMINI_RETRYABLE_MODEL_STATUSES = /* @__PURE__ */ new Set([404, 422, 503]);
 function geminiModelCandidates(model) {
   const requested = String(model || "").trim();
