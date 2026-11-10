@@ -18,7 +18,10 @@ export const OPENROUTER_FREE_MODEL = 'openrouter/free';
 // stays, and the fallbacks below exist only for the case where the API starts
 // rejecting it (retired ids) — `gemini-flash-latest` is Google's moving alias.
 export const DEFAULT_GEMINI_MODEL = 'gemini-3.8-flash';
-export const GEMINI_MODEL_FALLBACKS = ['gemini-flash-latest', 'gemini-2.5-flash'];
+// Ordered by what the deployed key can actually reach. `GET /v1beta/models`
+// lists 47 generateContent models for this key, so a refusal on one id says
+// nothing about the next; the list is short because every entry costs a request.
+export const GEMINI_MODEL_FALLBACKS = ['gemini-flash-latest', 'gemini-2.5-pro', 'gemini-2.5-flash-lite', 'gemini-2.5-flash'];
 
 // A model can answer 503 "currently experiencing high demand" while the key is
 // fine and other models still work — measured on production: `gemini-3.8-flash`
