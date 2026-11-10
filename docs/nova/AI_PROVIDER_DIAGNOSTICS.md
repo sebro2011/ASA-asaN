@@ -50,12 +50,26 @@ unexplained for so long. They mean different things:
 | `503 UNAVAILABLE` | `code: PROVIDER_UNAVAILABLE` | the model exists and is overloaded right now — retry later, nothing to fix in config |
 | no answer | `keyValid` + `keyCheck` | the generation call was too slow; the separate metadata check says whether the key itself is fine |
 
-When the model is the problem, the probe also retries the default id and reports
-`fallbackModel`, so one report answers both questions: *is the key good?* and *is
-the model good?* In the app, **Settings → AI providers** shows the model problem
-on its own line, separately from a key problem, in English, Sinhala and Tamil.
+When the model is the problem, the probe tries the other known ids and reports
+`fallbackModel` (the first that answered) plus `modelsTried`, so one report
+answers both questions: *is the key good?* and *is the model good?* It also lists
+the models the key may actually call (`availableModels`, `availableModelCount`,
+read from `GET /v1beta/models` and filtered to `generateContent`). In the app,
+**Settings → AI providers** shows the model problem and that list on their own
+lines, separately from a key problem, in English, Sinhala and Tamil.
 
-Measured on production `3a3c1a1` (2026-11-09 15:23 UTC):
+A `503` is treated as *model-scoped* in chat: it retries the other ids once
+(bounded by the request budget) and, if one answers, reports which `model`
+answered and `modelFallback: true`. If every id is refused the same way, the
+report says so — `Every model id tried was refused the same way … quota, billing
+or a project restriction` — instead of blaming the model id.
+
+Measured on production `bce50a1` (2026-11-10 13:53 UTC): both `gemini-3.8-flash`
+and `gemini-flash-latest` answered **503 "high demand"** (852 ms and 385 ms) while
+the key check answered **200 in 95 ms** — a healthy key in front of a refusing
+API, and that is now what the report says.
+
+Earlier, on `3a3c1a1` (2026-11-09 15:23 UTC):
 `gemini-3.8-flash` answered **503 "currently experiencing high demand"** while the
 key check against `GET /v1beta/models` answered **200** — a busy model with a
 healthy key, and the report said exactly that.

@@ -527,7 +527,9 @@ test('Auto falls back to the local engine when every configured online provider 
   const response = await handler({ body: sampleBody, ip: '198.51.100.32' });
 
   assert.equal(response.status, 200);
-  assert.deepEqual(attemptedProviders, ['openrouter', 'gemini']);
+  // Gemini may try more than one model id (a 503 is scoped to the model), so the
+  // chain is asserted per provider rather than per request.
+  assert.deepEqual([...new Set(attemptedProviders)], ['openrouter', 'gemini']);
   assert.equal(response.body.provider, 'NOVA Local Space Engine');
   assert.equal(response.body.model, 'nasa-local-engine');
   assert.equal(response.body.fallback, true);
@@ -1337,7 +1339,42 @@ test('a rejected key is never retried against other model ids', async () => {
   assert.equal(urls.length, 1, 'an auth failure is reported as it is');
 });
 
-test('an overloaded model (503) is reported as overloaded, not retried', async () => {
+test('an overloaded model (503) is retried once against another id, and labelled', async () => {
+  const urls = [];
+  const handler = createNovaChatHandler({
+    getApiKey: () => '',
+    getGeminiApiKey: () => TEST_API_KEY,
+    getGeminiModel: () => 'gemini-3.8-flash',
+    fetchImpl: async (url) => {
+      urls.push(String(url));
+      if (String(url).includes('gemini-3.8-flash')) {
+        // What the live API actually says about this model, measured 2026-11-10.
+        return {
+          ok: false,
+          status: 503,
+          json: async () => ({ error: { code: 503, message: 'This model is currently experiencing high demand.', status: 'UNAVAILABLE' } }),
+          text: async () => '{"error":{"code":503}}',
+        };
+      }
+      return { ok: true, status: 200, json: async () => ({ candidates: [{ content: { parts: [{ text: 'Real answer from the fallback model.' }] } }] }) };
+    },
+  });
+
+  const response = await handler({
+    body: { lang: 'en', provider: 'gemini', messages: [{ role: 'user', content: 'ISS altitude?' }] },
+    ip: '198.51.100.80',
+  });
+
+  assert.equal(response.status, 200);
+  assert.equal(response.body.provider, 'Google Gemini', 'the answer really came from Gemini');
+  assert.equal(response.body.requestedModel, 'gemini-3.8-flash');
+  assert.equal(response.body.modelFallback, true);
+  assert.notEqual(response.body.model, 'gemini-3.8-flash');
+  assert.match(response.body.text, /fallback model/);
+  assert.equal(urls.length, 2, 'one alternative, not a loop');
+});
+
+test('when every model id is refused the same way, the real error survives', async () => {
   const urls = [];
   const handler = createNovaChatHandler({
     getApiKey: () => '',
@@ -1355,13 +1392,15 @@ test('an overloaded model (503) is reported as overloaded, not retried', async (
   });
   const response = await handler({
     body: { lang: 'en', provider: 'gemini', messages: [{ role: 'user', content: 'hi' }] },
-    ip: '198.51.100.80',
+    ip: '198.51.100.81',
   });
+
   // The user still gets an answer, from the local engine, and the chain names the
-  // real reason: the Gemini model was overloaded, not misconfigured.
+  // first (configured) model's real reason: overloaded, not misconfigured.
   assert.equal(response.status, 200);
   assert.equal(response.body.fallback, true);
   assert.equal(response.body.provider, 'NOVA Local Space Engine');
   assert.deepEqual(response.body.fallbackChain[0], { provider: 'Google Gemini', code: 'PROVIDER_UNAVAILABLE', status: 503 });
-  assert.equal(urls.length, 1, 'capacity trouble is not a reason to try other model ids');
+  assert.ok(urls.length > 1, 'the other ids were tried before giving up');
 });
+

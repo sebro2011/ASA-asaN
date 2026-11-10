@@ -88,7 +88,7 @@ value is returned by any endpoint.
 npm run lint                    # tsc --noEmit
 npm run test:life               # 48 engine tests
 npm run test:workspace-intelligence   # 5 UI tests
-npm test                        # 479 tests total
+npm test                        # 482 tests total
 npm run build                   # bundle
 ```
 

@@ -472,6 +472,8 @@ test('an invalid model id is shown as a configuration problem, not an outage', a
         modelInvalid: true,
         hint: 'NOVA_GEMINI_MODEL="gemini-3.8-flash" is not a Gemini model id.',
         fallbackModel: { model: 'gemini-flash-latest', ok: true, httpStatus: 200, code: 'OK', ms: 410 },
+        modelsTried: ['gemini-3.8-flash', 'gemini-flash-latest'],
+        availableModels: ['gemini-3.8-flash', 'gemini-2.5-flash'],
       },
       arena: { provider: 'Arena AI', configured: false, endpoint: 'api.arena.ai', model: 'arena_smart.aria', status: 'not-configured', code: 'PROVIDER_NOT_CONFIGURED' },
       local: { provider: 'NOVA Local Space Engine', configured: true, endpoint: 'in-process', model: 'nasa-local-engine', status: 'ok', code: 'OK' },
@@ -488,6 +490,9 @@ test('an invalid model id is shown as a configuration problem, not an outage', a
     assert.ok(line, 'the model problem has its own line');
     assert.match(line.textContent, /configured model id does not exist/);
     assert.match(line.textContent, /fall back to the default model, which answered/);
+    const models = document.querySelector('[data-testid="ai-status-models-gemini"]');
+    assert.ok(models, 'the models this key may use are listed');
+    assert.match(models.textContent, /This key may use: gemini-3\.8-flash, gemini-2\.5-flash/);
     // It must not be dressed up as a key problem: no key verdict was reported.
     assert.equal(document.querySelector('[data-testid="ai-status-key-gemini"]'), null);
   } finally {

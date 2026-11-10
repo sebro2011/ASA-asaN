@@ -75,6 +75,40 @@ const KEY_CHECKS = {
   }),
 };
 
+/**
+ * Which models can this key actually call? A 503 on one id says nothing about
+ * the others, so on a Gemini failure the report lists what the key may use.
+ * Returns [] when the list cannot be read; never throws.
+ */
+async function listGeminiModels({ fetchImpl, key, secrets, timeoutMs, now }) {
+  if (!key) return [];
+  const started = now();
+  const controller = typeof AbortController === 'function' ? new AbortController() : null;
+  const timer = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
+  try {
+    const response = await fetchImpl('https://generativelanguage.googleapis.com/v1beta/models?pageSize=1000', {
+      method: 'GET',
+      headers: { 'x-goog-api-key': key },
+      ...(controller ? { signal: controller.signal } : {}),
+    });
+    const status = typeof response?.status === 'number' ? response.status : 0;
+    if (status < 200 || status >= 300 || typeof response.json !== 'function') return [];
+    const data = await response.json();
+    const models = Array.isArray(data?.models) ? data.models : [];
+    return models
+      .filter((model) => Array.isArray(model?.supportedGenerationMethods) && model.supportedGenerationMethods.includes('generateContent'))
+      .map((model) => String(model?.name || '').replace(/^models\//, ''))
+      .filter(Boolean)
+      .sort();
+  } catch {
+    return [];
+  } finally {
+    if (timer) clearTimeout(timer);
+    void started;
+    void secrets;
+  }
+}
+
 /** A provider-specific one-token request. Returns `{url, init}`. */
 function probeRequest(provider, { keys, models }) {
   if (provider === 'openrouter') {
@@ -318,23 +352,39 @@ export function createDiagnosticsHandler({
         // (a configuration error), while 503 says the model is overloaded. Name
         // the first, and in either case probe the alias so the report can say
         // whether a working model is reachable with this key.
-        const alternativeModel = [...GEMINI_MODEL_FALLBACKS, DEFAULT_GEMINI_MODEL].find((candidate) => candidate !== models.gemini);
-        if (provider === 'gemini' && !outcome.ok && alternativeModel) {
+        if (provider === 'gemini' && !outcome.ok) {
           const modelMissing = outcome.status === 404 || outcome.status === 422;
           if (modelMissing) {
             entry.modelInvalid = true;
             entry.hint = `NOVA_GEMINI_MODEL="${models.gemini}" is not a Gemini model id. Set it to a real one (for example ${DEFAULT_GEMINI_MODEL}) or unset it.`;
           }
-          const retry = await probe({ fetchImpl, provider, keys, models: { ...models, gemini: alternativeModel }, secrets, timeoutMs, now });
-          entry.fallbackModel = {
-            model: alternativeModel,
-            ok: retry.ok,
-            httpStatus: retry.status,
-            code: retry.code,
-            ms: retry.ms,
-          };
-          if (retry.ok) {
-            entry.hint = `${entry.hint ? `${entry.hint} ` : ''}${alternativeModel} answered with the same key, so this is a model problem and not a key problem — ${alternativeModel} works today.`;
+
+          // Try the other ids once each, in order, and keep the first that answers.
+          const alternatives = [...GEMINI_MODEL_FALLBACKS, DEFAULT_GEMINI_MODEL].filter((candidate) => candidate !== models.gemini);
+          const tried = [];
+          for (const candidate of alternatives) {
+            const retry = await probe({ fetchImpl, provider, keys, models: { ...models, gemini: candidate }, secrets, timeoutMs, now });
+            const attempt = { model: candidate, ok: retry.ok, httpStatus: retry.status, code: retry.code, ms: retry.ms };
+            tried.push(attempt);
+            if (retry.ok) {
+              entry.fallbackModel = attempt;
+              break;
+            }
+          }
+          if (!entry.fallbackModel && tried.length) entry.fallbackModel = tried[tried.length - 1];
+          entry.modelsTried = [models.gemini, ...tried.map((attempt) => attempt.model)];
+
+          if (entry.fallbackModel?.ok) {
+            entry.hint = `${entry.hint ? `${entry.hint} ` : ''}${entry.fallbackModel.model} answered with the same key, so this is a model problem and not a key problem — set NOVA_GEMINI_MODEL to it.`;
+          } else if (!modelMissing) {
+            entry.hint = `${entry.hint ? `${entry.hint} ` : ''}Every model id tried was refused the same way, so this is not a model-id problem: the key is valid but the API is refusing generation (quota, billing or a project restriction).`;
+          }
+
+          // The authoritative answer to "what can this key call?".
+          const available = await listGeminiModels({ fetchImpl, key: keys.gemini, secrets, timeoutMs: keyCheckTimeoutMs, now });
+          if (available.length) {
+            entry.availableModelCount = available.length;
+            entry.availableModels = available.slice(0, 12);
           }
         }
 
