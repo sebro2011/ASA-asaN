@@ -260,3 +260,37 @@ test('a video entry shows its still on the home panel', async () => {
     dom.window.close();
   }
 });
+
+test('the NASA logo is rejected as the day’s picture, and said so plainly', async () => {
+  const { isDegradedApodRecord, apodFallbackHint } = await import('../server/nasaRoutes.ts');
+
+  // Measured live on 2026-11-11: api.nasa.gov answered with this.
+  const degraded = {
+    date: '2026-11-10',
+    title: 'NASA Science',
+    url: 'https://science.nasa.gov/wp-content/themes/nasa-child/assets/images/nasa-logo@2x.png',
+    hdurl: 'https://science.nasa.gov/wp-content/themes/nasa-child/assets/images/nasa-logo@2x.png',
+    media_type: 'image',
+    explanation: 'Sometimes Saturn disappears…',
+  };
+  assert.equal(isDegradedApodRecord(degraded), true);
+
+  // A real entry is untouched.
+  const real = {
+    date: '2026-11-09',
+    title: 'Saturn and the Moon',
+    url: 'https://apod.nasa.gov/apod/image/2511/saturn.jpg',
+    hdurl: 'https://apod.nasa.gov/apod/image/2511/saturn_hd.jpg',
+    media_type: 'image',
+  };
+  assert.equal(isDegradedApodRecord(real), false);
+  assert.equal(isDegradedApodRecord(null), false);
+
+  // Only the logo URL, without the site title, is still degraded.
+  assert.equal(isDegradedApodRecord({ ...real, url: degraded.url }), true);
+
+  const hint = apodFallbackHint({ failureKind: 'degraded', upstreamStatus: 200, usingDemoKey: false });
+  assert.match(hint, /site logo/);
+  assert.match(hint, /reference entry/);
+  assert.doesNotMatch(hint, /did not answer in time/);
+});

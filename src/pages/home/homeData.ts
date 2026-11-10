@@ -51,7 +51,7 @@ export async function loadApod(signal: AbortSignal): Promise<Sourced<Apod>> {
     data?: Apod;
     isFallback?: boolean;
     cached?: boolean;
-    fallbackReason?: 'network' | 'rate-limited' | 'upstream' | 'shape';
+    fallbackReason?: 'network' | 'rate-limited' | 'upstream' | 'shape' | 'degraded';
     keySource?: 'DEMO_KEY' | 'configured';
   }>('/api/apod', signal);
   const apod = payload?.data;
@@ -60,7 +60,9 @@ export async function loadApod(signal: AbortSignal): Promise<Sourced<Apod>> {
     data: apod,
     state: payload.isFallback ? 'static' : payload.cached ? 'cached' : 'live',
     note: payload.isFallback
-      ? payload.fallbackReason === 'rate-limited'
+      ? payload.fallbackReason === 'degraded'
+        ? 'NASA answered with its own site logo instead of the day\u2019s image, so a curated archival image is shown. It is not today\u2019s official APOD.'
+        : payload.fallbackReason === 'rate-limited'
         ? payload.keySource === 'DEMO_KEY'
           ? 'The shared NASA DEMO_KEY is rate-limited, so a curated archival image is shown. It is not today’s official APOD; setting NASA_API_KEY restores the live feed.'
           : 'The NASA API rejected the request (rate limit or quota), so a curated archival image is shown. It is not today’s official APOD.'
