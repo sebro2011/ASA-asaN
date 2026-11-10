@@ -220,3 +220,31 @@ Two ways to check an endpoint until that build is live:
 fetch('/api/nova/config').then(r => r.json()).then(j => console.log(JSON.stringify(j)));
 fetch('/api/nova/diagnostics?probe=1').then(r => r.json()).then(j => console.log(JSON.stringify(j, null, 2)));
 ```
+
+## 5. APOD media — what "the image does not render" actually means
+
+Four different failures look identical on screen, and only one of them is a
+network error. `GET /api/apod` now names each of them:
+
+| `fallbackReason` | Meaning |
+| --- | --- |
+| `network` | api.nasa.gov did not answer inside 8 s (the browser client waits 12 s, so it never gives up first) |
+| `upstream` | api.nasa.gov answered with a 5xx |
+| `rate-limited` | 429/403 — quota or a restricted key |
+| `shape` | answered 200 but without a usable picture entry |
+| `degraded` | answered 200 with **its own site logo** (`nasa-logo`, `science.nasa.gov/wp-content/themes/…`) and the site title `NASA Science` — measured live on 2026-11-11 while NASA migrates the APOD service |
+
+Media handling that used to fail silently:
+
+* `http://apod.nasa.gov/...` URLs (still returned for older entries) are upgraded
+  to `https://` on the server and in the browser client — an HTTPS page blocks
+  them as mixed content, which is the classic "valid response, blank image".
+* `media_type: "video"` is no longer put into an `<iframe>`: YouTube *watch* and
+  `youtu.be` URLs are rewritten to `/embed/`, direct `.mp4` files use `<video>`,
+  unembeddable players fall back to `thumbnail_url` plus a link.
+* every `<img>` walks `hdurl → url → thumbnail_url` and then states the failure
+  and links to the original, instead of leaving an empty panel.
+* the bundled fixtures are never seeded into the APOD cache, so a placeholder is
+  always labelled `isFallback` and never `cached`.
+
+Tests: `scripts/test-apod-media.mjs` (12 cases, including two jsdom renders).

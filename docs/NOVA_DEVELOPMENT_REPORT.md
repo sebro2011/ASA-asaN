@@ -47,7 +47,7 @@ with `status: live`. Copy in English, Sinhala and Tamil (`wsIntel*`, 104 keys).
 RLS, 4 policies each) and `20261108_nova_life_rollback.sql`.
 
 **Tests** — 6 new suites, 48 engine tests + 5 UI tests, all registered in
-`package.json`; `npm test` runs 482 tests in total.
+`package.json`; `npm test` runs 494 tests in total.
 
 ## 3. The 20 required points
 
@@ -78,7 +78,7 @@ RLS, 4 policies each) and `20261108_nova_life_rollback.sql`.
 
 | # | Criterion | Verdict | How it is checked |
 | --- | --- | --- | --- |
-| 1 | Existing features and integrations still work | ✅ | 482/482 tests, including every pre-existing suite; `test:workspace-shell` still pins routes and copy |
+| 1 | Existing features and integrations still work | ✅ | 494/494 tests, including every pre-existing suite; `test:workspace-shell` still pins routes and copy |
 | 2 | No working provider removed, no conversations or saved data deleted | ✅ | additive diff; no migration drops a non-`life_*` table |
 | 3 | No mock data, no fake AI activity, no invented metrics in the product | ✅ | UI has no fixtures; error paths render engine codes; benchmark seeds its own data |
 | 4 | An LLM cannot approve its own claim | ✅ | `user_approvals` written only by `security.decide()`; verification needs checks |

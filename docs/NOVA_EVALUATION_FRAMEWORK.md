@@ -9,7 +9,7 @@ Both report measured numbers; neither fabricates a pass rate.
 ## 1. Test inventory
 
 `npm test` = `npm run lint` (`tsc --noEmit`) followed by 34 Node test scripts.
-Last full run on this branch: **482 tests, 482 passed, 0 failed**, exit 0.
+Last full run on this branch: **494 tests, 494 passed, 0 failed**, exit 0.
 
 | Suite | Tests | What it proves |
 | --- | --- | --- |
