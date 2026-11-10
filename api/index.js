@@ -44,7 +44,6 @@ import { GoogleGenAI as GoogleGenAI3 } from "@google/genai";
 
 // server/earthIntelligence.ts
 import express from "express";
-import { GoogleGenAI, Type } from "@google/genai";
 
 // src/lib/earth/domains.ts
 function isIsoDate(value) {
@@ -639,6 +638,838 @@ function parsePowerResponse(payload, requested) {
   };
 }
 
+// server/earth/localAnalysis.ts
+var SEASONS = [
+  { season: "DJF (Dec\u2013Feb)", months: [12, 1, 2] },
+  { season: "MAM (Mar\u2013May)", months: [3, 4, 5] },
+  { season: "JJA (Jun\u2013Aug)", months: [6, 7, 8] },
+  { season: "SON (Sep\u2013Nov)", months: [9, 10, 11] }
+];
+var ANOMALY_BASELINE_YEARS = 5;
+function round(value, digits = 2) {
+  const factor = 10 ** digits;
+  return Math.round(value * factor) / factor;
+}
+function mean(values2) {
+  if (!values2.length) return null;
+  return values2.reduce((total, value) => total + value, 0) / values2.length;
+}
+function isUsable(value) {
+  return typeof value === "number" && Number.isFinite(value) && value > -900;
+}
+function daysInMonth(month) {
+  const [year, mon] = month.split("-").map(Number);
+  if (!year || !mon) return 30;
+  return new Date(Date.UTC(year, mon, 0)).getUTCDate();
+}
+function isRatePerDay(unit) {
+  return Boolean(unit && /\/\s*day/i.test(unit));
+}
+function analyseSeries(series) {
+  const unit = series.unit || "";
+  const dates = Array.isArray(series.dates) ? series.dates : [];
+  const values2 = Array.isArray(series.values) ? series.values : [];
+  const usable = [];
+  const missingMonths = [];
+  dates.forEach((month, index) => {
+    const value = values2[index];
+    if (isUsable(value)) usable.push({ month, value });
+    else missingMonths.push(month);
+  });
+  const numbers = usable.map((entry) => entry.value);
+  const overallMean = mean(numbers);
+  let min = null;
+  let max = null;
+  for (const entry of usable) {
+    if (!min || entry.value < min.value) min = entry;
+    if (!max || entry.value > max.value) max = entry;
+  }
+  const byYear = /* @__PURE__ */ new Map();
+  for (const entry of usable) {
+    const year = Number(entry.month.slice(0, 4));
+    if (!Number.isFinite(year)) continue;
+    if (!byYear.has(year)) byYear.set(year, []);
+    byYear.get(year).push(entry);
+  }
+  const annual = [...byYear.entries()].sort((a, b) => a[0] - b[0]).map(([year, entries]) => ({
+    year,
+    mean: entries.length === 12 ? round(mean(entries.map((entry) => entry.value)), 3) : null,
+    complete: entries.length === 12
+  }));
+  const complete = annual.filter((entry) => entry.complete && entry.mean !== null);
+  const baselineCount = Math.min(ANOMALY_BASELINE_YEARS, Math.max(0, complete.length - 1));
+  const baselineYears = complete.slice(0, baselineCount).map((entry) => entry.year);
+  const baselineValue = baselineCount ? round(mean(complete.slice(0, baselineCount).map((entry) => entry.mean)), 3) : null;
+  const comparison = baselineValue !== null ? complete.slice(baselineCount) : [];
+  const spanText = baselineYears.length === 1 ? `${baselineYears[0]}` : `${baselineYears[0]}\u2013${baselineYears[baselineYears.length - 1]}`;
+  const anomaly = baselineValue !== null && comparison.length ? {
+    baselineLabel: `mean of the ${baselineCount === 1 ? "single" : `first ${baselineCount}`} complete year${baselineCount === 1 ? "" : "s"} in the retrieved window (${spanText}); this is not the WMO 1991\u20132020 normal`,
+    baselineYears,
+    baselineValue,
+    points: comparison.map((entry) => ({ year: entry.year, anomaly: round(entry.mean - baselineValue, 3) })),
+    latest: { year: comparison[comparison.length - 1].year, anomaly: round(comparison[comparison.length - 1].mean - baselineValue, 3) }
+  } : null;
+  const seasonal = SEASONS.map(({ season, months }) => {
+    const entries = usable.filter((entry) => months.includes(Number(entry.month.slice(5, 7))));
+    return {
+      season,
+      months,
+      mean: entries.length ? round(mean(entries.map((entry) => entry.value)), 3) : null,
+      count: entries.length
+    };
+  });
+  const monthlyTotals = isRatePerDay(unit) ? usable.map((entry) => ({ month: entry.month, total: round(entry.value * daysInMonth(entry.month), 2) })) : null;
+  let periodComparison = null;
+  if (usable.length >= 4) {
+    const midpoint = Math.ceil(usable.length / 2);
+    const first = usable.slice(0, midpoint);
+    const second = usable.slice(midpoint);
+    const firstMean = mean(first.map((entry) => entry.value));
+    const secondMean = mean(second.map((entry) => entry.value));
+    if (firstMean !== null && secondMean !== null) {
+      periodComparison = {
+        firstLabel: `${first[0].month} \u2192 ${first[first.length - 1].month}`,
+        secondLabel: `${second[0].month} \u2192 ${second[second.length - 1].month}`,
+        firstMean: round(firstMean, 3),
+        secondMean: round(secondMean, 3),
+        absoluteChange: round(secondMean - firstMean, 3),
+        // A percentage change from a near-zero baseline is meaningless, so it is
+        // withheld rather than printed as an enormous number.
+        percentChange: Math.abs(firstMean) < 1e-6 ? null : round((secondMean - firstMean) / Math.abs(firstMean) * 100, 2)
+      };
+    }
+  }
+  return {
+    code: series.code,
+    unit,
+    count: usable.length,
+    missing: missingMonths.length,
+    missingMonths,
+    firstMonth: usable[0]?.month ?? null,
+    lastMonth: usable[usable.length - 1]?.month ?? null,
+    mean: overallMean === null ? null : round(overallMean, 3),
+    min: min ? { value: round(min.value, 3), month: min.month } : null,
+    max: max ? { value: round(max.value, 3), month: max.month } : null,
+    annual,
+    anomaly,
+    seasonal,
+    monthlyTotals,
+    periodComparison
+  };
+}
+function analyseBundle(context) {
+  const raw = Array.isArray(context.power?.series) ? context.power.series : [];
+  const series = raw.filter((entry) => entry && typeof entry.code === "string").map((entry) => analyseSeries({ code: entry.code, unit: entry.unit, dates: entry.dates || [], values: entry.values || [] }));
+  const analysed = series.reduce((total, entry) => total + entry.count, 0);
+  const missingCells = series.reduce((total, entry) => total + entry.missing, 0);
+  const notes = [];
+  if (!raw.length) notes.push("The request carried no monthly series, so no statistic could be computed.");
+  if (missingCells > 0) notes.push(`${missingCells} month/parameter cells had no usable value and were excluded from every statistic.`);
+  return {
+    series,
+    coverage: raw.length ? { requested: analysed + missingCells, analysed, missingCells } : null,
+    notes
+  };
+}
+var LABELS = {
+  T2M: "Air temperature at 2 m",
+  PRECTOTCORR: "Precipitation",
+  RH2M: "Relative humidity at 2 m",
+  WS2M: "Wind speed at 2 m",
+  ALLSKY_SFC_SW_DWN: "All-sky surface shortwave irradiance",
+  T2M_MAX: "Maximum air temperature at 2 m",
+  T2M_MIN: "Minimum air temperature at 2 m"
+};
+function seriesLabel(code) {
+  return LABELS[code] || code;
+}
+function fmt(value, digits = 2) {
+  return typeof value === "number" && Number.isFinite(value) ? value.toFixed(digits) : "not available";
+}
+function buildLocalAnalystAnswer(question, context, options = {}) {
+  const analysis = options.analysis || analyseBundle(context);
+  const verified = [];
+  const derived = [];
+  const interpretation = [];
+  const limitations2 = [];
+  const gaps = [...Array.isArray(context.dataGaps) ? context.dataGaps : []];
+  const evidence = [];
+  const place = context.power?.place || context.area?.label || "the selected point";
+  const lat = context.power?.latitude ?? context.area?.latitude;
+  const lon = context.power?.longitude ?? context.area?.longitude;
+  verified.push(
+    `Study area: ${place}${typeof lat === "number" && typeof lon === "number" ? ` at ${lat.toFixed(4)}\xB0, ${lon.toFixed(4)}\xB0 (WGS84)` : ""}. Observation date(s) in view: ${Array.isArray(context.dates) && context.dates.length ? context.dates.join(", ") : "none selected"}.`
+  );
+  if (context.power) {
+    verified.push(
+      `NASA POWER monthly archive retrieved through ${context.power.from || "unknown"} \u2192 ${context.power.to || "unknown"} (${context.power.months ?? "unknown"} monthly records; dataset ${context.power.sourceUrl || "not reported"}).`
+    );
+  }
+  if (Array.isArray(context.power?.unavailable) && context.power.unavailable.length) {
+    gaps.push(
+      `POWER returned no usable values for ${context.power.unavailable.join(", ")}. These are reported as unavailable rather than estimated.`
+    );
+  }
+  for (const entry of analysis.series) {
+    const name = `${seriesLabel(entry.code)} (${entry.code})`;
+    const unit = entry.unit || "unit not reported";
+    if (!entry.count) {
+      gaps.push(`${name}: no usable monthly values were retrieved, so no statistic is reported.`);
+      continue;
+    }
+    verified.push(
+      `${name}: ${entry.count} usable monthly values, ${entry.firstMonth} \u2192 ${entry.lastMonth}` + (entry.missing ? `, ${entry.missing} month(s) without a value.` : ".")
+    );
+    derived.push(
+      `${name}: mean ${fmt(entry.mean)} ${unit}; minimum ${fmt(entry.min?.value)} ${unit}` + (entry.min ? ` (${entry.min.month})` : "") + `; maximum ${fmt(entry.max?.value)} ${unit}` + (entry.max ? ` (${entry.max.month})` : "") + " \u2014 computed from the retrieved monthly values only."
+    );
+    if (entry.anomaly) {
+      derived.push(
+        `${name}: reference baseline ${fmt(entry.anomaly.baselineValue)} ${unit} \u2014 the ${entry.anomaly.baselineLabel}. The most recent complete year (${entry.anomaly.latest.year}) sits ${entry.anomaly.latest.anomaly >= 0 ? "+" : ""}${fmt(entry.anomaly.latest.anomaly)} ${unit} from it.`
+      );
+      evidence.push(
+        `${entry.code} anomalies vs ${entry.anomaly.baselineYears.join("/")} baseline (${unit}): ` + entry.anomaly.points.map((point) => `${point.year}:${point.anomaly >= 0 ? "+" : ""}${point.anomaly}`).join(", ")
+      );
+    } else if (entry.annual.filter((year) => year.complete).length < 2) {
+      gaps.push(
+        `${name}: ${entry.annual.filter((year) => year.complete).length} complete year(s) retrieved, so an anomaly against a reference period cannot be formed. A longer window is required.`
+      );
+    }
+    if (entry.periodComparison) {
+      derived.push(
+        `${name}: first half of the window (${entry.periodComparison.firstLabel}) mean ${fmt(entry.periodComparison.firstMean)} ${unit} versus second half (${entry.periodComparison.secondLabel}) ${fmt(entry.periodComparison.secondMean)} ${unit} \u2014 difference ${entry.periodComparison.absoluteChange >= 0 ? "+" : ""}${fmt(entry.periodComparison.absoluteChange)} ${unit}` + (entry.periodComparison.percentChange === null ? " (percentage withheld: the first-half mean is effectively zero)." : `, ${entry.periodComparison.percentChange >= 0 ? "+" : ""}${fmt(entry.periodComparison.percentChange)} %.`)
+      );
+    }
+    if (entry.seasonal.some((season) => season.count)) {
+      derived.push(
+        `${name} seasonal means: ` + entry.seasonal.filter((season) => season.mean !== null).map((season) => `${season.season} ${fmt(season.mean)} ${unit}`).join("; ") + "."
+      );
+    }
+    if (entry.monthlyTotals) {
+      const totals = entry.monthlyTotals;
+      const wettest = totals.reduce((best, entry2) => best === null || entry2.total > best.total ? entry2 : best, null);
+      const driest = totals.reduce((best, entry2) => best === null || entry2.total < best.total ? entry2 : best, null);
+      if (wettest && driest) {
+        derived.push(
+          `${name} monthly totals (rate \xD7 days in month): wettest ${wettest.month} ${fmt(wettest.total)} mm, driest ${driest.month} ${fmt(driest.total)} mm.`
+        );
+      }
+    }
+    if (entry.missingMonths.length) {
+      gaps.push(
+        `${name}: no usable value for ${entry.missingMonths.length} month(s) \u2014 ${entry.missingMonths.slice(0, 6).join(", ")}${entry.missingMonths.length > 6 ? `, and ${entry.missingMonths.length - 6} more` : ""}. These months are excluded from every statistic.`
+      );
+    }
+    limitations2.push(
+      `${name}: POWER values are satellite/re-analysis estimates for a \u22480.5\xB0 \xD7 0.625\xB0 grid cell, not station measurements. This is a descriptive statistic of the retrieved series; no significance test, homogenisation or attribution has been applied.`
+    );
+  }
+  if (!analysis.series.length && !context.power) {
+    gaps.push("No NASA POWER archive was retrieved for this selection, so no climate-series statement can be made.");
+  }
+  const question2 = String(question || "");
+  if (/trend|warming|increase|decrease|change/i.test(question2)) {
+    interpretation.push(
+      "A slope or a difference between two periods describes the retrieved window only. Without a longer baseline, a significance test and a change-point analysis, it must not be reported as a verified climate trend."
+    );
+  }
+  if (/correlat|because|cause|due to/i.test(question2)) {
+    interpretation.push(
+      "The retrieved series can show that two quantities move together over this window; that is not evidence that one causes the other. No attribution is claimed."
+    );
+  }
+  if (/image|imagery|satellite picture|compare dates/i.test(question2)) {
+    interpretation.push(
+      "Two images are not proof of a trend: cloud, sun angle, aerosols, sensor changes and processing can all produce a difference between dates."
+    );
+  }
+  if (!interpretation.length) {
+    interpretation.push(
+      "Interpretation is limited to reasoning over the values listed above. The Lab does not add external claims about this area."
+    );
+  }
+  limitations2.push(
+    "This answer was produced by the deterministic Local Earth Intelligence engine without a language model: it restates retrieved values and computes arithmetic on them only."
+  );
+  const sources = [];
+  if (context.power?.sourceUrl) {
+    sources.push({
+      label: "NASA POWER monthly point API",
+      url: String(context.power.sourceUrl),
+      retrievedAt: context.power.retrievedAt,
+      detail: `Monthly archive for ${place}`
+    });
+  }
+  for (const layer2 of Array.isArray(context.layers) ? context.layers : []) {
+    if (layer2?.serviceUrl) {
+      sources.push({
+        label: String(layer2.title || layer2.id || "Imagery layer"),
+        url: String(layer2.serviceUrl),
+        detail: layer2.coverage ? String(layer2.coverage) : void 0
+      });
+    }
+  }
+  const rawSections = [
+    { kind: "verified", title: "Verified observations", bullets: verified.slice(0, 6) },
+    { kind: "derived", title: "Calculated results", bullets: derived.slice(0, 8) },
+    { kind: "interpretation", title: "Scientific interpretation", bullets: interpretation.slice(0, 4) },
+    { kind: "limitations", title: "Limitations and uncertainty", bullets: limitations2.slice(0, 5) },
+    { kind: "gaps", title: "Missing data", bullets: gaps.slice(0, 6) }
+  ];
+  const sections = rawSections.map((section) => ({ ...section, bullets: section.bullets.filter(Boolean) }));
+  const sufficientData = analysis.series.some((entry) => entry.count > 0);
+  return { sections, sources, analysis, evidenceSummary: evidence, sufficientData };
+}
+
+// server/earth/providerOrchestrator.ts
+var ProviderError = class extends Error {
+  constructor(message, options = {}) {
+    super(message);
+    this.name = "ProviderError";
+    this.status = options.status;
+    this.code = options.code || (options.status ? classifyStatus(options.status).code : "PROVIDER_ERROR");
+    this.retryable = options.retryable ?? classifyStatus(options.status).retryable;
+    this.retryAfterMs = options.retryAfterMs;
+  }
+};
+function classifyStatus(status) {
+  if (!status) return { retryable: true, code: "NETWORK_ERROR" };
+  if (status === 429) return { retryable: true, code: "RATE_LIMITED" };
+  if (status === 408 || status === 504) return { retryable: true, code: "TIMEOUT" };
+  if (status >= 500 && status <= 599) return { retryable: true, code: "PROVIDER_UNAVAILABLE" };
+  if (status === 401 || status === 403) return { retryable: false, code: "AUTH_ERROR" };
+  if (status === 404) return { retryable: false, code: "MODEL_NOT_FOUND" };
+  if (status === 400 || status === 422) return { retryable: false, code: "BAD_REQUEST" };
+  if (status === 402) return { retryable: false, code: "CREDIT_REQUIRED" };
+  return { retryable: false, code: "PROVIDER_ERROR" };
+}
+var DEFAULTS = {
+  maxAttempts: 3,
+  baseDelayMs: 300,
+  maxDelayMs: 3e3,
+  timeoutMs: 12e3,
+  deadlineMs: 3e4,
+  circuitFailureThreshold: 3,
+  circuitCooldownMs: 6e4
+};
+function abortableSleep(ms, signal) {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) return reject(new ProviderError("aborted", { code: "ABORTED", retryable: false }));
+    const timer = setTimeout(() => {
+      cleanup();
+      resolve();
+    }, ms);
+    const onAbort = () => {
+      cleanup();
+      reject(new ProviderError("aborted", { code: "ABORTED", retryable: false }));
+    };
+    const cleanup = () => {
+      clearTimeout(timer);
+      signal?.removeEventListener?.("abort", onAbort);
+    };
+    signal?.addEventListener?.("abort", onAbort);
+  });
+}
+function createOrchestrator(options) {
+  const config = { ...DEFAULTS, ...options };
+  const now = options.now || Date.now;
+  const sleep = options.sleep || abortableSleep;
+  const random = options.random || Math.random;
+  const log = options.log || (() => {
+  });
+  const circuits = /* @__PURE__ */ new Map();
+  const inFlight = /* @__PURE__ */ new Map();
+  function circuitFor(id, at) {
+    const entry = circuits.get(id);
+    if (!entry) return { open: false, failures: 0 };
+    if (entry.failures < config.circuitFailureThreshold) return { open: false, failures: entry.failures };
+    const open = at - entry.openedAt < config.circuitCooldownMs;
+    return { open, failures: entry.failures };
+  }
+  function recordFailure(id, at) {
+    const entry = circuits.get(id) || { failures: 0, openedAt: 0 };
+    const failures = entry.failures + 1;
+    circuits.set(id, { failures, openedAt: failures >= config.circuitFailureThreshold ? at : entry.openedAt });
+  }
+  function recordSuccess(id) {
+    circuits.delete(id);
+  }
+  function backoffMs(attempt) {
+    const exponential = Math.min(config.maxDelayMs, config.baseDelayMs * 2 ** (attempt - 1));
+    const jitter = 0.6 + random() * 0.8;
+    return Math.round(Math.min(config.maxDelayMs, exponential * jitter));
+  }
+  async function callProvider(provider, args, outerSignal, deadline, runStartedAt) {
+    const started = now();
+    let attempts = 0;
+    let lastError;
+    while (attempts < config.maxAttempts) {
+      if (outerSignal.aborted) {
+        lastError = new ProviderError("aborted by caller", { code: "ABORTED", retryable: false });
+        break;
+      }
+      if (now() >= deadline) {
+        lastError = new ProviderError("analysis deadline exceeded", { code: "DEADLINE_EXCEEDED", retryable: false });
+        break;
+      }
+      attempts += 1;
+      const controller = new AbortController();
+      const onOuterAbort = () => controller.abort();
+      outerSignal.addEventListener?.("abort", onOuterAbort);
+      const remaining = Math.max(1, Math.min(config.timeoutMs, deadline - now()));
+      const timer = setTimeout(() => controller.abort(), remaining);
+      let attemptTimer;
+      try {
+        const guard = new Promise((_, reject) => {
+          attemptTimer = setTimeout(
+            () => reject(new ProviderError(`${provider.id} exceeded ${remaining} ms`, { code: "TIMEOUT", retryable: true })),
+            remaining
+          );
+        });
+        const text = await Promise.race([
+          provider.generate({ ...args, signal: controller.signal, timeoutMs: remaining }),
+          guard
+        ]);
+        return {
+          text,
+          entry: { provider: provider.id, model: provider.model, outcome: "ok", attempts, ms: now() - started }
+        };
+      } catch (error) {
+        const failure = error instanceof ProviderError ? error : new ProviderError(error?.message || "provider call failed", {
+          code: error?.name === "AbortError" ? "TIMEOUT" : "NETWORK_ERROR",
+          retryable: true
+        });
+        if (failure.code === "ABORTED") {
+          lastError = failure;
+          break;
+        }
+        lastError = failure;
+        log({
+          event: "earth.analyst.provider.attempt",
+          provider: provider.id,
+          model: provider.model,
+          attempt: attempts,
+          code: failure.code,
+          status: failure.status,
+          retryable: failure.retryable,
+          ms: now() - started,
+          sinceStartMs: now() - runStartedAt
+        });
+        if (!failure.retryable) break;
+        if (attempts >= config.maxAttempts) break;
+        const delay = Math.max(failure.retryAfterMs ?? 0, backoffMs(attempts));
+        try {
+          await sleep(Math.min(delay, Math.max(0, deadline - now())), outerSignal);
+        } catch {
+          lastError = new ProviderError("aborted while backing off", { code: "ABORTED", retryable: false });
+          break;
+        }
+      } finally {
+        if (attemptTimer) clearTimeout(attemptTimer);
+        clearTimeout(timer);
+        outerSignal.removeEventListener?.("abort", onOuterAbort);
+      }
+    }
+    return {
+      text: null,
+      error: lastError,
+      entry: {
+        provider: provider.id,
+        model: provider.model,
+        outcome: "error",
+        code: lastError?.code,
+        status: lastError?.status,
+        attempts,
+        ms: now() - started,
+        reason: lastError?.message ? String(lastError.message).slice(0, 180) : void 0
+      }
+    };
+  }
+  async function runOnce(args) {
+    const runStartedAt = now();
+    const deadline = runStartedAt + config.deadlineMs;
+    const controller = new AbortController();
+    const outer = args.signal;
+    const onAbort = () => controller.abort();
+    outer?.addEventListener?.("abort", onAbort);
+    const chain = [];
+    let retries = 0;
+    let attempts = 0;
+    try {
+      for (const provider of config.providers) {
+        if (!provider.isConfigured()) {
+          chain.push({ provider: provider.id, model: provider.model, outcome: "skipped", attempts: 0, ms: 0, code: "NOT_CONFIGURED" });
+          continue;
+        }
+        const circuit = circuitFor(provider.id, now());
+        if (circuit.open) {
+          chain.push({ provider: provider.id, model: provider.model, outcome: "skipped", attempts: 0, ms: 0, code: "CIRCUIT_OPEN" });
+          log({ event: "earth.analyst.provider.skipped", provider: provider.id, reason: "circuit-open", failures: circuit.failures });
+          continue;
+        }
+        if (controller.signal.aborted) break;
+        if (now() >= deadline) break;
+        const result2 = await callProvider(
+          provider,
+          { question: args.question, context: args.context, lang: args.lang },
+          controller.signal,
+          deadline,
+          runStartedAt
+        );
+        attempts += result2.entry.attempts;
+        retries += Math.max(0, result2.entry.attempts - 1);
+        chain.push(result2.entry);
+        if (result2.text !== null) {
+          recordSuccess(provider.id);
+          const parsed = parseSafely((text) => config.parseAnswer(text, args.context), result2.text);
+          if (parsed.ok) {
+            const failedBefore = chain.filter((entry) => entry.outcome === "error");
+            return {
+              ok: true,
+              answer: parsed.value,
+              metadata: {
+                mode: "remote",
+                provider: provider.id,
+                providerLabel: provider.label,
+                model: provider.model,
+                attempts,
+                retries,
+                fallback: failedBefore.length > 0,
+                fallbackReason: failedBefore[0]?.code,
+                providerChain: chain,
+                generatedAt: new Date(now()).toISOString(),
+                deduped: false,
+                durationMs: now() - runStartedAt,
+                noticeCode: failedBefore.length ? "primary-unavailable" : void 0
+              }
+            };
+          }
+          log({ event: "earth.analyst.provider.unparsable", provider: provider.id, model: provider.model });
+          chain[chain.length - 1] = { ...result2.entry, outcome: "error", code: "UNPARSABLE_RESPONSE" };
+          recordFailure(provider.id, now());
+          continue;
+        }
+        recordFailure(provider.id, now());
+      }
+    } finally {
+      outer?.removeEventListener?.("abort", onAbort);
+    }
+    const attempted = chain.filter((entry) => entry.outcome !== "skipped");
+    const allConfiguredFailed = attempted.length > 0;
+    return {
+      ok: false,
+      answer: null,
+      metadata: {
+        mode: "local",
+        provider: "local",
+        providerLabel: "Local Earth Intelligence",
+        attempts,
+        retries,
+        fallback: true,
+        fallbackReason: chain.find((entry) => entry.outcome === "error")?.code || "NO_PROVIDER_CONFIGURED",
+        providerChain: chain,
+        generatedAt: new Date(now()).toISOString(),
+        deduped: false,
+        durationMs: now() - runStartedAt,
+        noticeCode: allConfiguredFailed ? "all-providers-unavailable" : void 0
+      }
+    };
+  }
+  function parseSafely(parse, text) {
+    try {
+      const value = parse(text);
+      if (value === null || value === void 0) return { ok: false };
+      return { ok: true, value };
+    } catch {
+      return { ok: false };
+    }
+  }
+  return {
+    /** Runs the chain. Identical concurrent requests share one execution. */
+    async run(args) {
+      const key2 = args.dedupeKey;
+      if (!key2) return runOnce(args);
+      const existing = inFlight.get(key2);
+      if (existing) {
+        const shared = await existing;
+        return {
+          ...shared,
+          metadata: { ...shared.metadata, deduped: true }
+        };
+      }
+      const promise = runOnce(args).finally(() => inFlight.delete(key2));
+      inFlight.set(key2, promise);
+      return promise;
+    },
+    /**
+     * Provider health as this process currently sees it: configuration plus the
+     * breaker state, i.e. providers that recently failed hard. This is a *cheap*
+     * check — it never spends a provider request just to look healthy.
+     */
+    health() {
+      return config.providers.map((provider) => {
+        const circuit = circuitFor(provider.id, now());
+        return {
+          provider: provider.id,
+          label: provider.label,
+          model: provider.model,
+          configured: provider.isConfigured(),
+          state: !provider.isConfigured() ? "unconfigured" : circuit.open ? "open" : "closed",
+          consecutiveFailures: circuit.failures
+        };
+      });
+    },
+    /** Test seam: clears circuit state and in-flight bookkeeping. */
+    reset() {
+      circuits.clear();
+      inFlight.clear();
+    }
+  };
+}
+
+// server/earth/providers.ts
+import { GoogleGenAI, Type } from "@google/genai";
+var ANALYST_MODEL = process.env.NOVA_ANALYST_MODEL || "gemini-3.8-flash";
+var OPENROUTER_MODEL = process.env.EARTH_ANALYST_OPENROUTER_MODEL || "google/gemini-2.0-flash-001";
+var ARENA_MODEL = process.env.EARTH_ANALYST_ARENA_MODEL || "gemini-2.5-flash";
+var ANALYST_SYSTEM_INSTRUCTION = `You are the Earth Science Analyst inside the NASA Space Explorer Earth Intelligence Lab.
+
+Absolute rules:
+1. You may ONLY use the numbers, dataset names, dates, coverage strings and URLs present in the JSON context supplied by the client. Never add measurements, hotspot counts, alerts, place names or sources from memory.
+2. If a value needed to answer is absent from the context, say it is not available in the retrieved data and name what would be required.
+3. Separate your answer into:
+   - verified: statements that restate retrieved values or documented dataset metadata;
+   - derived: arithmetic or comparisons you performed on those retrieved values (show the calculation style, e.g. "mean of the 12 monthly values");
+   - interpretation: scientific reading, always hedged and clearly labelled as interpretation;
+   - limitations: dataset limitations, uncertainty, and what the data cannot establish;
+   - gaps: missing data.
+4. Never claim that two images prove a trend. Never claim statistical significance or attribution.
+5. Cite the source URLs exactly as they appear in the context, and only those.
+6. Be concise: at most 5 bullets per section, each under 45 words.
+7. Write in the requested language (English, Sinhala or Tamil) using correct scientific terminology.
+8. The context may contain a "localAnalysis" block of arithmetic already computed from the retrieved values. You may restate those results; you may not recompute them differently.`;
+var ANALYST_RESPONSE_SCHEMA = {
+  type: Type.OBJECT,
+  properties: {
+    sections: {
+      type: Type.ARRAY,
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          kind: { type: Type.STRING, description: "verified | derived | interpretation | limitations | gaps" },
+          title: { type: Type.STRING },
+          bullets: { type: Type.ARRAY, items: { type: Type.STRING } }
+        },
+        required: ["kind", "title", "bullets"]
+      }
+    },
+    sources: {
+      type: Type.ARRAY,
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          label: { type: Type.STRING },
+          url: { type: Type.STRING },
+          detail: { type: Type.STRING }
+        },
+        required: ["label", "url"]
+      }
+    }
+  },
+  required: ["sections"]
+};
+function analystPrompt(question, context, languageName) {
+  return `Question from the user (answer in ${languageName}):
+
+${question}
+
+Retrieved data context (JSON, the only allowed source of facts):
+${JSON.stringify(
+    context
+  )}`;
+}
+function statusFromError(error) {
+  const candidates = [error?.status, error?.code, error?.error?.code, error?.response?.status];
+  for (const candidate of candidates) {
+    const value = typeof candidate === "string" ? Number(candidate) : candidate;
+    if (typeof value === "number" && Number.isFinite(value) && value >= 100 && value <= 599) return value;
+  }
+  return void 0;
+}
+function retryAfterFromError(error) {
+  const header = error?.response?.headers?.["retry-after"] || error?.headers?.["retry-after"];
+  const seconds = Number(header);
+  return Number.isFinite(seconds) && seconds > 0 ? seconds * 1e3 : void 0;
+}
+function createGeminiProvider(options) {
+  const model = options.model || ANALYST_MODEL;
+  return {
+    id: "gemini",
+    label: "Google Gemini",
+    model,
+    isConfigured: () => Boolean(options.client),
+    async generate({ question, context, lang, signal, timeoutMs }) {
+      const languageName = { en: "English", si: "Sinhala (\u0DC3\u0DD2\u0D82\u0DC4\u0DBD)", ta: "Tamil (\u0BA4\u0BAE\u0BBF\u0BB4\u0BCD)" }[lang] || "English";
+      const call = options.client.models.generateContent({
+        model,
+        contents: analystPrompt(question, context, languageName),
+        config: {
+          systemInstruction: ANALYST_SYSTEM_INSTRUCTION,
+          responseMimeType: "application/json",
+          responseSchema: ANALYST_RESPONSE_SCHEMA,
+          temperature: 0.2,
+          // The SDK forwards this when it supports it; the orchestrator's own
+          // timeout still bounds the attempt either way.
+          abortSignal: signal
+        }
+      });
+      let timer;
+      const guard = new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new ProviderError(`Gemini exceeded ${timeoutMs} ms`, { code: "TIMEOUT", retryable: true })), timeoutMs);
+      });
+      try {
+        const response = await Promise.race([call, guard]);
+        const text = typeof response?.text === "string" ? response.text : typeof response?.text === "function" ? response.text() : "";
+        if (!text) throw new ProviderError("Gemini returned an empty response", { code: "EMPTY_RESPONSE", retryable: true });
+        return text;
+      } catch (error) {
+        if (error instanceof ProviderError) throw error;
+        throw new ProviderError(String(error?.message || "Gemini call failed"), {
+          status: statusFromError(error),
+          retryAfterMs: retryAfterFromError(error)
+        });
+      } finally {
+        if (timer) clearTimeout(timer);
+      }
+    }
+  };
+}
+function createChatCompletionsProvider(id, label, options) {
+  const model = options.model || OPENROUTER_MODEL;
+  const fetchImpl = options.fetchImpl || fetch;
+  return {
+    id,
+    label,
+    model,
+    isConfigured: () => Boolean(options.apiKey),
+    async generate({ question, context, lang, signal, timeoutMs }) {
+      const languageName = { en: "English", si: "Sinhala (\u0DC3\u0DD2\u0D82\u0DC4\u0DBD)", ta: "Tamil (\u0BA4\u0BAE\u0BBF\u0BB4\u0BCD)" }[lang] || "English";
+      let response;
+      try {
+        response = await fetchImpl(`${options.baseUrl.replace(/\/$/, "")}/chat/completions`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${options.apiKey}`,
+            ...options.extraHeaders || {}
+          },
+          body: JSON.stringify({
+            model,
+            temperature: 0.2,
+            response_format: { type: "json_object" },
+            messages: [
+              { role: "system", content: ANALYST_SYSTEM_INSTRUCTION },
+              { role: "user", content: analystPrompt(question, context, languageName) }
+            ]
+          }),
+          signal
+        });
+      } catch (error) {
+        const aborted = error?.name === "AbortError";
+        throw new ProviderError(aborted ? `${label} timed out after ${timeoutMs} ms` : `${label} request failed`, {
+          code: aborted ? "TIMEOUT" : "NETWORK_ERROR",
+          retryable: true
+        });
+      }
+      if (!response.ok) {
+        const retryAfter = Number(response.headers?.get?.("retry-after"));
+        throw new ProviderError(`${label} responded ${response.status}`, {
+          status: response.status,
+          retryAfterMs: Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter * 1e3 : void 0
+        });
+      }
+      let payload;
+      try {
+        payload = await response.json();
+      } catch {
+        throw new ProviderError(`${label} returned a non-JSON body`, { code: "UNPARSABLE_RESPONSE", retryable: true });
+      }
+      const text = payload?.choices?.[0]?.message?.content;
+      if (typeof text !== "string" || !text.trim()) {
+        throw new ProviderError(`${label} returned an empty message`, { code: "EMPTY_RESPONSE", retryable: true });
+      }
+      return text;
+    }
+  };
+}
+function createOpenRouterProvider(options) {
+  return createChatCompletionsProvider("openrouter", "OpenRouter", {
+    apiKey: options.apiKey,
+    model: options.model || OPENROUTER_MODEL,
+    baseUrl: "https://openrouter.ai/api/v1",
+    extraHeaders: { "HTTP-Referer": "https://nasa-space-expolere.vercel.app", "X-Title": "NASA Space Explorer \u2014 Earth Lab" },
+    fetchImpl: options.fetchImpl
+  });
+}
+function createArenaProvider(options) {
+  const baseUrl = options.baseUrl || process.env.ARENA_BASE_URL || "";
+  return createChatCompletionsProvider("arena", "Arena AI", {
+    apiKey: options.apiKey && baseUrl ? options.apiKey : void 0,
+    model: options.model || ARENA_MODEL,
+    baseUrl: baseUrl || "https://api.arena.ai/v1",
+    fetchImpl: options.fetchImpl
+  });
+}
+function createConfiguredProviders(options = {}) {
+  const gemini = createGeminiProvider({
+    client: process.env.GEMINI_API_KEY ? new GoogleGenAI({
+      apiKey: process.env.GEMINI_API_KEY,
+      httpOptions: { headers: { "User-Agent": "nasa-space-explorer-earth-lab" } }
+    }) : null
+  });
+  return [
+    gemini,
+    createOpenRouterProvider({ apiKey: process.env.OPENROUTER_API_KEY, fetchImpl: options.fetchImpl }),
+    createArenaProvider({ apiKey: process.env.ARENA_API_KEY, fetchImpl: options.fetchImpl })
+  ];
+}
+function extractJson(text) {
+  const trimmed = String(text || "").trim().replace(/^```(?:json)?/i, "").replace(/```$/i, "").trim();
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    const start = trimmed.indexOf("{");
+    const end = trimmed.lastIndexOf("}");
+    if (start >= 0 && end > start) {
+      return JSON.parse(trimmed.slice(start, end + 1));
+    }
+    throw new ProviderError("Model reply contained no JSON object", { code: "UNPARSABLE_RESPONSE", retryable: false });
+  }
+}
+var SECTION_KINDS = ["verified", "derived", "interpretation", "limitations", "gaps"];
+function normaliseAnswer(parsed, context, limit = 6) {
+  const sections = Array.isArray(parsed?.sections) ? parsed.sections : [];
+  if (!sections.length) throw new ProviderError("Model returned no sections", { code: "EMPTY_RESPONSE", retryable: false });
+  const allowed = /* @__PURE__ */ new Set();
+  JSON.stringify(context).replace(/"(https?:\/\/[^"]+)"/g, (match, url) => {
+    allowed.add(url);
+    return match;
+  });
+  const normalisedSections = sections.filter((section) => section && typeof section === "object").map((section) => ({
+    kind: SECTION_KINDS.includes(section.kind) ? section.kind : "interpretation",
+    title: String(section.title || "Interpretation"),
+    bullets: Array.isArray(section.bullets) ? section.bullets.map((bullet) => String(bullet)).slice(0, limit) : []
+  })).filter((section) => section.bullets.length > 0);
+  if (!normalisedSections.length) throw new ProviderError("Model sections contained no bullets", { code: "EMPTY_RESPONSE", retryable: false });
+  const sources = (Array.isArray(parsed?.sources) ? parsed.sources : []).filter((source) => source && typeof source.url === "string").map((source) => ({
+    label: String(source.label || source.url),
+    url: String(source.url),
+    detail: source.detail ? String(source.detail) : void 0,
+    verifiedInContext: allowed.has(String(source.url))
+  }));
+  return { sections: normalisedSections, sources, droppedSources: sources.filter((source) => !source.verifiedInContext).length };
+}
+
 // server/earthIntelligence.ts
 var earthRouter = express.Router();
 var cache = /* @__PURE__ */ new Map();
@@ -701,6 +1532,7 @@ function numberParam(value, min, max) {
 }
 earthRouter.get("/health", (_req, res) => {
   res.json({
+    analystProviders: activeAnalystOrchestrator().health(),
     ok: true,
     service: "earth-intelligence",
     timestamp: (/* @__PURE__ */ new Date()).toISOString(),
@@ -709,11 +1541,21 @@ earthRouter.get("/health", (_req, res) => {
       gibsDomains: true,
       gibsProbe: true,
       firmsHotspots: Boolean(process.env.FIRMS_MAP_KEY),
-      aiAnalyst: Boolean(process.env.GEMINI_API_KEY)
+      aiAnalyst: Boolean(process.env.GEMINI_API_KEY),
+      aiAnalystProviders: [
+        process.env.GEMINI_API_KEY ? "gemini" : null,
+        process.env.OPENROUTER_API_KEY ? "openrouter" : null,
+        process.env.ARENA_API_KEY ? "arena" : null
+      ].filter(Boolean),
+      localAnalyst: true
     },
     notes: {
       firmsHotspots: process.env.FIRMS_MAP_KEY ? "NASA FIRMS area API proxy enabled." : "No FIRMS_MAP_KEY configured \u2014 hotspot counts are not offered (the app never estimates them).",
-      aiAnalyst: process.env.GEMINI_API_KEY ? "Gemini interpretation enabled; answers are grounded in the retrieved data bundle only." : "No GEMINI_API_KEY configured \u2014 the Lab uses its deterministic local analysis engine."
+      aiAnalyst: process.env.GEMINI_API_KEY ? "Gemini interpretation enabled; answers are grounded in the retrieved data bundle only." : "No GEMINI_API_KEY configured \u2014 the Lab uses its deterministic local analysis engine.",
+      aiAnalystFailover: [
+        process.env.OPENROUTER_API_KEY ? "OpenRouter" : null,
+        process.env.ARENA_API_KEY ? "Arena AI" : null
+      ].filter(Boolean).length ? "Gemini failures retry with backoff, then fall over to a configured alternative provider, then to the local engine." : "Gemini failures retry with backoff, then fall back to the local deterministic engine (no alternative AI key configured)."
     }
   });
 });
@@ -1026,54 +1868,82 @@ earthRouter.get("/firms/hotspots", rateLimit("firms", 30, 6e4), async (req, res)
     });
   }
 });
-var aiClient = process.env.GEMINI_API_KEY ? new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY, httpOptions: { headers: { "User-Agent": "nasa-space-explorer-earth-lab" } } }) : null;
-var ANALYST_MODEL = "gemini-3.8-flash";
-var ANALYST_SYSTEM_INSTRUCTION = `You are the Earth Science Analyst inside the NASA Space Explorer Earth Intelligence Lab.
-
-Absolute rules:
-1. You may ONLY use the numbers, dataset names, dates, coverage strings and URLs present in the JSON context supplied by the client. Never add measurements, hotspot counts, alerts, place names or sources from memory.
-2. If a value needed to answer is absent from the context, say it is not available in the retrieved data and name what would be required.
-3. Separate your answer into:
-   - verified: statements that restate retrieved values or documented dataset metadata;
-   - derived: arithmetic or comparisons you performed on those retrieved values (show the calculation style, e.g. "mean of the 12 monthly values");
-   - interpretation: scientific reading, always hedged and clearly labelled as interpretation;
-   - limitations: dataset limitations, uncertainty, and what the data cannot establish;
-   - gaps: missing data.
-4. Never claim that two images prove a trend. Never claim statistical significance or attribution.
-5. Cite the source URLs exactly as they appear in the context, and only those.
-6. Be concise: at most 5 bullets per section, each under 45 words.
-7. Write in the requested language (English, Sinhala or Tamil) using correct scientific terminology.`;
-function analystResponseSchema() {
-  const section = {
-    type: Type.OBJECT,
-    properties: {
-      kind: { type: Type.STRING, description: "verified | derived | interpretation | limitations | gaps" },
-      title: { type: Type.STRING },
-      bullets: { type: Type.ARRAY, items: { type: Type.STRING } }
-    },
-    required: ["kind", "title", "bullets"]
-  };
+var redact = (text) => String(text || "").replace(/([?&](?:api_?key|key|token|access_token)=)[^&\s"']+/gi, "$1[redacted]").replace(/\b(AIza|sk-|or-|arena-)[A-Za-z0-9_\-]{8,}/g, "[redacted]").replace(/\bBearer\s+[A-Za-z0-9._\-]{8,}/gi, "Bearer [redacted]").slice(0, 240);
+function logAnalystEvent(event) {
+  try {
+    console.log(JSON.stringify({ ts: (/* @__PURE__ */ new Date()).toISOString(), scope: "earth.analyst", ...event }));
+  } catch {
+  }
+}
+var PROVIDER_LABELS = {
+  gemini: "Google Gemini",
+  openrouter: "OpenRouter",
+  arena: "Arena AI",
+  local: "Local Earth Intelligence"
+};
+function buildProviderContext(context, analysis) {
   return {
-    type: Type.OBJECT,
-    properties: {
-      sections: { type: Type.ARRAY, items: section },
-      sources: {
-        type: Type.ARRAY,
-        items: {
-          type: Type.OBJECT,
-          properties: {
-            label: { type: Type.STRING },
-            url: { type: Type.STRING },
-            detail: { type: Type.STRING }
-          },
-          required: ["label", "url"]
-        }
-      }
+    location: {
+      label: context?.power?.place || context?.area?.label || null,
+      latitude: context?.power?.latitude ?? context?.area?.latitude ?? null,
+      longitude: context?.power?.longitude ?? context?.area?.longitude ?? null
     },
-    required: ["sections"]
+    observationDates: Array.isArray(context?.dates) ? context.dates : [],
+    dateRange: context?.power ? { from: context.power.from ?? null, to: context.power.to ?? null } : null,
+    datasets: [
+      context?.power ? {
+        id: "NASA_POWER_MONTHLY_POINT",
+        title: "NASA POWER monthly point archive",
+        sourceUrl: context.power.sourceUrl ?? null,
+        units: Object.fromEntries(analysis.series.map((entry) => [entry.code, entry.unit || "unit not reported"])),
+        availableParameters: context.power.available ?? [],
+        unavailableParameters: context.power.unavailable ?? [],
+        monthlySeries: analysis.series.map((entry) => ({
+          code: entry.code,
+          unit: entry.unit,
+          firstMonth: entry.firstMonth,
+          lastMonth: entry.lastMonth,
+          values: entry.count
+        }))
+      } : null
+    ].filter(Boolean),
+    layers: Array.isArray(context?.layers) ? context.layers : [],
+    missingData: {
+      reportedByClient: Array.isArray(context?.dataGaps) ? context.dataGaps : [],
+      byParameter: analysis.series.filter((entry) => entry.missing > 0).map((entry) => ({ code: entry.code, missingMonths: entry.missing, examples: entry.missingMonths.slice(0, 6) }))
+    },
+    localAnalysis: {
+      note: "Arithmetic already computed from the retrieved POWER values by the deterministic engine. Restate these; do not recompute differently.",
+      series: analysis.series.map((entry) => ({
+        code: entry.code,
+        unit: entry.unit,
+        usableValues: entry.count,
+        mean: entry.mean,
+        min: entry.min,
+        max: entry.max,
+        anomalyBaseline: entry.anomaly ? { label: entry.anomaly.baselineLabel, value: entry.anomaly.baselineValue, latest: entry.anomaly.latest } : null,
+        periodComparison: entry.periodComparison,
+        seasonal: entry.seasonal
+      })),
+      coverage: analysis.coverage
+    },
+    raw: context
   };
 }
+var analystOrchestrator = createOrchestrator({
+  providers: createConfiguredProviders(),
+  parseAnswer: (text, context) => normaliseAnswer(extractJson(text), context, 6),
+  log: (event) => logAnalystEvent(event)
+});
+var analystOrchestratorOverride = null;
+function activeAnalystOrchestrator() {
+  return analystOrchestratorOverride || analystOrchestrator;
+}
+function analystLanguageName(lang) {
+  return { en: "English", si: "Sinhala (\u0DC3\u0DD2\u0D82\u0DC4\u0DBD)", ta: "Tamil (\u0BA4\u0BAE\u0BBF\u0BB4\u0BCD)" }[lang] || "English";
+}
 earthRouter.post("/analyst", rateLimit("analyst", 20, 5 * 6e4), async (req, res) => {
+  const startedAt = Date.now();
   const { question, context, lang = "en" } = req.body || {};
   if (!question || typeof question !== "string" || question.length > 800) {
     return res.status(400).json({ ok: false, code: "invalid-question", message: "A question of up to 800 characters is required." });
@@ -1081,90 +1951,139 @@ earthRouter.post("/analyst", rateLimit("analyst", 20, 5 * 6e4), async (req, res)
   if (!context || typeof context !== "object") {
     return res.status(400).json({ ok: false, code: "missing-context", message: "A retrieved-data context bundle is required." });
   }
-  const languageName = { en: "English", si: "Sinhala (\u0DC3\u0DD2\u0D82\u0DC4\u0DBD)", ta: "Tamil (\u0BA4\u0BAE\u0BBF\u0BB4\u0BCD)" }[String(lang)] || "English";
-  if (!aiClient) {
-    return res.status(200).json({
-      ok: false,
-      code: "ai-not-configured",
-      status: "not-configured",
-      message: "No GEMINI_API_KEY is configured on the server, so no model-generated interpretation is available. Use the local deterministic analysis instead.",
-      provider: "local"
-    });
-  }
+  const languageName = analystLanguageName(String(lang));
+  const requestId = `an-${startedAt.toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+  const analysis = analyseBundle(context);
+  const local = buildLocalAnalystAnswer(String(question), context, { analysis });
+  const providerContext = buildProviderContext(context, analysis);
+  const controller = new AbortController();
+  let clientGone = false;
+  res.on("close", () => {
+    if (!res.writableEnded) {
+      clientGone = true;
+      controller.abort();
+    }
+  });
+  const dedupeKey = JSON.stringify([String(question), String(lang), providerContext.location, providerContext.dateRange, analysis.series.map((entry) => [entry.code, entry.count, entry.lastMonth])]);
+  logAnalystEvent({
+    event: "earth.analyst.request",
+    requestId,
+    lang: String(lang),
+    questionLength: question.length,
+    series: analysis.series.length,
+    usableValues: analysis.coverage?.analysed ?? 0,
+    missingCells: analysis.coverage?.missingCells ?? 0
+  });
+  let run;
   try {
-    const response = await aiClient.models.generateContent({
-      model: ANALYST_MODEL,
-      contents: `Question from the user (answer in ${languageName}):
-
-${question}
-
-Retrieved data context (JSON, the only allowed source of facts):
-${JSON.stringify(
-        context
-      )}`,
-      config: {
-        systemInstruction: ANALYST_SYSTEM_INSTRUCTION,
-        responseMimeType: "application/json",
-        responseSchema: analystResponseSchema(),
-        temperature: 0.2
-      }
-    });
-    const text = response.text || "";
-    let parsed = null;
-    try {
-      parsed = JSON.parse(text);
-    } catch {
-      return res.status(502).json({
-        ok: false,
-        code: "ai-unparsable",
-        status: "error",
-        message: "The model response could not be parsed as structured JSON. The local deterministic analysis is available instead."
-      });
-    }
-    const sections = Array.isArray(parsed?.sections) ? parsed.sections : [];
-    if (!sections.length) {
-      return res.status(502).json({
-        ok: false,
-        code: "ai-empty",
-        status: "error",
-        message: "The model returned no answer sections. The local deterministic analysis is available instead."
-      });
-    }
-    const allowedUrls = /* @__PURE__ */ new Set();
-    JSON.stringify(context).replace(/"(https?:\/\/[^"]+)"/g, (match, url) => {
-      allowedUrls.add(url);
-      return match;
-    });
-    const rawSources = Array.isArray(parsed?.sources) ? parsed.sources : [];
-    const sources = rawSources.filter((source) => source && typeof source.url === "string").map((source) => ({
-      label: String(source.label || source.url),
-      url: String(source.url),
-      detail: source.detail ? String(source.detail) : void 0,
-      verifiedInContext: allowedUrls.has(String(source.url))
-    }));
-    return res.json({
-      ok: true,
-      provider: "ai",
-      model: ANALYST_MODEL,
-      generatedAt: (/* @__PURE__ */ new Date()).toISOString(),
-      groundedInRetrievedData: true,
-      groundingMode: "retrieved-context-only",
-      sections: sections.map((section) => ({
-        kind: ["verified", "derived", "interpretation", "limitations", "gaps"].includes(section.kind) ? section.kind : "interpretation",
-        title: String(section.title || "Interpretation"),
-        bullets: Array.isArray(section.bullets) ? section.bullets.map((bullet) => String(bullet)).slice(0, 6) : []
-      })),
-      sources,
-      droppedSources: sources.filter((source) => source.verifiedInContext === false).length
+    run = await activeAnalystOrchestrator().run({
+      question: String(question),
+      context: providerContext,
+      lang: String(lang),
+      signal: controller.signal,
+      dedupeKey
     });
   } catch (error) {
-    return res.status(502).json({
+    logAnalystEvent({ event: "earth.analyst.orchestrator_error", requestId, message: redact(error?.message || "unknown") });
+    run = {
       ok: false,
-      code: "ai-error",
-      status: "error",
-      message: `The AI analyst call failed (${error?.message || "unknown error"}). The local deterministic analysis is available instead.`
+      answer: null,
+      unparsable: void 0,
+      metadata: {
+        mode: "local",
+        provider: "local",
+        providerLabel: PROVIDER_LABELS.local,
+        attempts: 0,
+        retries: 0,
+        fallback: true,
+        fallbackReason: "ORCHESTRATOR_ERROR",
+        providerChain: [],
+        generatedAt: (/* @__PURE__ */ new Date()).toISOString(),
+        deduped: false,
+        durationMs: Date.now() - startedAt,
+        noticeCode: "all-providers-unavailable"
+      }
+    };
+  }
+  const { metadata } = run;
+  const chain = metadata.providerChain.map((entry) => ({
+    provider: entry.provider,
+    providerLabel: PROVIDER_LABELS[entry.provider] || entry.provider,
+    model: entry.model,
+    outcome: entry.outcome,
+    code: entry.code,
+    status: entry.status,
+    attempts: entry.attempts,
+    ms: entry.ms,
+    // Upstream messages are logged server-side only; the client gets the
+    // classification code, never the provider's own error text.
+    reason: entry.code ? `${PROVIDER_LABELS[entry.provider] || entry.provider}: ${entry.code}` : void 0
+  }));
+  const base = {
+    ok: true,
+    mode: metadata.mode,
+    provider: metadata.provider,
+    providerLabel: metadata.providerLabel,
+    model: metadata.model,
+    generatedAt: metadata.generatedAt,
+    attempts: metadata.attempts,
+    retries: metadata.retries,
+    fallback: metadata.fallback,
+    fallbackReason: metadata.fallbackReason,
+    providerChain: chain,
+    deduped: metadata.deduped,
+    durationMs: Date.now() - startedAt,
+    groundedInRetrievedData: true,
+    groundingMode: "retrieved-context-only",
+    sufficientData: local.sufficientData,
+    localEvidence: local.evidenceSummary.slice(0, 5)
+  };
+  if (clientGone) {
+    logAnalystEvent({ event: "earth.analyst.client_closed", requestId, ms: Date.now() - startedAt });
+    return void 0;
+  }
+  if (run.ok && run.answer) {
+    const answer = run.answer;
+    logAnalystEvent({
+      event: "earth.analyst.answer",
+      requestId,
+      mode: "remote",
+      provider: metadata.provider,
+      attempts: metadata.attempts,
+      retries: metadata.retries,
+      fallback: metadata.fallback,
+      ms: Date.now() - startedAt
+    });
+    return res.json({
+      ...base,
+      noticeCode: metadata.noticeCode ?? (metadata.fallback ? "primary-unavailable" : void 0),
+      sections: answer.sections,
+      sources: answer.sources,
+      droppedSources: answer.droppedSources
     });
   }
+  const noticeCode = local.sufficientData ? metadata.noticeCode || "local-mode" : "no-observations";
+  logAnalystEvent({
+    event: "earth.analyst.answer",
+    requestId,
+    mode: "local",
+    noticeCode,
+    attempts: metadata.attempts,
+    reason: metadata.fallbackReason,
+    ms: Date.now() - startedAt
+  });
+  return res.json({
+    ...base,
+    mode: "local",
+    provider: "local",
+    providerLabel: PROVIDER_LABELS.local,
+    model: void 0,
+    noticeCode,
+    sections: local.sections,
+    sources: local.sources,
+    droppedSources: 0,
+    groundingMode: "deterministic-local-analysis"
+  });
 });
 
 // server/spaceVideos.ts
@@ -7381,7 +8300,7 @@ function generateHypotheses(request) {
 function finiteValues(values2) {
   return values2.filter((value) => typeof value === "number" && Number.isFinite(value));
 }
-function mean(values2) {
+function mean2(values2) {
   if (values2.length === 0) return null;
   let total = 0;
   for (const value of values2) total += value;
@@ -7389,7 +8308,7 @@ function mean(values2) {
 }
 function sampleStdDev(values2) {
   if (values2.length < 2) return null;
-  const average = mean(values2);
+  const average = mean2(values2);
   if (average === null) return null;
   let sumSquares = 0;
   for (const value of values2) sumSquares += (value - average) ** 2;
@@ -7416,7 +8335,7 @@ function describe(values2) {
   }
   return {
     n: clean.length,
-    mean: mean(clean),
+    mean: mean2(clean),
     median: median(clean),
     sd: sampleStdDev(clean),
     min: Math.min(...clean),
@@ -7505,8 +8424,8 @@ function correlationTest(x, y) {
   }
   const n = pairs.length;
   if (n < 3) return { r: null, n, t: null, df: null, p: null };
-  const meanX = mean(pairs.map((pair) => pair[0]));
-  const meanY = mean(pairs.map((pair) => pair[1]));
+  const meanX = mean2(pairs.map((pair) => pair[0]));
+  const meanY = mean2(pairs.map((pair) => pair[1]));
   let sxy = 0;
   let sxx = 0;
   let syy = 0;
@@ -7531,8 +8450,8 @@ function linearRegression(x, y) {
   }
   const n = pairs.length;
   if (n < 3) return { slope: null, intercept: null, r2: null, n, slopeStandardError: null };
-  const meanX = mean(pairs.map((pair) => pair[0]));
-  const meanY = mean(pairs.map((pair) => pair[1]));
+  const meanX = mean2(pairs.map((pair) => pair[0]));
+  const meanY = mean2(pairs.map((pair) => pair[1]));
   let sxy = 0;
   let sxx = 0;
   let syy = 0;
@@ -7585,7 +8504,7 @@ function crossCorrelation(driver, response, maxLagSteps) {
 }
 function detectAnomalies(values2, z = 3) {
   const clean = finiteValues(values2);
-  const average = mean(clean);
+  const average = mean2(clean);
   const sd = sampleStdDev(clean);
   if (average === null || sd === null || sd === 0) {
     return { count: 0, threshold: null, indices: [], mean: average, sd };
@@ -7600,8 +8519,8 @@ function detectAnomalies(values2, z = 3) {
 function compareGroups(baseline, event) {
   const a = finiteValues(baseline);
   const b = finiteValues(event);
-  const meanA = mean(a);
-  const meanB = mean(b);
+  const meanA = mean2(a);
+  const meanB = mean2(b);
   const sdA = sampleStdDev(a);
   const sdB = sampleStdDev(b);
   let welchT = null;
@@ -7784,7 +8703,7 @@ function effectMagnitude(r) {
   if (magnitude >= 0.3) return "weak";
   return "none";
 }
-function round(value, digits = 4) {
+function round2(value, digits = 4) {
   if (value === null || !Number.isFinite(value)) return null;
   const factor = 10 ** digits;
   return Math.round(value * factor) / factor;
@@ -8516,7 +9435,7 @@ function runAnalyses(request, datasets, language = request.language) {
     analysis.results = Object.fromEntries(
       Object.entries(analysis.results).map(([key2, value]) => [
         key2,
-        typeof value === "number" ? round(value, 6) : value
+        typeof value === "number" ? round2(value, 6) : value
       ])
     );
     analyses.push(analysis);
@@ -11022,10 +11941,10 @@ function detectHardware({
   loadavg = () => os.loadavg()
 } = {}) {
   const cpuList = safe(cpus, []) || [];
-  const totalRamGb = round2(safe(totalmem, 0) / GB);
-  const freeRamGb = round2(safe(freemem, 0) / GB);
+  const totalRamGb = round3(safe(totalmem, 0) / GB);
+  const freeRamGb = round3(safe(freemem, 0) / GB);
   const gpu = gpuFromEnv(env);
-  const load1 = round2((safe(loadavg, [0]) || [0])[0] ?? 0);
+  const load1 = round3((safe(loadavg, [0]) || [0])[0] ?? 0);
   const cpuCount = cpuList.length || 1;
   const forced = envProfile(env);
   const reported = {
@@ -11034,7 +11953,7 @@ function detectHardware({
     totalRamGb,
     freeRamGb,
     load1,
-    loadPerCpu: round2(load1 / cpuCount),
+    loadPerCpu: round3(load1 / cpuCount),
     gpu,
     platform: process.platform,
     arch: process.arch,
@@ -11067,7 +11986,7 @@ function safe(fn, fallback) {
     return fallback;
   }
 }
-function round2(value) {
+function round3(value) {
   return Math.round(Number(value || 0) * 10) / 10;
 }
 
@@ -13402,7 +14321,7 @@ function safeParse2(value, fallback = {}) {
 // server/life/orchestrator.js
 var DEFAULT_LIMITS = { maxSteps: 8, maxToolCalls: 4, maxIterations: 2 };
 var DEFAULT_TOOLS = ["project.list", "project.read", "project.search"];
-function createOrchestrator({
+function createOrchestrator2({
   store,
   security,
   memory,
@@ -14296,7 +15215,7 @@ function createLifeEngine({
   const verification = createVerificationService({ store, security, graph, clock, userId });
   const experiences = createExperienceService({ store, security, graph, clock, userId });
   const skills = createSkillService({ store, security, graph, clock, userId });
-  const orchestrator = createOrchestrator({
+  const orchestrator = createOrchestrator2({
     store,
     security,
     memory,

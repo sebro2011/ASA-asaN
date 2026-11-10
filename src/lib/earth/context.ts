@@ -89,7 +89,15 @@ export function buildAnalystContext(input: BundleInput): AnalystContext {
           lastMonth: input.power.rows[input.power.rows.length - 1]?.date,
           stats: input.power.available.map((code) => input.power!.stats[code]).filter(Boolean),
           sourceUrl: input.powerProvenanceUrl || 'https://power.larc.nasa.gov/api/temporal/monthly/point',
-          retrievedAt: input.powerRetrievedAt || new Date().toISOString()
+          retrievedAt: input.powerRetrievedAt || new Date().toISOString(),
+          series: input.power.available.map((code) => ({
+            code,
+            unit: input.power!.stats[code]?.unit || '',
+            dates: input.power!.rows.map((row) => row.date),
+            // Only values POWER actually returned; missing cells stay null so the
+            // analyser can report them as missing instead of interpolating.
+            values: input.power!.rows.map((row) => (typeof row.values[code] === 'number' ? row.values[code] : null))
+          }))
         }
       : null,
     dataGaps
@@ -141,7 +149,8 @@ export function contextForRequest(context: AnalystContext, question: string) {
               completeYears: stats.annual.filter((entry) => entry.complete).length
             })),
             sourceUrl: context.power.sourceUrl,
-            retrievedAt: context.power.retrievedAt
+            retrievedAt: context.power.retrievedAt,
+            series: context.power.series
           }
         : null,
       dataGaps: context.dataGaps

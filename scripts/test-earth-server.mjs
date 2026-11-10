@@ -302,7 +302,7 @@ test('GET /firms/hotspots aggregates real CSV rows and never echoes the MAP_KEY'
 
 /* --------------------------------- analyst --------------------------------- */
 
-test('POST /analyst validates the question and reports the missing AI configuration', async () => {
+test('POST /analyst validates the question and answers in local mode without any AI key', async () => {
   const empty = await post('/analyst', { question: '', context: {}, lang: 'en' });
   assert.equal(empty.status, 400);
   assert.equal((await empty.json()).code, 'invalid-question');
@@ -310,11 +310,20 @@ test('POST /analyst validates the question and reports the missing AI configurat
   const tooLong = await post('/analyst', { question: 'x'.repeat(801), context: {}, lang: 'en' });
   assert.equal(tooLong.status, 400);
 
+  // With no provider key the endpoint no longer refuses: the deterministic engine
+  // answers from the retrieved bundle and the response says which mode ran.
+  // A bundle with no observations must be answered with the "no observations"
+  // notice rather than an invented analysis.
   const noKey = await post('/analyst', { question: 'Is Sri Lanka warming?', context: { areaLabel: 'Colombo' }, lang: 'en' });
   const body = await noKey.json();
-  assert.equal(body.ok, false);
-  assert.equal(body.code, 'ai-not-configured');
+  assert.equal(body.ok, true);
+  assert.equal(body.mode, 'local');
   assert.equal(body.provider, 'local');
+  assert.equal(body.providerLabel, 'Local Earth Intelligence');
+  assert.equal(body.noticeCode, 'no-observations');
+  assert.equal(body.sufficientData, false);
+  assert.ok(body.generatedAt, 'every answer carries a timestamp');
+  assert.ok(Array.isArray(body.providerChain), 'the provider chain is always reported');
 });
 
 test('POST /analyst is rate limited per client', async () => {
