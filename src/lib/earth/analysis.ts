@@ -20,15 +20,51 @@ export interface AnalystSource {
   detail?: string;
 }
 
+export interface AnalystProviderAttempt {
+  provider: string;
+  providerLabel?: string;
+  model?: string;
+  outcome: 'ok' | 'error' | 'skipped';
+  code?: string;
+  status?: number;
+  attempts: number;
+  ms: number;
+  reason?: string;
+}
+
+/**
+ * What actually ran. The UI shows this verbatim, because a user is entitled to
+ * know whether Gemini answered, an alternative answered after a fallback, or the
+ * deterministic engine answered — and how many attempts it took.
+ */
+export interface AnalystExecution {
+  mode: 'remote' | 'local';
+  providerId: string;
+  providerLabel: string;
+  attempts: number;
+  retries: number;
+  fallback: boolean;
+  fallbackReason?: string;
+  durationMs?: number;
+  chain: AnalystProviderAttempt[];
+  noticeCode?: string;
+}
+
 export interface AnalystAnswer {
   sections: Array<{ kind: AnalystSectionKind; title: string; bullets: string[] }>;
   sources: AnalystSource[];
-  /** `ai` = Gemini over the retrieved bundle, `local` = deterministic engine. */
+  /** `ai` = a model answered, `local` = deterministic engine. */
   provider: 'ai' | 'local';
   model?: string;
   generatedAt: string;
   /** True when the returned answer is built only from retrieved values. */
   groundedInRetrievedData: boolean;
+  /** Execution metadata — presented as-is, never embellished. */
+  execution?: AnalystExecution;
+  /** Computed values the local engine put in front of the model. */
+  localEvidence?: string[];
+  /** True when the retrieved bundle could support at least one statistic. */
+  sufficientData?: boolean;
 }
 
 export interface AnalystContext {
@@ -59,6 +95,12 @@ export interface AnalystContext {
     stats: PowerSeriesStats[];
     sourceUrl: string;
     retrievedAt: string;
+    /**
+     * Retrieved monthly values, parameter by parameter. This is what lets the
+     * deterministic engine compute anomalies, seasonality and percentage change
+     * from the real observations instead of from pre-aggregated statistics.
+     */
+    series?: Array<{ code: string; unit: string; dates: string[]; values: Array<number | null> }>;
   } | null;
   /** Free-form notes about missing data (never fabricated values). */
   dataGaps: string[];

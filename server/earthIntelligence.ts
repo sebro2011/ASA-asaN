@@ -17,10 +17,12 @@
  */
 
 import express, { type Request, type Response, type NextFunction } from 'express';
-import { GoogleGenAI, Type } from '@google/genai';
 import { buildDomain, describeCoverage, type DescribeDomainsError } from '../src/lib/earth/domains.ts';
 import { describeDomainsUrl, getGibsLayer, GIBS_WMTS_BASE, wmtsTileUrl } from '../src/lib/earth/gibsCatalog.ts';
 import { CORE_PARAMETER_CODES, POWER_MONTHLY_POINT_URL } from '../src/lib/earth/power.ts';
+import { analyseBundle, buildLocalAnalystAnswer } from './earth/localAnalysis.ts';
+import { createOrchestrator } from './earth/providerOrchestrator.ts';
+import { createConfiguredProviders, extractJson, normaliseAnswer } from './earth/providers.ts';
 
 export const earthRouter = express.Router();
 
@@ -107,6 +109,7 @@ function numberParam(value: unknown, min: number, max: number): number | null {
 
 earthRouter.get('/health', (_req, res) => {
   res.json({
+    analystProviders: activeAnalystOrchestrator().health(),
     ok: true,
     service: 'earth-intelligence',
     timestamp: new Date().toISOString(),
@@ -115,7 +118,13 @@ earthRouter.get('/health', (_req, res) => {
       gibsDomains: true,
       gibsProbe: true,
       firmsHotspots: Boolean(process.env.FIRMS_MAP_KEY),
-      aiAnalyst: Boolean(process.env.GEMINI_API_KEY)
+      aiAnalyst: Boolean(process.env.GEMINI_API_KEY),
+      aiAnalystProviders: [
+        process.env.GEMINI_API_KEY ? 'gemini' : null,
+        process.env.OPENROUTER_API_KEY ? 'openrouter' : null,
+        process.env.ARENA_API_KEY ? 'arena' : null
+      ].filter(Boolean),
+      localAnalyst: true
     },
     notes: {
       firmsHotspots: process.env.FIRMS_MAP_KEY
@@ -123,7 +132,13 @@ earthRouter.get('/health', (_req, res) => {
         : 'No FIRMS_MAP_KEY configured — hotspot counts are not offered (the app never estimates them).',
       aiAnalyst: process.env.GEMINI_API_KEY
         ? 'Gemini interpretation enabled; answers are grounded in the retrieved data bundle only.'
-        : 'No GEMINI_API_KEY configured — the Lab uses its deterministic local analysis engine.'
+        : 'No GEMINI_API_KEY configured — the Lab uses its deterministic local analysis engine.',
+      aiAnalystFailover: [
+        process.env.OPENROUTER_API_KEY ? 'OpenRouter' : null,
+        process.env.ARENA_API_KEY ? 'Arena AI' : null
+      ].filter(Boolean).length
+        ? 'Gemini failures retry with backoff, then fall over to a configured alternative provider, then to the local engine.'
+        : 'Gemini failures retry with backoff, then fall back to the local deterministic engine (no alternative AI key configured).'
     }
   });
 });
@@ -501,62 +516,125 @@ earthRouter.get('/firms/hotspots', rateLimit('firms', 30, 60_000), async (req, r
 /* AI Earth science analyst                                            */
 /* ------------------------------------------------------------------ */
 
-const aiClient = process.env.GEMINI_API_KEY
-  ? new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY, httpOptions: { headers: { 'User-Agent': 'nasa-space-explorer-earth-lab' } } })
-  : null;
+/* ------------------------------------------------------------------ */
+/* AI Earth science analyst                                            */
+/*                                                                     */
+/* Chain: Gemini (primary) → OpenRouter → Arena AI → Local engine.     */
+/* Gemini is unchanged in model, prompt and schema — it is simply no   */
+/* longer the only thing standing between a user and an answer.        */
+/* ------------------------------------------------------------------ */
 
-// Verified live: `gemini-3.8-flash` is a real id (a bad one answers 404, this
-// one answers 503 under load).
-const ANALYST_MODEL = 'gemini-3.8-flash';
+interface AnalystRedaction {
+  (text: string): string;
+}
 
-const ANALYST_SYSTEM_INSTRUCTION = `You are the Earth Science Analyst inside the NASA Space Explorer Earth Intelligence Lab.
+/** Strips anything key-shaped out of a string we are about to return or log. */
+const redact: AnalystRedaction = (text: string) =>
+  String(text || '')
+    .replace(/([?&](?:api_?key|key|token|access_token)=)[^&\s"']+/gi, '$1[redacted]')
+    .replace(/\b(AIza|sk-|or-|arena-)[A-Za-z0-9_\-]{8,}/g, '[redacted]')
+    .replace(/\bBearer\s+[A-Za-z0-9._\-]{8,}/gi, 'Bearer [redacted]')
+    .slice(0, 240);
 
-Absolute rules:
-1. You may ONLY use the numbers, dataset names, dates, coverage strings and URLs present in the JSON context supplied by the client. Never add measurements, hotspot counts, alerts, place names or sources from memory.
-2. If a value needed to answer is absent from the context, say it is not available in the retrieved data and name what would be required.
-3. Separate your answer into:
-   - verified: statements that restate retrieved values or documented dataset metadata;
-   - derived: arithmetic or comparisons you performed on those retrieved values (show the calculation style, e.g. "mean of the 12 monthly values");
-   - interpretation: scientific reading, always hedged and clearly labelled as interpretation;
-   - limitations: dataset limitations, uncertainty, and what the data cannot establish;
-   - gaps: missing data.
-4. Never claim that two images prove a trend. Never claim statistical significance or attribution.
-5. Cite the source URLs exactly as they appear in the context, and only those.
-6. Be concise: at most 5 bullets per section, each under 45 words.
-7. Write in the requested language (English, Sinhala or Tamil) using correct scientific terminology.`;
+/** Structured, key-free server log line. */
+function logAnalystEvent(event: Record<string, unknown>) {
+  try {
+    console.log(JSON.stringify({ ts: new Date().toISOString(), scope: 'earth.analyst', ...event }));
+  } catch {
+    /* logging must never break a request */
+  }
+}
 
-function analystResponseSchema() {
-  const section = {
-    type: Type.OBJECT,
-    properties: {
-      kind: { type: Type.STRING, description: 'verified | derived | interpretation | limitations | gaps' },
-      title: { type: Type.STRING },
-      bullets: { type: Type.ARRAY, items: { type: Type.STRING } }
-    },
-    required: ['kind', 'title', 'bullets']
-  };
+const PROVIDER_LABELS: Record<string, string> = {
+  gemini: 'Google Gemini',
+  openrouter: 'OpenRouter',
+  arena: 'Arena AI',
+  local: 'Local Earth Intelligence',
+};
+
+/** Context sent to a model: retrieved evidence + the arithmetic already done. */
+function buildProviderContext(context: any, analysis: ReturnType<typeof analyseBundle>) {
   return {
-    type: Type.OBJECT,
-    properties: {
-      sections: { type: Type.ARRAY, items: section },
-      sources: {
-        type: Type.ARRAY,
-        items: {
-          type: Type.OBJECT,
-          properties: {
-            label: { type: Type.STRING },
-            url: { type: Type.STRING },
-            detail: { type: Type.STRING }
-          },
-          required: ['label', 'url']
-        }
-      }
+    location: {
+      label: context?.power?.place || context?.area?.label || null,
+      latitude: context?.power?.latitude ?? context?.area?.latitude ?? null,
+      longitude: context?.power?.longitude ?? context?.area?.longitude ?? null,
     },
-    required: ['sections']
+    observationDates: Array.isArray(context?.dates) ? context.dates : [],
+    dateRange: context?.power ? { from: context.power.from ?? null, to: context.power.to ?? null } : null,
+    datasets: [
+      context?.power
+        ? {
+            id: 'NASA_POWER_MONTHLY_POINT',
+            title: 'NASA POWER monthly point archive',
+            sourceUrl: context.power.sourceUrl ?? null,
+            units: Object.fromEntries(analysis.series.map((entry) => [entry.code, entry.unit || 'unit not reported'])),
+            availableParameters: context.power.available ?? [],
+            unavailableParameters: context.power.unavailable ?? [],
+            monthlySeries: analysis.series.map((entry) => ({
+              code: entry.code,
+              unit: entry.unit,
+              firstMonth: entry.firstMonth,
+              lastMonth: entry.lastMonth,
+              values: entry.count,
+            })),
+          }
+        : null,
+    ].filter(Boolean),
+    layers: Array.isArray(context?.layers) ? context.layers : [],
+    missingData: {
+      reportedByClient: Array.isArray(context?.dataGaps) ? context.dataGaps : [],
+      byParameter: analysis.series
+        .filter((entry) => entry.missing > 0)
+        .map((entry) => ({ code: entry.code, missingMonths: entry.missing, examples: entry.missingMonths.slice(0, 6) })),
+    },
+    localAnalysis: {
+      note: 'Arithmetic already computed from the retrieved POWER values by the deterministic engine. Restate these; do not recompute differently.',
+      series: analysis.series.map((entry) => ({
+        code: entry.code,
+        unit: entry.unit,
+        usableValues: entry.count,
+        mean: entry.mean,
+        min: entry.min,
+        max: entry.max,
+        anomalyBaseline: entry.anomaly
+          ? { label: entry.anomaly.baselineLabel, value: entry.anomaly.baselineValue, latest: entry.anomaly.latest }
+          : null,
+        periodComparison: entry.periodComparison,
+        seasonal: entry.seasonal,
+      })),
+      coverage: analysis.coverage,
+    },
+    raw: context,
   };
 }
 
+const analystOrchestrator = createOrchestrator({
+  providers: createConfiguredProviders(),
+  parseAnswer: (text, context) => normaliseAnswer(extractJson(text), context, 6),
+  log: (event) => logAnalystEvent(event as Record<string, unknown>),
+});
+
+/**
+ * Test seam: lets the failover suite inject an orchestrator whose providers are
+ * stubs, so the HTTP contract is exercised end to end without calling Google.
+ */
+let analystOrchestratorOverride: typeof analystOrchestrator | null = null;
+
+export function __setAnalystOrchestratorForTests(instance: typeof analystOrchestrator | null) {
+  analystOrchestratorOverride = instance;
+}
+
+function activeAnalystOrchestrator() {
+  return analystOrchestratorOverride || analystOrchestrator;
+}
+
+function analystLanguageName(lang: string): string {
+  return ({ en: 'English', si: 'Sinhala (සිංහල)', ta: 'Tamil (தமிழ்)' } as Record<string, string>)[lang] || 'English';
+}
+
 earthRouter.post('/analyst', rateLimit('analyst', 20, 5 * 60_000), async (req, res) => {
+  const startedAt = Date.now();
   const { question, context, lang = 'en' } = req.body || {};
   if (!question || typeof question !== 'string' || question.length > 800) {
     return res.status(400).json({ ok: false, code: 'invalid-question', message: 'A question of up to 800 characters is required.' });
@@ -565,92 +643,154 @@ earthRouter.post('/analyst', rateLimit('analyst', 20, 5 * 60_000), async (req, r
     return res.status(400).json({ ok: false, code: 'missing-context', message: 'A retrieved-data context bundle is required.' });
   }
 
-  const languageName = ({ en: 'English', si: 'Sinhala (සිංහල)', ta: 'Tamil (தமிழ்)' } as Record<string, string>)[String(lang)] || 'English';
+  const languageName = analystLanguageName(String(lang));
+  const requestId = `an-${startedAt.toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 
-  if (!aiClient) {
-    return res.status(200).json({
-      ok: false,
-      code: 'ai-not-configured',
-      status: 'not-configured',
-      message: 'No GEMINI_API_KEY is configured on the server, so no model-generated interpretation is available. Use the local deterministic analysis instead.',
-      provider: 'local'
-    });
-  }
+  // Deterministic pass first: it grounds the model AND is the answer of last resort.
+  const analysis = analyseBundle(context as any);
+  const local = buildLocalAnalystAnswer(String(question), context as any, { analysis });
+  const providerContext = buildProviderContext(context, analysis);
 
+  // Cancellation: if the browser goes away, stop paying for tokens.
+  const controller = new AbortController();
+  let clientGone = false;
+  // `req` 'close' fires as soon as the request body has been read, so the
+  // cancellation signal has to come from the response side.
+  res.on('close', () => {
+    if (!res.writableEnded) {
+      clientGone = true;
+      controller.abort();
+    }
+  });
+
+  const dedupeKey = JSON.stringify([String(question), String(lang), providerContext.location, providerContext.dateRange, analysis.series.map((entry) => [entry.code, entry.count, entry.lastMonth])]);
+
+  logAnalystEvent({
+    event: 'earth.analyst.request',
+    requestId,
+    lang: String(lang),
+    questionLength: question.length,
+    series: analysis.series.length,
+    usableValues: analysis.coverage?.analysed ?? 0,
+    missingCells: analysis.coverage?.missingCells ?? 0,
+  });
+
+  let run: Awaited<ReturnType<typeof analystOrchestrator.run>>;
   try {
-    const response = await aiClient.models.generateContent({
-      model: ANALYST_MODEL,
-      contents: `Question from the user (answer in ${languageName}):\n\n${question}\n\nRetrieved data context (JSON, the only allowed source of facts):\n${JSON.stringify(
-        context
-      )}`,
-      config: {
-        systemInstruction: ANALYST_SYSTEM_INSTRUCTION,
-        responseMimeType: 'application/json',
-        responseSchema: analystResponseSchema(),
-        temperature: 0.2
-      }
-    });
-
-    const text = response.text || '';
-    let parsed: any = null;
-    try {
-      parsed = JSON.parse(text);
-    } catch {
-      return res.status(502).json({
-        ok: false,
-        code: 'ai-unparsable',
-        status: 'error',
-        message: 'The model response could not be parsed as structured JSON. The local deterministic analysis is available instead.'
-      });
-    }
-
-    const sections = Array.isArray(parsed?.sections) ? parsed.sections : [];
-    if (!sections.length) {
-      return res.status(502).json({
-        ok: false,
-        code: 'ai-empty',
-        status: 'error',
-        message: 'The model returned no answer sections. The local deterministic analysis is available instead.'
-      });
-    }
-
-    // Guardrail: only URLs that exist in the supplied context survive.
-    const allowedUrls = new Set<string>();
-    JSON.stringify(context).replace(/"(https?:\/\/[^"]+)"/g, (match, url) => {
-      allowedUrls.add(url);
-      return match;
-    });
-    const rawSources = Array.isArray(parsed?.sources) ? parsed.sources : [];
-    const sources = rawSources
-      .filter((source: any) => source && typeof source.url === 'string')
-      .map((source: any) => ({
-        label: String(source.label || source.url),
-        url: String(source.url),
-        detail: source.detail ? String(source.detail) : undefined,
-        verifiedInContext: allowedUrls.has(String(source.url))
-      }));
-
-    return res.json({
-      ok: true,
-      provider: 'ai',
-      model: ANALYST_MODEL,
-      generatedAt: new Date().toISOString(),
-      groundedInRetrievedData: true,
-      groundingMode: 'retrieved-context-only',
-      sections: sections.map((section: any) => ({
-        kind: ['verified', 'derived', 'interpretation', 'limitations', 'gaps'].includes(section.kind) ? section.kind : 'interpretation',
-        title: String(section.title || 'Interpretation'),
-        bullets: Array.isArray(section.bullets) ? section.bullets.map((bullet: unknown) => String(bullet)).slice(0, 6) : []
-      })),
-      sources,
-      droppedSources: sources.filter((source: any) => source.verifiedInContext === false).length
+    run = await activeAnalystOrchestrator().run({
+      question: String(question),
+      context: providerContext,
+      lang: String(lang),
+      signal: controller.signal,
+      dedupeKey,
     });
   } catch (error) {
-    return res.status(502).json({
+    // The orchestrator itself never throws, but a bug here must still not leak.
+    logAnalystEvent({ event: 'earth.analyst.orchestrator_error', requestId, message: redact((error as Error)?.message || 'unknown') });
+    run = {
       ok: false,
-      code: 'ai-error',
-      status: 'error',
-      message: `The AI analyst call failed (${(error as Error)?.message || 'unknown error'}). The local deterministic analysis is available instead.`
+      answer: null,
+      unparsable: undefined,
+      metadata: {
+        mode: 'local',
+        provider: 'local',
+        providerLabel: PROVIDER_LABELS.local,
+        attempts: 0,
+        retries: 0,
+        fallback: true,
+        fallbackReason: 'ORCHESTRATOR_ERROR',
+        providerChain: [],
+        generatedAt: new Date().toISOString(),
+        deduped: false,
+        durationMs: Date.now() - startedAt,
+        noticeCode: 'all-providers-unavailable',
+      },
+    };
+  }
+
+  const { metadata } = run;
+  const chain = metadata.providerChain.map((entry) => ({
+    provider: entry.provider,
+    providerLabel: PROVIDER_LABELS[entry.provider] || entry.provider,
+    model: entry.model,
+    outcome: entry.outcome,
+    code: entry.code,
+    status: entry.status,
+    attempts: entry.attempts,
+    ms: entry.ms,
+    // Upstream messages are logged server-side only; the client gets the
+    // classification code, never the provider's own error text.
+    reason: entry.code ? `${PROVIDER_LABELS[entry.provider] || entry.provider}: ${entry.code}` : undefined,
+  }));
+
+  const base = {
+    ok: true,
+    mode: metadata.mode,
+    provider: metadata.provider,
+    providerLabel: metadata.providerLabel,
+    model: metadata.model,
+    generatedAt: metadata.generatedAt,
+    attempts: metadata.attempts,
+    retries: metadata.retries,
+    fallback: metadata.fallback,
+    fallbackReason: metadata.fallbackReason,
+    providerChain: chain,
+    deduped: metadata.deduped,
+    durationMs: Date.now() - startedAt,
+    groundedInRetrievedData: true,
+    groundingMode: 'retrieved-context-only',
+    sufficientData: local.sufficientData,
+    localEvidence: local.evidenceSummary.slice(0, 5),
+  };
+
+  if (clientGone) {
+    logAnalystEvent({ event: 'earth.analyst.client_closed', requestId, ms: Date.now() - startedAt });
+    return undefined;
+  }
+
+  if (run.ok && run.answer) {
+    const answer = run.answer as ReturnType<typeof normaliseAnswer>;
+    logAnalystEvent({
+      event: 'earth.analyst.answer',
+      requestId,
+      mode: 'remote',
+      provider: metadata.provider,
+      attempts: metadata.attempts,
+      retries: metadata.retries,
+      fallback: metadata.fallback,
+      ms: Date.now() - startedAt,
+    });
+    return res.json({
+      ...base,
+      noticeCode: metadata.noticeCode ?? (metadata.fallback ? 'primary-unavailable' : undefined),
+      sections: answer.sections,
+      sources: answer.sources,
+      droppedSources: answer.droppedSources,
     });
   }
+
+  // Local mode: a real answer, computed from the same retrieved values.
+  const noticeCode = local.sufficientData ? (metadata.noticeCode || 'local-mode') : 'no-observations';
+  logAnalystEvent({
+    event: 'earth.analyst.answer',
+    requestId,
+    mode: 'local',
+    noticeCode,
+    attempts: metadata.attempts,
+    reason: metadata.fallbackReason,
+    ms: Date.now() - startedAt,
+  });
+
+  return res.json({
+    ...base,
+    mode: 'local',
+    provider: 'local',
+    providerLabel: PROVIDER_LABELS.local,
+    model: undefined,
+    noticeCode,
+    sections: local.sections,
+    sources: local.sources,
+    droppedSources: 0,
+    groundingMode: 'deterministic-local-analysis',
+  });
 });

@@ -2,18 +2,27 @@
  * AI Earth Science Analyst.
  *
  * The panel posts a compact bundle of *retrieved* values to `/api/earth/analyst`.
- * The server answers with strict JSON sections (verified / derived /
- * interpretation / limitations / gaps). If the AI service is not configured or
- * fails — including when the app is hosted without the Express server — the
- * deterministic local engine (`buildLocalAnalystAnswer`) answers from the same
- * bundle, so the workspace never depends on a model to be usable.
+ * The server runs the provider chain (Gemini → alternative → local engine) and
+ * answers with strict JSON sections (verified / derived / interpretation /
+ * limitations / gaps) plus the execution metadata of what actually ran.
+ *
+ * The UI shows that metadata as-is: which provider answered, whether a fallback
+ * happened, how many attempts it took and how long it took. There is no spinner
+ * that keeps running after a failure and no "AI" badge on a locally computed
+ * answer.
  */
 
 import React, { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { BrainCircuit, ExternalLink, Link2, Loader2, Send, ShieldCheck, TriangleAlert } from 'lucide-react';
+import { BrainCircuit, ChevronDown, Cpu, ExternalLink, Link2, Loader2, Send, ShieldCheck, TriangleAlert } from 'lucide-react';
 import { InfoNote, Panel, Pill, SectionHeading, formatDateTime } from './EarthPanel';
-import { buildLocalAnalystAnswer, type AnalystAnswer, type AnalystContext, type AnalystSectionKind } from '../../lib/earth/analysis';
+import {
+  buildLocalAnalystAnswer,
+  type AnalystAnswer,
+  type AnalystContext,
+  type AnalystExecution,
+  type AnalystSectionKind
+} from '../../lib/earth/analysis';
 import { contextForRequest } from '../../lib/earth/context';
 
 interface AnalystPanelProps {
@@ -30,6 +39,53 @@ const SECTION_STYLES: Record<AnalystSectionKind, { tone: 'emerald' | 'violet' | 
   gaps: { tone: 'rose', key: 'earthAnalystSectionGaps' }
 };
 
+const NOTICE_KEYS: Record<string, string> = {
+  'primary-unavailable': 'earthAnalystNoticePrimaryUnavailable',
+  'all-providers-unavailable': 'earthAnalystNoticeAllDown',
+  'local-mode': 'earthAnalystNoticeLocalMode',
+  'no-observations': 'earthAnalystNoticeNoObservations',
+  'model-response-unusable': 'earthAnalystNoticeUnusable'
+};
+
+/** Evidence the answer is grounded in — computed from the bundle actually sent. */
+function buildEvidence(context: AnalystContext, answer: AnalystAnswer, t: (key: string, options?: Record<string, unknown>) => string) {
+  const rows: Array<{ label: string; value: string }> = [];
+  rows.push({
+    label: t('earthAnalystEvidenceLocation'),
+    value: `${context.areaLabel} · ${context.latitude.toFixed(3)}°, ${context.longitude.toFixed(3)}°`
+  });
+  rows.push({
+    label: t('earthAnalystEvidenceDates'),
+    value: context.dates.length ? context.dates.join(', ') : t('earthAnalystNotApplicable')
+  });
+  if (context.power) {
+    rows.push({
+      label: t('earthAnalystEvidenceWindow'),
+      value: `${context.power.firstMonth || '?'} → ${context.power.lastMonth || '?'} · ${context.power.rows} months · ${context.power.available.join(', ') || 'no parameters'}`
+    });
+    const series = context.power.series || [];
+    const cells = series.reduce((total, entry) => total + entry.values.length, 0);
+    const missing = series.reduce(
+      (total, entry) => total + entry.values.filter((value) => typeof value !== 'number').length,
+      0
+    );
+    if (series.length) {
+      rows.push({
+        label: t('earthAnalystEvidenceSeries'),
+        value: `${series.length} (${series.map((entry) => entry.code).join(', ')})`
+      });
+      rows.push({
+        label: t('earthAnalystEvidenceMissing'),
+        value: `${missing} / ${cells} ${missing ? '' : '(none reported)'}`.trim()
+      });
+    }
+    rows.push({ label: 'NASA POWER', value: context.power.sourceUrl });
+    rows.push({ label: t('earthProvenanceRetrieved'), value: formatDateTime(context.power.retrievedAt) });
+  }
+  const computed = answer.localEvidence || [];
+  return { rows, computed };
+}
+
 export default function AnalystPanel({ context, lang, aiCapable }: AnalystPanelProps) {
   const { t } = useTranslation();
   const [question, setQuestion] = useState('');
@@ -40,9 +96,23 @@ export default function AnalystPanel({ context, lang, aiCapable }: AnalystPanelP
 
   const suggestions = [t('earthAnalystSuggestion1'), t('earthAnalystSuggestion2'), t('earthAnalystSuggestion3'), t('earthAnalystSuggestion4')];
 
-  const runLocal = (asked: string) => {
+  /** Deterministic answer computed in the browser — used only when the API itself is unreachable. */
+  const runLocal = (asked: string, reason: string) => {
     const local = buildLocalAnalystAnswer(asked, context);
-    setAnswer(local);
+    setAnswer({
+      ...local,
+      execution: {
+        mode: 'local',
+        providerId: 'local',
+        providerLabel: t('earthAnalystModeLocal'),
+        attempts: 0,
+        retries: 0,
+        fallback: true,
+        fallbackReason: reason,
+        chain: [],
+        noticeCode: 'local-mode'
+      }
+    });
   };
 
   const submit = async (asked: string) => {
@@ -65,13 +135,26 @@ export default function AnalystPanel({ context, lang, aiCapable }: AnalystPanelP
       });
 
       const body = await response.json().catch(() => null);
+
+      // A hard HTTP failure (no server, rate limit, validation) → browser-side engine.
       if (!response.ok || !body?.ok) {
-        // Any failure path (no key, model error, no server at all) → deterministic answer.
-        const local = buildLocalAnalystAnswer(trimmed, context);
-        setAnswer(local);
-        setNotice(body?.message || t('earthAnalystLocalNotice'));
+        runLocal(trimmed, body?.code ? String(body.code).toUpperCase() : `HTTP_${response.status}`);
+        setNotice(body?.message || t('earthAnalystNoticeLocalMode'));
         return;
       }
+
+      const execution: AnalystExecution = {
+        mode: body.mode === 'remote' ? 'remote' : 'local',
+        providerId: String(body.provider || 'local'),
+        providerLabel: String(body.providerLabel || (body.mode === 'remote' ? body.provider : t('earthAnalystModeLocal'))),
+        attempts: Number(body.attempts || 0),
+        retries: Number(body.retries || 0),
+        fallback: Boolean(body.fallback),
+        fallbackReason: body.fallbackReason ? String(body.fallbackReason) : undefined,
+        durationMs: typeof body.durationMs === 'number' ? body.durationMs : undefined,
+        chain: Array.isArray(body.providerChain) ? body.providerChain : [],
+        noticeCode: body.noticeCode ? String(body.noticeCode) : undefined
+      };
 
       setAnswer({
         sections: body.sections || [],
@@ -81,23 +164,32 @@ export default function AnalystPanel({ context, lang, aiCapable }: AnalystPanelP
           retrievedAt: body.generatedAt || new Date().toISOString(),
           detail: source.detail
         })),
-        provider: 'ai',
+        provider: execution.mode === 'remote' ? 'ai' : 'local',
         model: body.model,
         generatedAt: body.generatedAt,
-        groundedInRetrievedData: Boolean(body.groundedInRetrievedData)
+        groundedInRetrievedData: Boolean(body.groundedInRetrievedData),
+        execution,
+        localEvidence: Array.isArray(body.localEvidence) ? body.localEvidence : [],
+        sufficientData: Boolean(body.sufficientData)
       });
-      if (body.droppedSources) {
+
+      if (execution.noticeCode && NOTICE_KEYS[execution.noticeCode]) {
+        setNotice(t(NOTICE_KEYS[execution.noticeCode]));
+      } else if (body.droppedSources) {
         setNotice(t('earthAnalystDroppedSources', { count: body.droppedSources }));
       }
     } catch (error) {
       if ((error as Error)?.name === 'AbortError') return;
-      const local = buildLocalAnalystAnswer(trimmed, context);
-      setAnswer(local);
-      setNotice(t('earthAnalystLocalNotice'));
+      runLocal(trimmed, 'API_UNREACHABLE');
+      setNotice(t('earthAnalystNoticeLocalMode'));
     } finally {
       if (!controller.signal.aborted) setLoading(false);
     }
   };
+
+  const execution = answer?.execution;
+  const isLocal = execution ? execution.mode === 'local' : answer ? answer.provider === 'local' : false;
+  const evidence = answer ? buildEvidence(context, answer, t) : null;
 
   return (
     <div className="space-y-4">
@@ -137,6 +229,7 @@ export default function AnalystPanel({ context, lang, aiCapable }: AnalystPanelP
             <button
               type="submit"
               disabled={loading || !question.trim()}
+              aria-busy={loading}
               className="flex items-center gap-2 rounded-[8px] border border-atmo/45 bg-atmo/10 px-4 py-2 text-sm text-atmo-soft transition hover:bg-cyan-500/25 disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-atmo"
             >
               {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
@@ -165,17 +258,22 @@ export default function AnalystPanel({ context, lang, aiCapable }: AnalystPanelP
           </div>
         </div>
 
-        {notice ? <InfoNote tone="amber">{notice}</InfoNote> : null}
+        {notice ? <InfoNote tone={isLocal ? 'amber' : 'cyan'}>{notice}</InfoNote> : null}
       </Panel>
 
       {answer ? (
         <Panel className="space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex flex-wrap items-center gap-2">
-              <Pill tone={answer.provider === 'ai' ? 'cyan' : 'slate'}>
-                {answer.provider === 'ai' ? t('earthAnalystProviderAi') : t('earthAnalystProviderLocal')}
+              {/* True provider identity: local answers are never dressed up as remote AI. */}
+              <Pill tone={isLocal ? 'slate' : 'cyan'}>
+                {isLocal ? <Cpu className="h-3 w-3" /> : <BrainCircuit className="h-3 w-3" />}
+                {execution?.providerLabel || (answer.provider === 'ai' ? t('earthAnalystProviderAi') : t('earthAnalystModeLocal'))}
               </Pill>
-              {answer.model ? <Pill tone="slate">{t('earthAnalystModel', { model: answer.model })}</Pill> : null}
+              {!isLocal && answer.model ? <Pill tone="slate">{t('earthAnalystModel', { model: answer.model })}</Pill> : null}
+              {execution && execution.attempts > 0 ? <Pill tone="slate">{t('earthAnalystAttemptsCount', { count: execution.attempts })}</Pill> : null}
+              {execution?.retries ? <Pill tone="amber">{t('earthAnalystRetriesCount', { count: execution.retries })}</Pill> : null}
+              {execution?.fallback && !isLocal ? <Pill tone="amber">{t('earthAnalystAttemptError')}</Pill> : null}
               {answer.groundedInRetrievedData ? (
                 <Pill tone="emerald">
                   <ShieldCheck className="h-3 w-3" />
@@ -183,7 +281,10 @@ export default function AnalystPanel({ context, lang, aiCapable }: AnalystPanelP
                 </Pill>
               ) : null}
             </div>
-            <p className="text-[11px] text-ink-4">{t('earthAnalystGeneratedAt', { time: formatDateTime(answer.generatedAt) })}</p>
+            <p className="text-[11px] text-ink-4">
+              {t('earthAnalystGeneratedAt', { time: formatDateTime(answer.generatedAt) })}
+              {execution?.durationMs ? ` · ${t('earthAnalystDuration', { ms: execution.durationMs })}` : ''}
+            </p>
           </div>
 
           <div className="grid gap-3 lg:grid-cols-2">
@@ -220,6 +321,72 @@ export default function AnalystPanel({ context, lang, aiCapable }: AnalystPanelP
                 );
               })}
           </div>
+
+          {/* Expandable evidence: exactly what was sent, so the answer can be checked. */}
+          {evidence ? (
+            <details className="group rounded-[10px] border border-line bg-abyss/60 p-3 [&_summary::-webkit-details-marker]:hidden">
+              <summary className="flex cursor-pointer items-center justify-between gap-2 text-[11px] uppercase tracking-wide text-ink-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-atmo">
+                <span>{t('earthAnalystEvidence')}</span>
+                <ChevronDown className="h-3.5 w-3.5 transition group-open:rotate-180" />
+              </summary>
+              <dl className="mt-2 space-y-1.5">
+                {evidence.rows.map((row) => (
+                  <div key={row.label} className="grid grid-cols-[minmax(96px,auto)_1fr] gap-x-3 border-b border-line/50 py-1 text-[11px] last:border-0">
+                    <dt className="text-ink-4">{row.label}</dt>
+                    <dd className="min-w-0 break-words text-ink-2">{row.value}</dd>
+                  </div>
+                ))}
+              </dl>
+              {evidence.computed.length ? (
+                <>
+                  <p className="mt-2 text-[10px] uppercase tracking-[0.12em] text-ink-4">{t('earthAnalystEvidenceComputed')}</p>
+                  <ul className="mt-1 space-y-1 text-[11px] text-ink-2">
+                    {evidence.computed.map((line) => (
+                      <li key={line} className="break-words">
+                        {line}
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              ) : null}
+            </details>
+          ) : null}
+
+          {/* Provider attempts: the real chain, including skipped providers. */}
+          <details className="group rounded-[10px] border border-line bg-abyss/60 p-3 [&_summary::-webkit-details-marker]:hidden">
+            <summary className="flex cursor-pointer items-center justify-between gap-2 text-[11px] uppercase tracking-wide text-ink-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-atmo">
+              <span>{t('earthAnalystProviderChain')}</span>
+              <ChevronDown className="h-3.5 w-3.5 transition group-open:rotate-180" />
+            </summary>
+            {execution && execution.chain.length ? (
+              <ul className="mt-2 space-y-1.5 text-[11px]">
+                {execution.chain.map((entry, index) => (
+                  <li key={`${entry.provider}-${index}`} className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-[8px] border border-line/60 px-2 py-1">
+                    <span className={entry.outcome === 'ok' ? 'text-emerald-300' : entry.outcome === 'error' ? 'text-caution' : 'text-ink-4'}>
+                      {entry.providerLabel || entry.provider}
+                    </span>
+                    {entry.model ? <span className="text-ink-4">{entry.model}</span> : null}
+                    <span className="text-ink-4">
+                      {entry.outcome === 'ok'
+                        ? t('earthAnalystAttemptOk')
+                        : entry.outcome === 'error'
+                          ? t('earthAnalystAttemptError')
+                          : t('earthAnalystAttemptSkipped')}
+                    </span>
+                    {entry.code ? <span className="text-ink-4">· {entry.code}</span> : null}
+                    {entry.status ? <span className="text-ink-4">· HTTP {entry.status}</span> : null}
+                    {entry.attempts ? <span className="text-ink-4">· {t('earthAnalystAttemptsCount', { count: entry.attempts })}</span> : null}
+                    {entry.ms ? <span className="text-ink-4">· {t('earthAnalystDuration', { ms: entry.ms })}</span> : null}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="mt-2 text-[11px] text-ink-4">{t('earthAnalystProviderChainEmpty')}</p>
+            )}
+            {execution?.fallbackReason ? (
+              <p className="mt-2 text-[11px] text-ink-4">{t('earthAnalystFallbackReason', { reason: execution.fallbackReason })}</p>
+            ) : null}
+          </details>
 
           {answer.sources.length ? (
             <div>

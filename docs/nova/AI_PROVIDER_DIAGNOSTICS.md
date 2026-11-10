@@ -248,3 +248,37 @@ Media handling that used to fail silently:
   always labelled `isFallback` and never `cached`.
 
 Tests: `scripts/test-apod-media.mjs` (12 cases, including two jsdom renders).
+
+---
+
+## 8. Earth Science Analyst failover (2026-11-08)
+
+The analyst no longer treats a provider failure as final. The chain is
+Gemini → OpenRouter → Arena AI → Local Intelligence Mode, and the response always
+names whichever one answered.
+
+| Failure | Classification | What happens |
+| --- | --- | --- |
+| 429 rate limit | retryable | backoff (honours `Retry-After`), then retry, then next provider |
+| 500 / 502 / 503 / 504 | retryable | 3 attempts with jittered exponential backoff |
+| timeout (>12 s per attempt) | retryable | attempt is cut short, next attempt or next provider |
+| network error / DNS | retryable | as above |
+| 400 / 422 bad request | permanent | next provider immediately |
+| 401 / 403 auth | permanent | next provider immediately |
+| 402 credit | permanent | next provider immediately |
+| 404 model id | permanent | next provider immediately |
+| 200 with unreadable JSON | provider failure | classified `UNPARSABLE_RESPONSE`, next provider |
+| all exhausted | — | local deterministic answer, `noticeCode` explains which case |
+
+Diagnostics: `GET /api/earth/health` → `analystProviders[]` with `configured` and
+breaker `state` (`closed` / `open` / `unconfigured`). This never spends a provider
+request; it reports configuration plus in-process failure state only.
+
+Structured logs (`scope: "earth.analyst"`) are emitted as one JSON object per line
+with `event`, `requestId`, `provider`, `attempt`, `code`, `status`, `ms` — and
+never a key, prompt or response body.
+
+Full design, including the deterministic engine and the test matrix:
+[`AI_ANALYST_FAILOVER.md`](./AI_ANALYST_FAILOVER.md). The Gemini project itself
+still returns 503 for every model id until the Google project issue is fixed (see
+§2); the analyst now degrades honestly instead of failing.
