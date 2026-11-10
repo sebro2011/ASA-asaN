@@ -75,6 +75,7 @@ import {
   saveInvestigation,
   type StoredInvestigation,
 } from '../../lib/forge/memory';
+import { ScienceLab } from './ScienceLab';
 import {
   EvidenceChart,
   HypothesisGraph,
@@ -1322,6 +1323,8 @@ export default function ForgeSurface({ onExitToChat }: { onExitToChat?: () => vo
                     </div>
                   </div>
                 ) : null}
+
+                <ScienceLab seriesList={seriesList} />
 
                 {hypotheses.length > 0 ? (
                   <HypothesisGraph hypotheses={hypotheses} t={t} language={language} />
