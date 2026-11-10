@@ -2721,6 +2721,7 @@ var GEMINI_GENERATE_CONTENT_URL = "https://generativelanguage.googleapis.com/v1b
 var OPENROUTER_FREE_MODEL = "openrouter/free";
 var DEFAULT_GEMINI_MODEL = "gemini-3.8-flash";
 var GEMINI_MODEL_FALLBACKS = ["gemini-flash-latest", "gemini-2.5-flash"];
+var GEMINI_RETRYABLE_MODEL_STATUSES = /* @__PURE__ */ new Set([404, 422, 503]);
 function geminiModelCandidates(model) {
   const requested = String(model || "").trim();
   const candidates = requested ? [requested] : [];
@@ -3119,6 +3120,7 @@ async function callGemini({ fetchImpl, apiKey, model, messages, language, thinki
   let upstreamResult = null;
   let firstError = null;
   let usedModel = model;
+  const deadline = timeoutMs ? Date.now() + timeoutMs : 0;
   for (const candidate of geminiModelCandidates(model)) {
     usedModel = candidate;
     const url = `${GEMINI_GENERATE_CONTENT_URL}/${encodeURIComponent(candidate)}:generateContent`;
@@ -3144,7 +3146,8 @@ async function callGemini({ fetchImpl, apiKey, model, messages, language, thinki
     if (!upstreamResult.error) break;
     if (!firstError) firstError = upstreamResult.error;
     const upstreamStatus = upstreamResult.error.body?.upstreamStatus;
-    if (upstreamStatus !== 404 && upstreamStatus !== 422) break;
+    if (!GEMINI_RETRYABLE_MODEL_STATUSES.has(upstreamStatus)) break;
+    if (deadline && Date.now() > deadline) break;
   }
   if (upstreamResult.error) return firstError || upstreamResult.error;
   const rawText = extractText(upstreamResult.data?.candidates?.[0]?.content?.parts);
@@ -3411,6 +3414,30 @@ var KEY_CHECKS = {
     init: { method: "GET", headers: { "x-goog-api-key": key2 } }
   })
 };
+async function listGeminiModels({ fetchImpl, key: key2, secrets, timeoutMs, now }) {
+  if (!key2) return [];
+  const started = now();
+  const controller = typeof AbortController === "function" ? new AbortController() : null;
+  const timer = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
+  try {
+    const response = await fetchImpl("https://generativelanguage.googleapis.com/v1beta/models?pageSize=1000", {
+      method: "GET",
+      headers: { "x-goog-api-key": key2 },
+      ...controller ? { signal: controller.signal } : {}
+    });
+    const status = typeof response?.status === "number" ? response.status : 0;
+    if (status < 200 || status >= 300 || typeof response.json !== "function") return [];
+    const data = await response.json();
+    const models = Array.isArray(data?.models) ? data.models : [];
+    return models.filter((model) => Array.isArray(model?.supportedGenerationMethods) && model.supportedGenerationMethods.includes("generateContent")).map((model) => String(model?.name || "").replace(/^models\//, "")).filter(Boolean).sort();
+  } catch {
+    return [];
+  } finally {
+    if (timer) clearTimeout(timer);
+    void started;
+    void secrets;
+  }
+}
 function probeRequest(provider, { keys, models }) {
   if (provider === "openrouter") {
     return {
@@ -3611,23 +3638,34 @@ function createDiagnosticsHandler({
         entry.ms = outcome.ms;
         entry.reachable = outcome.reachable;
         if (outcome.reason) entry.reason = outcome.reason;
-        const alternativeModel = [...GEMINI_MODEL_FALLBACKS, DEFAULT_GEMINI_MODEL].find((candidate) => candidate !== models.gemini);
-        if (provider === "gemini" && !outcome.ok && alternativeModel) {
+        if (provider === "gemini" && !outcome.ok) {
           const modelMissing = outcome.status === 404 || outcome.status === 422;
           if (modelMissing) {
             entry.modelInvalid = true;
             entry.hint = `NOVA_GEMINI_MODEL="${models.gemini}" is not a Gemini model id. Set it to a real one (for example ${DEFAULT_GEMINI_MODEL}) or unset it.`;
           }
-          const retry = await probe({ fetchImpl, provider, keys, models: { ...models, gemini: alternativeModel }, secrets, timeoutMs, now });
-          entry.fallbackModel = {
-            model: alternativeModel,
-            ok: retry.ok,
-            httpStatus: retry.status,
-            code: retry.code,
-            ms: retry.ms
-          };
-          if (retry.ok) {
-            entry.hint = `${entry.hint ? `${entry.hint} ` : ""}${alternativeModel} answered with the same key, so this is a model problem and not a key problem \u2014 ${alternativeModel} works today.`;
+          const alternatives2 = [...GEMINI_MODEL_FALLBACKS, DEFAULT_GEMINI_MODEL].filter((candidate) => candidate !== models.gemini);
+          const tried = [];
+          for (const candidate of alternatives2) {
+            const retry = await probe({ fetchImpl, provider, keys, models: { ...models, gemini: candidate }, secrets, timeoutMs, now });
+            const attempt = { model: candidate, ok: retry.ok, httpStatus: retry.status, code: retry.code, ms: retry.ms };
+            tried.push(attempt);
+            if (retry.ok) {
+              entry.fallbackModel = attempt;
+              break;
+            }
+          }
+          if (!entry.fallbackModel && tried.length) entry.fallbackModel = tried[tried.length - 1];
+          entry.modelsTried = [models.gemini, ...tried.map((attempt) => attempt.model)];
+          if (entry.fallbackModel?.ok) {
+            entry.hint = `${entry.hint ? `${entry.hint} ` : ""}${entry.fallbackModel.model} answered with the same key, so this is a model problem and not a key problem \u2014 set NOVA_GEMINI_MODEL to it.`;
+          } else if (!modelMissing) {
+            entry.hint = `${entry.hint ? `${entry.hint} ` : ""}Every model id tried was refused the same way, so this is not a model-id problem: the key is valid but the API is refusing generation (quota, billing or a project restriction).`;
+          }
+          const available = await listGeminiModels({ fetchImpl, key: keys.gemini, secrets, timeoutMs: keyCheckTimeoutMs, now });
+          if (available.length) {
+            entry.availableModelCount = available.length;
+            entry.availableModels = available.slice(0, 12);
           }
         }
         if (outcome.code === "AI_TIMEOUT" || outcome.code === "UPSTREAM_NETWORK_ERROR" || outcome.code === "PROVIDER_UNAVAILABLE") {

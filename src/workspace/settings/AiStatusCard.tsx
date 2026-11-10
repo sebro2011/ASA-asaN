@@ -37,6 +37,10 @@ interface ProviderReport {
   /** What the probe got when it retried with the default model id. */
   fallbackModel?: { model: string; ok: boolean; httpStatus?: number; code: string; ms?: number };
   hint?: string;
+  /** Model ids this key may actually call (only reported when a probe failed). */
+  availableModels?: string[];
+  availableModelCount?: number;
+  modelsTried?: string[];
 }
 
 interface DiagnosticsReport {
@@ -181,6 +185,14 @@ export default function AiStatusCard() {
                     <p className="mt-0.5 break-words text-[11px] text-ws-warn" data-testid={`ai-status-model-${key}`}>
                       {t('wsAiModelInvalid')}
                       {entry.fallbackModel?.ok ? ` ${t('wsAiModelFallbackWorking')}` : ''}
+                    </p>
+                  ) : null}
+                  {entry.availableModels?.length ? (
+                    <p className="mt-0.5 break-words text-[11px] text-ws-text-3" data-testid={`ai-status-models-${key}`}>
+                      {t('wsAiModelsAvailable')} {entry.availableModels.join(', ')}
+                      {typeof entry.availableModelCount === 'number' && entry.availableModelCount > entry.availableModels.length
+                        ? ` (+${entry.availableModelCount - entry.availableModels.length})`
+                        : ''}
                     </p>
                   ) : null}
                   {entry.reason ? (

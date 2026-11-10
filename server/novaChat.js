@@ -20,6 +20,13 @@ export const OPENROUTER_FREE_MODEL = 'openrouter/free';
 export const DEFAULT_GEMINI_MODEL = 'gemini-3.8-flash';
 export const GEMINI_MODEL_FALLBACKS = ['gemini-flash-latest', 'gemini-2.5-flash'];
 
+// A model can answer 503 "currently experiencing high demand" while the key is
+// fine and other models still work — measured on production: `gemini-3.8-flash`
+// stayed 503 for over a day on both ids. Google's own wording scopes that error
+// to the model, so another id is worth one attempt, and the response says which
+// model answered.
+const GEMINI_RETRYABLE_MODEL_STATUSES = new Set([404, 422, 503]);
+
 // A configured model id that the API does not know is a configuration error, not
 // an outage. Rather than failing the whole chat, try the known-good ids in order
 // and say which one actually answered.
@@ -510,6 +517,7 @@ async function callGemini({ fetchImpl, apiKey, model, messages, language, thinki
   let upstreamResult = null;
   let firstError = null;
   let usedModel = model;
+  const deadline = timeoutMs ? Date.now() + timeoutMs : 0;
   for (const candidate of geminiModelCandidates(model)) {
     usedModel = candidate;
     const url = `${GEMINI_GENERATE_CONTENT_URL}/${encodeURIComponent(candidate)}:generateContent`;
@@ -534,11 +542,12 @@ async function callGemini({ fetchImpl, apiKey, model, messages, language, thinki
     });
     if (!upstreamResult.error) break;
     if (!firstError) firstError = upstreamResult.error;
-    // Only a missing or withdrawn model id deserves another attempt. A 429, a
-    // rejected key or an upstream 5xx must be reported as it is, not retried
-    // against other ids.
+    // Only a missing id, or a model Google itself calls overloaded, is worth
+    // another id. A 429, a rejected key or a generic 5xx is reported as it is.
     const upstreamStatus = upstreamResult.error.body?.upstreamStatus;
-    if (upstreamStatus !== 404 && upstreamStatus !== 422) break;
+    if (!GEMINI_RETRYABLE_MODEL_STATUSES.has(upstreamStatus)) break;
+    // Never let the retries outlive the caller's budget.
+    if (deadline && Date.now() > deadline) break;
   }
   // Report the configured model's error, not the last fallback's: "your model is
   // overloaded" is the truth, "the alias 404'd" is an artefact of the retry.

@@ -381,3 +381,57 @@ test('the busy default is compared against the alias, without probing the same i
 });
 
 
+
+test('when every Gemini model id is busy, the report says so and lists what the key can use', async () => {
+  const impl = async (url, init) => {
+    const target = String(url);
+    if (init?.method === 'GET' && target.includes('/v1beta/models?')) {
+      // The model list the key may call.
+      return {
+        status: 200,
+        ok: true,
+        json: async () => ({
+          models: [
+            { name: 'models/gemini-3.8-flash', supportedGenerationMethods: ['generateContent'] },
+            { name: 'models/gemini-2.5-flash', supportedGenerationMethods: ['generateContent'] },
+            { name: 'models/text-embedding-004', supportedGenerationMethods: ['embedContent'] },
+          ],
+        }),
+        text: async () => '{}',
+      };
+    }
+    if (init?.method === 'GET') return { status: 200, ok: true, json: async () => ({}), text: async () => '{}' };
+    return { status: 503, ok: false, text: async () => '{"error":{"code":503}}', json: async () => ({}) };
+  };
+
+  const handler = createDiagnosticsHandler({ fetchImpl: impl, env: envWith() });
+  const report = await handler({ probe: true });
+  const gemini = report.providers.gemini;
+
+  assert.equal(gemini.code, 'PROVIDER_UNAVAILABLE');
+  assert.equal(gemini.modelInvalid, undefined, 'a busy model is never called an invalid model');
+  assert.equal(gemini.fallbackModel.ok, false, 'the alternatives were tried and also refused');
+  assert.ok(gemini.modelsTried.length > 1, 'more than one id was attempted');
+  assert.match(gemini.hint, /not a model-id problem/);
+  assert.match(gemini.hint, /quota, billing or a project restriction/);
+  // Only generateContent models, and no `models/` prefix.
+  assert.deepEqual(gemini.availableModels, ['gemini-2.5-flash', 'gemini-3.8-flash']);
+  assert.equal(gemini.availableModelCount, 2);
+});
+
+test('the model list never leaks the key and survives a broken response', async () => {
+  const impl = async (url, init) => {
+    if (init?.method === 'GET' && String(url).includes('/v1beta/models?')) {
+      return { status: 200, ok: true, json: async () => { throw new Error('not json'); }, text: async () => 'not json' };
+    }
+    if (init?.method === 'GET') return { status: 200, ok: true, json: async () => ({}), text: async () => '{}' };
+    return { status: 503, ok: false, text: async () => '{}', json: async () => ({}) };
+  };
+  const handler = createDiagnosticsHandler({ fetchImpl: impl, env: envWith() });
+  const report = await handler({ probe: true });
+  const gemini = report.providers.gemini;
+  assert.equal(gemini.availableModels, undefined, 'an unreadable list is omitted, not guessed');
+  const text = JSON.stringify(report);
+  assert.equal(text.includes(KEYS.GEMINI_API_KEY), false);
+  assert.equal(/AIzaSy/.test(text), false);
+});
