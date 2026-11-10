@@ -58,7 +58,24 @@ export function normaliseApodMedia<T extends Record<string, any>>(record: T): T 
   return upgraded as T;
 }
 
-export type ApodFailureKind = 'network' | 'rate-limited' | 'upstream' | 'shape';
+export type ApodFailureKind = 'network' | 'rate-limited' | 'upstream' | 'shape' | 'degraded';
+
+/**
+ * Detects the record NASA is currently returning while its APOD backend is
+ * being migrated: the explanation is the real entry, but `title` is the site
+ * title "NASA Science" and `url`/`hdurl` point at NASA's own theme logo. Showing
+ * that as the astronomy picture of the day is worse than showing nothing, and
+ * the URL is a perfectly valid image, so no `onError` in the browser can catch it.
+ */
+export function isDegradedApodRecord(record: any): boolean {
+  if (!record || typeof record !== 'object') return false;
+  const url = String(record.url || '');
+  const hdurl = String(record.hdurl || '');
+  const logoLike = (value: string) =>
+    /^https?:\/\/science\.nasa\.gov\/wp-content\/themes\//i.test(value) || /\/nasa-logo(@2x)?\.(png|jpe?g|svg|webp)$/i.test(value);
+  const title = String(record.title || '').trim();
+  return logoLike(url) || logoLike(hdurl) || title === 'NASA Science';
+}
 
 /**
  * The hint has to name the *actual* cause. "Your key was rejected" was wrong for
@@ -80,6 +97,9 @@ export function apodFallbackHint({ failureKind, upstreamStatus, usingDemoKey }: 
   }
   if (failureKind === 'shape') {
     return 'api.nasa.gov answered, but not with a usable picture entry. The bundled reference entry is shown.';
+  }
+  if (failureKind === 'degraded') {
+    return 'api.nasa.gov answered, but with its own site logo instead of the entry\u2019s image (a known upstream problem while NASA migrates the APOD service). The bundled reference entry is shown instead of pretending that logo is today\u2019s picture.';
   }
   return 'api.nasa.gov did not answer in time; the bundled reference entry is shown.';
 }
@@ -609,7 +629,8 @@ export function setupNasaRoutes(app: any, ai: GoogleGenAI) {
 
     let timeout: any;
     let upstreamStatus = 0;
-    let failureKind: 'network' | 'rate-limited' | 'upstream' | 'shape' = 'network';
+    let degradeReason: ApodFailureKind | null = null;
+    let failureKind: ApodFailureKind = 'network';
     try {
       const controller = new AbortController();
       // APOD is the slowest api.nasa.gov endpoint; 3.5 s aborted genuine
@@ -623,7 +644,11 @@ export function setupNasaRoutes(app: any, ai: GoogleGenAI) {
 
       if (nasaRes.ok) {
         const data = normaliseApodMedia(redactApiKeys(await nasaRes.json()));
-        if (data && data.title && data.url) {
+        if (isDegradedApodRecord(data)) {
+          // The record is real JSON with a real explanation, but the image is the
+          // NASA logo. Serve the labelled archival entry instead.
+          degradeReason = 'degraded';
+        } else if (data && data.title && data.url) {
           if (date) apodCache.set(date, data);
           apodCache.set('today', data);
           apodTodayCachedAt = Date.now();
@@ -641,6 +666,8 @@ export function setupNasaRoutes(app: any, ai: GoogleGenAI) {
     } finally {
       if (timeout) clearTimeout(timeout);
     }
+
+    if (degradeReason) failureKind = degradeReason;
 
     // Service unavailable. Return a clearly-labelled reference entry and do NOT
     // write it to the cache: caching a placeholder would make a later genuine

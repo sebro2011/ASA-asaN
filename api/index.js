@@ -3742,6 +3742,14 @@ function normaliseApodMedia(record) {
   }
   return upgraded;
 }
+function isDegradedApodRecord(record) {
+  if (!record || typeof record !== "object") return false;
+  const url = String(record.url || "");
+  const hdurl = String(record.hdurl || "");
+  const logoLike = (value) => /^https?:\/\/science\.nasa\.gov\/wp-content\/themes\//i.test(value) || /\/nasa-logo(@2x)?\.(png|jpe?g|svg|webp)$/i.test(value);
+  const title = String(record.title || "").trim();
+  return logoLike(url) || logoLike(hdurl) || title === "NASA Science";
+}
 function apodFallbackHint({ failureKind, upstreamStatus, usingDemoKey }) {
   if (usingDemoKey) {
     return "No NASA_API_KEY is configured, so the shared DEMO_KEY is used and rate limits are expected. Set NASA_API_KEY to restore live images.";
@@ -3754,6 +3762,9 @@ function apodFallbackHint({ failureKind, upstreamStatus, usingDemoKey }) {
   }
   if (failureKind === "shape") {
     return "api.nasa.gov answered, but not with a usable picture entry. The bundled reference entry is shown.";
+  }
+  if (failureKind === "degraded") {
+    return "api.nasa.gov answered, but with its own site logo instead of the entry\u2019s image (a known upstream problem while NASA migrates the APOD service). The bundled reference entry is shown instead of pretending that logo is today\u2019s picture.";
   }
   return "api.nasa.gov did not answer in time; the bundled reference entry is shown.";
 }
@@ -4216,6 +4227,7 @@ function setupNasaRoutes(app2, ai2) {
     const url = date ? `https://api.nasa.gov/planetary/apod?api_key=${nasaApiKey}&date=${date}` : `https://api.nasa.gov/planetary/apod?api_key=${nasaApiKey}`;
     let timeout;
     let upstreamStatus = 0;
+    let degradeReason = null;
     let failureKind = "network";
     try {
       const controller = new AbortController();
@@ -4229,7 +4241,9 @@ function setupNasaRoutes(app2, ai2) {
       upstreamStatus = nasaRes.status;
       if (nasaRes.ok) {
         const data = normaliseApodMedia(redactApiKeys(await nasaRes.json()));
-        if (data && data.title && data.url) {
+        if (isDegradedApodRecord(data)) {
+          degradeReason = "degraded";
+        } else if (data && data.title && data.url) {
           if (date) apodCache.set(date, data);
           apodCache.set("today", data);
           apodTodayCachedAt = Date.now();
@@ -4244,6 +4258,7 @@ function setupNasaRoutes(app2, ai2) {
     } finally {
       if (timeout) clearTimeout(timeout);
     }
+    if (degradeReason) failureKind = degradeReason;
     const fallback = normaliseApodMedia(
       FALLBACK_APODS[date] || FALLBACK_APODS[date.slice(0, 10)] || FALLBACK_APODS["2026-09-30"] || FALLBACK_APODS.default
     );
