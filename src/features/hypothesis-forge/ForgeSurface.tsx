@@ -15,7 +15,7 @@
  *  - research history is device-local and says so.
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -248,6 +248,8 @@ export default function ForgeSurface({ onExitToChat }: { onExitToChat?: () => vo
   const language = (i18n.language || 'en').slice(0, 2) as 'en' | 'si' | 'ta';
 
   const [section, setSection] = useState<ForgeSectionId>('workspace');
+  const regionRef = useRef<HTMLDivElement>(null);
+  const tabRefs = useRef<Partial<Record<ForgeSectionId, HTMLButtonElement | null>>>({});
   const [question, setQuestion] = useState('');
   const [followUp, setFollowUp] = useState('');
   const [interpretedQuestion, setInterpretedQuestion] = useState('');
@@ -266,6 +268,45 @@ export default function ForgeSurface({ onExitToChat }: { onExitToChat?: () => vo
   const [showCatalogue, setShowCatalogue] = useState(false);
 
   const refreshHistory = useCallback(() => setStored(listInvestigations()), []);
+
+  /**
+   * Switches sections and restores a sane scroll position.
+   *
+   * Sections differ wildly in height, so keeping the raw scroll offset left the
+   * reader halfway down an unrelated panel — or staring at the page footer when
+   * the new section was shorter. If the Forge top is already out of view, the
+   * view jumps back to it (below the sticky top bar); if the reader is still at
+   * the top, nothing moves. `behavior: 'auto'` respects the reduced-motion
+   * preference already applied to `scroll-behavior`.
+   */
+  const selectSection = useCallback((id: ForgeSectionId) => {
+    setSection(id);
+    const node = regionRef.current;
+    if (!node || typeof window === 'undefined') return;
+    const anchor = node.getBoundingClientRect().top + window.scrollY;
+    const top = Math.max(0, anchor - 64);
+    if (window.scrollY > top + 8) {
+      window.scrollTo({ top, behavior: 'auto' });
+    }
+  }, []);
+
+  /** Arrow/Home/End navigation for the tab strip (WAI-ARIA tabs pattern). */
+  const onTabKeyDown = useCallback(
+    (event: React.KeyboardEvent<HTMLButtonElement>, index: number) => {
+      const last = SECTIONS.length - 1;
+      let next = -1;
+      if (event.key === 'ArrowRight' || event.key === 'ArrowDown') next = index === last ? 0 : index + 1;
+      else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') next = index === 0 ? last : index - 1;
+      else if (event.key === 'Home') next = 0;
+      else if (event.key === 'End') next = last;
+      if (next < 0) return;
+      event.preventDefault();
+      const target = SECTIONS[next];
+      selectSection(target);
+      tabRefs.current[target]?.focus();
+    },
+    [selectSection],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -469,7 +510,7 @@ export default function ForgeSurface({ onExitToChat }: { onExitToChat?: () => vo
   }, [passport, t]);
 
   return (
-    <div className="forge" role="region" aria-label={t('hfTitle')}>
+    <div className="forge" role="region" aria-label={t('hfTitle')} ref={regionRef}>
       <header className="forge-hero">
         <div className="forge-hero__top">
           <span className="forge-hero__badge">
@@ -492,16 +533,24 @@ export default function ForgeSurface({ onExitToChat }: { onExitToChat?: () => vo
       </header>
 
       <div className="forge-tabs" role="tablist" aria-label={t('hfTitle')}>
-        {SECTIONS.map((id) => (
+        {SECTIONS.map((id, index) => (
           <button
             key={id}
             type="button"
             role="tab"
+            ref={(node) => {
+              tabRefs.current[id] = node;
+            }}
             aria-selected={section === id}
-            aria-controls={`forge-panel-${id}`}
+            /* Only the rendered panel exists in the DOM, so only the active tab
+               may point at it — the previous code advertised eight ids, seven of
+               which never existed. */
+            aria-controls={section === id ? `forge-panel-${id}` : undefined}
+            tabIndex={section === id ? 0 : -1}
             id={`forge-tab-${id}`}
             className={`forge-tab${section === id ? ' is-active' : ''}`}
-            onClick={() => setSection(id)}
+            onClick={() => selectSection(id)}
+            onKeyDown={(event) => onTabKeyDown(event, index)}
           >
             {t(SECTION_KEY[id])}
             {id === 'evidence' && investigation ? (

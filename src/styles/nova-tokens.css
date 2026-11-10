@@ -47,6 +47,9 @@
   --spacing-ws-sidebar: 16.5rem; /* 264px expanded */
   --spacing-ws-rail: 4.5rem; /*    72px collapsed  */
   --spacing-ws-topbar: 3.5rem; /*  56px            */
+  /* Height the fixed mobile bar occupies (visible below 1024px). Content and
+     pane heights subtract it so nothing is ever parked underneath it. */
+  --spacing-ws-mobilebar: 4.5rem; /* 72px           */
 }
 
 :root {

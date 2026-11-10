@@ -30,6 +30,13 @@ function titleFor(route: AppRoute, t: (key: string) => string): string {
 export default function AppShell({ route, children }: { route: AppRoute; children: ReactNode }) {
   const { t } = useTranslation();
   const isMobile = !useMediaQuery('(min-width: 768px)');
+  /**
+   * The fixed mobile bar is hidden from 1024px up (`lg:hidden`), NOT from 768px.
+   * Between those widths — a portrait Android tablet — the bar is on screen, so
+   * the content region has to reserve its height or the bar covers the last
+   * controls of a long panel.
+   */
+  const hasMobileBar = !useMediaQuery('(min-width: 1024px)');
   // Below 1024px the sidebar is an icon rail, so the drawer is the only way to
   // read the destination labels.
   const showMenuButton = !useMediaQuery('(min-width: 1024px)');
@@ -120,7 +127,11 @@ export default function AppShell({ route, children }: { route: AppRoute; childre
           ref={mainRef}
           tabIndex={-1}
           className="min-w-0 flex-1 outline-none"
-          style={{ paddingBottom: isMobile ? 'calc(4.5rem + env(safe-area-inset-bottom))' : undefined }}
+          style={{
+            paddingBottom: hasMobileBar
+              ? 'calc(var(--spacing-ws-mobilebar, 4.5rem) + env(safe-area-inset-bottom))'
+              : undefined
+          }}
         >
           {children}
         </main>

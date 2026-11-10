@@ -58,20 +58,54 @@ export function useFocusTrap(active: boolean, ref: RefObject<HTMLElement | null>
   }, [active, ref]);
 }
 
-/** Locks background scrolling (and compensates for the scrollbar width). */
+/**
+ * Locks background scrolling (and compensates for the scrollbar width).
+ *
+ * Reference counted, because overlays stack: the command palette can be opened
+ * on top of the mobile drawer. With the previous save/restore pair, closing the
+ * drawer first restored `overflow: ''` (unlocking the page under the palette)
+ * and closing the palette last restored `overflow: 'hidden'` — leaving the whole
+ * application permanently unscrollable until a reload. One shared lock state
+ * removes that ordering hazard entirely.
+ */
+let bodyLockCount = 0;
+let bodyLockSnapshot: { overflow: string; paddingRight: string } | null = null;
+
+function acquireBodyLock() {
+  if (typeof document === 'undefined') return;
+  const { body, documentElement } = document;
+  if (bodyLockCount === 0) {
+    const scrollbar = window.innerWidth - documentElement.clientWidth;
+    bodyLockSnapshot = { overflow: body.style.overflow, paddingRight: body.style.paddingRight };
+    body.style.overflow = 'hidden';
+    if (scrollbar > 0) body.style.paddingRight = `${scrollbar}px`;
+  }
+  bodyLockCount += 1;
+}
+
+function releaseBodyLock() {
+  if (typeof document === 'undefined') return;
+  if (bodyLockCount === 0) return;
+  bodyLockCount -= 1;
+  if (bodyLockCount > 0) return;
+  const { body } = document;
+  const snapshot = bodyLockSnapshot;
+  bodyLockSnapshot = null;
+  // Restore to the value the *first* lock saw, not to a stacked intermediate.
+  body.style.overflow = snapshot?.overflow ?? '';
+  body.style.paddingRight = snapshot?.paddingRight ?? '';
+}
+
+/** Test seam: reports the current lock state without touching the DOM. */
+export function getBodyLockCount() {
+  return bodyLockCount;
+}
+
 export function useBodyScrollLock(locked: boolean) {
   useEffect(() => {
     if (!locked) return;
-    const { body, documentElement } = document;
-    const scrollbar = window.innerWidth - documentElement.clientWidth;
-    const previousOverflow = body.style.overflow;
-    const previousPadding = body.style.paddingRight;
-    body.style.overflow = 'hidden';
-    if (scrollbar > 0) body.style.paddingRight = `${scrollbar}px`;
-    return () => {
-      body.style.overflow = previousOverflow;
-      body.style.paddingRight = previousPadding;
-    };
+    acquireBodyLock();
+    return releaseBodyLock;
   }, [locked]);
 }
 
