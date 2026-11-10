@@ -89,7 +89,10 @@ const csp = [
   "connect-src 'self' https:",               // APIs only
   "font-src 'self' data:",
   "media-src 'self' blob: https:",
-  "frame-src 'self' https://www.youtube.com",          // YouTube embeds
+  // APOD video entries are YouTube watch URLs, which are rewritten to /embed/;
+  // YouTube's player itself loads from youtube-nocookie and player.vimeo.com is
+  // used by older entries. Both stay explicit — never `frame-src https:`.
+  "frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com https://player.vimeo.com",
   "object-src 'none'",
   "base-uri 'self'",
   "form-action 'self'",

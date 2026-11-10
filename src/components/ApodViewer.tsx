@@ -30,6 +30,7 @@ import {
 import { SupportedLanguage, translations } from '../i18n/translations';
 import { useFavorites } from '../utils/favorites';
 import { fetchApod, translateSpaceContent } from '@/lib/nasaApi';
+import { httpsUrl, resolveApodPlayback } from '../lib/apodMedia';
 import { CustomApodDatePicker } from './CustomApodDatePicker';
 import APODStoryteller from './APODStoryteller.jsx';
 import { Button, DataStateBadge, ErrorState, IconButton, LoadingState, Panel, SourceNote } from '../ui/primitives';
@@ -40,6 +41,7 @@ interface ApodData {
   explanation: string;
   url: string;
   hdurl?: string;
+  thumbnail_url?: string;
   media_type: string;
   copyright?: string;
   _isSample?: boolean;
@@ -82,6 +84,11 @@ export const ApodViewer: React.FC<ApodViewerProps> = React.memo(({ lang, onOpenE
   const [copied, setCopied] = useState(false);
   const [hdOpen, setHdOpen] = useState(false);
   const [fullResolution, setFullResolution] = useState(false);
+  // Which candidate URL is on screen, and whether all of them failed. A broken
+  // `hdurl` used to leave an empty panel with no way to tell what happened.
+  const [mediaIndex, setMediaIndex] = useState(0);
+  const [mediaFailed, setMediaFailed] = useState(false);
+  const [lightboxIndex, setLightboxIndex] = useState(0);
   const closeRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
@@ -108,6 +115,13 @@ export const ApodViewer: React.FC<ApodViewerProps> = React.memo(({ lang, onOpenE
   useEffect(() => {
     load(selectedDate);
   }, [selectedDate, load]);
+
+  // A new record starts from the first candidate again.
+  useEffect(() => {
+    setMediaIndex(0);
+    setMediaFailed(false);
+    setLightboxIndex(0);
+  }, [apod?.url, apod?.hdurl, apod?.thumbnail_url, apod?.media_type, fullResolution]);
 
   /* Dynamic translation is server-side; failures stay visible, never faked. */
   useEffect(() => {
@@ -165,7 +179,21 @@ export const ApodViewer: React.FC<ApodViewerProps> = React.memo(({ lang, onOpenE
   const displayTitle = translation?.title || apod?.title || '';
   const displayExplanation = translation?.explanation || apod?.explanation || '';
   const saved = apod ? isApodSaved(apod.date) : false;
-  const mediaSrc = fullResolution && apod?.hdurl ? apod.hdurl : apod?.url || '';
+  const playback = React.useMemo(
+    () => resolveApodPlayback(apod ?? {}),
+    [apod?.url, apod?.hdurl, apod?.thumbnail_url, apod?.media_type],
+  );
+  // Standard resolution first unless HD was asked for; the browser still falls
+  // through the list when a URL 404s.
+  const orderedSources = React.useMemo(() => {
+    const hd = httpsUrl(apod?.hdurl);
+    if (!hd || playback.kind !== 'image') return playback.sources;
+    return fullResolution
+      ? [hd, ...playback.sources.filter((src: string) => src !== hd)]
+      : [...playback.sources.filter((src: string) => src !== hd), hd];
+  }, [playback.sources, playback.kind, apod?.hdurl, fullResolution]);
+  const mediaSrc = orderedSources[Math.min(mediaIndex, Math.max(orderedSources.length - 1, 0))];
+  const lightboxSrc = orderedSources[Math.min(lightboxIndex, Math.max(orderedSources.length - 1, 0))];
   const archiveUrl = apod
     ? `https://apod.nasa.gov/apod/ap${apod.date.replace(/-/g, '').slice(2)}.html`
     : 'https://apod.nasa.gov/apod/astropix.html';
@@ -296,29 +324,62 @@ export const ApodViewer: React.FC<ApodViewerProps> = React.memo(({ lang, onOpenE
           <div className="grid gap-5 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
             <Panel className="overflow-hidden p-0">
               <div className="relative flex min-h-[280px] items-center justify-center bg-void">
-                {apod.media_type === 'video' ? (
+                {playback.kind === 'embed' ? (
                   <div className="aspect-video w-full">
                     <iframe
-                      src={apod.url}
+                      src={playback.embedUrl}
                       title={apod.title}
                       allowFullScreen
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                      referrerPolicy="strict-origin-when-cross-origin"
                       className="h-full w-full border-0"
+                      data-testid="apod-embed"
                     />
                   </div>
-                ) : (
+                ) : playback.kind === 'video' ? (
+                  <video
+                    src={mediaSrc}
+                    poster={playback.poster}
+                    controls
+                    playsInline
+                    preload="metadata"
+                    className="max-h-[620px] w-full"
+                    data-testid="apod-video"
+                  />
+                ) : playback.kind === 'image' && mediaSrc && !mediaFailed ? (
                   <img
                     src={mediaSrc}
                     alt={apod.title}
-                    loading="lazy"
+                    loading="eager"
+                    data-testid="apod-image"
+                    onError={() => {
+                      // hdurl → url → thumbnail, then an explicit message.
+                      if (mediaIndex + 1 < orderedSources.length) setMediaIndex(mediaIndex + 1);
+                      else setMediaFailed(true);
+                    }}
                     className="max-h-[620px] w-full object-contain"
                   />
+                ) : (
+                  <div className="flex flex-col items-center gap-3 p-8 text-center" data-testid="apod-media-unavailable">
+                    <p className="text-[12.5px] text-ink-2">
+                      {mediaFailed ? t('apodImageFailed') : t('apodMediaMissing')}
+                    </p>
+                    <a
+                      href={playback.originalUrl}
+                      target="_blank"
+                      rel="noreferrer noopener"
+                      className="inline-flex items-center gap-1.5 text-xs text-atmo underline decoration-dotted"
+                    >
+                      {t('apodOpenOriginal')} <ExternalLink className="h-3.5 w-3.5" />
+                    </a>
+                  </div>
                 )}
                 <div className="pointer-events-none absolute inset-x-0 bottom-0 flex items-end justify-between gap-3 bg-[linear-gradient(0deg,rgba(3,6,14,0.92),rgba(3,6,14,0))] p-4 pt-12">
                   <p className="max-w-[70%] text-[11px] leading-snug text-ink-2">
                     <span className="font-mono uppercase tracking-[0.12em] text-ink-4">{t('apodCreditLabel')} </span>
                     {apod.copyright || 'NASA'}
                   </p>
-                  {apod.media_type !== 'video' && (
+                  {playback.kind === 'image' && (
                     <button
                       type="button"
                       onClick={() => setHdOpen(true)}
@@ -447,9 +508,15 @@ export const ApodViewer: React.FC<ApodViewerProps> = React.memo(({ lang, onOpenE
         >
           <div className="relative max-h-[92vh] w-full max-w-[95vw]" onClick={(event) => event.stopPropagation()}>
             <img
-              src={apod.hdurl || apod.url}
+              src={lightboxSrc}
               alt={apod.title}
               className="mx-auto max-h-[88vh] max-w-full rounded-[10px] object-contain shadow-2xl"
+              data-testid="apod-lightbox-image"
+              onError={() => {
+                // HD can 404 while the standard URL works; fall back instead of
+                // showing an empty lightbox.
+                if (lightboxIndex + 1 < orderedSources.length) setLightboxIndex(lightboxIndex + 1);
+              }}
             />
             <button
               ref={closeRef}

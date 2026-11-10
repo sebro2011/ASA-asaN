@@ -3726,6 +3726,22 @@ function redactApiKeys(payload) {
     return payload;
   }
 }
+function normaliseApodMedia(record) {
+  if (!record || typeof record !== "object") return record;
+  const upgraded = { ...record };
+  for (const field of ["url", "hdurl", "thumbnail_url"]) {
+    const value = upgraded[field];
+    if (typeof value === "string" && value.trim()) {
+      upgraded[field] = value.trim().replace(/^http:\/\//i, "https://");
+    } else if (field in upgraded) {
+      delete upgraded[field];
+    }
+  }
+  if (typeof upgraded.url === "string" && !/^https?:\/\//i.test(upgraded.url)) {
+    delete upgraded.url;
+  }
+  return upgraded;
+}
 function apodFallbackHint({ failureKind, upstreamStatus, usingDemoKey }) {
   if (usingDemoKey) {
     return "No NASA_API_KEY is configured, so the shared DEMO_KEY is used and rate limits are expected. Set NASA_API_KEY to restore live images.";
@@ -3801,9 +3817,6 @@ var FALLBACK_APODS = {
     copyright: "NASA, ESA, CSA, STScI"
   }
 };
-Object.entries(FALLBACK_APODS).forEach(([k, v]) => {
-  if (k !== "default") apodCache.set(k, v);
-});
 function generateSmartAstronomicalTranslation(title, explanation, targetLang) {
   if (targetLang === "si") {
     let t = title.replace(/What Color is the Universe\?/gi, "\u0DC0\u0DD2\u0DC1\u0DCA\u0DC0\u0DBA\u0DDA \u0DC3\u0DD0\u0DB6\u0DD1 \u0DC0\u0DBB\u0DCA\u0DAB\u0DBA \u0D9A\u0DD4\u0DB8\u0D9A\u0DCA\u0DAF?").replace(/The Pillars of Creation/gi, "\u0DB8\u0DD0\u0DC0\u0DD3\u0DB8\u0DDA \u0D9A\u0DD4\u0DC5\u0DD4\u0DAB\u0DD4 (Pillars of Creation)").replace(/Deep Infrared/gi, "\u0D9C\u0DD0\u0DB9\u0DD4\u0DBB\u0DD4 \u0D85\u0DB0\u0DDD\u0DBB\u0D9A\u0DCA\u0DAD \u0D9A\u0DD2\u0DBB\u0DAB").replace(/James Webb/gi, "\u0DA2\u0DDA\u0DB8\u0DCA\u0DC3\u0DCA \u0DC0\u0DD9\u0DB6\u0DCA \u0DAF\u0DD4\u0DBB\u0DDA\u0D9A\u0DCA\u0DC2\u0DBA").replace(/Earth and Moon/gi, "\u0DB4\u0DD8\u0DAE\u0DD2\u0DC0\u0DD2\u0DBA \u0DC3\u0DC4 \u0DA0\u0DB1\u0DCA\u0DAF\u0DCA\u200D\u0DBB\u0DBA\u0DCF").replace(/Artemis/gi, "\u0D86\u0DA7\u0DD9\u0DB8\u0DD2\u0DC3\u0DCA \u0DB8\u0DD9\u0DC4\u0DD9\u0DBA\u0DD4\u0DB8").replace(/Orion/gi, "\u0D94\u0DBB\u0DCF\u0DBA\u0DB1\u0DCA \u0DBA\u0DCF\u0DB1\u0DBA").replace(/Galaxy/gi, "\u0DB8\u0DB1\u0DCA\u0DAF\u0DCF\u0D9A\u0DD2\u0DAB\u0DD2\u0DBA").replace(/Nebula/gi, "\u0DB1\u0DD2\u0DC4\u0DCF\u0DBB\u0DD2\u0D9A\u0DCF\u0DC0").replace(/Black Hole/gi, "\u0D9A\u0DC5\u0DD4 \u0D9A\u0DD4\u0DC4\u0DBB\u0DBA");
@@ -4215,7 +4228,7 @@ function setupNasaRoutes(app2, ai2) {
       const nasaRes = await fetch(url, { signal: controller.signal });
       upstreamStatus = nasaRes.status;
       if (nasaRes.ok) {
-        const data = redactApiKeys(await nasaRes.json());
+        const data = normaliseApodMedia(redactApiKeys(await nasaRes.json()));
         if (data && data.title && data.url) {
           if (date) apodCache.set(date, data);
           apodCache.set("today", data);
@@ -4231,7 +4244,9 @@ function setupNasaRoutes(app2, ai2) {
     } finally {
       if (timeout) clearTimeout(timeout);
     }
-    const fallback = FALLBACK_APODS[date] || FALLBACK_APODS[date.slice(0, 10)] || FALLBACK_APODS["2026-09-30"] || FALLBACK_APODS.default;
+    const fallback = normaliseApodMedia(
+      FALLBACK_APODS[date] || FALLBACK_APODS[date.slice(0, 10)] || FALLBACK_APODS["2026-09-30"] || FALLBACK_APODS.default
+    );
     const usingDemoKey = nasaApiKey === "DEMO_KEY";
     return res.json({
       success: true,
@@ -14552,8 +14567,10 @@ var csp = [
   // APIs only
   "font-src 'self' data:",
   "media-src 'self' blob: https:",
-  "frame-src 'self' https://www.youtube.com",
-  // YouTube embeds
+  // APOD video entries are YouTube watch URLs, which are rewritten to /embed/;
+  // YouTube's player itself loads from youtube-nocookie and player.vimeo.com is
+  // used by older entries. Both stay explicit — never `frame-src https:`.
+  "frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com https://player.vimeo.com",
   "object-src 'none'",
   "base-uri 'self'",
   "form-action 'self'"

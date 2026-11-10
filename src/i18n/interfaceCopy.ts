@@ -99,6 +99,10 @@ const en: Copy = {
   apodOpen: 'Open the full archive',
   apodCredit: 'Image credit',
   apodSampleNote: 'Archival reference image — the live APOD service did not respond.',
+  apodImageFailed: 'The image could not be loaded from NASA. The original is still available.',
+  apodMediaMissing: 'NASA published this entry without a still image.',
+  apodOpenOriginal: 'Open the original media',
+  apodVideoNote: 'This entry is a video, not a still image.',
 
   /* earth preview */
   earthEyebrow: 'Earth intelligence',
@@ -256,6 +260,10 @@ const si: Copy = {
   apodOpen: 'සම්පූර්ණ ලේඛනාගාරය විවෘත කරන්න',
   apodCredit: 'රූප ණය',
   apodSampleNote: 'ලේඛනාගාර යොමු රූපයකි — සජීවී APOD සේවාව ප්‍රතිචාර නොදැක්වීය.',
+  apodImageFailed: 'නාසා වෙතින් රූපය පූරණය කළ නොහැකි විය. මුල් රූපය තවමත් ලබාගත හැක.',
+  apodMediaMissing: 'නාසා මෙම සටහන ස්ථිති රූපයක් නොමැතිව පළ කර ඇත.',
+  apodOpenOriginal: 'මුල් මාධ්‍ය විවෘත කරන්න',
+  apodVideoNote: 'මෙම සටහන වීඩියෝවක් මිස ස්ථිති රූපයක් නොවේ.',
 
   earthEyebrow: 'පෘථිවි බුද්ධිය',
   earthTitle: 'වසර පහළොවක මතුපිට උෂ්ණත්වය, එක් ජාල සෛලයක් තුළ',
@@ -409,6 +417,10 @@ const ta: Copy = {
   apodOpen: 'முழு காப்பகத்தைத் திறக்க',
   apodCredit: 'பட உரிமை',
   apodSampleNote: 'காப்பகக் குறிப்புப் படம் — நேரலை APOD சேவை பதிலளிக்கவில்லை.',
+  apodImageFailed: 'நாசாவிடமிருந்து படத்தை ஏற்ற முடியவில்லை. அசல் இன்னும் கிடைக்கிறது.',
+  apodMediaMissing: 'நாசா இந்தப் பதிவை நிலைப்படம் இல்லாமல் வெளியிட்டுள்ளது.',
+  apodOpenOriginal: 'அசல் ஊடகத்தைத் திறக்க',
+  apodVideoNote: 'இந்தப் பதிவு ஒரு காணொளி, நிலைப்படம் அல்ல.',
 
   earthEyebrow: 'பூமி நுண்ணறிவு',
   earthTitle: 'பதினைந்து ஆண்டு மேற்பரப்பு வெப்பநிலை, ஒரு கட்டச் செல்',
