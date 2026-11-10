@@ -284,6 +284,95 @@ function NeoPanel({
 
 /* ------------------------------------------------------------------ APOD */
 
+type ApodMediaState = 'loading' | 'ready' | 'failed';
+
+/**
+ * The APOD media block.
+ *
+ * Two things used to break here and both failed silently: a `url` that the
+ * browser refuses (NASA still returns `http://` for older entries, which the
+ * page's HTTPS + CSP blocks) left an empty box, and a `video` entry rendered no
+ * image at all even though NASA ships `thumbnail_url` for it. Both are handled
+ * explicitly now, and a failure always says so instead of showing a dark panel.
+ */
+export function ApodMedia({ apod }: { apod: Apod }) {
+  const { t } = useTranslation();
+  const [phase, setPhase] = React.useState<ApodMediaState>('loading');
+  const [useThumbnail, setUseThumbnail] = React.useState(false);
+
+  const isImage = apod.media_type === 'image';
+  const thumbnail = apod.thumbnail_url;
+  const primary = isImage ? apod.url : thumbnail;
+  const src = useThumbnail && thumbnail ? thumbnail : primary;
+  const failed = phase === 'failed';
+
+  // A new record resets the per-URL failures.
+  React.useEffect(() => {
+    setPhase('loading');
+    setUseThumbnail(false);
+  }, [apod.url, apod.thumbnail_url, apod.media_type]);
+
+  if (!src || failed) {
+    return (
+      <div className="flex h-full min-h-[240px] flex-col items-center justify-center gap-2 p-6 text-center">
+        <p className="text-[12px] text-ink-2" data-testid="apod-media-unavailable">
+          {failed ? t('apodImageFailed') : t('apodMediaMissing')}
+        </p>
+        <a
+          href={apod.url}
+          target="_blank"
+          rel="noreferrer noopener"
+          className="inline-flex items-center gap-1 text-xs text-atmo underline decoration-dotted"
+        >
+          {t('apodOpenOriginal')} <ExternalLink className="h-3 w-3" />
+        </a>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      {phase === 'loading' ? (
+        <div className="absolute inset-0 flex items-center justify-center" aria-hidden="true">
+          <span className="h-6 w-6 animate-spin rounded-full border-2 border-atmo/30 border-t-atmo" />
+        </div>
+      ) : null}
+      <img
+        src={src}
+        alt={apod.title}
+        loading="eager"
+        decoding="async"
+        data-testid="apod-media"
+        onLoad={() => setPhase('ready')}
+        onError={() => {
+          // Try the other URL once (HD → standard, or video thumbnail), then say
+          // so. Never leave the panel blank with no explanation.
+          if (!useThumbnail && thumbnail && thumbnail !== src) {
+            setUseThumbnail(true);
+            return;
+          }
+          setPhase('failed');
+        }}
+        className={`h-full max-h-[420px] w-full object-cover ${phase === 'ready' ? 'opacity-100' : 'opacity-0'}`}
+        style={{ transition: 'opacity 180ms ease-out' }}
+      />
+      {!isImage ? (
+        <div className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-2 bg-[linear-gradient(0deg,rgba(3,6,14,0.9),rgba(3,6,14,0))] p-3 pt-10">
+          <p className="text-[11px] text-ink-2">{t('apodVideoNote')}</p>
+          <a
+            href={apod.url}
+            target="_blank"
+            rel="noreferrer noopener"
+            className="inline-flex items-center gap-1 text-[11px] text-atmo underline decoration-dotted"
+          >
+            {t('apodOpenOriginal')} <ExternalLink className="h-3 w-3" />
+          </a>
+        </div>
+      ) : null}
+    </>
+  );
+}
+
 function ApodPanel({
   resource,
   onNavigate
@@ -300,29 +389,7 @@ function ApodPanel({
       <div className="grid lg:grid-cols-[1.35fr_1fr]">
         <div className="relative min-h-[240px] bg-abyss">
           {apod ? (
-            apod.media_type === 'image' ? (
-              <img
-                src={apod.url}
-                alt={apod.title}
-                loading="lazy"
-                decoding="async"
-                className="h-full max-h-[420px] w-full object-cover"
-              />
-            ) : (
-              <div className="flex h-full min-h-[240px] items-center justify-center p-6 text-center">
-                <div>
-                  <p className="text-[12px] text-ink-2">This entry is {apod.media_type}, not a still image.</p>
-                  <a
-                    href={apod.url}
-                    target="_blank"
-                    rel="noreferrer noopener"
-                    className="mt-2 inline-flex items-center gap-1 text-xs text-atmo underline decoration-dotted"
-                  >
-                    Open the original media <ExternalLink className="h-3 w-3" />
-                  </a>
-                </div>
-              </div>
-            )
+            <ApodMedia apod={apod} />
           ) : (
             <Skeleton className="h-full min-h-[240px] w-full rounded-none" />
           )}

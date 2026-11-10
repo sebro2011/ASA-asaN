@@ -32,6 +32,32 @@ export function redactApiKeys<T>(payload: T): T {
   }
 }
 
+/**
+ * NASA still returns `http://apod.nasa.gov/apod/image/...` for older entries.
+ * The app is served over HTTPS with `img-src 'self' data: https: blob:`, so those
+ * URLs were blocked as mixed content and the image never rendered — with a
+ * perfectly valid API response. Upgrading the scheme is the entire fix; the host
+ * serves both, and no proxy round-trip is needed.
+ */
+export function normaliseApodMedia<T extends Record<string, any>>(record: T): T {
+  if (!record || typeof record !== 'object') return record;
+  const upgraded: Record<string, any> = { ...record };
+  for (const field of ['url', 'hdurl', 'thumbnail_url'] as const) {
+    const value = upgraded[field];
+    if (typeof value === 'string' && value.trim()) {
+      upgraded[field] = value.trim().replace(/^http:\/\//i, 'https://');
+    } else if (field in upgraded) {
+      delete upgraded[field];
+    }
+  }
+  // A `url` that is neither http(s) nor a media path is not something the
+  // browser can render, so the caller can treat it as missing.
+  if (typeof upgraded.url === 'string' && !/^https?:\/\//i.test(upgraded.url)) {
+    delete upgraded.url;
+  }
+  return upgraded as T;
+}
+
 export type ApodFailureKind = 'network' | 'rate-limited' | 'upstream' | 'shape';
 
 /**
@@ -129,10 +155,12 @@ export const FALLBACK_APODS: Record<string, any> = {
   }
 };
 
-// Seed default cache items
-Object.entries(FALLBACK_APODS).forEach(([k, v]) => {
-  if (k !== 'default') apodCache.set(k, v);
-});
+// The bundled entries are NOT seeded into `apodCache`. They used to be, which
+// made `GET /api/apod?date=<seeded date>` answer `{ cached: true }` with a
+// placeholder and skip NASA entirely: the client was told a fixture was a cached
+// real record, and the genuine picture for that date could never appear.
+// Fixtures are now served only by the fallback branch, which labels them
+// `isFallback: true` and carries the reason.
 
 // High quality intelligent astronomical fallback translation (Sinhala & Tamil)
 function generateSmartAstronomicalTranslation(title: string, explanation: string, targetLang: string) {
@@ -594,7 +622,7 @@ export function setupNasaRoutes(app: any, ai: GoogleGenAI) {
       upstreamStatus = nasaRes.status;
 
       if (nasaRes.ok) {
-        const data = redactApiKeys(await nasaRes.json());
+        const data = normaliseApodMedia(redactApiKeys(await nasaRes.json()));
         if (data && data.title && data.url) {
           if (date) apodCache.set(date, data);
           apodCache.set('today', data);
@@ -617,7 +645,9 @@ export function setupNasaRoutes(app: any, ai: GoogleGenAI) {
     // Service unavailable. Return a clearly-labelled reference entry and do NOT
     // write it to the cache: caching a placeholder would make a later genuine
     // request look like a successful network read.
-    const fallback = FALLBACK_APODS[date] || FALLBACK_APODS[date.slice(0, 10)] || FALLBACK_APODS['2026-09-30'] || FALLBACK_APODS.default;
+    const fallback = normaliseApodMedia(
+      FALLBACK_APODS[date] || FALLBACK_APODS[date.slice(0, 10)] || FALLBACK_APODS['2026-09-30'] || FALLBACK_APODS.default,
+    );
     const usingDemoKey = nasaApiKey === 'DEMO_KEY';
     return res.json({
       success: true,
