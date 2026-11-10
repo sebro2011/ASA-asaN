@@ -1505,3 +1505,380 @@
 .nova-chat-shell--forge .forge-tabs {
   max-width: 100%;
 }
+
+/* ==========================================================================
+   Computational laboratory (deterministic science panel)
+   Lives inside the Scientific Analysis section. Deliberately quieter than the
+   investigation cards: it is a workbench, not a headline.
+   ========================================================================== */
+
+.forge-lab {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  margin-top: 14px;
+  padding: 14px 15px 12px;
+  border: 1px solid var(--color-line, rgba(120, 160, 220, 0.16));
+  border-radius: 13px;
+  background:
+    linear-gradient(168deg, rgba(16, 27, 45, 0.72), rgba(6, 11, 21, 0.72));
+}
+
+.forge-lab--empty {
+  align-items: flex-start;
+}
+
+.forge-lab__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 14px;
+  min-width: 0;
+}
+
+.forge-lab__title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  color: var(--color-ink-1, #eaf1fb);
+}
+
+.forge-lab__title h3 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  white-space: normal;
+}
+
+.forge-lab__badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border: 1px solid rgba(94, 211, 242, 0.34);
+  border-radius: 999px;
+  background: rgba(94, 211, 242, 0.1);
+  color: var(--color-ink-1, #eaf1fb);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.forge-lab__picker {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  font-size: 11.5px;
+  color: var(--color-ink-3, #9db0cc);
+}
+
+.forge-lab__picker select {
+  max-width: min(340px, 100%);
+  min-width: 0;
+  padding: 5px 8px;
+  border: 1px solid var(--color-line, rgba(120, 160, 220, 0.22));
+  border-radius: 8px;
+  background: rgba(9, 16, 28, 0.9);
+  color: var(--color-ink-1, #eaf1fb);
+  font: inherit;
+  font-size: 11.5px;
+}
+
+.forge-lab__hint {
+  margin: 0;
+  max-width: 74ch;
+  font-size: 11.5px;
+  line-height: 1.55;
+  color: var(--color-ink-3, #9db0cc);
+}
+
+.forge-lab__tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+
+.forge-lab__tab {
+  padding: 5px 10px;
+  border: 1px solid var(--color-line, rgba(120, 160, 220, 0.18));
+  border-radius: 999px;
+  background: rgba(9, 16, 28, 0.6);
+  color: var(--color-ink-3, #9db0cc);
+  font: inherit;
+  font-size: 11.5px;
+  cursor: pointer;
+}
+
+.forge-lab__tab:hover {
+  color: var(--color-ink-1, #eaf1fb);
+  border-color: rgba(120, 160, 220, 0.34);
+}
+
+.forge-lab__tab.is-active {
+  border-color: rgba(79, 141, 255, 0.5);
+  background: rgba(79, 141, 255, 0.16);
+  color: var(--color-ink-1, #eaf1fb);
+}
+
+.forge-lab__tab:focus-visible,
+.forge-lab__picker select:focus-visible,
+.forge-lab__priors input:focus-visible {
+  outline: 2px solid rgba(94, 211, 242, 0.7);
+  outline-offset: 2px;
+}
+
+.forge-lab__panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.forge-lab__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(160px, 100%), 1fr));
+  gap: 8px;
+  margin: 0;
+}
+
+.forge-lab__grid > div {
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid rgba(120, 160, 220, 0.12);
+  border-radius: 9px;
+  background: rgba(7, 13, 24, 0.5);
+}
+
+.forge-lab__grid dt {
+  font-size: 10.5px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--color-ink-3, #9db0cc);
+}
+
+.forge-lab__grid dd {
+  margin: 3px 0 0;
+  font-size: 12.5px;
+  overflow-wrap: anywhere;
+  color: var(--color-ink-1, #eaf1fb);
+}
+
+.forge-lab__priors {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(130px, 100%), 1fr));
+  gap: 8px;
+  min-width: 0;
+}
+
+.forge-lab__priors label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  font-size: 10.5px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--color-ink-3, #9db0cc);
+}
+
+.forge-lab__priors input,
+.forge-lab__priors select {
+  min-width: 0;
+  padding: 6px 8px;
+  border: 1px solid var(--color-line, rgba(120, 160, 220, 0.22));
+  border-radius: 8px;
+  background: rgba(9, 16, 28, 0.9);
+  color: var(--color-ink-1, #eaf1fb);
+  font: inherit;
+  font-size: 12px;
+}
+
+.forge-lab__priors .forge-muted {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+.forge-lab__sweep {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11.5px;
+}
+
+.forge-lab__sweep caption {
+  padding-bottom: 5px;
+  text-align: left;
+  font-size: 10.5px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--color-ink-3, #9db0cc);
+}
+
+.forge-lab__sweep th,
+.forge-lab__sweep td {
+  padding: 5px 8px;
+  border-bottom: 1px solid rgba(120, 160, 220, 0.1);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.forge-lab__sweep th {
+  font-weight: 600;
+  color: var(--color-ink-3, #9db0cc);
+}
+
+.forge-lab__validation {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0;
+  padding: 7px 10px;
+  border: 1px solid rgba(120, 160, 220, 0.18);
+  border-radius: 9px;
+  font-size: 11.5px;
+  line-height: 1.45;
+}
+
+.forge-lab__validation.is-pass {
+  border-color: rgba(78, 205, 160, 0.4);
+  background: rgba(78, 205, 160, 0.08);
+}
+
+.forge-lab__validation.is-fail {
+  border-color: rgba(247, 143, 143, 0.42);
+  background: rgba(247, 143, 143, 0.08);
+}
+
+.forge-lab__modelnote {
+  margin: 0;
+  padding: 8px 10px;
+  border-left: 2px solid rgba(94, 211, 242, 0.5);
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--color-ink-2, #c3d2e6);
+}
+
+.forge-lab__candidates {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.forge-lab__candidate {
+  padding: 9px 11px;
+  border: 1px solid rgba(120, 160, 220, 0.16);
+  border-radius: 10px;
+  background: rgba(7, 13, 24, 0.5);
+}
+
+.forge-lab__candidate header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  margin-bottom: 5px;
+  font-size: 12px;
+}
+
+.forge-lab__candidate header strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.forge-lab__candidate p {
+  margin: 0 0 4px;
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+
+.forge-lab__claim,
+.forge-lab__unverified {
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 10px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.forge-lab__claim {
+  border: 1px solid rgba(79, 141, 255, 0.4);
+  background: rgba(79, 141, 255, 0.12);
+}
+
+.forge-lab__unverified {
+  border: 1px dashed rgba(247, 207, 143, 0.5);
+  color: rgba(247, 207, 143, 0.95);
+}
+
+.forge-lab__limits {
+  margin: 0;
+  padding-left: 16px;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--color-ink-3, #9db0cc);
+}
+
+.forge-lab__limits li + li {
+  margin-top: 3px;
+}
+
+.forge-lab__audit .forge-lab__meta {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(180px, 100%), 1fr));
+  gap: 8px;
+  margin: 8px 0 0;
+}
+
+.forge-lab__audit .forge-lab__meta > div {
+  min-width: 0;
+}
+
+.forge-lab__audit dt {
+  font-size: 10px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--color-ink-3, #9db0cc);
+}
+
+.forge-lab__audit dd {
+  margin: 2px 0 0;
+  font-size: 11px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+  color: var(--color-ink-2, #c3d2e6);
+}
+
+.forge-lab__audit ul {
+  margin: 0;
+  padding-left: 14px;
+}
+
+.forge-lab__foot {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(120, 160, 220, 0.12);
+  font-size: 10.5px;
+  color: var(--color-ink-3, #9db0cc);
+}
+
+@media (max-width: 640px) {
+  .forge-lab {
+    padding: 12px 12px 10px;
+  }
+
+  .forge-lab__picker select {
+    max-width: 100%;
+  }
+}
