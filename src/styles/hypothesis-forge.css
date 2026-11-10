@@ -47,6 +47,7 @@
   position: relative;
   z-index: 1;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
@@ -121,6 +122,21 @@
   background: rgba(8, 15, 27, 0.6);
   backdrop-filter: blur(14px);
   scrollbar-width: thin;
+}
+
+/* On a tablet the eight tab labels (longer still in Sinhala and Tamil) cannot
+   fit one row. Wrapping keeps every section reachable with a single vertical
+   gesture instead of an undiscoverable horizontal one. */
+@media (max-width: 900px) {
+  .forge-tabs {
+    flex-wrap: wrap;
+    overflow-x: visible;
+  }
+
+  .forge-tab {
+    flex: 1 1 auto;
+    justify-content: center;
+  }
 }
 
 .forge-tab {
@@ -217,6 +233,9 @@
 }
 
 .forge-panel {
+  /* Keeps a focused/anchored panel clear of the sticky top bar. */
+  scroll-margin-top: calc(var(--spacing-ws-topbar, 3.5rem) + 0.75rem);
+  min-width: 0;
   padding: 16px 18px 18px;
   border: 1px solid var(--color-line, rgba(120, 160, 220, 0.16));
   border-radius: var(--forge-radius);
@@ -226,10 +245,18 @@
 
 .forge-panel__head {
   display: flex;
+  flex-wrap: wrap;
   align-items: flex-start;
   justify-content: space-between;
   gap: 14px;
   margin-bottom: 13px;
+}
+
+/* The heading column must be allowed to shrink, and the action row to wrap —
+   otherwise a long Sinhala/Tamil title pushes the buttons out of the panel. */
+.forge-panel__head > div {
+  min-width: 0;
+  flex: 1 1 14rem;
 }
 
 .forge-panel__title {
@@ -257,10 +284,23 @@
 .forge-grid {
   display: grid;
   gap: 16px;
+  /* Grid and flex items default to `min-width: auto`, i.e. their min-content
+     width. A 680px-wide table inside a track therefore used to widen the track
+     (and the page) instead of scrolling inside its own wrapper. */
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
 }
 
 .forge-grid--two {
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  /* `min(320px, 100%)` keeps the single-column fallback on a 320px phone while
+     still splitting into two columns on a laptop. */
+  grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr));
+}
+
+.forge-grid > *,
+.forge-body > *,
+.forge-panel > * {
+  min-width: 0;
 }
 
 /* ------------------------------------------------------------- controls */
@@ -712,7 +752,7 @@
 
 .forge-hypothesis__grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(150px, 100%), 1fr));
   gap: 10px;
   margin: 12px 0 6px;
   padding: 10px 11px;
@@ -785,6 +825,9 @@
 
 .forge-tablewrap {
   overflow-x: auto;
+  max-width: 100%;
+  /* The scrollbar must be usable with a trackpad and a finger. */
+  overscroll-behavior-x: contain;
   border: 1px solid var(--color-line, rgba(120, 160, 220, 0.14));
   border-radius: 10px;
 }
@@ -895,7 +938,7 @@
 
 .forge-evidence__meta {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(170px, 100%), 1fr));
   gap: 7px 14px;
   margin: 10px 0 0;
   padding-top: 9px;
@@ -951,7 +994,7 @@
 
 .forge-results {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(120px, 100%), 1fr));
   gap: 7px;
   margin: 11px 0 4px;
 }
@@ -1307,6 +1350,29 @@
   }
 }
 
+/* Touch targets: the desktop-density controls are ~30px tall, which is below the
+   44px recommendation on a finger-driven screen. Only coarse pointers grow. */
+@media (pointer: coarse) {
+  .forge-btn,
+  .forge-tab,
+  .forge-toggle,
+  .forge-linkbtn,
+  .forge-example {
+    min-height: 40px;
+  }
+
+  .forge-tab {
+    padding-block: 10px;
+  }
+}
+
+.forge,
+.forge-hero,
+.forge-panel {
+  /* A long unbroken token (a token hash, a URL, a DOI) may never widen the page. */
+  overflow-wrap: break-word;
+}
+
 @media (max-width: 640px) {
   .forge-hero {
     padding: 16px;
@@ -1380,18 +1446,62 @@
   }
 }
 
-/* The investigation workspace fills the chat column but keeps the shell chrome. */
+/* ==========================================================================
+   SCROLL OWNERSHIP (root-cause fix, 2026-11-08)
+   --------------------------------------------------------------------------
+   The investigation workspace fills the chat column but keeps the shell chrome.
+
+   `.nova-chat-shell` is viewport-locked on purpose — in chat mode the thread and
+   the rail scroll inside it, and the document must not. The Forge is document
+   content, so it must NOT inherit that lock:
+
+     * `height: auto` — the shell grows with its content, which lets the page
+       grow and scroll. Before, it stayed `calc(100dvh - topbar)` while the
+       Forge was several screens tall.
+     * `min-height` (not `height`) — a short Forge section still fills the
+       viewport instead of leaving a bare strip of background.
+     * the content pane is no longer a scroll container — `overflow-y: auto`
+       also computes `overflow-x` to `auto`, so the pane silently clipped wide
+       tables, chart popovers and long source URLs.
+
+   With those three removed there is exactly one scroll owner for this surface:
+   the document. The sticky top bar and the sticky sidebar keep working because
+   their containing block (`.nova-app`) now genuinely spans the whole page.
+   ========================================================================== */
+
 .nova-chat-shell--forge {
   display: block;
-  min-height: 0;
+  height: auto;
+  min-height: calc(100dvh - var(--spacing-ws-topbar));
+  padding: 0;
+}
+
+/* Where the fixed mobile bar is on screen the shell already reserves its height
+   through `main`'s padding, so the minimum must not add it a second time. */
+@media (max-width: 1023px) {
+  .nova-chat-shell--forge {
+    min-height: calc(100dvh - var(--spacing-ws-topbar) - var(--spacing-ws-mobilebar));
+  }
 }
 
 .nova-chat-shell--forge .nova-chat-main {
+  display: block;
   width: 100%;
   max-width: 1240px;
+  min-width: 0;
   margin: 0 auto;
-  padding: 14px 14px 0;
-  overflow-y: auto;
+  padding: 14px 14px 24px;
+  /* Explicit: nothing here may become a scroll container. */
+  overflow: visible;
   border: 0;
   background: transparent;
+}
+
+/* The Forge never creates a nested vertical scroll area. Horizontal scrolling is
+   allowed only inside the elements that need it (wide tables, code blocks, the
+   tab strip) so a long value cannot widen the page. */
+.nova-chat-shell--forge .forge-tablewrap,
+.nova-chat-shell--forge .forge-code,
+.nova-chat-shell--forge .forge-tabs {
+  max-width: 100%;
 }

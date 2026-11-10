@@ -239,7 +239,7 @@ export default function CommandPalette({ open, onClose }: { open: boolean; onClo
           ref={listRef}
           role="listbox"
           aria-label={t('wsCommandTitle')}
-          className="max-h-[min(60vh,26rem)] list-none overflow-y-auto p-1.5"
+          className="max-h-[min(60dvh,26rem)] list-none overflow-y-auto overscroll-contain p-1.5"
         >
           {flat.length === 0 ? (
             <li className="px-3 py-6 text-center text-[12.5px] text-ws-text-3">{t('wsCommandEmpty')}</li>

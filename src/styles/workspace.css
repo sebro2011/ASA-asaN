@@ -24,6 +24,14 @@
   isolation: isolate;
 }
 
+/* Jump targets (skip link, route focus) land below the sticky top bar instead of
+   underneath it. `scroll-margin` is inherited by nothing, so it is set on the
+   scroll container's children that receive focus or anchors. */
+#nova-main,
+.nova-main-anchor {
+  scroll-margin-top: calc(var(--spacing-ws-topbar) + 0.5rem);
+}
+
 /* ------------------------------------------------------------------ surfaces */
 
 .nova-glass {
@@ -844,9 +852,18 @@
   padding: 0.75rem;
 }
 
+/* The fixed mobile bar is only hidden from 1024px up (`lg:hidden`), so between
+   768px and 1023px (portrait Android tablets) it still covers the viewport
+   bottom. The pane therefore reserves its height until that breakpoint, not
+   until 767px — otherwise the last control of a thread sits under the bar. */
+@media (max-width: 1023px) {
+  .nova-chat-shell {
+    height: calc(100dvh - var(--spacing-ws-topbar) - var(--spacing-ws-mobilebar));
+  }
+}
+
 @media (max-width: 767px) {
   .nova-chat-shell {
-    height: calc(100dvh - var(--spacing-ws-topbar) - 4.5rem);
     padding: 0.5rem;
   }
 }
