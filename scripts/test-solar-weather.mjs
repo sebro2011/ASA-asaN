@@ -38,7 +38,7 @@ globalThis.fetch = async (input, init) => {
       // A 500 is the realistic outage; the handler must not fall back to a value.
       return new Response('upstream error', { status: 500 });
     }
-    if (url.includes('planetary_k_index')) {
+    if (url.includes('planetary_k_index') || url.includes('noaa-planetary-k-index')) {
       return new Response(JSON.stringify(KP_TABLE), {
         status: 200,
         headers: { 'content-type': 'application/json' },
@@ -81,8 +81,23 @@ const callSolarWeather = async () => {
   return { status: response.status, body: await response.json() };
 };
 
-test('the Kp table parser takes the newest finite value and maps the NOAA G-scale', () => {
+test('the Kp parser accepts both published SWPC shapes and maps the NOAA G-scale', () => {
   const { parsePlanetaryKIndex, kpStormScale } = globalThis.__parsers;
+
+  // Shape 2: `json/planetary_k_index.json` — objects, observed on production.
+  const objectShape = parsePlanetaryKIndex([
+    { time_tag: '2026-11-12T09:00:00', kp_index: 1.67, estimated_kp: 1.67 },
+    { time_tag: '2026-11-12T12:00:00', kp_index: 6.0, estimated_kp: 6.33, kp: 6.0 },
+  ]);
+  // `kp_index` is the official planetary index; `estimated_kp` is the preliminary
+  // estimate, so the official value wins when both are present.
+  assert.equal(objectShape.kpIndex, 6.0);
+  assert.equal(objectShape.stormKey, 'G2');
+  assert.equal(objectShape.observedAt, '2026-11-12T12:00:00.000Z');
+
+  const objectEstimatedOnly = parsePlanetaryKIndex([{ time_tag: '2026-11-12T12:00:00', estimated_kp: 4.0 }]);
+  assert.equal(objectEstimatedOnly.kpIndex, 4.0, 'estimated_kp is the fallback');
+  assert.equal(objectEstimatedOnly.stormKey, 'G0');
   const parsed = parsePlanetaryKIndex(KP_TABLE);
   assert.equal(parsed.kpIndex, 5.33, 'the newest row wins');
   assert.equal(parsed.stormKey, 'G1');
@@ -93,6 +108,7 @@ test('the Kp table parser takes the newest finite value and maps the NOAA G-scal
   assert.equal(parsePlanetaryKIndex([['t', 'null'], ['t2', '12']]), null);
   assert.equal(parsePlanetaryKIndex([]), null);
   assert.equal(parsePlanetaryKIndex({}), null);
+  assert.equal(parsePlanetaryKIndex([{ time_tag: '2026-11-12T12:00:00' }]), null, 'a row with no Kp is not a calm reading');
 
   assert.equal(kpStormScale(9).stormKey, 'G5');
   assert.equal(kpStormScale(4.99).stormKey, 'G0');

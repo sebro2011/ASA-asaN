@@ -160,7 +160,8 @@ export function normaliseNasaImageItem(item: unknown): NasaImageRecord | null {
     // `center` is the real publishing centre; if absent the field stays empty
     // rather than borrowing a plausible-looking one.
     category: text(entry.center),
-    thumbnail: preview ?? '',
+    // NASA asset filenames contain spaces; a raw space in `src` is unreliable.
+    thumbnail: preview ? encodeURI(preview) : '',
     hdUrl: null,
     detailsUrl: `https://images.nasa.gov/details/${encodeURIComponent(nasaId)}`,
     assetUrl: `https://images-api.nasa.gov/asset/${encodeURIComponent(nasaId)}`,

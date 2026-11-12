@@ -58,6 +58,15 @@ test('normalisation keeps only fields that exist upstream and builds real links'
   assert.equal(record.detailsUrl, 'https://images.nasa.gov/details/PIA12345');
   assert.equal(record.assetUrl, 'https://images-api.nasa.gov/asset/PIA12345');
 
+  // Real NASA ids contain spaces; the preview URL must be encoded for `src`.
+  const spaced = normaliseNasaImageItem({
+    data: [{ nasa_id: 'Artemis Logo RGB', title: 'Artemis Logo RGB' }],
+    links: [{ href: 'https://images-assets.nasa.gov/image/Artemis Logo RGB/Artemis Logo RGB~medium.jpg' }],
+  });
+  assert.ok(spaced);
+  assert.equal(spaced.thumbnail, 'https://images-assets.nasa.gov/image/Artemis%20Logo%20RGB/Artemis%20Logo%20RGB~medium.jpg');
+  assert.equal(spaced.detailsUrl, 'https://images.nasa.gov/details/Artemis%20Logo%20RGB');
+
   // No invented values when the upstream is silent.
   const sparse = normaliseNasaImageItem({
     data: [{ nasa_id: 'PIA1', title: 'Untitled record' }],
