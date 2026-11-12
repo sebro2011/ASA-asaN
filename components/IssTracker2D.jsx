@@ -79,7 +79,7 @@ function calculateHaversineDistanceKm(lat1, lon1, lat2, lon2) {
  * - Direct live telemetry fetching from https://api.wheretheiss.at/v1/satellites/25544 every 5 seconds
  * - 60 FPS smooth rendering loop using pure 2D Canvas context (zero WebGL overhead)
  * - Trajectory ground track line, day/night footprint indicator, and pulsing cyan target reticle
- * - Calculates next pass over Sri Lanka coordinates (6.9271° N, 79.8612° E) with live countdown badge
+ * - Shows approximate ground distance to Colombo; no next-pass prediction is calculated
  */
 export function IssTracker2D({ className = '', lang = 'en' }) {
   const canvasRef = useRef(null);
@@ -112,8 +112,6 @@ export function IssTracker2D({ className = '', lang = 'en' }) {
   const orbitTrailRef = useRef([]); // Past points array [{ lat, lon }]
   const isInViewRef = useRef(true);
 
-  // Live countdown state (seconds remaining to next flyover pass)
-  const [secondsToNextPass, setSecondsToNextPass] = useState(3840); // default ~1h 4m
 
   // 1. Fetch live ISS telemetry every 5 seconds via central API pipeline
   const fetchIssTelemetry = useCallback(async () => {
@@ -220,40 +218,6 @@ export function IssTracker2D({ className = '', lang = 'en' }) {
       SRI_LANKA_COORDS.lon
     );
   }, [telemetry.latitude, telemetry.longitude]);
-
-  // Calculate dynamic flyover seconds based on current orbital ground track distance
-  useEffect(() => {
-    // ISS speed is ~7.66 km/s (~460 km/min)
-    const speedKmS = (telemetry.velocity || 27600) / 3600;
-    
-    // Orbital period ~5561 seconds. Calculate estimated flight time to closest approach
-    let estSeconds = Math.round((sriLankaDistance / speedKmS) * 0.75);
-    if (estSeconds < 120 && sriLankaDistance < 600) {
-      estSeconds = Math.max(15, estSeconds);
-    } else if (estSeconds < 300) {
-      estSeconds = 360;
-    } else if (estSeconds > 5561) {
-      estSeconds = estSeconds % 5561;
-    }
-
-    setSecondsToNextPass(estSeconds);
-  }, [sriLankaDistance, telemetry.velocity]);
-
-  // Ticking 1-second countdown clock for the badge
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setSecondsToNextPass(prev => (prev > 1 ? prev - 1 : 5561));
-    }, 1000);
-    return () => clearInterval(timer);
-  }, []);
-
-  // Format countdown string HH:MM:SS
-  const countdownFormatted = useMemo(() => {
-    const hrs = Math.floor(secondsToNextPass / 3600);
-    const mins = Math.floor((secondsToNextPass % 3600) / 60);
-    const secs = secondsToNextPass % 60;
-    return `${hrs > 0 ? `${hrs}h ` : ''}${String(mins).padStart(2, '0')}m ${String(secs).padStart(2, '0')}s`;
-  }, [secondsToNextPass]);
 
   // 60 FPS HTML5 2D Canvas Render Loop
   useEffect(() => {
@@ -644,26 +608,14 @@ export function IssTracker2D({ className = '', lang = 'en' }) {
             </div>
             <p className="text-[11px] text-ink-2 font-mono mt-0.5">
               Distance to Colombo: <strong className="text-cyan-300">{sriLankaDistance.toLocaleString()} km</strong>
-              {sriLankaDistance < 1800 ? (
-                <span className="ml-2 text-signal font-bold">● VISIBLE HORIZON PASS</span>
-              ) : (
-                <span className="ml-2 text-ink-3">● Orbital Precession Phase</span>
-              )}
+              <span className="ml-2 text-ink-3">{lang === 'si' ? 'භූමි දුර පමණි; දෘශ්‍යතාව නොවේ' : lang === 'ta' ? 'தரை தூரம் மட்டுமே; தெரிவுநிலை அல்ல' : 'Ground distance only; not visibility'}</span>
             </p>
           </div>
         </div>
 
-        {/* Live Countdown Badge */}
-        <div className="flex items-center gap-2.5 bg-abyss/70 px-3.5 py-2 rounded-[10px] border border-emerald-500/40 shadow-md">
-          <Clock className="w-4 h-4 text-signal animate-pulse" />
-          <div>
-            <span className="text-[9px] font-mono text-ink-3 uppercase tracking-wider block">
-              {lang === 'si' ? 'මීළඟ ගුවන් ගමනට ඉතිරි කාලය' : lang === 'ta' ? 'அடுத்த பறக்கும் நேரம்' : 'Next Pass Countdown'}
-            </span>
-            <span className="text-sm font-bold font-mono text-signal tracking-wider">
-              {countdownFormatted}
-            </span>
-          </div>
+        <div className="flex items-center gap-2.5 bg-abyss/70 px-3.5 py-2 rounded-[10px] border border-line text-xs text-ink-2">
+          <Clock className="w-4 h-4" />
+          <span>{lang === 'si' ? 'මීළඟ ගමන් වේලාව ගණනය නොකෙරේ.' : lang === 'ta' ? 'அடுத்த கடக்கும் நேரம் கணிக்கப்படவில்லை.' : 'Next-pass time is not predicted.'}</span>
         </div>
       </div>
 

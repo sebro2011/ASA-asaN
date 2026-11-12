@@ -1,16 +1,7 @@
-import React, { useState, useEffect, useMemo, memo } from 'react';
+import React, { useState, useEffect, useMemo, useRef, memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { VoiceSearchInput } from './VoiceSearchInput';
-import { buildNasaApodUrl } from '../utils/nasaApiClient';
-import { 
-  getCachedApod, 
-  setCachedApod, 
-  getCachedNews, 
-  setCachedNews, 
-  getMockApodFallback, 
-  getMockNewsFallback 
-} from '../lib/dbCache.js';
-import { fetchApod as fetchApodPipeline, fetchNasaNews as fetchNewsPipeline, translateSpaceContent } from '@/lib/nasaApi';
+import { fetchApod as fetchApodPipeline, fetchSpaceNewsStatus as fetchNewsPipeline, translateSpaceContent } from '@/lib/nasaApi';
 import { 
   Sparkles, 
   Newspaper, 
@@ -28,46 +19,6 @@ import {
   ChevronRight
 } from 'lucide-react';
 
-// Fallback curated news items if external RSS proxies encounter rate limits or CORS
-const FALLBACK_NASA_NEWS = [
-  {
-    guid: 'nasa-news-1',
-    title: "NASA's James Webb Space Telescope Discovers Most Distant Known Black Hole",
-    pubDate: 'Mon, 28 Sep 2026 12:00:00 GMT',
-    link: 'https://www.nasa.gov/missions/webb/',
-    description: 'Astronomers using NASA’s James Webb Space Telescope have discovered an active supermassive black hole thriving in a galaxy observed just 400 million years after the Big Bang, offering unprecedented clues into how the earliest cosmos sparked to life.',
-    thumbnail: 'https://images.unsplash.com/photo-1614728894747-a83421e2b9c9?auto=format&fit=crop&w=800&q=80',
-    category: 'Deep Space'
-  },
-  {
-    guid: 'nasa-news-2',
-    title: 'Artemis Crew Completes Integrated Flight Launch Simulations',
-    pubDate: 'Sun, 27 Sep 2026 15:30:00 GMT',
-    link: 'https://www.nasa.gov/artemis',
-    description: 'NASA astronauts and ground controllers successfully completed full-duration countdown simulations at Kennedy Space Center as systems gear up for the historic circumlunar mission.',
-    thumbnail: 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&w=800&q=80',
-    category: 'Artemis Lunar'
-  },
-  {
-    guid: 'nasa-news-3',
-    title: 'Perseverance Rover Unearths Rich Organic Carbon Signatures in Jezero Delta',
-    pubDate: 'Fri, 25 Sep 2026 09:15:00 GMT',
-    link: 'https://mars.nasa.gov/mars2020/',
-    description: 'Rock core samples collected from ancient Martian river sediments reveal high concentrations of complex organic molecules, marking a vital milestone for astrobiology.',
-    thumbnail: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=800&q=80',
-    category: 'Mars Exploration'
-  },
-  {
-    guid: 'nasa-news-4',
-    title: 'Europa Clipper Successfully Deploys Subsurface Ice-Penetrating Radar',
-    pubDate: 'Thu, 24 Sep 2026 18:45:00 GMT',
-    link: 'https://europa.nasa.gov/',
-    description: 'Cruising through deep space toward Jupiter, the Europa Clipper spacecraft locked its massive radar antennas into position to sound the liquid ocean beneath the ice shell of Europa.',
-    thumbnail: 'https://images.unsplash.com/photo-1462331940025-496dfbfc7564?auto=format&fit=crop&w=800&q=80',
-    category: 'Solar System'
-  }
-];
-
 function NasaNewsFeed() {
   const { t, i18n } = useTranslation();
   const currentLang = (i18n.language || 'en').slice(0, 2);
@@ -77,6 +28,8 @@ function NasaNewsFeed() {
   const [apodLoading, setApodLoading] = useState(true);
   const [newsItems, setNewsItems] = useState([]);
   const [newsLoading, setNewsLoading] = useState(true);
+  const [newsStatus, setNewsStatus] = useState({ ok: true, partial: false });
+  const newsRequest = useRef(0);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [copiedId, setCopiedId] = useState(null);
@@ -86,81 +39,48 @@ function NasaNewsFeed() {
   const [translations, setTranslations] = useState({});
   const [translatingIds, setTranslatingIds] = useState(new Set());
 
-  // 1. Fetch NASA APOD (Astronomy Picture of the Day) with Central Pipeline
+  // The shared pipeline rejects synthetic APOD records. Do not reuse legacy
+  // IndexedDB entries: their provenance and requested date are not trustworthy.
   const fetchApod = async () => {
     setApodLoading(true);
-
-    // Check IndexedDB cache first: if under 6 hours old, serve instantly
-    try {
-      const cached = await getCachedApod('today');
-      if (cached && cached.isFresh && cached.data) {
-        setApod(cached.data);
-        setApodLoading(false);
-        return;
-      }
-    } catch {}
-
     try {
       const data = await fetchApodPipeline();
-      if (data && data.title && data.url) {
-        setApod(data);
-        setCachedApod(data.date || 'today', data);
-        return;
-      }
+      setApod(data && !data._isSample && !data._isFallback ? data : null);
     } catch {
-      // Stale cache or localized mock space data fallback
-      try {
-        const staleCached = await getCachedApod('today');
-        if (staleCached && staleCached.data) {
-          setApod(staleCached.data);
-          return;
-        }
-      } catch {}
-
-      const mock = getMockApodFallback(currentLang);
-      setApod(mock);
+      setApod(null);
     } finally {
       setApodLoading(false);
     }
   };
 
-  // 2. Fetch NASA RSS News Feed with IndexedDB Caching & Central Pipeline
-  const fetchNewsFeed = async () => {
+  const fetchNewsFeed = async (refresh = false) => {
+    const request = ++newsRequest.current;
     setNewsLoading(true);
-
-    // Check IndexedDB cache first: if under 6 hours old, serve instantly
     try {
-      const cached = await getCachedNews(currentLang);
-      if (cached && cached.isFresh && Array.isArray(cached.data) && cached.data.length > 0) {
-        setNewsItems(cached.data);
-        setNewsLoading(false);
-        return;
-      }
-    } catch {}
-
-    try {
-      const articles = await fetchNewsPipeline();
-      if (Array.isArray(articles) && articles.length > 0) {
-        const formatted = articles.map((item, index) => ({
+      const result = await fetchNewsPipeline({ refresh });
+      if (request !== newsRequest.current) return;
+      setNewsStatus(result);
+      const formatted = result.items
+        .filter(item => !item._isSample && typeof item.title === 'string' && typeof item.url === 'string' && /^https?:\/\//i.test(item.url))
+        .map((item, index) => ({
           guid: item.id || `news-${index}`,
           title: item.title,
-          pubDate: item.date || 'October 2026',
-          link: item.url || 'https://www.nasa.gov',
+          pubDate: item.publishedAt || item.date || null,
+          link: item.url,
           description: item.summary || item.description || '',
-          thumbnail: item.image || item.thumbnail || FALLBACK_NASA_NEWS[index % FALLBACK_NASA_NEWS.length].thumbnail,
-          category: item.category || 'Space Science'
+          thumbnail: item.imageUrl || item.image || item.thumbnail || null,
+          category: item.category || 'Space News',
+          source: item.sourceLabel || 'Space news provider'
         }));
-        setNewsItems(formatted);
-        setCachedNews(currentLang, formatted);
-        setNewsLoading(false);
-        return;
+      setNewsItems(formatted);
+    } catch {
+      if (request === newsRequest.current) {
+        setNewsStatus({ ok: false });
+        setNewsItems([]);
       }
-    } catch {}
-
-    // Fallback gracefully to hardcoded Sinhala/Tamil mock space news data
-    const mockNews = getMockNewsFallback(currentLang);
-    setNewsItems(mockNews || FALLBACK_NASA_NEWS);
-    setNewsLoading(false);
+    } finally {
+      if (request === newsRequest.current) setNewsLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -170,7 +90,7 @@ function NasaNewsFeed() {
       fetchNewsFeed();
       fetchApod();
     }, 45000); // 45s throttled polling for 60FPS background efficiency
-    return () => clearInterval(interval);
+    return () => { clearInterval(interval); newsRequest.current++; };
   }, []);
 
   // 3. Dynamic Translation Handler (English -> Sinhala / Tamil)
@@ -190,52 +110,28 @@ function NasaNewsFeed() {
         setTranslatingIds(prev => new Set(prev).add(item.guid));
 
         try {
-          // Attempt backend translation via central pipeline
           const data = await translateSpaceContent(item.title, item.description, currentLang);
           if (data && data.title) {
-            setTranslations(prev => ({
-              ...prev,
-              [key]: {
-                title: data.title,
-                description: data.explanation
-              }
-            }));
-            continue;
+            setTranslations(prev => ({ ...prev, [key]: { title: data.title, description: data.explanation } }));
           }
         } catch {
-          // Use smart local scientific translation generator
+          // Keep the original text when translation is unavailable.
+        } finally {
+          setTranslatingIds(prev => {
+            const next = new Set(prev);
+            next.delete(item.guid);
+            return next;
+          });
         }
-
-        // Localized scientific terminology fallback
-        const localTranslation = generateLocalNewsTranslation(item.title, item.description, currentLang);
-        setTranslations(prev => ({
-          ...prev,
-          [key]: localTranslation
-        }));
-
-        setTranslatingIds(prev => {
-          const next = new Set(prev);
-          next.delete(item.guid);
-          return next;
-        });
       }
     };
 
     translateItems();
   }, [currentLang, newsItems]);
 
-  // Translate APOD title & explanation when language changes
-  const apodDisplay = useMemo(() => {
-    if (!apod) return null;
-    if (currentLang === 'en') {
-      return { title: apod.title, explanation: apod.explanation };
-    }
-    const key = `${currentLang}:apod:${apod.date}`;
-    if (translations[key]) return translations[key];
-
-    // Generate immediate fallback
-    return generateLocalNewsTranslation(apod.title, apod.explanation, currentLang);
-  }, [apod, currentLang, translations]);
+  // APOD remains in its original language here; the dedicated APOD viewer
+  // offers translation and reports failures.
+  const apodDisplay = apod ? { title: apod.title, explanation: apod.explanation } : null;
 
   // Categories list
   const categories = useMemo(() => {
@@ -281,27 +177,27 @@ function NasaNewsFeed() {
         <div>
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-cyan-500/10 text-cyan-300 border border-cyan-500/30 mb-2">
             <Flame className="w-3.5 h-3.5 text-cyan-400" />
-            <span>NASA RSS & APOD Live Stream</span>
+            <span>Space News & NASA APOD</span>
           </div>
           <h2 className="text-2xl sm:text-3xl font-black text-white tracking-tight flex items-center gap-2.5">
             <Newspaper className="w-7 h-7 text-cyan-400" />
             <span>
-              {currentLang === 'si' && 'නාසා සජීවී පුවත් සහ තාරකා විද්‍යා වාර්තා'}
-              {currentLang === 'ta' && 'நாசா நேரலைச் செய்திகள் & வானியல் அறிக்கைகள்'}
-              {currentLang === 'en' && 'NASA News Releases & Cosmic Discoveries'}
+              {currentLang === 'si' && 'අභ්‍යවකාශ පුවත් සහ NASA APOD'}
+              {currentLang === 'ta' && 'விண்வெளி செய்திகள் மற்றும் NASA APOD'}
+              {currentLang === 'en' && 'Space News & Cosmic Discoveries'}
             </span>
           </h2>
           <p className="text-xs sm:text-sm text-ink-3 mt-1 max-w-2xl">
-            {currentLang === 'si' && 'නාසා නිල මාධ්‍ය නිවේදන සහ දවසේ තාරකා විද්‍යා ඡායාරූපය (APOD) ස්වයංක්‍රීයව සිංහල බසින් කියවන්න.'}
-            {currentLang === 'ta' && 'நாசாவின் அதிகாரப்பூர்வ செய்திகள் மற்றும் நாளின் வானியல் புகைப்படம் (APOD) உடனுக்குடன் தமிழில்.'}
-            {currentLang === 'en' && 'Live press releases direct from NASA Headquarters with automatic real-time translation into Sinhala and Tamil.'}
+            {currentLang === 'si' && 'විවිධ මූලාශ්‍රවල අභ්‍යවකාශ පුවත් සහ NASA APOD. පරිවර්තනය නොලැබුණහොත් මුල් පෙළ පෙන්වයි.'}
+            {currentLang === 'ta' && 'பல மூலங்களின் விண்வெளிச் செய்திகள் மற்றும் NASA APOD. மொழிபெயர்ப்பு கிடைக்காவிட்டால் அசல் உரை காட்டப்படும்.'}
+            {currentLang === 'en' && 'Space news from multiple providers and NASA APOD. Translation may be unavailable; original text is retained.'}
           </p>
         </div>
 
         {/* Action Controls */}
         <div className="flex items-center gap-2">
           <button
-            onClick={() => { fetchApod(); fetchNewsFeed(); }}
+            onClick={() => { fetchApod(); fetchNewsFeed(true); }}
             className="p-2.5 rounded-[10px] bg-surface/65 border border-line text-ink-2 hover:text-cyan-400 hover:border-cyan-500/50 transition shadow-md flex items-center gap-2 text-xs font-semibold"
             title="Refresh Feed"
           >
@@ -311,17 +207,18 @@ function NasaNewsFeed() {
         </div>
       </div>
 
+      {!apodLoading && !apod && <p role="status" className="text-sm text-ink-3">NASA APOD is currently unavailable.</p>}
       {/* Featured NASA APOD Highlight Banner */}
       {apod && (
         <div className="relative rounded-3xl overflow-hidden border border-cyan-500/25 bg-gradient-to-r from-[#0B0F19] via-[#0e1626] to-[#0B0F19] p-1 shadow-2xl backdrop-blur-2xl">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 p-6 sm:p-8 items-center">
             {/* APOD Media Preview */}
             <div className="lg:col-span-5 relative rounded-[14px] overflow-hidden aspect-video lg:aspect-square bg-[#05070d] border border-cyan-500/20 shadow-xl group">
-              <img
+              {apod.media_type !== 'video' ? <img
                 src={apod.url}
                 alt={apod.title}
                 className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
-              />
+              /> : <p className="p-6 text-ink-2">Video APOD: open the media link below.</p>}
               <div className="absolute top-3 left-3">
                 <span className="px-3 py-1 rounded-full text-xs font-mono font-bold bg-[#0B0F19]/90 text-cyan-300 border border-cyan-500/40 backdrop-blur-md flex items-center gap-1.5">
                   <Compass className="w-3.5 h-3.5 text-cyan-400" />
@@ -337,7 +234,7 @@ function NasaNewsFeed() {
                   FEATURED DISCOVERY
                 </span>
                 <span className="text-xs text-ink-3 font-mono">
-                  {currentLang === 'si' ? 'භාෂාව: සිංහල' : currentLang === 'ta' ? 'மொழி: தமிழ்' : 'Language: English'}
+                  Original text
                 </span>
               </div>
 
@@ -356,7 +253,7 @@ function NasaNewsFeed() {
                   rel="noreferrer"
                   className="px-4 py-2 rounded-[10px] text-xs font-bold bg-cyan-600 hover:bg-cyan-500 text-white transition flex items-center gap-2 shadow-lg shadow-cyan-600/30"
                 >
-                  <span>Explore Ultra HD</span>
+                  <span>Open APOD media</span>
                   <ExternalLink className="w-3.5 h-3.5" />
                 </a>
 
@@ -380,9 +277,9 @@ function NasaNewsFeed() {
             onChange={(val) => setSearchQuery(val)}
             lang={currentLang}
             placeholder={
-              currentLang === 'si' ? 'නාසා පුවත් හඬින් හෝ ලියා සොයන්න...' :
+              currentLang === 'si' ? 'අභ්‍යවකාශ පුවත් හඬින් හෝ ලියා සොයන්න...' :
               currentLang === 'ta' ? 'செய்திகளை குரல் மூலம் தேடுங்கள்...' :
-              'Speak or search NASA releases...'
+              'Speak or search space news...'
             }
           />
         </div>
@@ -406,15 +303,23 @@ function NasaNewsFeed() {
       </div>
 
       {/* News Cards Grid */}
+      {!newsLoading && newsStatus.ok && newsStatus.partial && <p role="status" className="text-sm text-caution">{currentLang === 'si' ? 'සමහර පුවත් මූලාශ්‍ර දැනට නොලැබේ.' : currentLang === 'ta' ? 'சில செய்தி மூலங்கள் தற்போது கிடைக்கவில்லை.' : 'Some news providers are currently unavailable.'}</p>}
       {newsLoading ? (
         <div className="py-24 flex flex-col items-center justify-center gap-3 text-ink-3">
           <div className="w-10 h-10 border-2 border-cyan-500/20 border-t-cyan-400 rounded-full animate-spin"></div>
-          <p className="text-xs font-mono">Connecting to NASA News RSS Feed...</p>
+          <p className="text-xs font-mono">Loading space news...</p>
+        </div>
+      ) : !newsStatus.ok ? (
+        <div role="alert" className="py-16 text-center text-ink-3 apple-liquid-glass rounded-3xl">
+          <p>{currentLang === 'si' ? 'පුවත් සේවාව දැනට ලබාගත නොහැක.' : currentLang === 'ta' ? 'செய்தி சேவை தற்போது கிடைக்கவில்லை.' : 'The news service is currently unavailable.'}</p>
+          <button type="button" onClick={() => fetchNewsFeed(true)} className="mt-3 rounded-lg border border-line px-4 py-2 text-ink">{currentLang === 'si' ? 'නැවත උත්සාහ කරන්න' : currentLang === 'ta' ? 'மீண்டும் முயற்சிக்கவும்' : 'Retry'}</button>
         </div>
       ) : filteredNews.length === 0 ? (
         <div className="py-16 text-center text-ink-3 apple-liquid-glass rounded-3xl">
           <Info className="w-8 h-8 text-cyan-400 mx-auto mb-2 opacity-60" />
-          <p className="text-sm">No space news found matching your search.</p>
+          <p className="text-sm">{newsItems.length === 0
+            ? (currentLang === 'si' ? 'දැනට පුවත් හමු නොවීය.' : currentLang === 'ta' ? 'தற்போது செய்திகள் இல்லை.' : 'No news returned by the available providers.')
+            : (currentLang === 'si' ? 'සෙවුමට ගැළපෙන පුවත් නැත.' : currentLang === 'ta' ? 'தேடலுக்குப் பொருந்தும் செய்திகள் இல்லை.' : 'No news matches your search.')}</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -434,12 +339,12 @@ function NasaNewsFeed() {
               >
                 {/* Article Image Banner */}
                 <div className="relative aspect-video w-full overflow-hidden bg-transparent">
-                  <img
+                  {article.thumbnail && <img
                     src={article.thumbnail}
                     alt={article.title}
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                     loading="lazy"
-                  />
+                  />}
                   
                   {/* Category Badge */}
                   <div className="absolute top-3 left-3">
@@ -465,19 +370,22 @@ function NasaNewsFeed() {
                     <div className="flex items-center justify-between text-[11px] text-ink-3 font-mono">
                       <div className="flex items-center gap-1.5">
                         <Calendar className="w-3 h-3 text-cyan-400" />
-                        <span>{article.pubDate ? new Date(article.pubDate).toLocaleDateString() : 'Recent'}</span>
+                        <span>{article.pubDate ? new Date(article.pubDate).toLocaleDateString() : 'Date unavailable'}</span>
                       </div>
 
+                      <span>{article.source}</span>
                       {isTranslating ? (
                         <span className="flex items-center gap-1 text-caution text-[10px]">
                           <Sparkles className="w-3 h-3 animate-spin" />
                           Translating...
                         </span>
-                      ) : currentLang !== 'en' ? (
+                      ) : translated ? (
                         <span className="flex items-center gap-1 text-signal text-[10px]">
                           <Sparkles className="w-3 h-3" />
                           {currentLang === 'si' ? 'සිංහල' : 'தமிழ்'}
                         </span>
+                      ) : currentLang !== 'en' ? (
+                        <span className="text-[10px]">Original text</span>
                       ) : null}
                     </div>
 
@@ -525,49 +433,6 @@ function NasaNewsFeed() {
       )}
     </section>
   );
-}
-
-// Helper: Localized scientific terminology generator for news titles and descriptions
-function generateLocalNewsTranslation(title, description, lang) {
-  if (lang === 'si') {
-    let t = title
-      .replace(/NASA's/gi, 'නාසා ආයතනයේ')
-      .replace(/NASA/gi, 'නාසා')
-      .replace(/James Webb Space Telescope/gi, 'ජේම්ස් වෙබ් අභ්‍යවකාශ දුරේක්ෂය')
-      .replace(/Black Hole/gi, 'කළු කුහරය')
-      .replace(/Artemis/gi, 'ආටෙමිස්')
-      .replace(/Perseverance/gi, 'පර්සෙවරන්ස් රෝවරය')
-      .replace(/Mars/gi, 'අඟහරු')
-      .replace(/Europa Clipper/gi, 'යුරෝපා ක්ලිපර්')
-      .replace(/Galaxy/gi, 'මන්දාකිණිය')
-      .replace(/Cosmic Latte/gi, 'කොස්මික් ලැටේ')
-      .replace(/The Average Color of the Universe/gi, 'විශ්වයේ සාමාන්‍ය වර්ණය');
-
-    let d = description
-      ? `නාසා විද්‍යාඥයින් විසින් ප්‍රකාශයට පත් කළ නිල තොරතුරු:\n${description}`
-      : 'නාසා නිල මාධ්‍ය නිවේදනය කියවන්න.';
-
-    return { title: t, description: d };
-  } else {
-    let t = title
-      .replace(/NASA's/gi, 'நாசாவின்')
-      .replace(/NASA/gi, 'நாசா')
-      .replace(/James Webb Space Telescope/gi, 'ஜேம்ஸ் வெப் விண்வெளி தொலைநோக்கி')
-      .replace(/Black Hole/gi, 'கருந்துளை')
-      .replace(/Artemis/gi, 'ஆர்ட்டெமிஸ்')
-      .replace(/Perseverance/gi, 'பெர்சவரன்ஸ் ரோவர்')
-      .replace(/Mars/gi, 'செவ்வாய்')
-      .replace(/Europa Clipper/gi, 'யூரோப்பா கிளிப்பர்')
-      .replace(/Galaxy/gi, 'விண்மீன் மண்டலம்')
-      .replace(/Cosmic Latte/gi, 'காஸ்மிக் லட்டே')
-      .replace(/The Average Color of the Universe/gi, 'பிரபஞ்சத்தின் சராசரி நிறம்');
-
-    let d = description
-      ? `நாசாவின் அதிகாரப்பூர்வ அறிவியல் அறிக்கை:\n${description}`
-      : 'முழுமையான நாசா செய்தி அறிக்கையை வாசிக்கவும்.';
-
-    return { title: t, description: d };
-  }
 }
 
 export default memo(NasaNewsFeed);

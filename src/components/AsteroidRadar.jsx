@@ -4,7 +4,6 @@ import React, { useState, useEffect, useMemo, useRef, memo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import AsteroidRiskBadge from './AsteroidRiskBadge.jsx';
 import AsteroidRiskGauge from './AsteroidRiskGauge.jsx';
-import { getNasaApiKey, buildNasaNeoWsUrl } from '../utils/nasaApiClient';
 import { fetchAsteroidsNeows } from '@/lib/nasaApi';
 import { 
   Radio, 
@@ -34,7 +33,7 @@ import {
   WifiOff
 } from 'lucide-react';
 
-// Planetary Defense Threat Thresholds (NASA PHA Standard)
+// App-specific screening thresholds; these are not NASA PHA criteria.
 export const THREAT_THRESHOLDS = {
   DIAMETER_METERS: 140, // Asteroids >= 140m can cause regional devastation upon impact
   CLOSE_APPROACH_LD: 10, // Close approach within 10 Lunar Distances (~3.84M km)
@@ -73,7 +72,7 @@ export function getAsteroidThreatInfo(ast) {
 
   let level = 'LOW';
   let badgeColor = 'emerald';
-  let labelEn = 'No hazard flag';
+  let labelEn = 'No app screening flag';
   let labelSi = 'අවදානම් ධජයක් නැත';
   let labelTa = 'குறைந்த அச்சுறுத்தல்';
   const reasons = [];
@@ -81,9 +80,9 @@ export function getAsteroidThreatInfo(ast) {
   if (isDiameterExceeded && isCloseApproach) {
     level = 'CRITICAL';
     badgeColor = 'rose';
-    labelEn = 'PHA · within 10 LD';
-    labelSi = 'PHA · LD 10ට තුළ';
-    labelTa = 'PHA · 10 LD உள்ளே';
+    labelEn = 'Size and proximity flag';
+    labelSi = 'ප්‍රමාණ සහ සමීපත්ව සලකුණ';
+    labelTa = 'அளவு மற்றும் அருகாமைக் குறி';
     reasons.push(`Diameter (${diameter}m ≥ ${THREAT_THRESHOLDS.DIAMETER_METERS}m)`);
     reasons.push(`Close Approach (${lunarDist} LD ≤ ${THREAT_THRESHOLDS.CLOSE_APPROACH_LD} LD)`);
   } else if (isDiameterExceeded) {
@@ -117,10 +116,10 @@ export function getAsteroidThreatInfo(ast) {
   } else {
     level = 'LOW';
     badgeColor = 'emerald';
-    labelEn = 'No hazard flag';
-    labelSi = 'ආරක්ෂිත කක්ෂය';
-    labelTa = 'பாதுகாப்பானது';
-    reasons.push('Safe astronomical distance');
+    labelEn = 'No app screening flag';
+    labelSi = 'යෙදුමෙන් සලකුණු කර නැත';
+    labelTa = 'செயலியால் குறிக்கப்படவில்லை';
+    reasons.push('Not flagged by the app screening criteria');
   }
 
   return {
@@ -134,138 +133,6 @@ export function getAsteroidThreatInfo(ast) {
     isPha
   };
 }
-
-// Comprehensive 8-item Fallback Mock Dataset for Reliable Offline / Netlify Production
-const MOCK_NEOWS_FALLBACK = [
-  {
-    id: '2026-PHA-1',
-    name: '433 Eros (1898 DQ)',
-    jplUrl: 'https://ssd.jpl.nasa.gov/tools/sbdb_lookup.html#/?sstr=433',
-    isHazardous: true,
-    minDiameterMeters: 16840,
-    maxDiameterMeters: 16840,
-    avgDiameterMeters: 16840,
-    velocityKms: '24.36',
-    velocityKmh: '87,696',
-    missDistanceKm: '26,740,000',
-    rawKmDistance: 26740000,
-    lunarDistance: '69.5',
-    closeApproachDate: '2026-10-15',
-    orbitingBody: 'Earth'
-  },
-  {
-    id: '2026-PHA-2',
-    name: '99942 Apophis (2004 MN4)',
-    jplUrl: 'https://ssd.jpl.nasa.gov/tools/sbdb_lookup.html#/?sstr=99942',
-    isHazardous: true,
-    minDiameterMeters: 340,
-    maxDiameterMeters: 370,
-    avgDiameterMeters: 355,
-    velocityKms: '30.73',
-    velocityKmh: '110,628',
-    missDistanceKm: '31,600',
-    rawKmDistance: 31600,
-    lunarDistance: '0.08',
-    closeApproachDate: '2029-04-13',
-    orbitingBody: 'Earth'
-  },
-  {
-    id: '2026-PHA-3',
-    name: '101955 Bennu (1999 RQ36)',
-    jplUrl: 'https://ssd.jpl.nasa.gov/tools/sbdb_lookup.html#/?sstr=101955',
-    isHazardous: true,
-    minDiameterMeters: 490,
-    maxDiameterMeters: 510,
-    avgDiameterMeters: 500,
-    velocityKms: '27.72',
-    velocityKmh: '99,792',
-    missDistanceKm: '4,800,000',
-    rawKmDistance: 4800000,
-    lunarDistance: '12.4',
-    closeApproachDate: '2026-11-02',
-    orbitingBody: 'Earth'
-  },
-  {
-    id: '2026-PHA-4',
-    name: '162173 Ryugu (1999 JU3)',
-    jplUrl: 'https://ssd.jpl.nasa.gov/tools/sbdb_lookup.html#/?sstr=162173',
-    isHazardous: true,
-    minDiameterMeters: 880,
-    maxDiameterMeters: 920,
-    avgDiameterMeters: 900,
-    velocityKms: '29.00',
-    velocityKmh: '104,400',
-    missDistanceKm: '9,200,000',
-    rawKmDistance: 9200000,
-    lunarDistance: '23.9',
-    closeApproachDate: '2026-10-24',
-    orbitingBody: 'Earth'
-  },
-  {
-    id: '2026-PHA-5',
-    name: '65803 Didymos (1996 GT)',
-    jplUrl: 'https://ssd.jpl.nasa.gov/tools/sbdb_lookup.html#/?sstr=65803',
-    isHazardous: true,
-    minDiameterMeters: 760,
-    maxDiameterMeters: 800,
-    avgDiameterMeters: 780,
-    velocityKms: '23.50',
-    velocityKmh: '84,600',
-    missDistanceKm: '10,500,000',
-    rawKmDistance: 10500000,
-    lunarDistance: '27.3',
-    closeApproachDate: '2026-10-30',
-    orbitingBody: 'Earth'
-  },
-  {
-    id: '2026-PHA-6',
-    name: '4179 Toutatis (1989 AC)',
-    jplUrl: 'https://ssd.jpl.nasa.gov/tools/sbdb_lookup.html#/?sstr=4179',
-    isHazardous: true,
-    minDiameterMeters: 2400,
-    maxDiameterMeters: 2500,
-    avgDiameterMeters: 2450,
-    velocityKms: '38.00',
-    velocityKmh: '136,800',
-    missDistanceKm: '7,100,000',
-    rawKmDistance: 7100000,
-    lunarDistance: '18.4',
-    closeApproachDate: '2026-12-12',
-    orbitingBody: 'Earth'
-  },
-  {
-    id: '2026-PHA-7',
-    name: '3122 Florence (1981 ET3)',
-    jplUrl: 'https://ssd.jpl.nasa.gov/tools/sbdb_lookup.html#/?sstr=3122',
-    isHazardous: true,
-    minDiameterMeters: 4800,
-    maxDiameterMeters: 5000,
-    avgDiameterMeters: 4900,
-    velocityKms: '13.60',
-    velocityKmh: '48,960',
-    missDistanceKm: '7,060,000',
-    rawKmDistance: 7060000,
-    lunarDistance: '18.3',
-    closeApproachDate: '2026-11-18',
-    orbitingBody: 'Earth'
-  },
-  {
-    id: '2026-PHA-8',
-    name: '3200 Phaethon (1983 TB)',
-    jplUrl: 'https://ssd.jpl.nasa.gov/tools/sbdb_lookup.html#/?sstr=3200',
-    isHazardous: true,
-    minDiameterMeters: 5700,
-    maxDiameterMeters: 5900,
-    avgDiameterMeters: 5800,
-    velocityKms: '34.00',
-    velocityKmh: '122,400',
-    missDistanceKm: '10,300,000',
-    rawKmDistance: 10300000,
-    lunarDistance: '26.8',
-    closeApproachDate: '2026-12-16',
-    orbitingBody: 'Earth'
-  }
-];
 
 function AsteroidRadar({ lang = 'en' }) {
   const [asteroids, setAsteroids] = useState([]);
@@ -301,9 +168,9 @@ function AsteroidRadar({ lang = 'en' }) {
 
   // Helper to format Date to YYYY-MM-DD
   const formatYYYYMMDD = (d) => {
-    const year = d.getFullYear();
-    const month = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
+    const year = d.getUTCFullYear();
+    const month = String(d.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(d.getUTCDate()).padStart(2, '0');
     return `${year}-${month}-${day}`;
   };
 
@@ -469,7 +336,7 @@ function AsteroidRadar({ lang = 'en' }) {
       orbitingBody: 'Earth'
     };
 
-    setActiveCloseApproachAlert(sampleAst);
+    setActiveCloseApproachAlert({ ...sampleAst, isSimulation: true });
 
     if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
       try {
@@ -503,9 +370,9 @@ function AsteroidRadar({ lang = 'en' }) {
   const fetchAsteroids = async () => {
     setLoading(true);
 
-    // 1. Dynamic Date Logic: today & 7 days from today in YYYY-MM-DD format
+    // Seven inclusive UTC dates, as required by the NeoWs feed.
     const today = new Date();
-    const nextWeek = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000);
+    const nextWeek = new Date(today.getTime() + 6 * 24 * 60 * 60 * 1000);
     const startDate = formatYYYYMMDD(today);
     const endDate = formatYYYYMMDD(nextWeek);
     setDateRangeInfo({ start: startDate, end: endDate });
@@ -522,22 +389,6 @@ function AsteroidRadar({ lang = 'en' }) {
       console.warn('NASA NeoWs pipeline fallback:', err);
     }
 
-    // Direct fallback if fetchAsteroidsNeows returned null
-    if (!rawNeoObj) {
-      try {
-        const directUrl = buildNasaNeoWsUrl(startDate, endDate);
-        const directRes = await fetch(directUrl);
-        if (directRes.ok) {
-          const directData = await directRes.json();
-          if (directData && (directData.near_earth_objects || Array.isArray(directData))) {
-            rawNeoObj = directData;
-          }
-        }
-      } catch (err) {
-        console.warn('Direct NASA NeoWs fetch attempt fallback:', err);
-      }
-    }
-
     // Process Received Real-Time Objects
     if (rawNeoObj) {
       const allList = [];
@@ -549,15 +400,22 @@ function AsteroidRadar({ lang = 'en' }) {
           if (Array.isArray(dayItems)) {
             dayItems.forEach(item => {
               if (!item) return;
-              const closeApp = Array.isArray(item.close_approach_data) && item.close_approach_data.length > 0
-                ? item.close_approach_data[0]
-                : (item.close_approach_data || {});
+              const closeApp = Array.isArray(item.close_approach_data)
+                ? item.close_approach_data.find(entry => entry.close_approach_date === date && entry.orbiting_body === 'Earth')
+                : null;
+              if (!closeApp || typeof item.is_potentially_hazardous_asteroid !== 'boolean') return;
 
-              const kmDistance = parseFloat(closeApp.miss_distance?.kilometers || item.miss_distance_km || item.rawKmDistance || '10000000') || 10000000;
-              const lunarDistance = parseFloat(closeApp.miss_distance?.lunar || item.lunarDistance || '25') || 25;
-              const velocityKms = parseFloat(closeApp.relative_velocity?.kilometers_per_second || item.velocityKms || '20') || 20;
-              const minDiam = item.estimated_diameter?.meters?.estimated_diameter_min || item.minDiameterMeters || 50;
-              const maxDiam = item.estimated_diameter?.meters?.estimated_diameter_max || item.maxDiameterMeters || 120;
+              const kmDistance = Number(closeApp.miss_distance?.kilometers);
+              const lunarDistance = Number(closeApp.miss_distance?.lunar);
+              const velocityKms = Number(closeApp.relative_velocity?.kilometers_per_second);
+              const minDiam = Number(item.estimated_diameter?.meters?.estimated_diameter_min);
+              const maxDiam = Number(item.estimated_diameter?.meters?.estimated_diameter_max);
+              // Never fabricate orbital measurements for an incomplete object.
+              if ([closeApp.miss_distance?.kilometers, closeApp.miss_distance?.lunar,
+                closeApp.relative_velocity?.kilometers_per_second,
+                item.estimated_diameter?.meters?.estimated_diameter_min,
+                item.estimated_diameter?.meters?.estimated_diameter_max].some(value => value == null || value === '') ||
+                ![kmDistance, lunarDistance, velocityKms, minDiam, maxDiam].every(Number.isFinite)) return;
               const avgDiam = (minDiam + maxDiam) / 2;
 
               allList.push({
@@ -579,42 +437,22 @@ function AsteroidRadar({ lang = 'en' }) {
             });
           }
         });
-      } else if (Array.isArray(rawNeoObj)) {
-        rawNeoObj.forEach(item => {
-          if (!item) return;
-          allList.push({
-            id: String(item.id || `ast-${Math.random()}`),
-            name: item.name || 'Unnamed Asteroid',
-            jplUrl: item.jplUrl || item.nasa_jpl_url || `https://ssd.jpl.nasa.gov/tools/sbdb_lookup.html#/?sstr=${item.id}`,
-            isHazardous: Boolean(item.isHazardous ?? item.is_potentially_hazardous_asteroid),
-            minDiameterMeters: Math.round(item.minDiameterMeters || 100),
-            maxDiameterMeters: Math.round(item.maxDiameterMeters || 200),
-            avgDiameterMeters: Math.round(item.avgDiameterMeters || 150),
-            velocityKms: String(item.velocityKms || '20.00'),
-            velocityKmh: String(item.velocityKmh || '72,000'),
-            missDistanceKm: String(item.missDistanceKm || '5,000,000'),
-            rawKmDistance: Number(item.rawKmDistance) || 5000000,
-            lunarDistance: String(item.lunarDistance || '13.0'),
-            closeApproachDate: item.closeApproachDate || 'Upcoming',
-            orbitingBody: item.orbitingBody || 'Earth'
-          });
-        });
+
       }
 
-      if (allList.length > 0) {
-        setAsteroids(allList);
-        setIsFallback(false);
-        setLoading(false);
-        checkAndNotifyCloseApproaches(allList);
-        return;
-      }
+      setAsteroids(allList);
+      setIsFallback(false);
+      setLoading(false);
+      checkAndNotifyCloseApproaches(allList);
+      return;
     }
 
-    // Tier 3: Seamlessly load Fallback Mock Dataset if API fails, rate-limits (429), or 400
-    setAsteroids(MOCK_NEOWS_FALLBACK);
+    // An unavailable feed is not an observation and must not trigger alerts.
+    setAsteroids([]);
+    setSelectedAsteroid(null);
+    setActiveCloseApproachAlert(null);
     setIsFallback(true);
     setLoading(false);
-    checkAndNotifyCloseApproaches(MOCK_NEOWS_FALLBACK);
   };
 
   useEffect(() => {
@@ -646,7 +484,7 @@ function AsteroidRadar({ lang = 'en' }) {
       subtitle: 'Real-time 7-day tracking of close-approach asteroids, orbital velocities, and hazardous threat levels',
       refresh: 'Refresh NeoWs Feed',
       filterAll: 'All Near-Earth Objects',
-      filterRedThreat: 'PHA-designated',
+      filterRedThreat: 'Flagged by app criteria',
       filterHazardous: 'NASA PHA flag',
       filterClose: 'Closest Approaches (< 10 LD)',
       filterLarge: 'Largest Objects (> 100m)',
@@ -664,13 +502,13 @@ function AsteroidRadar({ lang = 'en' }) {
       sizeBenchmark: 'Size Equivalent',
       machSpeed: 'Speed relative to Earth',
       closeApproachTelemetry: 'Close approach geometry',
-      offlineActive: 'Reference sample · NeoWs unreachable',
+      offlineActive: 'NeoWs unavailable · no observations shown',
       liveActive: 'NASA NeoWs · 7-day window',
       threatLevelHeader: 'HAZARD CLASSIFICATION',
-      threatCriteriaNote: 'PHA = absolute magnitude H ≤ 22 and MOID ≤ 0.05 AU (NASA/JPL). Not an impact prediction.',
-      flaggedRed: 'PHA-designated',
-      safeTrajectory: 'No PHA flag',
-      threatAssessmentTitle: 'Hazard classification (JPL criteria)',
+      threatCriteriaNote: 'App flag: diameter ≥ 140 m, approach ≤ 10 lunar distances (or 7.5 million km), or NASA PHA flag. Not an impact prediction.',
+      flaggedRed: 'App criteria flagged',
+      safeTrajectory: 'Not flagged by app criteria',
+      threatAssessmentTitle: 'App screening criteria (not a JPL classification)',
       notifEnabled: 'Close-approach alerts on (< 1M km)',
       notifEnableBtn: 'Enable Close Approach Alerts (< 1M km)',
       notifBlocked: 'Alerts Blocked in Browser',
@@ -684,7 +522,7 @@ function AsteroidRadar({ lang = 'en' }) {
       subheading: 'පෘථිවියට ආසන්නව ගමන් කරන උල්කාෂ්ම, ප්‍රවේග සහ අවදානම් මට්ටම් තත්‍ය කාලීනව නිරීක්ෂණය කරන්න',
       refresh: 'දත්ත යාවත්කාලීන කරන්න',
       filterAll: 'සියලුම වස්තූන්',
-      filterRedThreat: 'PHA ලෙස නම් කළ',
+      filterRedThreat: 'යෙදුමේ නිර්ණායක අනුව සලකුණු කළ',
       filterHazardous: 'අනතුරුදායක වස්තූන් (PHA)',
       filterClose: 'ආසන්නතම ගමන් (< 10 LD)',
       filterLarge: 'විශාලතම වස්තූන් (> 100m)',
@@ -702,13 +540,13 @@ function AsteroidRadar({ lang = 'en' }) {
       sizeBenchmark: 'ප්‍රමාණ සැසඳීම',
       machSpeed: 'මැක් වේග සාපේක්ෂතාව',
       closeApproachTelemetry: 'ආසන්න වීමේ ටෙලිමෙට්‍රි දත්ත',
-      offlineActive: 'නොබැඳි / කැෂේ දත්ත සක්‍රියයි',
+      offlineActive: 'NeoWs ලබාගත නොහැක · නිරීක්ෂණ නොපෙන්වයි',
       liveActive: 'NASA NeoWs · දින 7 ක කවුළුව',
       threatLevelHeader: 'අවදානම් වර්ගීකරණය',
-      threatCriteriaNote: 'විෂ්කම්භය ≥ 140m හෝ ආසන්න ගමන් ≤ 10 LD (කි.මී. 7.5M)',
-      flaggedRed: 'PHA ලෙස නම් කළ',
-      safeTrajectory: 'ආරක්ෂිත කක්ෂය',
-      threatAssessmentTitle: 'ග්‍රහලෝක ආරක්ෂණ තර්ජන වර්ගීකරණය',
+      threatCriteriaNote: 'යෙදුමේ සලකුණ: විෂ්කම්භය ≥ 140m, සමීපත්වය ≤ 10 LD හෝ කි.මී. මිලියන 7.5, හෝ NASA PHA සලකුණ. මෙය ගැටුම් අනාවැකියක් නොවේ.',
+      flaggedRed: 'යෙදුමෙන් සලකුණු කළ',
+      safeTrajectory: 'යෙදුමෙන් සලකුණු කර නැත',
+      threatAssessmentTitle: 'යෙදුමේ පරීක්ෂණ නිර්ණායක',
       notifEnabled: 'දැනුම්දීම් සක්‍රියයි (< කි.මී. 1M)',
       notifEnableBtn: 'ආසන්න ගමන් දැනුම්දීම් සක්‍රිය කරන්න (< කි.මී. 1M)',
       notifBlocked: 'බ්‍රවුසරයේ දැනුම්දීම් අවහිර කර ඇත',
@@ -722,7 +560,7 @@ function AsteroidRadar({ lang = 'en' }) {
       subheading: 'பூமியை நெருங்கும் சிறுகோள்கள், வேகம் மற்றும் அபாய அளவுகளை நேரலையில் கண்காணிக்கவும்',
       refresh: 'தரவைப் புதுப்பிக்கவும்',
       filterAll: 'அனைத்து பொருட்கள்',
-      filterRedThreat: 'PHA எனக் குறிக்கப்பட்டவை',
+      filterRedThreat: 'செயலி அளவுகோலின்படி குறிக்கப்பட்டவை',
       filterHazardous: 'அபாயகரமானவை (PHA)',
       filterClose: 'மிக அருகில் (< 10 LD)',
       filterLarge: 'பெரியவை (> 100m)',
@@ -740,13 +578,13 @@ function AsteroidRadar({ lang = 'en' }) {
       sizeBenchmark: 'அளவு ஒப்பீடு',
       machSpeed: 'வேக ஒப்பீடு',
       closeApproachTelemetry: 'நெருங்கும் தொலைநிலை அளவீடுகள்',
-      offlineActive: 'ஆஃப்லைன் / சேமிக்கப்பட்ட தரவு',
+      offlineActive: 'NeoWs கிடைக்கவில்லை · தரவு காட்டப்படவில்லை',
       liveActive: 'NASA NeoWs · 7 நாள் சாளரம்',
       threatLevelHeader: 'அபாய வகைப்பாடு',
-      threatCriteriaNote: 'விட்டம் ≥ 140m அல்லது நெருங்கிய பாதை ≤ 10 LD (7.5M km)',
-      flaggedRed: 'PHA குறியிடப்பட்டவை',
-      safeTrajectory: 'பாதுகாப்பான சுற்றுப்பாதை',
-      threatAssessmentTitle: 'கோள் பாதுகாப்பு அச்சுறுத்தல் வகைப்பாடு',
+      threatCriteriaNote: 'செயலிக் குறி: விட்டம் ≥ 140m, அருகாமை ≤ 10 LD அல்லது 7.5 மில்லியன் கி.மீ, அல்லது NASA PHA குறி. இது மோதல் முன்னறிவிப்பு அல்ல.',
+      flaggedRed: 'செயலியால் குறிக்கப்பட்டவை',
+      safeTrajectory: 'செயலியால் குறிக்கப்படாதவை',
+      threatAssessmentTitle: 'செயலியின் ஆய்வு அளவுகோல்கள்',
       notifEnabled: 'எச்சரிக்கை செயலில் உள்ளது (< 1M கி.மீ)',
       notifEnableBtn: 'நெருங்கிய பாதை எச்சரிக்கையை இயக்கு (< 1M கி.மீ)',
       notifBlocked: 'உலாவியில் எச்சரிக்கை தடுக்கப்பட்டது',
@@ -805,10 +643,10 @@ function AsteroidRadar({ lang = 'en' }) {
             </p>
             <p className="mt-2 max-w-2xl text-[11px] leading-relaxed text-ink-4">
               {lang === 'si'
-                ? 'PHA යනු NASA/JPL විසින් ප්‍රමාණය සහ කක්ෂය (H ≤ 22, MOID ≤ 0.05 AU) අනුව ලබා දෙන වර්ගීකරණයකි. එය ගැටුම් අනාවැකියක් නොවේ; මෙහි ලැයිස්තුගත කිසිදු වස්තුවක් ගැටුම් මාර්ගයක නොවේ.'
+                ? 'PHA යනු NASA/JPL විසින් ප්‍රමාණය සහ කක්ෂය (H ≤ 22, MOID ≤ 0.05 AU) අනුව ලබා දෙන වර්ගීකරණයකි. එය ගැටුම් අනාවැකියක් නොවේ; මෙම දත්ත මඟින් ගැටුම් අවදානම තීරණය කළ නොහැක.'
                 : lang === 'ta'
-                  ? 'PHA என்பது NASA/JPL அளவு மற்றும் சுற்றுப்பாதையின் அடிப்படையில் (H ≤ 22, MOID ≤ 0.05 AU) வழங்கும் வகைப்பாடு. இது மோதல் முன்னறிவிப்பு அல்ல; இங்குள்ள எந்த வான்பொருளும் மோதல் பாதையில் இல்லை.'
-                  : 'PHA is NASA/JPL’s classification based on size and orbit (H ≤ 22, MOID ≤ 0.05 AU). It is not an impact prediction — no object listed here is on an impact trajectory.'}
+                  ? 'PHA என்பது NASA/JPL அளவு மற்றும் சுற்றுப்பாதையின் அடிப்படையில் (H ≤ 22, MOID ≤ 0.05 AU) வழங்கும் வகைப்பாடு. இது மோதல் முன்னறிவிப்பு அல்ல; இந்தத் தரவால் மோதல் அபாயத்தைத் தீர்மானிக்க முடியாது.'
+                  : 'PHA is NASA/JPL’s classification based on size and orbit (H ≤ 22, MOID ≤ 0.05 AU). It is not an impact prediction — this feed alone does not establish impact risk.'}
             </p>
           </div>
 
@@ -899,7 +737,7 @@ function AsteroidRadar({ lang = 'en' }) {
               <div className="space-y-1">
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="rounded-full border border-caution/40 px-3 py-0.5 font-mono text-[10px] uppercase tracking-[0.12em] text-caution">
-                    {t.criticalCloseApproachTag}
+                    {activeCloseApproachAlert.isSimulation ? (lang === 'si' ? 'පරීක්ෂණ දැනුම්දීම — සත්‍ය අනතුරු ඇඟවීමක් නොවේ' : lang === 'ta' ? 'சோதனை அறிவிப்பு — உண்மையான எச்சரிக்கை அல்ல' : 'TEST NOTICE — NOT A REAL ALERT') : t.criticalCloseApproachTag}
                   </span>
                   <span className="text-xs font-mono text-critical font-bold">
                     {activeCloseApproachAlert.closeApproachDate}
@@ -1058,13 +896,13 @@ function AsteroidRadar({ lang = 'en' }) {
               <div className="flex items-center gap-2 rounded-full border border-caution/35 bg-surface/60 px-3 py-1.5 text-caution">
                 <span className="h-2 w-2 rounded-full bg-caution" />
                 <span className="font-medium">
-                  PHA-designated: {asteroids.filter(a => getAsteroidThreatInfo(a).isRedThreat).length}
+                  App criteria flagged: {asteroids.filter(a => getAsteroidThreatInfo(a).isRedThreat).length}
                 </span>
               </div>
               <div className="flex items-center gap-2 rounded-full border border-line bg-surface/60 px-3 py-1.5 text-ink-2">
                 <span className="h-2 w-2 rounded-full bg-atmo" />
                 <span>
-                  No PHA flag: {asteroids.filter(a => !getAsteroidThreatInfo(a).isRedThreat).length}
+                  Not flagged by app criteria: {asteroids.filter(a => !getAsteroidThreatInfo(a).isRedThreat).length}
                 </span>
               </div>
             </div>
@@ -1237,7 +1075,9 @@ function AsteroidRadar({ lang = 'en' }) {
               </div>
             ) : filteredAsteroids.length === 0 ? (
               <div className="p-8 text-center font-mono text-xs text-ink-3 apple-liquid-glass rounded-3xl">
-                No matching asteroids found in current 7-day orbital window.
+                {isFallback
+                  ? (lang === 'si' ? 'NeoWs දත්ත ලබාගත නොහැක. නැවත උත්සාහ කරන්න.' : lang === 'ta' ? 'NeoWs தரவு கிடைக்கவில்லை. மீண்டும் முயற்சிக்கவும்.' : 'NeoWs data is unavailable. Please retry.')
+                  : (lang === 'si' ? 'ගැළපෙන දත්ත හමු නොවීය.' : lang === 'ta' ? 'பொருந்தும் தரவு இல்லை.' : 'No matching usable asteroids found in the current window.')}
               </div>
             ) : (
               filteredAsteroids.map(ast => {
@@ -1287,7 +1127,7 @@ function AsteroidRadar({ lang = 'en' }) {
                           <div className="flex flex-col items-end gap-1">
                             <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-mono font-black uppercase tracking-wider bg-rose-500/25 text-critical border-2 border-rose-500/80 shadow-[0_0_15px_rgba(244,63,94,0.4)] animate-pulse">
                               <AlertOctagon className="w-3.5 h-3.5 text-critical" />
-                              <span>THREAT: {threat.label[lang] || threat.label.en}</span>
+                              <span>SCREENING: {threat.label[lang] || threat.label.en}</span>
                             </span>
                             {threat.reasons.length > 0 && (
                               <span className="text-[9px] font-mono font-semibold text-critical bg-rose-950/80 px-2 py-0.5 rounded-md border border-rose-500/30">
@@ -1298,7 +1138,7 @@ function AsteroidRadar({ lang = 'en' }) {
                         ) : (
                           <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-mono font-bold uppercase tracking-wider bg-emerald-500/15 text-signal border border-emerald-500/40">
                             <ShieldCheck className="w-3.5 h-3.5 text-signal" />
-                            <span>THREAT: {threat.label[lang] || threat.label.en}</span>
+                            <span>SCREENING: {threat.label[lang] || threat.label.en}</span>
                           </span>
                         )}
                       </div>

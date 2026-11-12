@@ -50,47 +50,18 @@ function EPICViewer({ lang = 'en' }) {
           date: item.date,
           pngUrl: item.imageUrl || item.pngUrl,
           thumbUrl: item.imageUrl || item.thumbUrl,
-          centroid_coordinates: item.centroidCoords || item.centroid_coordinates || { lat: 0, lon: 0 },
-          sun_j2000_position: item.sunPos || item.sun_j2000_position || { x: 0, y: 0, z: 0 },
-          dscovr_j2000_position: item.dscovrPos || item.dscovr_j2000_position || { x: 0, y: 0, z: 0 },
-          lunar_distance: item.distanceKm || item.lunar_distance || '1,500,000 km'
+          centroid_coordinates: item.centroidCoords || item.centroid_coordinates || null,
+          sun_j2000_position: item.sunPos || item.sun_j2000_position || null,
+          dscovr_j2000_position: item.dscovrPos || item.dscovr_j2000_position || null,
+          lunar_distance: item.distanceKm || item.lunar_distance || null
         }));
       }
     } catch (err) {
       console.warn('NASA EPIC pipeline fallback:', err);
     }
 
-    // Tier 3: Curated Astronomical Fallback
-    if (!loadedFrames || loadedFrames.length === 0) {
-      loadedFrames = [
-        {
-          id: 'epic-fallback-1',
-          caption: 'DSCOVR EPIC Full-Disc Sunlit Earth View from Lagrange Point L1',
-          imageName: 'epic_1b_20260930',
-          date: '2026-09-30 18:24:12',
-          pngUrl: 'https://images.unsplash.com/photo-1614728894747-a83421e2b9c9?auto=format&fit=crop&w=1400&q=80',
-          thumbUrl: 'https://images.unsplash.com/photo-1614728894747-a83421e2b9c9?auto=format&fit=crop&w=400&q=80',
-          centroid_coordinates: { lat: 12.4, lon: -78.2 },
-          sun_j2000_position: { x: -145000000, y: 35000000, z: 15000000 },
-          dscovr_j2000_position: { x: -1450000, y: 220000, z: 110000 },
-          lunar_distance: '3.92 LD'
-        },
-        {
-          id: 'epic-fallback-2',
-          caption: 'Pacific & Cloud Vortex Systems captured by EPIC',
-          imageName: 'epic_1b_20260930_2',
-          date: '2026-09-30 20:12:05',
-          pngUrl: 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&w=1400&q=80',
-          thumbUrl: 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&w=400&q=80',
-          centroid_coordinates: { lat: 8.2, lon: -110.5 },
-          sun_j2000_position: { x: -145200000, y: 34800000, z: 14900000 },
-          dscovr_j2000_position: { x: -1452000, y: 218000, z: 109000 },
-          lunar_distance: '3.93 LD'
-        }
-      ];
-    }
-
-    setFrames(loadedFrames);
+    setFrames(loadedFrames || []);
+    setIsPlaying(false);
     setCurrentIndex(0);
     setLoading(false);
   };
@@ -120,7 +91,7 @@ function EPICViewer({ lang = 'en' }) {
   const UI = {
     en: {
       title: 'NASA EPIC Full-Disc Earth Observation',
-      subtitle: 'Real-time full-disc sunlit imagery of Earth captured from Lagrange Point L1 (~1.5 Million km)',
+      subtitle: 'Full-disc sunlit imagery from DSCOVR near Lagrange Point L1; images may be delayed.',
       play: 'Play Time-Lapse',
       pause: 'Pause Animation',
       prev: 'Previous Frame',
@@ -138,7 +109,7 @@ function EPICViewer({ lang = 'en' }) {
       captionTitle: 'Scientific Caption & Overview'
     },
     si: {
-      title: 'නාසා EPIC සම්පූර්ණ පෘථිවි තත්‍ය කාලීන නිරීක්ෂණ',
+      title: 'නාසා EPIC සම්පූර්ණ පෘථිවි නිරීක්ෂණ',
       subtitle: 'ලග්‍රාන්ජ් L1 ලක්ෂ්‍යයේ (~කි.මී. මිලියන 1.5) සිට DSCOVR මගින් ලබාගත් සූර්යාලෝකිත පෘථිවි ඡායාරූප',
       play: 'වීඩියෝව ක්‍රියාත්මක කරන්න',
       pause: 'වීඩියෝව නවත්වන්න',
@@ -157,7 +128,7 @@ function EPICViewer({ lang = 'en' }) {
       captionTitle: 'විද්‍යාත්මක විස්තරය'
     },
     ta: {
-      title: 'நாசா EPIC பூமி முழு வட்ட நேரலை ஆய்வு',
+      title: 'நாசா EPIC பூமி முழு வட்ட ஆய்வு',
       subtitle: 'லாக்ராஞ்ச் புள்ளி L1 இலிருந்து (~1.5 மில்லியன் கி.மீ) எடுக்கப்பட்ட பூமியின் நேரலை சூரிய ஒளி புகைப்படங்கள்',
       play: 'இயக்கு',
       pause: 'நிறுத்து',
@@ -233,7 +204,7 @@ function EPICViewer({ lang = 'en' }) {
               SUNLIT FULL-DISC EARTH
             </span>
             <span className="px-2.5 py-0.5 rounded-full liquid-glass text-[10px] text-cyan-400">
-              {t.frame} {currentIndex + 1} / {frames.length || 1}
+              {t.frame} {frames.length ? currentIndex + 1 : 0} / {frames.length}
             </span>
           </div>
 
@@ -244,6 +215,8 @@ function EPICViewer({ lang = 'en' }) {
                 <RefreshCw className="w-8 h-8 animate-spin mx-auto text-cyan-400" />
                 <p>Downloading DSCOVR EPIC Full-Disc Telemetry...</p>
               </div>
+            ) : frames.length === 0 ? (
+              <p role="status" className="p-8 text-center text-sm text-ink-2">{lang === 'si' ? 'NASA EPIC ඡායාරූප දැනට ලබාගත නොහැක. නැවත උත්සාහ කරන්න.' : lang === 'ta' ? 'NASA EPIC படங்கள் தற்போது கிடைக்கவில்லை. மீண்டும் முயற்சிக்கவும்.' : 'NASA EPIC imagery is unavailable. Please retry.'}</p>
             ) : (
               <AnimatePresence mode="wait">
                 <motion.img
@@ -269,6 +242,7 @@ function EPICViewer({ lang = 'en' }) {
             <div className="space-y-1">
               <input
                 type="range"
+                disabled={!frames.length}
                 min="0"
                 max={Math.max(0, frames.length - 1)}
                 value={currentIndex}
@@ -282,6 +256,7 @@ function EPICViewer({ lang = 'en' }) {
               <div className="flex items-center gap-2">
                 <button
                   type="button"
+                  disabled={!frames.length}
                   onClick={() => setCurrentIndex(prev => (prev - 1 + frames.length) % frames.length)}
                   className="p-2 rounded-[10px] liquid-glass text-ink-2 hover:text-ink cursor-pointer"
                   title={t.prev}
@@ -291,6 +266,7 @@ function EPICViewer({ lang = 'en' }) {
 
                 <button
                   type="button"
+                  disabled={frames.length < 2}
                   onClick={() => setIsPlaying(!isPlaying)}
                   className="px-4 py-2 rounded-[10px] bg-gradient-to-r from-cyan-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 text-white font-bold flex items-center gap-1.5 shadow-md shadow-cyan-950/50 cursor-pointer"
                 >
@@ -300,6 +276,7 @@ function EPICViewer({ lang = 'en' }) {
 
                 <button
                   type="button"
+                  disabled={!frames.length}
                   onClick={() => setCurrentIndex(prev => (prev + 1) % frames.length)}
                   className="p-2 rounded-[10px] liquid-glass text-ink-2 hover:text-ink cursor-pointer"
                   title={t.next}
@@ -357,17 +334,17 @@ function EPICViewer({ lang = 'en' }) {
               <div className="p-3.5 rounded-[14px] liquid-glass liquid-glass-edge">
                 <span className="text-[10px] text-ink-3 block mb-1">{t.centroid}</span>
                 <span className="text-cyan-300 font-bold text-sm">
-                  {currentFrame.centroid_coordinates?.lat ? `${currentFrame.centroid_coordinates.lat.toFixed(2)}° N` : '0.00°'}
+                  {Number.isFinite(currentFrame.centroid_coordinates?.lat) ? `${currentFrame.centroid_coordinates.lat.toFixed(2)}°` : 'N/A'}
                 </span>
                 <span className="text-indigo-300 font-bold text-sm block mt-0.5">
-                  {currentFrame.centroid_coordinates?.lon ? `${currentFrame.centroid_coordinates.lon.toFixed(2)}° E` : '0.00°'}
+                  {Number.isFinite(currentFrame.centroid_coordinates?.lon) ? `${currentFrame.centroid_coordinates.lon.toFixed(2)}°` : 'N/A'}
                 </span>
               </div>
 
               <div className="p-3.5 rounded-[14px] liquid-glass liquid-glass-edge">
                 <span className="text-[10px] text-ink-3 block mb-1">{t.satelliteDist}</span>
                 <span className="text-amber-300 font-bold text-xs block">
-                  {currentFrame.lunar_distance || '1,500,000 km'}
+                  {currentFrame.lunar_distance || 'N/A'}
                 </span>
                 <span className="text-[10px] text-ink-4 mt-1 block">
                   {t.lagrangeL1}
@@ -387,21 +364,21 @@ function EPICViewer({ lang = 'en' }) {
               <div className="p-2.5 rounded-[10px] liquid-glass">
                 <span className="text-[9px] text-ink-3 block">X Vector</span>
                 <span className="text-ink-2 font-bold text-[11px]">
-                  {currentFrame.sun_j2000_position?.x ? `${Math.round(currentFrame.sun_j2000_position.x / 1000).toLocaleString()} km` : 'N/A'}
+                  {Number.isFinite(currentFrame.sun_j2000_position?.x) ? `${Math.round(currentFrame.sun_j2000_position.x).toLocaleString()} km` : 'N/A'}
                 </span>
               </div>
 
               <div className="p-2.5 rounded-[10px] liquid-glass">
                 <span className="text-[9px] text-ink-3 block">Y Vector</span>
                 <span className="text-ink-2 font-bold text-[11px]">
-                  {currentFrame.sun_j2000_position?.y ? `${Math.round(currentFrame.sun_j2000_position.y / 1000).toLocaleString()} km` : 'N/A'}
+                  {Number.isFinite(currentFrame.sun_j2000_position?.y) ? `${Math.round(currentFrame.sun_j2000_position.y).toLocaleString()} km` : 'N/A'}
                 </span>
               </div>
 
               <div className="p-2.5 rounded-[10px] liquid-glass">
                 <span className="text-[9px] text-ink-3 block">Z Vector</span>
                 <span className="text-ink-2 font-bold text-[11px]">
-                  {currentFrame.sun_j2000_position?.z ? `${Math.round(currentFrame.sun_j2000_position.z / 1000).toLocaleString()} km` : 'N/A'}
+                  {Number.isFinite(currentFrame.sun_j2000_position?.z) ? `${Math.round(currentFrame.sun_j2000_position.z).toLocaleString()} km` : 'N/A'}
                 </span>
               </div>
             </div>

@@ -263,7 +263,7 @@ const TARGET_REGIONS = [
   }
 ];
 
-// Helper: Propagate satellite position using Keplerian/SGP4 TLE algorithm
+// Helper: approximate satellite position from orbital elements (not SGP4)
 function propagateSatellite(sat, date = new Date()) {
   return propagateTLE(sat, date);
 }
@@ -319,7 +319,7 @@ function ISSTracker({ className = '' }) {
     };
   }, [satPositions, selectedSatId]);
 
-  // Compute live positions using SGP4 every 5 seconds
+  // Compute approximate positions, then request a current ISS fix when available
   const updateSatellitePositions = useCallback(async () => {
     const now = new Date();
     const updatedPositions = {};
@@ -378,16 +378,7 @@ function ISSTracker({ className = '' }) {
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     const distKm = Math.round(R * c);
 
-    const speedKmS = (activePos.velocity || 27600) / 3600;
-    const minutesToClosest = Math.max(3, Math.round((distKm / speedKmS) / 60));
-    const nextPassDate = new Date(Date.now() + minutesToClosest * 60 * 1000);
-
-    return {
-      distanceKm: distKm,
-      isClose: distKm < 1800,
-      minutes: minutesToClosest,
-      timeStr: nextPassDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    };
+    return { distanceKm: distKm };
   }, [activePos, selectedStation]);
 
   // Projected 360-degree orbital wave coordinates for the selected satellite
@@ -631,7 +622,7 @@ function ISSTracker({ className = '' }) {
   const LABELS = {
     en: {
       title: 'Satellite Orbital Fleet & Mission Status',
-      subtitle: 'Real-time multi-satellite tracking & SGP4 TLE orbital propagation on Esri World Dark Gray Base',
+      subtitle: 'ISS position when available; other tracks use simplified orbital approximations, not SGP4.',
       selectSatHeading: 'Fleet Constellation Selector (Click to Track):',
       missionStatus: 'Current Mission Status',
       lat: 'Latitude',
@@ -644,7 +635,7 @@ function ISSTracker({ className = '' }) {
       debrief: 'Mission Scientific Debrief',
       recenter: 'Recenter Satellite',
       autoFollow: 'Auto-Center Orbit',
-      nextPassHeading: 'Regional Flyover Prediction',
+      nextPassHeading: 'Ground-station distance',
       selectStation: 'Select Ground Observation Station:',
       distance: 'Ground Distance',
       estPass: 'Estimated Nearest Pass',
@@ -652,7 +643,7 @@ function ISSTracker({ className = '' }) {
     },
     si: {
       title: 'චන්ද්‍රිකා සහ දුරේක්ෂ කක්ෂීය මෙහෙයුම් පුවරුව',
-      subtitle: 'Esri World Dark Gray සිතියම මත TLE දත්ත ඔස්සේ බහු-චන්ද්‍රිකා සජීවී කක්ෂීය ලුහුබැඳීම',
+      subtitle: 'ISS දත්ත ලැබෙන විට එය පෙන්වයි; අනෙක් කක්ෂ සරල ආසන්න කිරීම් පමණි, SGP4 නොවේ.',
       selectSatHeading: 'චන්ද්‍රිකාවක් තෝරන්න (නිරීක්ෂණය සඳහා ක්ලික් කරන්න):',
       missionStatus: 'වත්මන් මෙහෙයුම් තත්ත්වය',
       lat: 'අක්ෂාංශය',
@@ -665,7 +656,7 @@ function ISSTracker({ className = '' }) {
       debrief: 'විද්‍යාත්මක මෙහෙයුම් වාර්තාව',
       recenter: 'නැවත කේන්ද්‍රගත කරන්න',
       autoFollow: 'ස්වයංක්‍රීයව අනුගමනය කරන්න',
-      nextPassHeading: 'කලාපීය ඉහළින් පියාසර අනාවැකිය',
+      nextPassHeading: 'භූමි ස්ථානයට දුර',
       selectStation: 'භූමි නිරීක්ෂණ මධ්‍යස්ථානය තෝරන්න:',
       distance: 'භූමියට ඇති දුර',
       estPass: 'ආසන්නතම පියාසර වේලාව',
@@ -673,7 +664,7 @@ function ISSTracker({ className = '' }) {
     },
     ta: {
       title: 'செயற்கைக்கோள் மற்றும் தொலைநோக்கி நேரலை கண்காணிப்பு',
-      subtitle: 'Esri World Dark Gray வரைபடத்தில் TLE தரவுகள் மூலம் பல செயற்கைக்கோள்களின் நேரலை சுற்றுப்பாதை',
+      subtitle: 'ISS நிலை கிடைக்கும்போது காட்டப்படும்; மற்ற பாதைகள் எளிய தோராயங்கள், SGP4 அல்ல.',
       selectSatHeading: 'செயற்கைக்கோளைத் தேர்ந்தெடுக்கவும்:',
       missionStatus: 'தற்போதைய திட்ட நிலை',
       lat: 'அட்சரேகை',
@@ -686,7 +677,7 @@ function ISSTracker({ className = '' }) {
       debrief: 'அறிவியல் திட்ட விளக்கம்',
       recenter: 'மறுமையமாக்குக',
       autoFollow: 'தானியங்கி பின்தொடரல்',
-      nextPassHeading: 'பிராந்திய கடந்துசெல்லும் விழிப்பூட்டல்',
+      nextPassHeading: 'தரை நிலையத்திற்கான தூரம்',
       selectStation: 'தரை கண்காணிப்பு நிலையத்தைத் தேர்ந்தெடுக்கவும்:',
       distance: 'தரைவழி தூரம்',
       estPass: 'அடுத்த அணுகல் நேரம்',
@@ -1051,25 +1042,12 @@ function ISSTracker({ className = '' }) {
               {passEstimate.distanceKm.toLocaleString()} <span className="text-sm font-normal text-ink-3">km</span>
             </div>
             <div className="text-[11px] font-mono text-ink-3 mt-1">
-              {passEstimate.isClose ? (
-                <span className="text-signal font-bold flex items-center gap-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
-                  Inside Direct Radio Horizon
-                </span>
-              ) : (
-                'Outside Direct Horizon Line'
-              )}
+              {currentLang === 'si' ? 'පෘථිවි පෘෂ්ඨය මත ආසන්න දුර; දෘශ්‍යතාව නොවේ.' : currentLang === 'ta' ? 'தரைப்பரப்பு தூரம்; தெரிவுநிலை அல்ல.' : 'Approximate ground distance; not visibility.'}
             </div>
           </div>
 
-          <div className="p-4 rounded-[14px] bg-abyss/60 border border-line">
-            <div className="text-[11px] font-mono text-ink-3">{t.estPass}</div>
-            <div className="text-xl sm:text-2xl font-bold font-display text-amber-300 mt-1">
-              ~{passEstimate.timeStr}
-            </div>
-            <div className="text-[11px] font-mono text-ink-3 mt-1">
-              Approx. {passEstimate.minutes} minutes away ({Math.round(passEstimate.minutes / 92.6)} orbits)
-            </div>
+          <div className="p-4 rounded-[14px] bg-abyss/60 border border-line text-xs text-ink-2">
+            {currentLang === 'si' ? 'මීළඟ ගමන් වේලාව මෙහි ගණනය නොකෙරේ. ඒ සඳහා වලංගු කක්ෂීය දත්ත සහ අනාවැකි ආකෘතියක් අවශ්‍යයි.' : currentLang === 'ta' ? 'அடுத்த கடக்கும் நேரம் இங்கு கணிக்கப்படவில்லை; அதற்கு சரியான சுற்றுப்பாதைத் தரவும் மாதிரியும் தேவை.' : 'Next-pass time is not predicted here; it requires current orbital elements and a validated prediction model.'}
           </div>
         </div>
       </LiquidGlassCard>

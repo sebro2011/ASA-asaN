@@ -96,3 +96,82 @@ Two notes for operators:
 `GUARDIAN_API_KEY`, `YOUTUBE_API_KEY`, `PORT`.
 
 No values are recorded here or anywhere else in the repository.
+
+## Follow-up verification — branch `arena/f34c77a3-asa-asan` (2026-11-12)
+
+Previous production observations above are historical, not current health checks.
+No live provider or NASA request was made in this session: outbound access is
+restricted. POWER proxy validation, cache separation, upstream fallback and
+provenance were exercised with stubbed upstream responses. Its cache coordinates
+now match the four-decimal precision sent to NASA. Credentials remain server-side;
+see `.env.example` for variable names. Provider configuration alone does not prove
+availability.
+
+POWER follow-up: the proxy rejects a successful HTTP response lacking an object at
+`properties.parameter` and will not cache that malformed response. The client
+keeps upstream retrieval times and identifies omitted fallback parameters. Earth
+analyst capability now reports whether any supported remote key is configured;
+this is configuration only, not proof of provider health. All were tested with
+stubs, not live upstreams.
+
+### NeoWs and EPIC follow-up
+
+Both endpoints retain their successful response shapes, but return a JSON 503
+with `NEOWS_UNAVAILABLE` or `EPIC_UNAVAILABLE` on upstream failure or invalid
+shape instead of fabricated observations. Older fallback payloads are rejected by
+the browser helpers. NeoWs direct public fallback is retained; successful client
+responses are cached in memory for 30 minutes; EPIC frames for one hour. Server
+proxy caching has not yet been added. Tests used injected responses; no live
+NASA request or deployed behavior was verified in this session.
+
+### APOD, Exoplanet Archive and ISS follow-up
+
+- APOD and APOD range: valid upstream data retains the success shape; invalid
+  dates get 400; upstream failure gets 503 `APOD_UNAVAILABLE` rather than a
+  fabricated example. A historical lookup cannot populate the today cache.
+- Exoplanet Archive: successful valid catalog records retain their shape;
+  failures get 503 `EXOPLANETS_UNAVAILABLE`, not an unverified catalog.
+- ISS: a validated upstream observation carries its observation timestamp in
+  milliseconds; on a later failure a genuine last-known fix is marked
+  `isFallback`; before any fix the endpoint answers 503 `ISS_UNAVAILABLE`.
+  The current client uses its labelled simulation instead of treating a stale
+  proxy response as live. Verification was stubbed; no live service was tested.
+
+### Translation / NOVA follow-up
+
+`POST /api/translate` accepts bounded title and explanation and `en`, `si`, or
+`ta`. English returns the original; other languages use configured Gemini and
+return `provider: gemini` on success. On missing configuration, invalid model
+output, timeout or failure the route returns 503 `TRANSLATION_UNAVAILABLE`; it
+never invents a translation. Per-process rate limit: 15 requests/minute per
+Express client IP. Cache keys include the full original text and target language.
+These paths and NOVA history limits were tested with stubs; real provider
+availability and translation accuracy were not verified.
+
+### Mars Rover Photos
+
+`GET /api/mars/photos` accepts `rover` (curiosity, opportunity, spirit), integer
+`sol` (0–10000), and integer `page` (1–100). It returns validated photo metadata,
+source, retrieval time, cache status, omitted count and heuristic `hasMore`;
+invalid input is rejected and upstream failure returns 503 rather than fake
+photos. Server-side NASA key configuration uses the existing `NASA_API_KEY`
+environment variable (or DEMO_KEY); the route is rate-limited per process. Tests
+use mocked upstream responses: live NASA availability and actual host coverage
+have not been verified.
+
+### News feed follow-up
+
+`GET /api/news` returns provider `items` (not just `articles`); the shared news
+client now reads these and uses a versioned runtime cache. Provider information
+and publication time are preserved in the feed. The existing sample fallback is
+still returned by the helper on empty/error and marked `_isSample`; this feed
+filters it rather than attributing it to NASA. At that stage the feed could not distinguish an empty result from an outage;
+see the structured status follow-up below. Live providers were not verified.
+
+### Structured news status follow-up
+
+The feed now consumes `fetchSpaceNewsStatus`: a successful empty `items` array
+is distinct from HTTP/network/timeout/malformed-response failure. A provider
+`error` state on a successful aggregate is reported as partial. Refresh bypasses
+the client cache, not necessarily the server cache. The existing
+`fetchNasaNews` contract remains unchanged. Results were verified with stubs.

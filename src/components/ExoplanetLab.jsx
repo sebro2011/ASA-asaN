@@ -174,6 +174,10 @@ function InteractivePlanetGlobe({ radius = 1.0, texture, glowColor = '#38bdf8', 
   );
 }
 
+function formatValue(value, digits) {
+  return typeof value === 'number' && Number.isFinite(value) ? value.toFixed(digits) : 'N/A';
+}
+
 function ExoplanetLab({ lang = 'en' }) {
   const [exoplanets, setExoplanets] = useState([]);
   const [selectedPlanet, setSelectedPlanet] = useState(null);
@@ -202,12 +206,13 @@ function ExoplanetLab({ lang = 'en' }) {
     setLoading(true);
     try {
       const list = await fetchExoplanetsPipeline();
-      if (Array.isArray(list) && list.length > 0) {
-        setExoplanets(list);
-        setSelectedPlanet(list[0]);
-      }
+      const valid = Array.isArray(list) ? list.filter(p => p && typeof p.pl_name === 'string' && p.pl_name.trim()) : [];
+      setExoplanets(valid);
+      setSelectedPlanet(valid[0] || null);
     } catch (err) {
       console.warn('Exoplanet pipeline fetch error:', err);
+      setExoplanets([]);
+      setSelectedPlanet(null);
     } finally {
       setLoading(false);
     }
@@ -244,6 +249,10 @@ function ExoplanetLab({ lang = 'en' }) {
   const exoplanetTexture = useMemo(() => {
     return createProceduralExoplanetTexture(selectedPlanet);
   }, [selectedPlanet]);
+
+  // Release generated textures when selection changes or the component unmounts.
+  useEffect(() => () => earthTexture?.dispose(), [earthTexture]);
+  useEffect(() => () => exoplanetTexture?.dispose(), [exoplanetTexture]);
 
   // Scaled Radius for 3D Viewport (Clamped between 0.5 and 2.4 for clean viewing)
   const displayRadius = useMemo(() => {
@@ -376,7 +385,7 @@ function ExoplanetLab({ lang = 'en' }) {
             </span>
             {selectedPlanet && (
               <span className="px-3 py-1 rounded-full apple-liquid-glass text-cyan-300 font-bold text-[11px] border-cyan-500/30">
-                Scale: 1.0x Earth vs {selectedPlanet.pl_rade?.toFixed(2)}x Earth
+                Archive radius: {formatValue(selectedPlanet.pl_rade, 2)} × Earth
               </span>
             )}
           </div>
@@ -437,13 +446,13 @@ function ExoplanetLab({ lang = 'en' }) {
               </div>
 
               <div className="text-center font-mono text-[10px] text-amber-300 font-bold z-10">
-                R = {selectedPlanet?.pl_rade?.toFixed(2) || '1.0'} R⊕ • {selectedPlanet?.pl_masse?.toFixed(1) || '1.0'} M⊕
+                R = {formatValue(selectedPlanet?.pl_rade, 2)} R⊕ • {formatValue(selectedPlanet?.pl_masse, 1)} M⊕
               </div>
             </div>
           </div>
 
           <div className="text-center text-[11px] font-mono text-ink-3 pt-2 border-t border-white/10">
-            Rotate 3D spheres with click & drag • Real-time WebGL shader rendering
+            {lang === 'si' ? 'මෙම රූප කලාත්මක සංකල්ප පමණි; මතුපිට, වායුගෝලය හෝ වාසය කළ හැකි බව පිළිබඳ නිරීක්ෂණ නොවේ. දෘශ්‍ය පරිමාණය සීමා කර ඇත.' : lang === 'ta' ? 'இவை கலைக் கற்பனைகள் மட்டுமே; மேற்பரப்பு, வளிமண்டலம் அல்லது வாழ்தகுதி பற்றிய அவதானிப்புகள் அல்ல. காட்சியின் அளவு வரையறுக்கப்பட்டுள்ளது.' : 'Illustrative procedural textures are not observations of surface, atmosphere, or habitability. Display scale is capped.'}
           </div>
         </div>
 
@@ -482,7 +491,12 @@ function ExoplanetLab({ lang = 'en' }) {
             </div>
           </div>
 
-          {/* Habitability Spec Sheet Cards */}
+          {!loading && exoplanets.length === 0 && (
+            <div role="status" className="p-5 rounded-[14px] apple-liquid-glass text-sm text-ink-2">
+              {lang === 'si' ? 'Exoplanet Archive දත්ත දැනට නොමැත. නැවත උත්සාහ කරන්න.' : lang === 'ta' ? 'Exoplanet Archive தரவு தற்போது கிடைக்கவில்லை. மீண்டும் முயற்சிக்கவும்.' : 'Exoplanet Archive data is unavailable or empty. Please retry.'}
+            </div>
+          )}
+          {/* Archive Spec Sheet Cards */}
           {selectedPlanet && (
             <div className="p-6 rounded-[14px] apple-liquid-glass space-y-4 shadow-xl">
               
@@ -498,7 +512,7 @@ function ExoplanetLab({ lang = 'en' }) {
 
                 <div className="px-3.5 py-1 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-signal font-mono text-xs font-bold flex items-center gap-1.5">
                   <ShieldCheck className="w-3.5 h-3.5 text-signal" />
-                  <span>ESI: {(selectedPlanet.esi || 0.82).toFixed(2)}</span>
+                  <span>ESI: {formatValue(selectedPlanet.esi, 2)}</span>
                 </div>
               </div>
 
@@ -506,26 +520,26 @@ function ExoplanetLab({ lang = 'en' }) {
               <div className="grid grid-cols-2 gap-3 text-xs font-mono">
                 <div className="p-3.5 rounded-[14px] apple-liquid-glass">
                   <span className="text-ink-3 block text-[10px] mb-0.5">{t.radiusRatio}</span>
-                  <span className="text-cyan-300 font-bold text-sm">{selectedPlanet.pl_rade?.toFixed(2)} R⊕</span>
-                  <span className="text-ink-3 block text-[9px] mt-0.5">({Math.round((selectedPlanet.pl_rade || 1) * 6371).toLocaleString()} km)</span>
+                  <span className="text-cyan-300 font-bold text-sm">{formatValue(selectedPlanet.pl_rade, 2)} R⊕</span>
+                  <span className="text-ink-3 block text-[9px] mt-0.5">{Number.isFinite(selectedPlanet.pl_rade) ? `(${Math.round(selectedPlanet.pl_rade * 6371).toLocaleString()} km)` : ''}</span>
                 </div>
 
                 <div className="p-3.5 rounded-[14px] apple-liquid-glass">
                   <span className="text-ink-3 block text-[10px] mb-0.5">{t.massRatio}</span>
-                  <span className="text-indigo-300 font-bold text-sm">{selectedPlanet.pl_masse?.toFixed(2) || 'N/A'} M⊕</span>
+                  <span className="text-indigo-300 font-bold text-sm">{formatValue(selectedPlanet.pl_masse, 2)} M⊕</span>
                   <span className="text-ink-3 block text-[9px] mt-0.5">(Earth Mass Multiple)</span>
                 </div>
 
                 <div className="p-3.5 rounded-[14px] apple-liquid-glass">
                   <span className="text-ink-3 block text-[10px] mb-0.5">{t.orbitalPeriod}</span>
-                  <span className="text-amber-300 font-bold text-sm">{selectedPlanet.pl_orbper?.toFixed(1)} Days</span>
-                  <span className="text-ink-3 block text-[9px] mt-0.5">({(selectedPlanet.pl_orbper / 365.25).toFixed(2)} Earth Years)</span>
+                  <span className="text-amber-300 font-bold text-sm">{formatValue(selectedPlanet.pl_orbper, 1)} Days</span>
+                  <span className="text-ink-3 block text-[9px] mt-0.5">{Number.isFinite(selectedPlanet.pl_orbper) ? `(${(selectedPlanet.pl_orbper / 365.25).toFixed(2)} Earth Years)` : ''}</span>
                 </div>
 
                 <div className="p-3.5 rounded-[14px] apple-liquid-glass">
                   <span className="text-ink-3 block text-[10px] mb-0.5">{t.eqTemp}</span>
-                  <span className="text-critical font-bold text-sm">{selectedPlanet.pl_eqt || 255} K</span>
-                  <span className="text-ink-3 block text-[9px] mt-0.5">({((selectedPlanet.pl_eqt || 255) - 273.15).toFixed(1)} °C)</span>
+                  <span className="text-critical font-bold text-sm">{formatValue(selectedPlanet.pl_eqt, 0)} K</span>
+                  <span className="text-ink-3 block text-[9px] mt-0.5">{Number.isFinite(selectedPlanet.pl_eqt) ? `(${(selectedPlanet.pl_eqt - 273.15).toFixed(1)} °C)` : ''}</span>
                 </div>
               </div>
 
@@ -534,12 +548,12 @@ function ExoplanetLab({ lang = 'en' }) {
                 <div className="flex items-center justify-between text-ink-2">
                   <span>{t.distance}:</span>
                   <span className="text-cyan-300 font-bold">
-                    {selectedPlanet.sy_dist ? `${(selectedPlanet.sy_dist * 3.26156).toFixed(1)} ly (${selectedPlanet.sy_dist.toFixed(1)} pc)` : '124 ly'}
+                    {Number.isFinite(selectedPlanet.sy_dist) ? `${(selectedPlanet.sy_dist * 3.26156).toFixed(1)} ly (${selectedPlanet.sy_dist.toFixed(1)} pc)` : 'N/A'}
                   </span>
                 </div>
                 <div className="flex items-center justify-between text-ink-3 text-[11px] pt-1 border-t border-white/10">
                   <span>{t.facility}:</span>
-                  <span className="text-ink-2">{selectedPlanet.disc_facility || 'Kepler Space Telescope'} ({selectedPlanet.disc_year || '2015'})</span>
+                  <span className="text-ink-2">{selectedPlanet.disc_facility || 'N/A'} ({selectedPlanet.disc_year ?? 'N/A'})</span>
                 </div>
               </div>
 
@@ -550,7 +564,7 @@ function ExoplanetLab({ lang = 'en' }) {
                   Astrophysical Overview:
                 </span>
                 <p className="leading-relaxed font-sans text-ink-2 text-[11px]">
-                  {selectedPlanet.description || `${selectedPlanet.pl_name} is a confirmed exoplanet orbiting host star ${selectedPlanet.hostname} with a radius of ${selectedPlanet.pl_rade} Earth radii and an equilibrium temperature of ${selectedPlanet.pl_eqt} K.`}
+                  {selectedPlanet.description || `NASA Exoplanet Archive record: ${selectedPlanet.pl_name}. Missing values are not estimates. An equilibrium temperature is not a surface measurement or evidence of habitability.`}
                 </p>
               </div>
             </div>

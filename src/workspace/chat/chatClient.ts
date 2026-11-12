@@ -260,11 +260,30 @@ export function describeFallbackChain(chain: ChatFallbackHop[]): string {
     .join(' | ');
 }
 
-/** How many past turns are sent as context; the server enforces its own cap. */
-export const HISTORY_WINDOW = 20;
+/** Match the server's 12-message and 20 KiB text limits, including the new turn. */
+export const HISTORY_WINDOW = 12;
 
 export function historyWindow(messages: ChatTurn[]): ChatTurn[] {
-  return messages.slice(-HISTORY_WINDOW);
+  const usable = messages.filter((message) =>
+    (message.role === 'user' || message.role === 'assistant') && typeof message.content === 'string' && message.content.trim(),
+  );
+  if (!usable.length) return [];
+  // Never silently truncate the user's latest turn: the server will report a
+  // useful error if it exceeds the per-message or request size limit.
+  const result = [usable[usable.length - 1]];
+  const encoder = new TextEncoder();
+  let textBytes = encoder.encode(result[0].content).length;
+  for (let index = usable.length - 2; index >= 0 && result.length < HISTORY_WINDOW; index -= 1) {
+    const message = usable[index];
+    const bytes = encoder.encode(message.content).length;
+    if (message.content.length > 4_000 || textBytes + bytes > 20 * 1024) break;
+    // JSON escaping may add many bytes (e.g. quotes or newlines). Leave room
+    // for the rest of the request under the server's 24 KiB ceiling.
+    if (encoder.encode(JSON.stringify([message, ...result])).length > 23 * 1024) break;
+    result.unshift(message);
+    textBytes += bytes;
+  }
+  return result;
 }
 
 /** Only the five known levels are accepted; anything else becomes `auto`. */

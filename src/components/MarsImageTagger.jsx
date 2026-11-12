@@ -56,6 +56,7 @@ const DEFAULT_MARS_HOTSPOTS = [
 ];
 
 function MarsImageTagger({
+  lang = 'en',
   imageUrl = 'https://images.unsplash.com/photo-1614728894747-a83421e2b9c9?auto=format&fit=crop&w=1600&q=85',
   hotspots = DEFAULT_MARS_HOTSPOTS,
   className = ''
@@ -76,7 +77,7 @@ function MarsImageTagger({
           </div>
           <div>
             <span className="text-[10px] font-mono text-critical uppercase tracking-wider block font-semibold">
-              NASA JPL Mars 2020 Exploration
+              {lang === 'si' ? 'නිදර්ශන රූපය · NASA ඡායාරූපයක් නොවේ' : lang === 'ta' ? 'விளக்கப்படம் · NASA படம் அல்ல' : 'Illustration · not NASA imagery'}
             </span>
             <h3 className="text-base font-bold font-display text-white">
               Mars Rover Image Hotspot Tagger
@@ -85,17 +86,18 @@ function MarsImageTagger({
         </div>
 
         <span className="text-xs font-mono text-cyan-300 px-3.5 py-1.5 rounded-full liquid-glass shadow-sm">
-          {hotspots.length} Geological Targets Identified
+          {lang === 'si' ? 'සංකල්පීය සලකුණු' : lang === 'ta' ? 'கருத்து அடையாளங்கள்' : 'Conceptual hotspots'}
         </span>
       </div>
 
+      <p className="text-xs leading-relaxed text-ink-2">{lang === 'si' ? 'සලකුණු නිදර්ශන පමණි; මෙම රූපයේ විශේෂාංග හෝ NASA නිරීක්ෂණ ලෙස සත්‍යාපනය කර නැත.' : lang === 'ta' ? 'இந்த அடையாளங்கள் விளக்கத்திற்கானவை; படத்தில் உள்ள அம்சங்களாகவோ NASA அவதானிப்புகளாகவோ உறுதிப்படுத்தப்படவில்லை.' : 'These hotspots are illustrative and are not verified features of this image or NASA observations.'}</p>
       {/* Main Interactive 2D Coordinate Viewport Container */}
       <div className="relative w-full rounded-[14px] overflow-hidden border border-white/10 bg-abyss group aspect-[16/10] sm:aspect-[16/9] shadow-inner">
         
         {/* Background Mars Image */}
         <img
           src={imageUrl}
-          alt="Mars Surface Landscape"
+          alt={lang === 'si' ? 'නිදර්ශන පසුබිම් රූපය' : lang === 'ta' ? 'விளக்கப் பின்னணி படம்' : 'Illustrative background image'}
           className="w-full h-full object-cover select-none pointer-events-none filter brightness-90 contrast-105"
         />
 

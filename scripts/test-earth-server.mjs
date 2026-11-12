@@ -143,6 +143,19 @@ test('GET /health reports capabilities without leaking any key', async () => {
   delete process.env.FIRMS_MAP_KEY;
 });
 
+test('GET /health reports remote analyst configuration without claiming health', async () => {
+  process.env.OPENROUTER_API_KEY = 'test-key';
+  try {
+    const body = await (await get('/health')).json();
+    assert.equal(body.capabilities.aiAnalyst, true);
+    assert.ok(body.capabilities.aiAnalystProviders.includes('openrouter'));
+    assert.match(body.notes.aiAnalyst, /availability is not guaranteed/);
+    assert.ok(!JSON.stringify(body).includes('test-key'));
+  } finally {
+    delete process.env.OPENROUTER_API_KEY;
+  }
+});
+
 /* -------------------------------- POWER -------------------------------- */
 
 test('GET /power validates arguments before touching the network', async () => {
@@ -156,6 +169,30 @@ test('GET /power validates arguments before touching the network', async () => {
   const reversed = await get('/power?latitude=6.9&longitude=79.8&start=2021&end=2020');
   assert.equal(reversed.status, 400);
   assert.equal((await reversed.json()).code, 'invalid-range');
+});
+
+test('GET /power rejects empty, repeated and fractional inputs before fetching', async () => {
+  const before = upstream.length;
+  for (const query of [
+    'latitude=&longitude=79&start=2020&end=2020',
+    'latitude=6&latitude=7&longitude=79&start=2020&end=2020',
+    'latitude=6&longitude=79&start=2020.5&end=2021',
+  ]) {
+    const response = await get(`/power?${query}`);
+    assert.equal(response.status, 400);
+    assert.equal((await response.json()).code, 'invalid-arguments');
+  }
+  assert.equal(upstream.length, before);
+});
+
+test('GET /power caches each upstream coordinate separately at four decimal places', async () => {
+  const first = await (await get('/power?latitude=6.1231&longitude=79.1231&start=2020&end=2020')).json();
+  const second = await (await get('/power?latitude=6.1232&longitude=79.1231&start=2020&end=2020')).json();
+  assert.equal(first.fromCache, false);
+  assert.equal(second.fromCache, false);
+  assert.equal(new URL(second.sourceUrl).searchParams.get('latitude'), '6.1232');
+  const repeated = await (await get('/power?latitude=6.1232&longitude=79.1231&start=2020&end=2020')).json();
+  assert.equal(repeated.fromCache, true);
 });
 
 test('GET /power proxies NASA POWER, caches it and returns the raw payload', async () => {
@@ -173,6 +210,21 @@ test('GET /power proxies NASA POWER, caches it and returns the raw payload', asy
   const again = await (await get('/power?latitude=6.9271&longitude=79.8612&start=2020&end=2020&parameters=T2M,PRECTOTCORR')).json();
   assert.equal(again.fromCache, true);
   assert.equal(again.retrievedAt, body.retrievedAt, 'the cached envelope is returned unchanged');
+});
+
+test('GET /power rejects and does not cache malformed successful upstream JSON', async () => {
+  let calls = 0;
+  stubImpl = async () => { calls += 1; return new Response(JSON.stringify({ error: 'invalid' }), { status: 200 }); };
+  try {
+    for (let i = 0; i < 2; i += 1) {
+      const response = await get('/power?latitude=12.3456&longitude=15.4321&start=2020&end=2020');
+      assert.equal(response.status, 502);
+      assert.equal((await response.json()).code, 'power-invalid-response');
+    }
+    assert.equal(calls, 2);
+  } finally {
+    stubImpl = mainStub;
+  }
 });
 
 test('GET /power degrades to the core parameter set when POWER rejects the list', async () => {
@@ -379,4 +431,56 @@ test('the browser client falls back to a direct POWER call when the server proxy
   assert.match(sourced.provenance.sourceUrl, /power\.larc\.nasa\.gov/);
   assert.equal(sourced.status, 'live');
   stubImpl = mainStub;
+});
+
+test('Earth rate limiting ignores untrusted forwarded-for headers', async () => {
+  let limited = 0;
+  for (let i = 0; i < 65; i += 1) {
+    const response = await realFetch(base + '/power', { headers: { 'X-Forwarded-For': `198.51.100.${i + 1}` } });
+    if (response.status === 429) limited += 1;
+  }
+  assert.ok(limited > 0, 'changing a client-supplied header must not create new buckets');
+});
+
+test('POWER client separates nearby points and preserves upstream retrieval time on cache hits', async () => {
+  const { fetchPowerDataset } = await import('../src/lib/earth/power.ts');
+  const { cacheClear } = await import('../src/lib/earth/cache.ts');
+  cacheClear('power-v2:');
+  let calls = 0;
+  stubImpl = async (url) => {
+    calls += 1;
+    return new Response(JSON.stringify({
+      ok: true, sourceUrl: 'https://power.larc.nasa.gov/test',
+      retrievedAt: '2020-01-01T00:00:00.000Z', fromCache: true,
+      usedParameters: ['T2M'], payload: { properties: { parameter: { T2M: { '202001': 23 } } } }
+    }), { status: 200, headers: { 'content-type': 'application/json' } });
+  };
+  try {
+    const baseArgs = { latitude: 6.1231, longitude: 79.1231, startYear: 2020, endYear: 2020, placeLabel: 'test', parameters: ['T2M'] };
+    await fetchPowerDataset(baseArgs);
+    const cached = await fetchPowerDataset(baseArgs);
+    assert.equal(cached.status, 'cached');
+    assert.equal(cached.provenance.retrievedAt, '2020-01-01T00:00:00.000Z');
+    await fetchPowerDataset({ ...baseArgs, latitude: 6.1232 });
+    assert.equal(calls, 2);
+  } finally {
+    stubImpl = mainStub;
+    cacheClear('power-v2:');
+  }
+});
+
+test('POWER client reports parameters omitted by server degradation as unavailable', async () => {
+  const { fetchPowerDataset } = await import('../src/lib/earth/power.ts');
+  stubImpl = async () => new Response(JSON.stringify({
+    ok: true, sourceUrl: 'https://power.larc.nasa.gov/test', retrievedAt: '2020-01-01T00:00:00.000Z',
+    usedParameters: ['T2M', 'PRECTOTCORR'], degraded: true,
+    payload: { properties: { parameter: { T2M: { '202001': 23 }, PRECTOTCORR: { '202001': 2 } } } }
+  }), { status: 200 });
+  try {
+    const result = await fetchPowerDataset({ latitude: 8, longitude: 81, startYear: 2020, endYear: 2020, placeLabel: 'test', parameters: ['T2M', 'PRECTOTCORR', 'RH2M'], force: true });
+    assert.deepEqual(result.data.unavailable, ['RH2M']);
+    assert.deepEqual(result.data.available, ['T2M', 'PRECTOTCORR']);
+  } finally {
+    stubImpl = mainStub;
+  }
 });

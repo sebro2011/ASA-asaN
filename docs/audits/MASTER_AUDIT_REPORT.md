@@ -462,3 +462,127 @@ Still open and unchanged by this remediation: **M1** (Gemini generation down),
 **M2** (no cache on Neows/EPIC/Exoplanets), **M3** (strict mode off), **M4**
 (silent `DEMO_KEY`), **M5** (Mars Rover Photos), **M6** (build-chain advisories),
 **T1–T6**. They remain live at the current commit and are the next phases' work.
+
+---
+
+## Follow-up audit — 2026-11-12, branch `arena/f34c77a3-asa-asan`
+
+This is a scoped follow-up to the historical audit above, not a claim that every
+feature or line was reverified. Inventory: 493 tracked files; reviewed package and
+build configuration, Express entry and Earth router, NOVA provider routing,
+POWER tests, PWA registration, chat persistence and existing API/limitation
+reports. Source was not changed during this audit. The previous report's live
+production observations are historical, not evidence of current provider health.
+
+| Priority | Finding and evidence | Recommended action | Complexity |
+| --- | --- | --- | --- |
+| Major / scientific accuracy | `server/earthIntelligence.ts` rounds POWER cache keys to three decimal places but sends coordinates rounded to four; nearby distinct requests can receive the wrong grid location's cached data. | Make cache precision match the upstream request and test collision boundaries. | Low |
+| Major / security | Earth rate limits take the first `X-Forwarded-For` directly, allowing a direct caller to choose its own bucket. Maps are process-local, not shared across serverless instances. | Use Express's configured client IP; explicitly document proxy configuration and distributed limitations. | Low locally; distributed limit high |
+| Major / validation | POWER accepts fractional years and blank numeric query values (which JavaScript converts to zero). | Reject empty/non-scalar coordinates and non-integer years before upstream calls. | Low |
+| Major / functionality | Mars rover gallery and route remain absent according to current `docs/KNOWN_LIMITATIONS.md`; streaming is not implemented; live provider availability is unverified here. | Restore only with verified upstream contracts; design streaming separately. | High |
+| Major / freshness | Several NASA proxies lack server caching and data freshness; offline PWA telemetry may be old. | Add bounded source-aware caching and explicitly surface stale age. | Medium |
+| Minor / security | CSP permits arbitrary HTTPS for images and connections, plus inline script; in-memory rate limiting and caches do not provide distributed protection. | Inventory actual origins before tightening CSP; use trusted proxy and shared rate store where deployed. | Medium/high |
+| Minor / performance | Existing audit reports a large entry chunk and duplicate root/src namespaces; 3D features and numerous dashboards deserve runtime profiling on low-end devices. | Measure browser traces, selectively split imports without breaking 3D. | Medium |
+| Minor / UX | App has theme, localization and responsive components, but visual/accessibility and tablet behavior were not manually verified in this environment. | Run keyboard, contrast and real-device/browser checks. | Medium |
+| Minor / debt | TS strict mode is off; historical reports include prior-branch claims and deployment observations that can become stale. | Incremental strictness and dated evidence, not a wholesale rewrite. | High |
+
+Architecture: React/Vite app with a workspace and explore surfaces; Express routes
+are shared via the Vercel entry. `server/novaChat.js` retains the local engine
+and explicit remote providers, bounded messages, deadlines and fallback logic;
+chat supports search, rename and archive. POWER, GIBS, NASA data, space weather,
+ISS, AR, solar system and launch simulator are present in separate modules, but
+individual end-to-end correctness was not established by this inventory. Supabase
+is optional; its RLS and deployment policies require separate live validation.
+`public/sw.js` is explicitly registered while Vite also builds a Workbox worker;
+the actual deployed/offline lifecycle needs browser verification.
+
+Environment: Node 22.22.3; `npm install --no-package-lock --ignore-scripts`
+succeeded and reported 6 advisories (2 low, 4 moderate). A separate `npm audit
+--omit=dev` could not run without an npm lockfile; this repository has `bun.lock`.
+Live NASA and remote AI requests cannot be verified from this sandbox because
+outbound network access is restricted. No production changes were made.
+
+Follow-up remediation: the cache precision, numeric validation and forwarded-IP
+findings above were addressed in `server/earthIntelligence.ts` and covered in
+`scripts/test-earth-server.mjs`; `api/index.js` was regenerated. Full test and
+build results are recorded in `docs/TEST_RESULTS.md`. Remaining findings were not
+resolved merely by recording them.
+
+### Additional follow-up findings and remediation
+
+POWER client parsing converted null/blank/boolean values to zero; local cache
+used three-decimal keys and replaced original retrieval times with cache-write
+ times; degraded responses hid requested-but-omitted parameters. These
+scientific-integrity issues are corrected with regression coverage. Malformed
+successful POWER JSON is now rejected before server caching. The Workbox image
+cache previously captured non-image NASA requests by hostname, and the Earth
+proxy cache could silently replay a POWER response; the configuration now avoids
+those paths. Earth analyst capability previously overlooked configured non-Gemini
+providers; it now reports configuration without asserting health. Remaining PWA
+and other telemetry freshness behavior needs real-browser verification.
+
+### NeoWs / EPIC scientific integrity follow-up
+
+Previously the NeoWs proxy generated invented present-day close approaches, and
+its client discarded the fallback flag and cached the result as real. The radar
+could issue alerts from sample data and filled missing measurements with invented
+numbers. The EPIC proxy and viewer similarly substituted synthetic frames and
+telemetry, including for missing fields in successful responses. These active
+paths were replaced with explicit unavailable states and regression coverage;
+see the changelog and test results. The seven-day NeoWs range is now inclusive,
+and app-specific screening is distinguished from NASA PHA classification.
+APOD and exoplanet fallback/sample paths still require an independent review;
+older claims that every fallback was safely labelled are not reliable.
+
+### APOD / Exoplanet Archive / ISS follow-up
+
+APOD's today cache was overwritten by dated requests; failure fallback records
+attributed unrelated illustrative imagery to NASA and APOD ranges assigned
+invented dates. Exoplanet fallback records and UI fields could present guessed
+measurements and ESI values as archive data. ISS began with invented coordinates,
+its client lost stale status and multiplied server millisecond timestamps by
+1,000, and two UI surfaces presented distance/speed as a next-pass prediction.
+These active paths were corrected as documented in the changelog and tested with
+stubs. Predictive pass functionality remains unavailable pending a validated
+orbital implementation and current elements; no live provider test was possible.
+
+### NOVA / translation follow-up
+
+The translation route previously presented a partial keyword replacement with an
+unrelated Cosmic Latte explanation as a translation and cached by only the start
+of a title; it is now fail-closed, bounded, content-keyed and rate-limited. The
+legacy AI client fallback claimed NASA telemetry for arbitrary questions; it now
+uses the existing labelled local engine. Workspace chat previously sent 20 turns
+while the server accepts at most 12; it now bounds history by both count and
+bytes. Tests use fake providers and do not establish real provider health or
+translation quality. Other phases and live/browser verification remain open.
+
+### Mars rover imagery follow-up
+
+The existing Mars image tagger uses an illustrative stock image and hypothetical
+annotations, not NASA observations; it is now labelled accordingly. A separate
+historical rover gallery uses a server-side NASA proxy without fabricated fallback.
+The proxy and gallery were tested with stubs, not against the live NASA service;
+upstream availability, image-host coverage and actual browser layouts remain to
+be checked. Pagination's next-page indicator is a heuristic. This is an
+incremental phase, not a claim that the full programme is complete.
+
+### News feed integrity follow-up
+
+The legacy news client did not read the current `/api/news` `items` schema,
+therefore displayed sample fallback stories as current NASA news. The feed also
+used unverifiable old IndexedDB entries and a partial keyword substitution as a
+translation. The client now reads the actual schema; the feed excludes labelled
+samples and old cache entries, attributes provider names, and retains original
+text if translation fails. APOD is shown only when the shared pipeline returns a
+non-sample record. Tests are stubbed or source-level, not live-provider or browser
+verification. The wider audit and improvements remain ongoing.
+
+### News status follow-up
+
+The feed previously conflated outages with empty results. A separate structured
+client result now distinguishes request failure, valid empty results and partial
+provider failure, while preserving the existing array-returning helper. Request
+ordering guards keep an older news request from replacing a newer one. Stubbed
+client and jsdom tests cover outage, retry, empty and success; live provider and
+real browser verification remain outstanding.
