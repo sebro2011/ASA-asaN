@@ -69,6 +69,17 @@ Nothing here is a plan; if it was not executed it is not listed.
   (`Artemis Logo RGB`), so preview URLs are now `encodeURI`-ed before they reach
   `<img src>`.
 
+### Live verification (end to end, production)
+- `GET /api/nasa-archive?q=artemis&limit=2` → real records, 15 260 hits, real ids
+  and `images-assets` thumbnails (2026-11-12T10:52:30Z).
+- `GET /api/solar-weather` → real observation: Kp 1.67, `observedAt`
+  2026-11-12T06:00:00Z, `stormKey` G0, `fetchedAt` 2026-11-12T11:02:48Z,
+  `stale: false` (commit `71d1a80`). The plasma feed returned nothing in that call,
+  so `solarWindSpeedKmS` is `null` and the panel says "not reported".
+- Lesson recorded for operators: an identical URL can be answered from the edge
+  cache, so a route that *looked* broken was returning a cached body. Use a
+  cache-busting query when verifying a function.
+
 ### Verification
 - `npm test` → **704 pass / 0 fail** (was 682; +22 from the new suites).
 - `npm run lint` (`tsc --noEmit`) → clean.

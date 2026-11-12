@@ -17,12 +17,12 @@ what a user or operator would actually see, and where the audit records it.
 4. **Mars Rover Photos is not integrated.** The Forge dataset descriptor exists;
    there is no route and no gallery. The old client-side helper (hardcoded
    `DEMO_KEY`, fabricated ids) was removed on this branch. (M5)
-5. **Live connector behaviour is partly verified.** The NASA Images archive was
-   confirmed live from production (`q=artemis` → 15 260 real hits, real
-   `images-assets` thumbnails). NOAA SWPC, `api.nasa.gov` and the Exoplanet TAP
-   service have **not** been confirmed live; they are covered by injected-fetch
-   tests only, because this environment's outbound access reaches package
-   registries and GitHub only.
+5. **Live connector behaviour is partly verified.** NASA Images and NOAA SWPC Kp
+   are confirmed live from production (see `docs/API_STATUS_REPORT.md`). The NOAA
+   *plasma* feed returned nothing in that call, so solar-wind speed shows "not
+   reported"; `api.nasa.gov` (APOD/NeoWs/EPIC/exoplanets) and the Exoplanet TAP
+   service are covered by injected-fetch tests only, because this environment's
+   outbound access reaches package registries and GitHub only.
 6. **Dataset snapshots do not refresh themselves.** If a remote dataset changes
    version, the project reports drift; it never silently recalculates. (Forge)
 

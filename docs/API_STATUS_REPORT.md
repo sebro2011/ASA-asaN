@@ -39,14 +39,37 @@ key to diagnose (audit finding M1).
 | `GET /api/asteroids/neows` | api.nasa.gov/neo | **none** | **none** | live-unverified · audit M2 |
 | `GET /api/epic` | api.nasa.gov/EPIC | **none** | **none** | live-unverified · audit M2 |
 | `GET /api/exoplanets` | NASA Exoplanet Archive TAP | **none** | **none** | live-unverified · audit M2 |
-| `GET /api/nasa-archive` | **images-api.nasa.gov** (new) | 5 min TTL, 100 entries | `fetchedAt`, `cached` | tested · live-unverified |
-| `GET /api/solar-weather` | services.swpc.noaa.gov | last measured sample only | `fetchedAt`, `stale` | tested · live-unverified |
+| `GET /api/nasa-archive` | **images-api.nasa.gov** (new) | 5 min TTL, 100 entries | `fetchedAt`, `cached` | tested · **live-verified** 2026-11-12T10:52:30Z |
+| `GET /api/solar-weather` | services.swpc.noaa.gov | last measured sample only | `fetchedAt`, `stale` | tested · **live-verified** 2026-11-12T11:02:48Z |
 | `GET /api/iss` | api.wheretheiss.at | last known | `timestamp`, `isFallback` | tested |
 | `GET /api/satellites` | static registry | — | — | 200 |
 | `GET /api/missions/grounded-search` | curated archive (static) | 10 min TTL | `cached` | 200 |
 | `GET /api/youtube/meta` | YouTube oEmbed | — | — | 400/404/502 |
 | `POST /api/translate` | Gemini / OpenRouter | in-memory | — | tested |
 | `POST /api/mars-photos` | — | — | — | **does not exist** (audit M5) |
+
+## Live verification (production, commit `71d1a80`)
+
+```
+GET /api/nasa-archive?q=artemis&limit=2
+  → success:true, total:15260, first record nasaId "Artemis Logo Color Positive RGB-July 2021",
+    thumbnail https://images-assets.nasa.gov/…, detailsUrl https://images.nasa.gov/details/…,
+    fetchedAt 2026-11-12T10:52:30.790Z
+
+GET /api/solar-weather
+  → success:true, data.kpIndex 1.67, observedAt 2026-11-12T06:00:00.000Z,
+    stormKey "G0", source "NOAA SWPC", fetchedAt 2026-11-12T11:02:48.460Z, stale:false
+```
+
+Two notes for operators:
+
+* `services.swpc.noaa.gov` **is** reachable from the Vercel egress; the earlier
+  `UPSTREAM_UNAVAILABLE` readings were the edge/CDN serving a cached body for an
+  identical URL, not the function failing. Measuring with a cache-busting query is
+  the reliable way to read this route.
+* `solarWindSpeedKmS` came back `null` while Kp succeeded, so the plasma feed did
+  not answer in that call and the panel prints "not reported". Worth revisiting
+  with `plasma-2-hour.json` (smaller) in the next NASA pass.
 
 ## Earth Intelligence
 
