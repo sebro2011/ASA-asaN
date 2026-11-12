@@ -175,3 +175,109 @@ is distinct from HTTP/network/timeout/malformed-response failure. A provider
 `error` state on a successful aggregate is reported as partial. Refresh bypasses
 the client cache, not necessarily the server cache. The existing
 `fetchNasaNews` contract remains unchanged. Results were verified with stubs.
+
+### News rate limiting security follow-up
+
+`GET /api/news` and `GET /api/news/papers` each allow 30 requests per 60-second
+fixed window per Express-resolved IP and router instance; excess returns 429
+with `code: rate-limited` and `Retry-After`. The limit applies before query
+validation and cache lookup. `/api/news/sources` has no such limiter. No
+production proxy chain was verified, and per-process state cannot enforce a
+single global limit. See the security audit in the master report.
+
+### Live NASA / AI verification attempt — 2026-11-12
+
+**Blocked; no live provider request was made.** This workspace's outbound network
+policy permits only GitHub, npm and PyPI hosts, not NASA, Gemini, OpenRouter or
+Arena API hosts. A shell-environment presence check found `NASA_API_KEY`,
+`NEXT_PUBLIC_NASA_API_KEY`, `GEMINI_API_KEY`, `OPENROUTER_API_KEY`,
+`ARENA_API_KEY` and `ARENA_BASE_URL` unset; `.env`, `.env.local` and
+`.env.production` were not present. This is not evidence about configuration in
+any deployed environment. NASA routes may use `DEMO_KEY` where implemented,
+but that does not overcome the network restriction. No secret values were read
+or recorded. Historical deployment/provider observations elsewhere in this
+report do not establish current health.
+
+Follow-up requires an approved network-enabled environment and server-side
+configuration. Exercise NASA APOD, NeoWs, EPIC, Mars and POWER using bounded
+requests and validate provenance, dates, shape and non-fabricated failure; test
+NOVA remote providers explicitly (not `auto` alone), record requested and actual
+provider/model, and distinguish configured, reachable, failed and local fallback.
+Provider calls can consume quota or incur costs. Never record keys, raw secret
+headers, key-bearing URLs, private prompts or sensitive output. Do not change
+production settings or target production without authorization.
+
+### Authorized production live smoke checks — 2026-11-12 ~15:01 UTC
+
+After the blocked sandbox preflight above, the user authorized production endpoint
+checks. The page-fetch tool (separate from sandbox networking) reached the public
+production alias; Vercel metadata identified production commit `f3d5e21` as READY
+and promoted. These were point-in-time checks, not deployment-wide guarantees:
+
+| Request | Observed response |
+| --- | --- |
+| `/api/health` | `status: ok` (app health only). |
+| `/api/asteroids/neows` for 2024-01-01 | `success: true`, 3 objects under the requested date; upstream key-bearing links were redacted. |
+| `/api/epic` | `success: true`, 11 frames with dates and NASA image URLs; image downloads not tested. |
+| `/api/earth/power` for 7.2, 79.9, 2023, T2M | `ok: true`, requested/used parameter T2M, undegraded, not from cache, monthly data returned. |
+| `/api/apod?date=2024-01-01` | `APOD_UNAVAILABLE`, network reason, no data; subsequent `/api/apod` returned `APOD_UNAVAILABLE`, upstream 200 but a NASA logo was identified as degraded. Direct NASA DEMO_KEY historical request returned the generic NASA Science logo, not the requested picture. Causes of the two failures were not proven. |
+| `/api/mars/photos?rover=curiosity&sol=1000&page=1` | `MARS_UPSTREAM_ERROR`, no photos. A direct NASA DEMO_KEY URL produced a page titled `No such app`; the page-fetch tool did not expose HTTP status, so upstream status and cause remain unconfirmed. |
+| `/api/nova/diagnostics?probe=1` | OpenRouter configured and probe HTTP 200; Gemini configured, primary model HTTP 503, final reported alternative HTTP 404; model-list metadata HTTP 200; Arena not configured. Local reports in-process. The probe treats 2xx status as success without checking generated content; it is not an end-to-end chat test. |
+
+Gemini's production diagnostic hint incorrectly said all failures were the same
+and inferred a cause; mixed 503/404 disproved that assertion. The branch now
+makes the hint and UI copy cautious. This local fix has **not** been deployed.
+No real chat completion, translation accuracy, image download or device/browser
+behavior was verified. No production configuration changed. NASA and provider
+availability can change; repeat checks only with authorization and quota care.
+
+### Forge limiter follow-up
+
+Forge rate limits per resolved IP and router instance remain: catalogue 60,
+interpret 40, investigate 8 and assistant 20 requests per 60-second fixed
+window. Beyond the limit the existing `RATE_LIMITED` response and `Retry-After`
+remain. They now use Express IP resolution in this branch; deployment still
+runs the older code until changes are deployed. No real proxy chain was tested.
+
+### NASA imagery exploration update — 2026-11-12
+
+An authorized production `/api/nasa-archive` search for `Mars rover Curiosity`
+returned three NASA Image Library records and a NASA hit count, including
+Earth-based testing. The new branch UI uses that existing route separately from
+`/api/mars/photos`; it does not repair the latter or supply sol-based records.
+NASA Images responses missing an item array or valid total are now rejected by
+the branch adapter. NASA Science WordPress point samples were examined, but no
+new APOD provider/fallback was added: source contract, video and historical
+coverage require further verification. Branch UI and validation are not deployed.
+
+### NASA archive and APOD navigation follow-up
+
+`GET /api/nasa-archive` now rejects malformed/duplicate `q`, `year`, `page`, or
+`limit` in this branch with `INVALID_QUERY`, before contacting the upstream;
+previously `parseInt` could silently alter inputs. On APOD failure the viewer
+provides an external selected-date NASA record link. The historical 2024-01-01
+link redirected to the corresponding NASA Science record during a page-fetch
+check; this does not verify every date or fix the APOD API. Branch changes are
+not deployed.
+
+### APOD NASA Science fallback — branch implementation
+
+`GET /api/apod` first tries the existing legacy API. If unavailable, malformed
+or degraded it may return a date-matched NASA Science featured image with
+`data.source: NASA Science APOD archive`, `data.source_url` and a media note.
+It returns the existing 503 unavailable response when the alternate cannot be
+verified. `GET /api/apod-range` does not use the fallback; it now rejects
+out-of-range or degraded records. Primary provider success continues unchanged.
+The production alias still runs the prior commit until deployment. NASA Science
+search/media samples were observed live, but the new branch adapter and its
+end-to-end production behavior were not verified live.
+
+### APOD recheck after reported Vercel key change — 2026-11-12
+
+At the user's request, the production APOD endpoint was rechecked for today and
+2024-01-01. Both reported `APOD_UNAVAILABLE`, `fallbackReason: degraded`,
+`upstreamStatus: 200`, and `keySource: configured`: the upstream returned the
+NASA site logo, not a usable APOD. Vercel metadata still showed production
+commit `f3d5e21`, before this branch's NASA Science fallback. This does not prove
+whether the newly supplied key was included in the active deployment; key values
+were not read. No deployment or environment modification was performed.

@@ -48,6 +48,7 @@ const MissionsTimeline = lazy(() =>
 );
 const MarsImageTagger = lazy(() => import('../components/MarsImageTagger.jsx'));
 const MarsRoverPhotos = lazy(() => import('../components/MarsRoverPhotos'));
+const MarsArchiveExplorer = lazy(() => import('../components/MarsArchiveExplorer'));
 const SolarWeather = lazy(() => import('../components/SolarWeather.jsx'));
 const CosmicCalendar = lazy(() => import('../components/CosmicCalendar.jsx'));
 const SmartSpaceQuiz = lazy(() => import('../components/SmartSpaceQuiz.jsx'));
@@ -500,6 +501,7 @@ export default function ExploreApp({ tab, onSelectTab, onExitToWorkspace, onOpen
                     </div>
                     <MissionsTimeline lang={lang} initialMissionId={targetMissionId} />
                     <MarsRoverPhotos lang={lang} />
+                    <MarsArchiveExplorer lang={lang} />
                     <MarsImageTagger lang={lang} />
                     <SolarWeather />
                   </div>

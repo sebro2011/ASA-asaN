@@ -33,15 +33,12 @@ type Bucket = { count: number; resetAt: number };
 /** Per-router limiter state, so two routers in one process cannot share a budget. */
 function createRateLimit(buckets: Map<string, Bucket>, name: string, max: number, windowMs: number) {
   return (req: Request, res: Response, next: () => void) => {
-    const ip =
-      (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() ||
-      req.ip ||
-      req.socket.remoteAddress ||
-      'unknown';
+    // Let Express resolve the address using the application's trust proxy policy.
+    const ip = req.ip || req.socket.remoteAddress || 'unknown';
     const key = `${name}:${ip}`;
     const now = Date.now();
     const bucket = buckets.get(key);
-    if (!bucket || now > bucket.resetAt) {
+    if (!bucket || now >= bucket.resetAt) {
       buckets.set(key, { count: 1, resetAt: now + windowMs });
       return next();
     }

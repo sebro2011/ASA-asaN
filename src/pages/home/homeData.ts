@@ -43,6 +43,8 @@ export interface Apod {
   copyright?: string;
   thumbnail_url?: string;
   service_version?: string;
+  source?: string;
+  source_url?: string;
 }
 
 export async function loadApod(signal: AbortSignal): Promise<Sourced<Apod>> {
@@ -53,7 +55,7 @@ export async function loadApod(signal: AbortSignal): Promise<Sourced<Apod>> {
     cached?: boolean;
     fallbackReason?: 'network' | 'rate-limited' | 'upstream' | 'shape' | 'degraded';
     keySource?: 'DEMO_KEY' | 'configured';
-  }>('/api/apod', signal);
+  }>('/api/apod', signal, 18000);
   const apod = payload?.data;
   if (!apod?.title || !apod?.url) throw new Error('APOD service returned an incomplete record');
   return {

@@ -69,8 +69,9 @@ function makeFetch({ calls = [], fail = () => null, hang = () => false } = {}) {
   };
 }
 
-async function startServer({ fetchImpl, now, nasaKey = 'DEMO_KEY', timeoutMs } = {}) {
+async function startServer({ fetchImpl, now, nasaKey = 'DEMO_KEY', timeoutMs, trustProxy } = {}) {
   const app = express();
+  if (trustProxy !== undefined) app.set('trust proxy', trustProxy);
   app.use(express.json({ limit: '256kb' }));
   // A fresh cache per server keeps each test's upstream behaviour independent.
   app.use('/api/forge', createForgeRouter({ fetchImpl, now, nasaKey, timeoutMs, cache: new Map() }));
@@ -406,6 +407,67 @@ test('rate limiting returns a typed 429 after the per-IP budget', async () => {
   } finally {
     await server.close();
   }
+});
+
+test('forwarded-header spoofing cannot bypass any Forge route with default proxy trust', async () => {
+  const server = await startServer({ fetchImpl: makeFetch() });
+  try {
+    const routes = [
+      { path: '/catalogue', method: 'GET', max: 60, expected: 200 },
+      { path: '/interpret', method: 'POST', max: 40, expected: 400 },
+      { path: '/investigate', method: 'POST', max: 8, expected: 400 },
+      { path: '/assistant', method: 'POST', max: 20, expected: 400 },
+    ];
+    for (const route of routes) {
+      for (let i = 0; i < route.max; i++) {
+        const res = await fetch(`${server.base}/api/forge${route.path}`, {
+          method: route.method, headers: { 'content-type': 'application/json', 'x-forwarded-for': `203.0.113.${i + 1}` },
+          ...(route.method === 'POST' ? { body: '{}' } : {}),
+        });
+        assert.equal(res.status, route.expected, `${route.path} request ${i + 1}`);
+      }
+      const blocked = await fetch(`${server.base}/api/forge${route.path}`, {
+        method: route.method, headers: { 'content-type': 'application/json', 'x-forwarded-for': '198.51.100.250' },
+        ...(route.method === 'POST' ? { body: '{}' } : {}),
+      });
+      assert.equal(blocked.status, 429);
+      assert.equal((await blocked.json()).code, 'RATE_LIMITED');
+      assert.ok(Number(blocked.headers.get('retry-after')) > 0);
+    }
+  } finally { await server.close(); }
+});
+
+test('Forge uses Express trusted-proxy chain resolution when explicitly configured', async () => {
+  const server = await startServer({ fetchImpl: makeFetch(), trustProxy: 'loopback' });
+  try {
+    for (let i = 0; i < 8; i++) {
+      const response = await fetch(`${server.base}/api/forge/investigate`, {
+        method: 'POST', headers: { 'content-type': 'application/json', 'x-forwarded-for': `203.0.113.${i + 1}, 198.51.100.7` }, body: '{}',
+      });
+      assert.equal(response.status, 400);
+    }
+    const request = address => fetch(`${server.base}/api/forge/investigate`, {
+      method: 'POST', headers: { 'content-type': 'application/json', 'x-forwarded-for': `203.0.113.200, ${address}` }, body: '{}',
+    });
+    assert.equal((await request('198.51.100.7')).status, 429);
+    assert.equal((await request('198.51.100.8')).status, 400);
+  } finally { await server.close(); }
+});
+
+test('Forge limiter resets at the fixed-window boundary', async () => {
+  const originalNow = Date.now;
+  let now = originalNow();
+  Date.now = () => now;
+  const server = await startServer({ fetchImpl: makeFetch() });
+  try {
+    const request = () => fetch(`${server.base}/api/forge/investigate`, {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}',
+    });
+    for (let i = 0; i < 8; i++) assert.equal((await request()).status, 400);
+    assert.equal((await request()).status, 429);
+    now += 60_000;
+    assert.equal((await request()).status, 400);
+  } finally { Date.now = originalNow; await server.close(); }
 });
 
 test('a server-side NASA key never appears in a response, provenance or error', async () => {

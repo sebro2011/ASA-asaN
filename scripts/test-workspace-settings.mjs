@@ -488,11 +488,11 @@ test('an invalid model id is shown as a configuration problem, not an outage', a
 
     const line = document.querySelector('[data-testid="ai-status-model-gemini"]');
     assert.ok(line, 'the model problem has its own line');
-    assert.match(line.textContent, /configured model id does not exist/);
-    assert.match(line.textContent, /fall back to the default model, which answered/);
+    assert.match(line.textContent, /model request was not found or rejected/);
+    assert.match(line.textContent, /alternative model probe returned a successful status/);
     const models = document.querySelector('[data-testid="ai-status-models-gemini"]');
     assert.ok(models, 'the models this key may use are listed');
-    assert.match(models.textContent, /This key may use: gemini-3\.8-flash, gemini-2\.5-flash/);
+    assert.match(models.textContent, /Models listed by the provider: gemini-3\.8-flash, gemini-2\.5-flash/);
     // It must not be dressed up as a key problem: no key verdict was reported.
     assert.equal(document.querySelector('[data-testid="ai-status-key-gemini"]'), null);
   } finally {

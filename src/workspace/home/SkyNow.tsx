@@ -18,6 +18,7 @@ interface ApodFeed {
   date: string;
   kind: string;
   url: string;
+  source: string;
 }
 
 interface NeoFeed {
@@ -58,6 +59,7 @@ export function parseApod(payload: unknown): Parsed<ApodFeed> | null {
       date: asString(data.date),
       kind: asString(data.media_type) || 'image',
       url: asString(data.url) || asString(data.hdurl),
+      source: asString(data.source),
     },
     fallback: body.isFallback === true,
   };
@@ -265,6 +267,7 @@ export default function SkyNow({ onAsk }: { onAsk: (prompt: string) => void }) {
               ) : null}
               <p className="nova-sky-card__value">{apod.data.title}</p>
               <p className="nova-sky-card__meta">{fill(t('wsSkyApodMeta'), { date: apod.data.date })}</p>
+              {apod.data.source === 'NASA Science APOD archive' && <p className="nova-sky-card__meta">{t('apodScienceSource')}</p>}
             </>
           ) : null}
         </SkyCard>

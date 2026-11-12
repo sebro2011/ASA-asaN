@@ -142,3 +142,7 @@ test('PWA runtime image caching does not capture POWER JSON', async () => {
   assert.match(config, /urlPattern:\s*\(\{ request \}\) => request\.destination === 'image'/);
   assert.doesNotMatch(config, /url\.hostname\.includes\('nasa\.gov'\)/);
 });
+
+test('application leaves Express proxy trust disabled by default', () => {
+  assert.equal(app.get('trust proxy'), false);
+});
