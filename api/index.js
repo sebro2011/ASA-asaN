@@ -52,8 +52,8 @@ function isIsoDate(value) {
   const date = new Date(Date.UTC(y, m - 1, d));
   return date.getUTCFullYear() === y && date.getUTCMonth() === m - 1 && date.getUTCDate() === d;
 }
-function classifyDescribeDomainsError(text) {
-  const lower = text.toLowerCase();
+function classifyDescribeDomainsError(text2) {
+  const lower = text2.toLowerCase();
   if (lower.includes("invalid layer")) {
     const error = new Error("GIBS reports this layer identifier as invalid.");
     error.code = "invalid-layer";
@@ -74,12 +74,12 @@ function classifyDescribeDomainsError(text) {
 var ISO_RANGE = /(\d{4}-\d{2}-\d{2})(?:T[\d:.]+Z?)?\s*\/\s*(\d{4}-\d{2}-\d{2})(?:T[\d:.]+Z?)?(?:\s*\/\s*(P[0-9A-Z]+))?/g;
 var ISO_SINGLE = /(\d{4}-\d{2}-\d{2})(?:T[\d:.]+Z?)?/g;
 function parseTimeValues(xml) {
-  const text = String(xml || "").replace(/\r/g, "");
+  const text2 = String(xml || "").replace(/\r/g, "");
   const consumed = [];
   const ranges = [];
   ISO_RANGE.lastIndex = 0;
   let match;
-  while ((match = ISO_RANGE.exec(text)) !== null) {
+  while ((match = ISO_RANGE.exec(text2)) !== null) {
     const [, start, end, period] = match;
     if (!isIsoDate(start) || !isIsoDate(end)) continue;
     const [from, to] = start <= end ? [start, end] : [end, start];
@@ -87,7 +87,7 @@ function parseTimeValues(xml) {
     consumed.push([match.index, match.index + match[0].length]);
   }
   ISO_SINGLE.lastIndex = 0;
-  while ((match = ISO_SINGLE.exec(text)) !== null) {
+  while ((match = ISO_SINGLE.exec(text2)) !== null) {
     const value = match[1];
     const start = match.index;
     const end = start + match[0].length;
@@ -1026,12 +1026,12 @@ function createOrchestrator(options) {
             remaining
           );
         });
-        const text = await Promise.race([
+        const text2 = await Promise.race([
           provider.generate({ ...args, signal: controller.signal, timeoutMs: remaining }),
           guard
         ]);
         return {
-          text,
+          text: text2,
           entry: { provider: provider.id, model: provider.model, outcome: "ok", attempts, ms: now() - started }
         };
       } catch (error) {
@@ -1121,7 +1121,7 @@ function createOrchestrator(options) {
         chain.push(result2.entry);
         if (result2.text !== null) {
           recordSuccess(provider.id);
-          const parsed = parseSafely((text) => config.parseAnswer(text, args.context), result2.text);
+          const parsed = parseSafely((text2) => config.parseAnswer(text2, args.context), result2.text);
           if (parsed.ok) {
             const failedBefore = chain.filter((entry) => entry.outcome === "error");
             return {
@@ -1175,9 +1175,9 @@ function createOrchestrator(options) {
       }
     };
   }
-  function parseSafely(parse, text) {
+  function parseSafely(parse, text2) {
     try {
-      const value = parse(text);
+      const value = parse(text2);
       if (value === null || value === void 0) return { ok: false };
       return { ok: true, value };
     } catch {
@@ -1338,9 +1338,9 @@ function createGeminiPersonaProvider(options) {
       });
       try {
         const response = await Promise.race([call, guard]);
-        const text = typeof response?.text === "string" ? response.text : typeof response?.text === "function" ? response.text() : "";
-        if (!text) throw new ProviderError("Gemini returned an empty response", { code: "EMPTY_RESPONSE", retryable: true });
-        return text;
+        const text2 = typeof response?.text === "string" ? response.text : typeof response?.text === "function" ? response.text() : "";
+        if (!text2) throw new ProviderError("Gemini returned an empty response", { code: "EMPTY_RESPONSE", retryable: true });
+        return text2;
       } catch (error) {
         if (error instanceof ProviderError) throw error;
         throw new ProviderError(String(error?.message || "Gemini call failed"), {
@@ -1404,11 +1404,11 @@ function createChatCompletionsProvider(id, label, options) {
       } catch {
         throw new ProviderError(`${label} returned a non-JSON body`, { code: "UNPARSABLE_RESPONSE", retryable: true });
       }
-      const text = payload?.choices?.[0]?.message?.content;
-      if (typeof text !== "string" || !text.trim()) {
+      const text2 = payload?.choices?.[0]?.message?.content;
+      if (typeof text2 !== "string" || !text2.trim()) {
         throw new ProviderError(`${label} returned an empty message`, { code: "EMPTY_RESPONSE", retryable: true });
       }
-      return text;
+      return text2;
     }
   };
 }
@@ -1443,8 +1443,8 @@ function createConfiguredProviders(options = {}) {
     createArenaProvider({ apiKey: process.env.ARENA_API_KEY, fetchImpl: options.fetchImpl })
   ];
 }
-function extractJson(text) {
-  const trimmed = String(text || "").trim().replace(/^```(?:json)?/i, "").replace(/```$/i, "").trim();
+function extractJson(text2) {
+  const trimmed = String(text2 || "").trim().replace(/^```(?:json)?/i, "").replace(/```$/i, "").trim();
   try {
     return JSON.parse(trimmed);
   } catch {
@@ -1582,8 +1582,8 @@ earthRouter.get("/power", rateLimit("power", 60, 6e4), async (req, res) => {
     return res.status(400).json({ ok: false, code: "invalid-range", message: "start year must not be after end year." });
   }
   const parameters = requested.length ? requested.slice(0, 12) : CORE_PARAMETER_CODES;
-  const cacheKey = `power:${latitude.toFixed(3)}:${longitude.toFixed(3)}:${start}:${end}:${[...parameters].sort().join(",")}`;
-  const cached2 = cacheGet2(cacheKey);
+  const cacheKey2 = `power:${latitude.toFixed(3)}:${longitude.toFixed(3)}:${start}:${end}:${[...parameters].sort().join(",")}`;
+  const cached2 = cacheGet2(cacheKey2);
   if (cached2) {
     return res.json({ ...cached2, fromCache: true });
   }
@@ -1638,7 +1638,7 @@ earthRouter.get("/power", rateLimit("power", 60, 6e4), async (req, res) => {
       fromCache: false,
       payload
     };
-    cacheSet2(cacheKey, envelope, 12 * 60 * 60 * 1e3);
+    cacheSet2(cacheKey2, envelope, 12 * 60 * 60 * 1e3);
     return res.json(envelope);
   } catch (error) {
     return res.status(504).json({
@@ -1657,13 +1657,13 @@ earthRouter.get("/gibs/domains", rateLimit("gibs-domains", 120, 6e4), async (req
   const known = getGibsLayer(layerId);
   const tileMatrixSet = String(req.query.tileMatrixSet || known?.tileMatrixSet || "GoogleMapsCompatible_Level9");
   const url = known ? describeDomainsUrl(known) : `${GIBS_WMTS_BASE}/1.0.0/${layerId}/default/${tileMatrixSet}/all/all.xml`;
-  const cacheKey = `domains:${layerId}:${tileMatrixSet}`;
-  const cached2 = cacheGet2(cacheKey);
+  const cacheKey2 = `domains:${layerId}:${tileMatrixSet}`;
+  const cached2 = cacheGet2(cacheKey2);
   if (cached2) return res.json({ ...cached2, fromCache: true });
   try {
     const response = await fetchWithTimeout(url, { headers: { Accept: "application/xml,text/xml,*/*" } }, 2e4);
-    const text = await response.text();
-    if (!response.ok && !/exceptionreport/i.test(text)) {
+    const text2 = await response.text();
+    if (!response.ok && !/exceptionreport/i.test(text2)) {
       return res.status(502).json({
         ok: false,
         code: "gibs-error",
@@ -1672,7 +1672,7 @@ earthRouter.get("/gibs/domains", rateLimit("gibs-domains", 120, 6e4), async (req
       });
     }
     try {
-      const domain = buildDomain({ layerId, tileMatrixSet, xml: text, sourceUrl: url });
+      const domain = buildDomain({ layerId, tileMatrixSet, xml: text2, sourceUrl: url });
       const envelope = {
         ok: true,
         layerId,
@@ -1685,7 +1685,7 @@ earthRouter.get("/gibs/domains", rateLimit("gibs-domains", 120, 6e4), async (req
         retrievedAt: domain.retrievedAt,
         fromCache: false
       };
-      cacheSet2(cacheKey, envelope, 6 * 60 * 60 * 1e3);
+      cacheSet2(cacheKey2, envelope, 6 * 60 * 60 * 1e3);
       return res.json(envelope);
     } catch (error) {
       const typed = error;
@@ -1718,8 +1718,8 @@ earthRouter.get("/gibs/probe", rateLimit("gibs-probe", 240, 6e4), async (req, re
   const tileMatrixSet = String(req.query.tileMatrixSet || known?.tileMatrixSet || "GoogleMapsCompatible_Level9");
   const format2 = String(req.query.format || known?.format || "jpg") === "png" ? "png" : "jpg";
   const url = known ? wmtsTileUrl(known, date, tileMatrixSet, format2, 1, 1, 1) : `${GIBS_WMTS_BASE}/${layerId}/default/${date}/${tileMatrixSet}/1/1/1.${format2}`;
-  const cacheKey = `probe:${layerId}:${tileMatrixSet}:${format2}:${date}`;
-  const cached2 = cacheGet2(cacheKey);
+  const cacheKey2 = `probe:${layerId}:${tileMatrixSet}:${format2}:${date}`;
+  const cached2 = cacheGet2(cacheKey2);
   if (cached2) return res.json({ ...cached2, fromCache: true });
   try {
     const response = await fetchWithTimeout(url, { method: "GET", headers: { Accept: "image/*" } }, 15e3);
@@ -1739,7 +1739,7 @@ earthRouter.get("/gibs/probe", rateLimit("gibs-probe", 240, 6e4), async (req, re
       fromCache: false,
       note: response.ok && isImage ? "GIBS served an image for this layer/date combination. GIBS may substitute the nearest available day when the exact date is missing, so the observation-date domain is still checked separately." : `GIBS did not serve an image (HTTP ${response.status}).`
     };
-    cacheSet2(cacheKey, envelope, 30 * 60 * 1e3);
+    cacheSet2(cacheKey2, envelope, 30 * 60 * 1e3);
     return res.json(envelope);
   } catch (error) {
     return res.status(504).json({
@@ -1786,12 +1786,12 @@ earthRouter.get("/firms/hotspots", rateLimit("firms", 30, 6e4), async (req, res)
   const date = /^\d{4}-\d{2}-\d{2}$/.test(String(req.query.date || "")) ? String(req.query.date) : void 0;
   const bbox = `${west},${south},${east},${north}`;
   const url = `https://firms.modaps.eosdis.nasa.gov/api/area/csv/${mapKey}/${source}/${bbox}/${dayRange}${date ? `/${date}` : ""}`;
-  const cacheKey = `firms:${source}:${bbox}:${dayRange}:${date || "latest"}`;
-  const cached2 = cacheGet2(cacheKey);
+  const cacheKey2 = `firms:${source}:${bbox}:${dayRange}:${date || "latest"}`;
+  const cached2 = cacheGet2(cacheKey2);
   if (cached2) return res.json({ ...cached2, fromCache: true });
   try {
     const response = await fetchWithTimeout(url, { headers: { Accept: "text/csv,text/plain,*/*" } }, 25e3);
-    const text = await response.text();
+    const text2 = await response.text();
     if (!response.ok) {
       return res.status(502).json({
         ok: false,
@@ -1800,10 +1800,10 @@ earthRouter.get("/firms/hotspots", rateLimit("firms", 30, 6e4), async (req, res)
         sourceUrl: "https://firms.modaps.eosdis.nasa.gov/api/area/"
       });
     }
-    if (/Invalid MAP_KEY|Not Authorized/i.test(text)) {
+    if (/Invalid MAP_KEY|Not Authorized/i.test(text2)) {
       return res.status(401).json({ ok: false, code: "firms-key-rejected", message: "NASA FIRMS rejected the configured MAP_KEY.", docsUrl });
     }
-    const lines = text.trim().split(/\r?\n/);
+    const lines = text2.trim().split(/\r?\n/);
     const header = (lines.shift() || "").split(",");
     const index = (name) => header.findIndex((column) => column.trim().toLowerCase() === name);
     const latIdx = index("latitude");
@@ -1867,7 +1867,7 @@ earthRouter.get("/firms/hotspots", rateLimit("firms", 30, 6e4), async (req, res)
         "Cloud cover and satellite overpass timing mean a fire can be missed entirely."
       ]
     };
-    cacheSet2(cacheKey, envelope, 15 * 60 * 1e3);
+    cacheSet2(cacheKey2, envelope, 15 * 60 * 1e3);
     return res.json(envelope);
   } catch (error) {
     return res.status(504).json({
@@ -1878,7 +1878,7 @@ earthRouter.get("/firms/hotspots", rateLimit("firms", 30, 6e4), async (req, res)
     });
   }
 });
-var redact = (text) => String(text || "").replace(/([?&](?:api_?key|key|token|access_token)=)[^&\s"']+/gi, "$1[redacted]").replace(/\b(AIza|sk-|or-|arena-)[A-Za-z0-9_\-]{8,}/g, "[redacted]").replace(/\bBearer\s+[A-Za-z0-9._\-]{8,}/gi, "Bearer [redacted]").slice(0, 240);
+var redact = (text2) => String(text2 || "").replace(/([?&](?:api_?key|key|token|access_token)=)[^&\s"']+/gi, "$1[redacted]").replace(/\b(AIza|sk-|or-|arena-)[A-Za-z0-9_\-]{8,}/g, "[redacted]").replace(/\bBearer\s+[A-Za-z0-9._\-]{8,}/gi, "Bearer [redacted]").slice(0, 240);
 function logAnalystEvent(event) {
   try {
     console.log(JSON.stringify({ ts: (/* @__PURE__ */ new Date()).toISOString(), scope: "earth.analyst", ...event }));
@@ -1942,7 +1942,7 @@ function buildProviderContext(context, analysis) {
 }
 var analystOrchestrator = createOrchestrator({
   providers: createConfiguredProviders(),
-  parseAnswer: (text, context) => normaliseAnswer(extractJson(text), context, 6),
+  parseAnswer: (text2, context) => normaliseAnswer(extractJson(text2), context, 6),
   log: (event) => logAnalystEvent(event)
 });
 var analystOrchestratorOverride = null;
@@ -2523,7 +2523,7 @@ async function searchYouTube(mode, category, query, token, key2, scope) {
 }
 function createSpaceVideosRouter() {
   const router = Router();
-  const cache2 = /* @__PURE__ */ new Map();
+  const cache3 = /* @__PURE__ */ new Map();
   const inflight = /* @__PURE__ */ new Map();
   const rates = /* @__PURE__ */ new Map();
   let misses = { count: 0, reset: Date.now() + RATE_WINDOW_MS };
@@ -2565,11 +2565,11 @@ function createSpaceVideosRouter() {
       const offset = curatedToken ? Number(curatedToken[1]) : 0;
       return res.json({ ...getCuratedPage(mode, category, query, offset, 9, scope), source: "curated", ...!key2 ? { reason: "missing-key" } : {} });
     }
-    const cacheKey = JSON.stringify([mode, scope, category, query.toLocaleLowerCase(), token]);
-    const cached2 = cache2.get(cacheKey);
+    const cacheKey2 = JSON.stringify([mode, scope, category, query.toLocaleLowerCase(), token]);
+    const cached2 = cache3.get(cacheKey2);
     if (cached2 && cached2.expires > now) return res.json({ ...cached2.data, cached: true });
-    if (cached2) cache2.delete(cacheKey);
-    let pending = inflight.get(cacheKey);
+    if (cached2) cache3.delete(cacheKey2);
+    let pending = inflight.get(cacheKey2);
     if (!pending) {
       if (now >= misses.reset) misses = { count: 0, reset: now + RATE_WINDOW_MS };
       if (++misses.count > GLOBAL_MISS_LIMIT) {
@@ -2580,19 +2580,19 @@ function createSpaceVideosRouter() {
         return res.json({ ...getCuratedPage(mode, category, query, 0, 9, scope), source: "curated", reason: "rate-limit" });
       }
       pending = searchYouTube(mode, category, query, upstreamToken, key2, scope);
-      inflight.set(cacheKey, pending);
+      inflight.set(cacheKey2, pending);
     }
     try {
       const data = await pending;
-      cache2.set(cacheKey, { expires: Date.now() + CACHE_MS, data });
-      while (cache2.size > MAX_CACHE) cache2.delete(cache2.keys().next().value);
+      cache3.set(cacheKey2, { expires: Date.now() + CACHE_MS, data });
+      while (cache3.size > MAX_CACHE) cache3.delete(cache3.keys().next().value);
       return res.json(data);
     } catch (error) {
       const reason = error instanceof UpstreamFailure ? error.code : "upstream";
       if (token) return res.status(503).json({ error: reason });
       return res.json({ ...getCuratedPage(mode, category, query, 0, 9, scope), source: "curated", reason });
     } finally {
-      if (inflight.get(cacheKey) === pending) inflight.delete(cacheKey);
+      if (inflight.get(cacheKey2) === pending) inflight.delete(cacheKey2);
     }
   });
   return router;
@@ -2938,8 +2938,8 @@ function createCommunityRouter(options = {}) {
 var communityVideosRouter = createCommunityRouter();
 
 // src/utils/spaceLocalAiEngine.js
-function detectLanguage(text = "") {
-  const str = String(text);
+function detectLanguage(text2 = "") {
+  const str = String(text2);
   if (/[\u0D80-\u0DFF]/.test(str)) {
     return "si";
   }
@@ -3865,12 +3865,12 @@ function extractText(content) {
   if (!Array.isArray(content)) return "";
   return content.filter((part) => part && typeof part === "object" && typeof part.text === "string").map((part) => part.text).join("").trim();
 }
-function extractSuggestions(text, language) {
-  const match = /(?:^|\n)\s*SUGGESTIONS:\s*([^\n]+)\s*$/im.exec(text);
-  if (!match) return { text: text.trim(), suggestions: FALLBACK_SUGGESTIONS[language] };
+function extractSuggestions(text2, language) {
+  const match = /(?:^|\n)\s*SUGGESTIONS:\s*([^\n]+)\s*$/im.exec(text2);
+  if (!match) return { text: text2.trim(), suggestions: FALLBACK_SUGGESTIONS[language] };
   const suggestions = match[1].split("|").map((item) => item.trim().replace(/^\[|\]$/g, "").trim()).filter(Boolean).slice(0, 3).map((item) => item.slice(0, 180));
   return {
-    text: text.replace(match[0], "").trim(),
+    text: text2.replace(match[0], "").trim(),
     suggestions: suggestions.length ? suggestions : FALLBACK_SUGGESTIONS[language]
   };
 }
@@ -4323,8 +4323,8 @@ function envValue(env, key2) {
   const value = env?.[key2];
   return typeof value === "string" ? value.trim() : "";
 }
-function redactReason(text, secrets = []) {
-  let out = typeof text === "string" ? text : "";
+function redactReason(text2, secrets = []) {
+  let out = typeof text2 === "string" ? text2 : "";
   for (const secret of secrets) {
     if (typeof secret === "string" && secret.length >= 8) out = out.split(secret).join("[redacted]");
   }
@@ -4480,8 +4480,8 @@ async function probe({ fetchImpl, provider, keys, models, secrets, timeoutMs, no
     let reason = "";
     if (status >= 400) {
       try {
-        const text = await response.text();
-        reason = redactReason(typeof text === "string" ? text : "", secrets);
+        const text2 = await response.text();
+        reason = redactReason(typeof text2 === "string" ? text2 : "", secrets);
       } catch {
         reason = "";
       }
@@ -4639,18 +4639,196 @@ var handleNovaDiagnostics = createDiagnosticsHandler();
 
 // server/nasaRoutes.ts
 import { Type as Type2 } from "@google/genai";
+
+// server/nasaImageLibrary.ts
+var NASA_IMAGES_HOST = "images-api.nasa.gov";
+var NASA_IMAGES_ATTRIBUTION = "NASA Images (images.nasa.gov)";
+var NASA_IMAGES_TTL_MS = 5 * 60 * 1e3;
+var NASA_IMAGES_MAX_CACHE_ENTRIES = 100;
+var NASA_IMAGES_TIMEOUT_MS = 6e3;
+var cache2 = /* @__PURE__ */ new Map();
+function cacheKey(query) {
+  return `${query.q ?? ""}|${query.year ?? ""}|${query.page}|${query.limit}`;
+}
+function nasaImagesUrl(query) {
+  const q = (query.q ?? "").trim();
+  if (!q) return { ok: false, code: "INVALID_QUERY", status: 400, message: "A search term is required." };
+  if (q.length > 120) {
+    return { ok: false, code: "INVALID_QUERY", status: 400, message: "The search term is too long (120 characters maximum)." };
+  }
+  const page = query.page ?? 1;
+  const limit = query.limit ?? 8;
+  if (!Number.isInteger(page) || page < 1 || page > 100) {
+    return { ok: false, code: "INVALID_QUERY", status: 400, message: "page must be an integer between 1 and 100." };
+  }
+  if (!Number.isInteger(limit) || limit < 1 || limit > 24) {
+    return { ok: false, code: "INVALID_QUERY", status: 400, message: "limit must be an integer between 1 and 24." };
+  }
+  if (query.year != null && (!Number.isInteger(query.year) || query.year < 1958 || query.year > 2100)) {
+    return { ok: false, code: "INVALID_QUERY", status: 400, message: "year must be between 1958 and 2100." };
+  }
+  const url = new URL(`https://${NASA_IMAGES_HOST}/search`);
+  url.searchParams.set("media_type", "image");
+  url.searchParams.set("q", q);
+  url.searchParams.set("page", String(page));
+  url.searchParams.set("page_size", String(limit));
+  if (query.year != null) {
+    url.searchParams.set("year_start", String(query.year));
+    url.searchParams.set("year_end", String(query.year));
+  }
+  if (url.hostname !== NASA_IMAGES_HOST || url.protocol !== "https:") {
+    return { ok: false, code: "INVALID_QUERY", status: 400, message: "Only the NASA Images API may be queried." };
+  }
+  return { ok: true, url: url.toString() };
+}
+var text = (value) => typeof value === "string" ? value.trim() : "";
+function toDate(value) {
+  const raw = text(value);
+  if (!raw) return "";
+  const parsed = new Date(raw);
+  return Number.isNaN(parsed.getTime()) ? "" : parsed.toISOString().slice(0, 10);
+}
+function normaliseNasaImageItem(item) {
+  if (!item || typeof item !== "object") return null;
+  const record = item;
+  const data = Array.isArray(record.data) ? record.data[0] : null;
+  if (!data || typeof data !== "object") return null;
+  const entry = data;
+  const nasaId = text(entry.nasa_id);
+  const title = text(entry.title);
+  if (!nasaId || !title) return null;
+  const links = Array.isArray(record.links) ? record.links : [];
+  const preview = links.map((link) => link && typeof link === "object" ? text(link.href) : "").find((href) => href.startsWith("https://"));
+  const date = toDate(entry.date_created);
+  return {
+    id: nasaId,
+    nasaId,
+    title,
+    description: text(entry.description),
+    date,
+    year: date ? Number(date.slice(0, 4)) : null,
+    // `center` is the real publishing centre; if absent the field stays empty
+    // rather than borrowing a plausible-looking one.
+    category: text(entry.center),
+    thumbnail: preview ?? "",
+    hdUrl: null,
+    detailsUrl: `https://images.nasa.gov/details/${encodeURIComponent(nasaId)}`,
+    assetUrl: `https://images-api.nasa.gov/asset/${encodeURIComponent(nasaId)}`,
+    source: NASA_IMAGES_ATTRIBUTION
+  };
+}
+function normaliseNasaImageCollection(payload) {
+  if (!payload || typeof payload !== "object") return null;
+  const collection = payload.collection;
+  if (!collection || typeof collection !== "object") return null;
+  const rawItems = collection.items;
+  const metadata = collection.metadata;
+  const totalHits = metadata && typeof metadata === "object" ? Number(metadata.total_hits) : NaN;
+  const items = (Array.isArray(rawItems) ? rawItems : []).map(normaliseNasaImageItem).filter((item) => item !== null);
+  const total = Number.isFinite(totalHits) ? totalHits : items.length;
+  return { items, total };
+}
+async function searchNasaImages(query, deps = {}) {
+  const built = nasaImagesUrl(query);
+  if (!built.ok) return built;
+  const key2 = cacheKey(query);
+  const now = deps.now ? deps.now() : Date.now();
+  const hit = cache2.get(key2);
+  if (hit && now - Date.parse(hit.fetchedAt) < NASA_IMAGES_TTL_MS) {
+    const totalPages2 = Math.max(1, Math.ceil(hit.total / (query.limit ?? 8)));
+    return {
+      ok: true,
+      items: hit.items,
+      total: hit.total,
+      page: query.page ?? 1,
+      limit: query.limit ?? 8,
+      totalPages: totalPages2,
+      hasMore: (query.page ?? 1) < totalPages2,
+      cached: true,
+      fetchedAt: hit.fetchedAt,
+      source: NASA_IMAGES_ATTRIBUTION
+    };
+  }
+  const fetchImpl = deps.fetchImpl ?? globalThis.fetch;
+  let response;
+  try {
+    response = await fetchImpl(built.url, {
+      signal: AbortSignal.timeout(deps.timeoutMs ?? NASA_IMAGES_TIMEOUT_MS)
+    });
+  } catch (error) {
+    const aborted = error instanceof Error && /abort|timeout/i.test(error.name + error.message);
+    return {
+      ok: false,
+      code: aborted ? "UPSTREAM_TIMEOUT" : "UPSTREAM_UNAVAILABLE",
+      status: 503,
+      message: aborted ? "The NASA Images API did not answer in time." : "The NASA Images API could not be reached."
+    };
+  }
+  if (!response.ok) {
+    return {
+      ok: false,
+      code: "UPSTREAM_UNAVAILABLE",
+      status: 503,
+      message: `The NASA Images API answered ${response.status}.`
+    };
+  }
+  let payload;
+  try {
+    payload = await response.json();
+  } catch {
+    return {
+      ok: false,
+      code: "UPSTREAM_SHAPE",
+      status: 502,
+      message: "The NASA Images API returned a body that is not JSON."
+    };
+  }
+  const normalised = normaliseNasaImageCollection(payload);
+  if (!normalised) {
+    return {
+      ok: false,
+      code: "UPSTREAM_SHAPE",
+      status: 502,
+      message: "The NASA Images API response did not match the expected collection shape."
+    };
+  }
+  const fetchedAt = new Date(now).toISOString();
+  cache2.set(key2, { items: normalised.items, total: normalised.total, fetchedAt });
+  while (cache2.size > NASA_IMAGES_MAX_CACHE_ENTRIES) {
+    const oldest = cache2.keys().next().value;
+    if (oldest === void 0) break;
+    cache2.delete(oldest);
+  }
+  const limit = query.limit ?? 8;
+  const totalPages = Math.max(1, Math.ceil(normalised.total / limit));
+  const page = query.page ?? 1;
+  return {
+    ok: true,
+    items: normalised.items,
+    total: normalised.total,
+    page,
+    limit,
+    totalPages,
+    hasMore: page < totalPages,
+    cached: false,
+    fetchedAt,
+    source: NASA_IMAGES_ATTRIBUTION
+  };
+}
+
+// server/nasaRoutes.ts
 var API_KEY_PATTERN = /api_key=[^&"'\s\\]+/gi;
 function redactApiKeys(payload) {
   if (payload === null || payload === void 0) return payload;
-  let text;
+  let text2;
   try {
-    text = JSON.stringify(payload);
+    text2 = JSON.stringify(payload);
   } catch {
     return payload;
   }
-  if (!text || !/api_key=/i.test(text)) return payload;
+  if (!text2 || !/api_key=/i.test(text2)) return payload;
   try {
-    return JSON.parse(text.replace(API_KEY_PATTERN, "api_key=[redacted]"));
+    return JSON.parse(text2.replace(API_KEY_PATTERN, "api_key=[redacted]"));
   } catch {
     return payload;
   }
@@ -4768,216 +4946,6 @@ function generateSmartAstronomicalTranslation(title, explanation, targetLang) {
     return { title: t, explanation: exp };
   }
 }
-var HISTORICAL_NASA_ARCHIVE = [
-  {
-    id: "arch-2026-1",
-    nasaId: "JWST-EARLY-COSMOS-2026",
-    title: "James Webb Discovers Most Distant Primordial Galaxy Cluster",
-    date: "2026-08-14",
-    year: 2026,
-    category: "James Webb",
-    source: "nasa-images",
-    thumbnail: "https://images.unsplash.com/photo-1614728894747-a83421e2b9c9?auto=format&fit=crop&w=1200&q=80",
-    hdUrl: "https://images.unsplash.com/photo-1614728894747-a83421e2b9c9?auto=format&fit=crop&w=3840&q=95",
-    description: "Deep spectroscopic surveys with JWST reveal a gravitationally bound proto-cluster of galaxies shining only 350 million years after the Big Bang, challenging prevailing models of early dark matter halo formation.",
-    titleSi: "\u0DA2\u0DDA\u0DB8\u0DCA\u0DC3\u0DCA \u0DC0\u0DD9\u0DB6\u0DCA \u0DAF\u0DD4\u0DBB\u0DDA\u0D9A\u0DCA\u0DC2\u0DBA \u0DC0\u0DD2\u0DC1\u0DCA\u0DC0\u0DBA\u0DDA \u0D88\u0DAD\u0DB8 \u0DB8\u0DB1\u0DCA\u0DAF\u0DCF\u0D9A\u0DD2\u0DAB\u0DD2 \u0DB4\u0DDC\u0D9A\u0DD4\u0DBB \u0DC3\u0DDC\u0DBA\u0DCF\u0D9C\u0DB1\u0DD2\u0DBA\u0DD2",
-    titleTa: "\u0B9C\u0BC7\u0BAE\u0BCD\u0BB8\u0BCD \u0BB5\u0BC6\u0BAA\u0BCD \u0BB5\u0BBF\u0BA3\u0BCD\u0BB5\u0BC6\u0BB3\u0BBF\u0BAF\u0BBF\u0BA9\u0BCD \u0BAE\u0BBF\u0B95\u0BA4\u0BCD \u0BA4\u0BCA\u0BB2\u0BC8\u0BA4\u0BC2\u0BB0 \u0BB5\u0BBF\u0BA3\u0BCD\u0BAE\u0BC0\u0BA9\u0BCD \u0BA4\u0BBF\u0BB0\u0BB3\u0BC8\u0B95\u0BCD \u0B95\u0BA3\u0BCD\u0B9F\u0BC1\u0BAA\u0BBF\u0B9F\u0BBF\u0BA4\u0BCD\u0BA4\u0BA4\u0BC1",
-    descriptionSi: "\u0DB8\u0DC4\u0DCF \u0DB4\u0DD2\u0DB4\u0DD2\u0DBB\u0DD4\u0DB8\u0DD9\u0DB1\u0DCA \u0DC0\u0DC3\u0DBB \u0DB8\u0DD2\u0DBD\u0DD2\u0DBA\u0DB1 350 \u0D9A\u0DA7 \u0DB4\u0DC3\u0DD4\u0DC0 \u0DB6\u0DD2\u0DC4\u0DD2\u0DC0\u0DD6 \u0DB4\u0DD0\u0DBB\u0DAB\u0DD2\u0DAD\u0DB8 \u0DB8\u0DB1\u0DCA\u0DAF\u0DCF\u0D9A\u0DD2\u0DAB\u0DD2 \u0DB4\u0DDC\u0D9A\u0DD4\u0DBB\u0D9A\u0DCA \u0DA2\u0DDA\u0DB8\u0DCA\u0DC3\u0DCA \u0DC0\u0DD9\u0DB6\u0DCA \u0D85\u0DB0\u0DDD\u0DBB\u0D9A\u0DCA\u0DAD \u0DAF\u0DD4\u0DBB\u0DDA\u0D9A\u0DCA\u0DC2\u0DBA \u0DB8\u0D9F\u0DD2\u0DB1\u0DCA \u0DAD\u0DC4\u0DC0\u0DD4\u0DBB\u0DD4 \u0D9A\u0DBB\u0D9C\u0DD9\u0DB1 \u0D87\u0DAD.",
-    descriptionTa: "\u0BAA\u0BC6\u0BB0\u0BC1\u0BB5\u0BC6\u0B9F\u0BBF\u0BAA\u0BCD\u0BAA\u0BBF\u0BB1\u0BCD\u0B95\u0BC1 350 \u0BAE\u0BBF\u0BB2\u0BCD\u0BB2\u0BBF\u0BAF\u0BA9\u0BCD \u0B86\u0BA3\u0BCD\u0B9F\u0BC1\u0B95\u0BB3\u0BC1\u0B95\u0BCD\u0B95\u0BC1\u0BAA\u0BCD \u0BAA\u0BBF\u0BB1\u0B95\u0BC1 \u0BA4\u0BCB\u0BA9\u0BCD\u0BB1\u0BBF\u0BAF \u0B86\u0BA4\u0BBF \u0BB5\u0BBF\u0BA3\u0BCD\u0BAE\u0BC0\u0BA9\u0BCD \u0BA4\u0BBF\u0BB0\u0BB3\u0BC8 \u0B9C\u0BC7\u0BAE\u0BCD\u0BB8\u0BCD \u0BB5\u0BC6\u0BAA\u0BCD \u0BA4\u0BCA\u0BB2\u0BC8\u0BA8\u0BCB\u0B95\u0BCD\u0B95\u0BBF \u0B95\u0BA3\u0BCD\u0B9F\u0BB1\u0BBF\u0BA8\u0BCD\u0BA4\u0BC1\u0BB3\u0BCD\u0BB3\u0BA4\u0BC1."
-  },
-  {
-    id: "arch-2025-1",
-    nasaId: "ARTEMIS-ORION-CREW-2025",
-    title: "Artemis II Orion Spacecraft Completes Altitude Chamber Tests",
-    date: "2025-11-20",
-    year: 2025,
-    category: "Artemis",
-    source: "press-release",
-    thumbnail: "https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&w=1200&q=80",
-    hdUrl: "https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&w=3840&q=95",
-    description: "NASA's Orion spacecraft for the crewed Artemis II lunar flyby successfully endured deep vacuum and extreme thermal stress simulations inside Kennedy Space Center's Neil Armstrong Operations Building.",
-    titleSi: "\u0D86\u0DA7\u0DD9\u0DB8\u0DD2\u0DC3\u0DCA II \u0D94\u0DBB\u0DCF\u0DBA\u0DB1\u0DCA \u0D85\u0DB7\u0DCA\u200D\u0DBA\u0DC0\u0D9A\u0DCF\u0DC1 \u0DBA\u0DCF\u0DB1\u0DBA \u0DB4\u0DD3\u0DA9\u0DB1 \u0D9A\u0DD4\u0DA7\u0DD3\u0DBB \u0DB4\u0DBB\u0DD3\u0D9A\u0DCA\u0DC2\u0DAB \u0DC3\u0DCF\u0DBB\u0DCA\u0DAE\u0D9A\u0DC0 \u0D85\u0DC0\u0DC3\u0DB1\u0DCA \u0D9A\u0DBB\u0DBA\u0DD2",
-    titleTa: "\u0B86\u0BB0\u0BCD\u0B9F\u0BCD\u0B9F\u0BC6\u0BAE\u0BBF\u0BB8\u0BCD II \u0B93\u0BB0\u0BBF\u0BAF\u0BA9\u0BCD \u0BB5\u0BBF\u0BA3\u0BCD\u0B95\u0BB2\u0BAE\u0BCD \u0BB5\u0BC6\u0BB1\u0BCD\u0BB1\u0BBF\u0B9F \u0B9A\u0BCB\u0BA4\u0BA9\u0BC8\u0B95\u0BB3\u0BC8 \u0BA8\u0BBF\u0BB1\u0BC8\u0BB5\u0BC1 \u0B9A\u0BC6\u0BAF\u0BCD\u0BA4\u0BA4\u0BC1",
-    descriptionSi: "\u0D9C\u0D9C\u0DB1\u0D9C\u0DCF\u0DB8\u0DD3\u0DB1\u0DCA \u0DC3\u0DC4\u0DD2\u0DAD \u0DA0\u0DB1\u0DCA\u0DAF\u0DCA\u200D\u0DBB \u0DA0\u0DCF\u0DBB\u0DD2\u0D9A\u0DCF\u0DC0 \u0DC3\u0DB3\u0DC4\u0DCF \u0DC3\u0DD6\u0DAF\u0DCF\u0DB1\u0DB8\u0DCA \u0DC0\u0DB1 \u0D94\u0DBB\u0DCF\u0DBA\u0DB1\u0DCA \u0DBA\u0DCF\u0DB1\u0DBA \u0DBB\u0DD2\u0D9A\u0DCA\u0DAD\u0D9A \u0DC3\u0DC4 \u0D85\u0DB1\u0DCA\u0DAD \u0D8B\u0DC2\u0DCA\u0DAB\u0DAD\u0DCA\u0DC0 \u0DB4\u0DBB\u0DD3\u0D9A\u0DCA\u0DC2\u0DCF\u0DC0\u0DB1\u0DCA\u0D9C\u0DD9\u0DB1\u0DCA \u0DC3\u0DB8\u0DAD\u0DCA \u0DC0\u0DD2\u0DBA.",
-    descriptionTa: "\u0BA8\u0BBF\u0BB2\u0BB5\u0BC8\u0B9A\u0BCD \u0B9A\u0BC1\u0BB1\u0BCD\u0BB1\u0BBF \u0BB5\u0BB0\u0BB5\u0BBF\u0BB0\u0BC1\u0B95\u0BCD\u0B95\u0BC1\u0BAE\u0BCD \u0BB5\u0BBF\u0BA3\u0BCD\u0BB5\u0BC6\u0BB3\u0BBF \u0BB5\u0BC0\u0BB0\u0BB0\u0BCD\u0B95\u0BB3\u0BC1\u0B95\u0BCD\u0B95\u0BBE\u0BA9 \u0B93\u0BB0\u0BBF\u0BAF\u0BA9\u0BCD \u0BB5\u0BBF\u0BA3\u0BCD\u0B95\u0BB2\u0BAE\u0BCD \u0BB5\u0BC6\u0BAA\u0BCD\u0BAA\u0BAE\u0BCD \u0BAE\u0BB1\u0BCD\u0BB1\u0BC1\u0BAE\u0BCD \u0BB5\u0BC6\u0BB1\u0BCD\u0BB1\u0BBF\u0B9F \u0B9A\u0BCB\u0BA4\u0BA9\u0BC8\u0B95\u0BB3\u0BBF\u0BB2\u0BCD \u0BB5\u0BC6\u0BB1\u0BCD\u0BB1\u0BBF \u0BAA\u0BC6\u0BB1\u0BCD\u0BB1\u0BA4\u0BC1."
-  },
-  {
-    id: "arch-2024-1",
-    nasaId: "EUROPA-CLIPPER-LAUNCH-2024",
-    title: "Europa Clipper Launches on Falcon Heavy Toward Jupiter's Ocean World",
-    date: "2024-10-14",
-    year: 2024,
-    category: "Solar System",
-    source: "nasa-images",
-    thumbnail: "https://images.unsplash.com/photo-1541185933-ef5d8ed016c2?auto=format&fit=crop&w=1200&q=80",
-    hdUrl: "https://images.unsplash.com/photo-1541185933-ef5d8ed016c2?auto=format&fit=crop&w=3840&q=95",
-    description: "NASA's largest planetary probe, Europa Clipper, lifted off from Launch Complex 39A to determine whether conditions beneath the icy crust of Jupiter's moon Europa could support extraterrestrial life.",
-    titleSi: "\u0DBA\u0DD4\u0DBB\u0DDD\u0DB4\u0DCF \u0D9A\u0DCA\u0DBD\u0DD2\u0DB4\u0DBB\u0DCA \u0DBA\u0DCF\u0DB1\u0DBA \u0DB6\u0DCA\u200D\u0DBB\u0DC4\u0DC3\u0DCA\u0DB4\u0DAD\u0DD2\u0D9C\u0DDA \u0DC3\u0DCF\u0D9C\u0DBB \u0D8B\u0DB4\u0D9C\u0DCA\u200D\u0DBB\u0DC4\u0DBA\u0DCF \u0DB6\u0DBD\u0DCF \u0D9C\u0DB8\u0DB1\u0DCA \u0D85\u0DBB\u0DB9\u0DBA\u0DD2",
-    titleTa: "\u0BAF\u0BC2\u0BB0\u0BCB\u0BAA\u0BCD\u0BAA\u0BBE \u0B95\u0BBF\u0BB3\u0BBF\u0BAA\u0BCD\u0BAA\u0BB0\u0BCD \u0BB5\u0BBF\u0BAF\u0BBE\u0BB4\u0BA9\u0BBF\u0BA9\u0BCD \u0BAA\u0BA9\u0BBF \u0B89\u0BB2\u0B95\u0BC8 \u0BA8\u0BCB\u0B95\u0BCD\u0B95\u0BBF \u0B8F\u0BB5\u0BAA\u0BCD\u0BAA\u0B9F\u0BCD\u0B9F\u0BA4\u0BC1",
-    descriptionSi: "\u0DB1\u0DCF\u0DC3\u0DCF \u0D86\u0DBA\u0DAD\u0DB1\u0DBA\u0DDA \u0DC0\u0DD2\u0DC1\u0DCF\u0DBD\u0DAD\u0DB8 \u0D9C\u0DCA\u200D\u0DBB\u0DC4\u0DBD\u0DDD\u0D9A \u0D9C\u0DC0\u0DDA\u0DC2\u0DAB \u0DBA\u0DCF\u0DB1\u0DBA \u0DC0\u0DB1 \u0DBA\u0DD4\u0DBB\u0DDD\u0DB4\u0DCF \u0D9A\u0DCA\u0DBD\u0DD2\u0DB4\u0DBB\u0DCA \u0DC3\u0DCF\u0DBB\u0DCA\u0DAE\u0D9A\u0DC0 \u0D85\u0DB7\u0DCA\u200D\u0DBA\u0DC0\u0D9A\u0DCF\u0DC1 \u0D9C\u0DAD \u0D9A\u0DD9\u0DBB\u0DD2\u0DAB\u0DD2.",
-    descriptionTa: "\u0BB5\u0BBF\u0BAF\u0BBE\u0BB4\u0BA9\u0BBF\u0BA9\u0BCD \u0BA8\u0BBF\u0BB2\u0BB5\u0BBE\u0BA9 \u0BAF\u0BC2\u0BB0\u0BCB\u0BAA\u0BCD\u0BAA\u0BBE\u0BB5\u0BBF\u0BB2\u0BCD \u0B89\u0BB3\u0BCD\u0BB3 \u0BAA\u0BC6\u0BB0\u0BC1\u0B99\u0BCD\u0B95\u0B9F\u0BB2\u0BC8 \u0B86\u0BAF\u0BCD\u0BB5\u0BC1 \u0B9A\u0BC6\u0BAF\u0BCD\u0BAF \u0BA8\u0BBE\u0B9A\u0BBE\u0BB5\u0BBF\u0BA9\u0BCD \u0BAE\u0BBF\u0B95\u0BAA\u0BCD\u0BAA\u0BC6\u0BB0\u0BBF\u0BAF \u0BB5\u0BBF\u0BA3\u0BCD\u0B95\u0BB2\u0BAE\u0BCD \u0B8F\u0BB5\u0BAA\u0BCD\u0BAA\u0B9F\u0BCD\u0B9F\u0BA4\u0BC1."
-  },
-  {
-    id: "arch-2023-1",
-    nasaId: "OSIRIS-REX-SAMPLE-RETURN-2023",
-    title: "OSIRIS-REx Successfully Delivers Pristine Asteroid Bennu Samples to Earth",
-    date: "2023-09-24",
-    year: 2023,
-    category: "Asteroid Missions",
-    source: "nasa-images",
-    thumbnail: "https://images.unsplash.com/photo-1506703719100-a0f3a48c0f86?auto=format&fit=crop&w=1200&q=80",
-    hdUrl: "https://images.unsplash.com/photo-1506703719100-a0f3a48c0f86?auto=format&fit=crop&w=3840&q=95",
-    description: "After a seven-year billion-mile journey, the sample return capsule landed softly in the Utah Desert, bearing over 120 grams of carbon-rich regolith dating back to the dawn of the solar system 4.5 billion years ago.",
-    titleSi: "\u0D94\u0DC3\u0DBA\u0DD2\u0DBB\u0DD2\u0DC3\u0DCA-\u0DBB\u0DD9\u0D9A\u0DCA\u0DC3\u0DCA \u0DBA\u0DCF\u0DB1\u0DBA \u0DB6\u0DD9\u0DB1\u0DD4 \u0D9C\u0DCA\u200D\u0DBB\u0DC4\u0D9A\u0DBA\u0DDA \u0DB4\u0DCF\u0DC2\u0DCF\u0DAB \u0DC3\u0DCF\u0DB8\u0DCA\u0DB4\u0DBD \u0DB4\u0DD8\u0DAE\u0DD2\u0DC0\u0DD2\u0DBA\u0DA7 \u0DBB\u0DD0\u0D9C\u0DD9\u0DB1 \u0D91\u0DBA\u0DD2",
-    titleTa: "\u0BAA\u0BC6\u0BA9\u0BCD\u0BA9\u0BC1 \u0B9A\u0BBF\u0BB1\u0BC1\u0B95\u0BCB\u0BB3\u0BBF\u0BA9\u0BCD \u0BAE\u0BBE\u0BA4\u0BBF\u0BB0\u0BBF\u0B95\u0BB3\u0BC8 \u0BAA\u0BC2\u0BAE\u0BBF\u0B95\u0BCD\u0B95\u0BC1 \u0BB5\u0BC6\u0BB1\u0BCD\u0BB1\u0BBF\u0B95\u0BB0\u0BAE\u0BBE\u0B95\u0B95\u0BCD \u0B95\u0BCA\u0BA3\u0BCD\u0B9F\u0BC1 \u0B9A\u0BC7\u0BB0\u0BCD\u0BA4\u0BCD\u0BA4 \u0B92\u0B9A\u0BBF\u0BB0\u0BBF\u0BB8\u0BCD-\u0BB0\u0BC6\u0B95\u0BCD\u0BB8\u0BCD",
-    descriptionSi: "\u0DC0\u0DC3\u0DBB \u0DB6\u0DD2\u0DBD\u0DD2\u0DBA\u0DB1 4.5\u0D9A\u0DCA \u0DB4\u0DD0\u0DBB\u0DAB\u0DD2 \u0D9A\u0DCF\u0DB6\u0DB1\u0DCA \u0DB6\u0DC4\u0DD4\u0DBD \u0D9C\u0DCA\u200D\u0DBB\u0DC4\u0D9A \u0D9A\u0DDC\u0DA7\u0DC3\u0DCA \u0D9C\u0DCA\u200D\u0DBB\u0DD1\u0DB8\u0DCA 120\u0D9A\u0DA7 \u0DC0\u0DD0\u0DA9\u0DD2 \u0DB4\u0DCA\u200D\u0DBB\u0DB8\u0DCF\u0DAB\u0DBA\u0D9A\u0DCA \u0DBA\u0DD6\u0DA7\u0DCF \u0D9A\u0DCF\u0DB1\u0DCA\u0DAD\u0DCF\u0DBB\u0DBA\u0DA7 \u0D86\u0DBB\u0D9A\u0DCA\u0DC2\u0DD2\u0DAD\u0DC0 \u0D9C\u0DDC\u0DA9\u0DB6\u0DD0\u0DC3\u0DCA\u0DC0\u0DD2\u0DAB\u0DD2.",
-    descriptionTa: "\u0B9A\u0BC2\u0BB0\u0BBF\u0BAF \u0B95\u0BC1\u0B9F\u0BC1\u0BAE\u0BCD\u0BAA\u0BA4\u0BCD\u0BA4\u0BBF\u0BA9\u0BCD \u0B86\u0BB0\u0BAE\u0BCD\u0BAA \u0B95\u0BBE\u0BB2\u0BA4\u0BCD\u0BA4\u0BC1 \u0BAA\u0BC6\u0BA9\u0BCD\u0BA9\u0BC1 \u0B9A\u0BBF\u0BB1\u0BC1\u0B95\u0BCB\u0BB3\u0BBF\u0BB2\u0BBF\u0BB0\u0BC1\u0BA8\u0BCD\u0BA4\u0BC1 \u0BAA\u0BBE\u0BB1\u0BC8 \u0BAE\u0BBE\u0BA4\u0BBF\u0BB0\u0BBF\u0B95\u0BB3\u0BCD \u0BAA\u0BC2\u0BAE\u0BBF\u0B95\u0BCD\u0B95\u0BC1 \u0BAA\u0BA4\u0BCD\u0BA4\u0BBF\u0BB0\u0BAE\u0BBE\u0B95\u0B95\u0BCD \u0B95\u0BCA\u0BA3\u0BCD\u0B9F\u0BC1\u0BB5\u0BB0\u0BAA\u0BCD\u0BAA\u0B9F\u0BCD\u0B9F\u0BA9."
-  },
-  {
-    id: "arch-2022-1",
-    nasaId: "JWST-FIRST-DEEP-FIELD-2022",
-    title: "NASA Releases James Webb's First Deep Field of Universe SMACS 0723",
-    date: "2022-07-12",
-    year: 2022,
-    category: "James Webb",
-    source: "apod",
-    thumbnail: "https://images.unsplash.com/photo-1462331940025-496dfbfc7564?auto=format&fit=crop&w=1200&q=80",
-    hdUrl: "https://images.unsplash.com/photo-1462331940025-496dfbfc7564?auto=format&fit=crop&w=3840&q=95",
-    description: "The deepest and sharpest infrared image of the distant universe ever seen. Thousands of galaxies, including the faintest objects ever observed in the infrared, appeared in Webb's view for the first time.",
-    titleSi: "\u0DA2\u0DDA\u0DB8\u0DCA\u0DC3\u0DCA \u0DC0\u0DD9\u0DB6\u0DCA \u0DAF\u0DD4\u0DBB\u0DDA\u0D9A\u0DCA\u0DC2\u0DBA\u0DDA \u0D93\u0DAD\u0DD2\u0DC4\u0DCF\u0DC3\u0DD2\u0D9A \u0DB4\u0DCA\u200D\u0DBB\u0DAE\u0DB8 \u0DC0\u0DD2\u0DC1\u0DCA\u0DC0 \u0D9C\u0DD0\u0DB9\u0DD4\u0DBB\u0DD4 \u0DA1\u0DCF\u0DBA\u0DCF\u0DBB\u0DD6\u0DB4\u0DBA \u0DB8\u0DD4\u0DAF\u0DCF\u0DC4\u0DD0\u0DBB\u0DDA",
-    titleTa: "\u0B9C\u0BC7\u0BAE\u0BCD\u0BB8\u0BCD \u0BB5\u0BC6\u0BAA\u0BCD \u0BB5\u0BBF\u0BA3\u0BCD\u0BB5\u0BC6\u0BB3\u0BBF \u0BA4\u0BCA\u0BB2\u0BC8\u0BA8\u0BCB\u0B95\u0BCD\u0B95\u0BBF\u0BAF\u0BBF\u0BA9\u0BCD \u0BB5\u0BB0\u0BB2\u0BBE\u0BB1\u0BCD\u0BB1\u0BC1 \u0B9A\u0BBF\u0BB1\u0BAA\u0BCD\u0BAA\u0BC1\u0BAE\u0BBF\u0B95\u0BCD\u0B95 \u0BAE\u0BC1\u0BA4\u0BB2\u0BCD \u0B86\u0BB4\u0BAE\u0BBE\u0BA9 \u0BAA\u0B9F\u0BAE\u0BCD",
-    descriptionSi: "\u0D88\u0DAD \u0DC0\u0DD2\u0DC1\u0DCA\u0DC0\u0DBA\u0DDA \u0DB8\u0DB1\u0DCA\u0DAF\u0DCF\u0D9A\u0DD2\u0DAB\u0DD2 \u0DAF\u0DC4\u0DC3\u0DCA \u0D9C\u0DAB\u0DB1\u0D9A\u0DCA \u0D87\u0DAD\u0DD4\u0DC5\u0DAD\u0DCA \u0DB4\u0DCA\u200D\u0DBB\u0DAE\u0DB8 \u0DB4\u0DD6\u0DBB\u0DCA\u0DAB \u0DC0\u0DBB\u0DCA\u0DAB \u0D85\u0DB0\u0DDD\u0DBB\u0D9A\u0DCA\u0DAD \u0DA1\u0DCF\u0DBA\u0DCF\u0DBB\u0DD6\u0DB4\u0DBA \u0DB1\u0DCF\u0DC3\u0DCF \u0D86\u0DBA\u0DAD\u0DB1\u0DBA \u0DC0\u0DD2\u0DC3\u0DD2\u0DB1\u0DCA \u0DB1\u0DD2\u0D9A\u0DD4\u0DAD\u0DCA \u0D9A\u0DBB\u0DB1 \u0DBD\u0DAF\u0DD3.",
-    descriptionTa: "\u0BAA\u0BBF\u0BB0\u0BAA\u0B9E\u0BCD\u0B9A\u0BA4\u0BCD\u0BA4\u0BBF\u0BA9\u0BCD \u0BAA\u0BB2\u0BCD\u0BB2\u0BBE\u0BAF\u0BBF\u0BB0\u0B95\u0BCD\u0B95\u0BA3\u0B95\u0BCD\u0B95\u0BBE\u0BA9 \u0BB5\u0BBF\u0BA3\u0BCD\u0BAE\u0BC0\u0BA9\u0BCD \u0BA4\u0BBF\u0BB0\u0BB3\u0BCD\u0B95\u0BB3\u0BC8\u0B95\u0BCD \u0B95\u0BBE\u0B9F\u0BCD\u0B9F\u0BC1\u0BAE\u0BCD \u0BAE\u0BBF\u0B95\u0BA4\u0BCD \u0BA4\u0BC6\u0BB3\u0BBF\u0BB5\u0BBE\u0BA9 \u0B85\u0B95\u0B9A\u0BCD\u0B9A\u0BBF\u0BB5\u0BAA\u0BCD\u0BAA\u0BC1 \u0BAA\u0B9F\u0BA4\u0BCD\u0BA4\u0BC8 \u0BA8\u0BBE\u0B9A\u0BBE \u0BB5\u0BC6\u0BB3\u0BBF\u0BAF\u0BBF\u0B9F\u0BCD\u0B9F\u0BA4\u0BC1."
-  },
-  {
-    id: "arch-2022-2",
-    nasaId: "DART-IMPACT-2022",
-    title: "DART Mission Successfully Alters Asteroid Dimorphos Orbit",
-    date: "2022-09-26",
-    year: 2022,
-    category: "Planetary Defense",
-    source: "press-release",
-    thumbnail: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=1200&q=80",
-    hdUrl: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=3840&q=95",
-    description: "In humanity's first planetary defense test, NASA's DART spacecraft purposefully impacted the asteroid Dimorphos at 14,000 mph, shortening its orbital period around Didymos by 33 minutes.",
-    titleSi: "\u0DA9\u0DCF\u0DBB\u0DCA\u0DA7\u0DCA (DART) \u0DB8\u0DD9\u0DC4\u0DD9\u0DBA\u0DD4\u0DB8 \u0DB8\u0D9F\u0DD2\u0DB1\u0DCA \u0D9C\u0DCA\u200D\u0DBB\u0DC4\u0D9A\u0DBA\u0D9A \u0D9A\u0D9A\u0DCA\u0DC2\u0DBA \u0DC3\u0DCF\u0DBB\u0DCA\u0DAE\u0D9A\u0DC0 \u0DC0\u0DD9\u0DB1\u0DC3\u0DCA \u0D9A\u0DBB\u0DBA\u0DD2",
-    titleTa: "\u0B9F\u0BBF\u0BAE\u0BCB\u0BB0\u0BCD\u0BAA\u0BCB\u0BB8\u0BCD \u0B9A\u0BBF\u0BB1\u0BC1\u0B95\u0BCB\u0BB3\u0BBF\u0BA9\u0BCD \u0B9A\u0BC1\u0BB1\u0BCD\u0BB1\u0BC1\u0BAA\u0BCD\u0BAA\u0BBE\u0BA4\u0BC8\u0BAF\u0BC8 \u0BB5\u0BC6\u0BB1\u0BCD\u0BB1\u0BBF\u0B95\u0BB0\u0BAE\u0BBE\u0B95 \u0BAE\u0BBE\u0BB1\u0BCD\u0BB1\u0BBF\u0BAF \u0B9F\u0BBE\u0BB0\u0BCD\u0B9F\u0BCD \u0BB5\u0BBF\u0BA3\u0BCD\u0B95\u0BB2\u0BAE\u0BCD",
-    descriptionSi: "\u0DB8\u0DB1\u0DD4\u0DC2\u0DCA\u200D\u0DBA \u0D89\u0DAD\u0DD2\u0DC4\u0DCF\u0DC3\u0DBA\u0DDA \u0DB4\u0DCA\u200D\u0DBB\u0DAE\u0DB8 \u0DC0\u0DBB\u0DA7 \u0DB4\u0DD8\u0DAE\u0DD2\u0DC0\u0DD2 \u0D86\u0DBB\u0D9A\u0DCA\u0DC2\u0DAB \u0DAD\u0DCF\u0D9A\u0DCA\u0DC2\u0DAB\u0DBA \u0D85\u0DAD\u0DCA\u0DC4\u0DAF\u0DCF \u0DB6\u0DBD\u0DB8\u0DD2\u0DB1\u0DCA \u0D9C\u0DCA\u200D\u0DBB\u0DC4\u0D9A\u0DBA\u0D9A \u0D9C\u0DB8\u0DB1\u0DCA \u0DB8\u0D9F \u0DC3\u0DCF\u0DBB\u0DCA\u0DAE\u0D9A\u0DC0 \u0DC0\u0DD9\u0DB1\u0DC3\u0DCA \u0D9A\u0DD2\u0DBB\u0DD3\u0DB8\u0DA7 \u0DB1\u0DCF\u0DC3\u0DCF \u0DC3\u0DB8\u0DAD\u0DCA \u0DC0\u0DD2\u0DBA.",
-    descriptionTa: "\u0BAA\u0BC2\u0BAE\u0BBF\u0BAF\u0BC8\u0BAA\u0BCD \u0BAA\u0BBE\u0BA4\u0BC1\u0B95\u0BBE\u0B95\u0BCD\u0B95\u0BC1\u0BAE\u0BCD \u0BAE\u0BC1\u0BA4\u0BB2\u0BCD \u0BAE\u0BC1\u0BAF\u0BB1\u0BCD\u0B9A\u0BBF\u0BAF\u0BBE\u0B95, \u0BA8\u0BBE\u0B9A\u0BBE\u0BB5\u0BBF\u0BA9\u0BCD \u0B9F\u0BBE\u0BB0\u0BCD\u0B9F\u0BCD \u0BB5\u0BBF\u0BA3\u0BCD\u0B95\u0BB2\u0BAE\u0BCD \u0B9A\u0BBF\u0BB1\u0BC1\u0B95\u0BCB\u0BB3\u0BC8 \u0BAE\u0BCB\u0BA4\u0BBF \u0B85\u0BA4\u0BA9\u0BCD \u0B9A\u0BC1\u0BB1\u0BCD\u0BB1\u0BC1\u0BAA\u0BCD\u0BAA\u0BBE\u0BA4\u0BC8\u0BAF\u0BC8 \u0BAE\u0BBE\u0BB1\u0BCD\u0BB1\u0BBF\u0BAF\u0BA4\u0BC1."
-  },
-  {
-    id: "arch-2021-1",
-    nasaId: "PERSEVERANCE-MARS-LANDING-2021",
-    title: "Perseverance Rover Successfully Touches Down on Mars Jezero Crater",
-    date: "2021-02-18",
-    year: 2021,
-    category: "Mars Rover",
-    source: "nasa-images",
-    thumbnail: "https://images.unsplash.com/photo-1614728894747-a83421e2b9c9?auto=format&fit=crop&w=1200&q=80",
-    hdUrl: "https://images.unsplash.com/photo-1614728894747-a83421e2b9c9?auto=format&fit=crop&w=3840&q=95",
-    description: "Surviving the 'seven minutes of terror' with a sky crane maneuver, NASA's Perseverance rover landed safely inside Jezero Crater to search for signs of ancient microbial life and deploy the Ingenuity Mars Helicopter.",
-    titleSi: "\u0DB4\u0DBB\u0DCA\u0DC3\u0DD9\u0DC0\u0DBB\u0DB1\u0DCA\u0DC3\u0DCA \u0DBB\u0DDD\u0DC0\u0DBB\u0DBA \u0D85\u0D9F\u0DC4\u0DBB\u0DD4 \u0DB8\u0DAD \u0DA2\u0DD9\u0DC3\u0DD3\u0DBB\u0DDD \u0D86\u0DC0\u0DCF\u0DA7\u0DBA\u0DA7 \u0DC3\u0DCF\u0DBB\u0DCA\u0DAE\u0D9A\u0DC0 \u0D9C\u0DDC\u0DA9\u0DB6\u0DC3\u0DD3",
-    titleTa: "\u0B9A\u0BC6\u0BB5\u0BCD\u0BB5\u0BBE\u0BAF\u0BCD \u0B95\u0BBF\u0BB0\u0B95\u0BA4\u0BCD\u0BA4\u0BBF\u0BA9\u0BCD \u0B9C\u0BC6\u0B9A\u0BC6\u0BB0\u0BCB \u0BAA\u0BB3\u0BCD\u0BB3\u0BA4\u0BCD\u0BA4\u0BBF\u0BB2\u0BCD \u0BAA\u0BC6\u0BB0\u0BCD\u0B9A\u0BB5\u0BB0\u0BA9\u0BCD\u0BB8\u0BCD \u0BB0\u0BCB\u0BB5\u0BB0\u0BCD \u0BB5\u0BC6\u0BB1\u0BCD\u0BB1\u0BBF\u0B95\u0BB0\u0BAE\u0BBE\u0B95\u0BA4\u0BCD \u0BA4\u0BB0\u0BC8\u0BAF\u0BBF\u0BB1\u0B99\u0BCD\u0B95\u0BBF\u0BAF\u0BA4\u0BC1",
-    descriptionSi: "\u0DB4\u0DD0\u0DBB\u0DAB\u0DD2 \u0D9A\u0DCA\u0DC2\u0DD4\u0DAF\u0DCA\u200D\u0DBB\u0DA2\u0DD3\u0DC0\u0DD3 \u0DA2\u0DD3\u0DC0 \u0DC3\u0DCF\u0D9A\u0DCA\u0DC2\u0DD2 \u0DC3\u0DD9\u0DC0\u0DD3\u0DB8 \u0DC3\u0DB3\u0DC4\u0DCF \u0DB1\u0DCF\u0DC3\u0DCF\u0DC4\u0DD2 \u0DC0\u0DA9\u0DCF\u0DAD\u0DCA\u0DB8 \u0DAF\u0DD2\u0DBA\u0DD4\u0DAB\u0DD4 \u0DBB\u0DDD\u0DC0\u0DBB\u0DBA \u0D85\u0D9F\u0DC4\u0DBB\u0DD4 \u0DB8\u0DAD\u0DA7 \u0D86\u0DBB\u0D9A\u0DCA\u0DC2\u0DD2\u0DAD\u0DC0 \u0D9C\u0DDC\u0DA9\u0DB6\u0DD0\u0DC3\u0DCA\u0DC0\u0DD2\u0DAB\u0DD2.",
-    descriptionTa: "\u0BAA\u0BA3\u0BCD\u0B9F\u0BC8\u0BAF \u0B89\u0BAF\u0BBF\u0BB0\u0BBF\u0BA9\u0B99\u0BCD\u0B95\u0BB3\u0BBF\u0BA9\u0BCD \u0BA4\u0B9F\u0BAF\u0B99\u0BCD\u0B95\u0BB3\u0BC8\u0BA4\u0BCD \u0BA4\u0BC7\u0B9F \u0BA8\u0BBE\u0B9A\u0BBE\u0BB5\u0BBF\u0BA9\u0BCD \u0BAA\u0BC6\u0BB0\u0BCD\u0B9A\u0BB5\u0BB0\u0BA9\u0BCD\u0BB8\u0BCD \u0BB0\u0BCB\u0BB5\u0BB0\u0BCD \u0B9A\u0BC6\u0BB5\u0BCD\u0BB5\u0BBE\u0BAF\u0BBF\u0BB2\u0BCD \u0BB5\u0BC6\u0BB1\u0BCD\u0BB1\u0BBF\u0B95\u0BB0\u0BAE\u0BBE\u0B95\u0BA4\u0BCD \u0BA4\u0BB0\u0BC8\u0BAF\u0BBF\u0BB1\u0B99\u0BCD\u0B95\u0BBF\u0BAF\u0BA4\u0BC1."
-  },
-  {
-    id: "arch-2021-2",
-    nasaId: "JWST-LAUNCH-CHRISTMAS-2021",
-    title: "James Webb Space Telescope Launches on Ariane 5 from Kourou",
-    date: "2021-12-25",
-    year: 2021,
-    category: "James Webb",
-    source: "nasa-images",
-    thumbnail: "https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&w=1200&q=80",
-    hdUrl: "https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&w=3840&q=95",
-    description: "On Christmas Day 2021, the premier space observatory of the next decade launched flawlessly atop an Ariane 5 rocket, beginning its one-million-mile journey to the Sun-Earth L2 Lagrange point.",
-    titleSi: "\u0DA2\u0DDA\u0DB8\u0DCA\u0DC3\u0DCA \u0DC0\u0DD9\u0DB6\u0DCA \u0D85\u0DB7\u0DCA\u200D\u0DBA\u0DC0\u0D9A\u0DCF\u0DC1 \u0DAF\u0DD4\u0DBB\u0DDA\u0D9A\u0DCA\u0DC2\u0DBA \u0DB4\u0DCA\u200D\u0DBB\u0D82\u0DC1 \u0D9C\u0DBA\u0DB1\u0DCF\u0DC0\u0DD9\u0DB1\u0DCA \u0DC3\u0DCF\u0DBB\u0DCA\u0DAE\u0D9A\u0DC0 \u0D85\u0DB7\u0DCA\u200D\u0DBA\u0DC0\u0D9A\u0DCF\u0DC1\u0D9C\u0DAD \u0D9A\u0DD9\u0DBB\u0DDA",
-    titleTa: "\u0B9C\u0BC7\u0BAE\u0BCD\u0BB8\u0BCD \u0BB5\u0BC6\u0BAA\u0BCD \u0BB5\u0BBF\u0BA3\u0BCD\u0BB5\u0BC6\u0BB3\u0BBF \u0BA4\u0BCA\u0BB2\u0BC8\u0BA8\u0BCB\u0B95\u0BCD\u0B95\u0BBF \u0B8F\u0BB0\u0BBF\u0BAF\u0BBE\u0BA9\u0BCD 5 \u0BB0\u0BBE\u0B95\u0BCD\u0B95\u0BC6\u0B9F\u0BCD \u0BAE\u0BC2\u0BB2\u0BAE\u0BCD \u0BB5\u0BC6\u0BB1\u0BCD\u0BB1\u0BBF\u0B95\u0BB0\u0BAE\u0BBE\u0B95 \u0B8F\u0BB5\u0BAA\u0BCD\u0BAA\u0B9F\u0BCD\u0B9F\u0BA4\u0BC1",
-    descriptionSi: "2021 \u0DB1\u0DAD\u0DCA\u0DAD\u0DBD\u0DCA \u0DAF\u0DD2\u0DB1\u0DBA\u0DDA\u0DAF\u0DD3 \u0DA2\u0DDA\u0DB8\u0DCA\u0DC3\u0DCA \u0DC0\u0DD9\u0DB6\u0DCA \u0DAF\u0DD4\u0DBB\u0DDA\u0D9A\u0DCA\u0DC2\u0DBA L2 \u0DBD\u0D9A\u0DCA\u0DC2\u0DCA\u200D\u0DBA\u0DBA \u0DB6\u0DBD\u0DCF \u0DC3\u0DD2\u0DBA \u0D93\u0DAD\u0DD2\u0DC4\u0DCF\u0DC3\u0DD2\u0D9A \u0D9C\u0DB8\u0DB1 \u0D86\u0DBB\u0DB8\u0DCA\u0DB7 \u0D9A\u0DC5\u0DDA\u0DBA.",
-    descriptionTa: "\u0BB5\u0BB0\u0BB2\u0BBE\u0BB1\u0BCD\u0BB1\u0BC1 \u0B9A\u0BBF\u0BB1\u0BAA\u0BCD\u0BAA\u0BC1\u0BAE\u0BBF\u0B95\u0BCD\u0B95 \u0B9C\u0BC7\u0BAE\u0BCD\u0BB8\u0BCD \u0BB5\u0BC6\u0BAA\u0BCD \u0BA4\u0BCA\u0BB2\u0BC8\u0BA8\u0BCB\u0B95\u0BCD\u0B95\u0BBF \u0BB5\u0BBF\u0BA3\u0BCD\u0BB5\u0BC6\u0BB3\u0BBF\u0BAF\u0BC8 \u0BA8\u0BCB\u0B95\u0BCD\u0B95\u0BBF \u0BA4\u0BA9\u0BA4\u0BC1 \u0BAA\u0BAF\u0BA3\u0BA4\u0BCD\u0BA4\u0BC8\u0BA4\u0BCD \u0BA4\u0BCA\u0B9F\u0B99\u0BCD\u0B95\u0BBF\u0BAF\u0BA4\u0BC1."
-  },
-  {
-    id: "arch-2020-1",
-    nasaId: "CREW-DRAGON-DEMO2-2020",
-    title: "NASA Astronauts Launch from American Soil on Commercial Spacecraft",
-    date: "2020-05-30",
-    year: 2020,
-    category: "Commercial Crew",
-    source: "nasa-images",
-    thumbnail: "https://images.unsplash.com/photo-1517976487502-5e0e3300f556?auto=format&fit=crop&w=1200&q=80",
-    hdUrl: "https://images.unsplash.com/photo-1517976487502-5e0e3300f556?auto=format&fit=crop&w=3840&q=95",
-    description: "NASA astronauts Robert Behnken and Douglas Hurley launched aboard SpaceX Crew Dragon from Launch Complex 39A, restoring American orbital human spaceflight capabilities after nearly a decade.",
-    titleSi: "\u0DC0\u0DC3\u0DBB 9 \u0D9A\u0DA7 \u0DB4\u0DC3\u0DD4 \u0D87\u0DB8\u0DBB\u0DD2\u0D9A\u0DCF\u0DB1\u0DD4 \u0DB7\u0DD6\u0DB8\u0DD2\u0DBA\u0DD9\u0DB1\u0DCA \u0DB8\u0DD2\u0DB1\u0DD2\u0DC3\u0DD4\u0DB1\u0DCA \u0DBB\u0DD0\u0D9C\u0DAD\u0DCA \u0DB4\u0DCA\u200D\u0DBB\u0DAE\u0DB8 \u0DC0\u0DCF\u0DAB\u0DD2\u0DA2 \u0D85\u0DB7\u0DCA\u200D\u0DBA\u0DC0\u0D9A\u0DCF\u0DC1 \u0DA0\u0DCF\u0DBB\u0DD2\u0D9A\u0DCF\u0DC0",
-    titleTa: "\u0B85\u0BAE\u0BC6\u0BB0\u0BBF\u0B95\u0BCD\u0B95 \u0BAE\u0BA3\u0BCD\u0BA3\u0BBF\u0BB2\u0BBF\u0BB0\u0BC1\u0BA8\u0BCD\u0BA4\u0BC1 \u0BAE\u0BA9\u0BBF\u0BA4\u0BB0\u0BCD\u0B95\u0BB3\u0BC8 \u0B9A\u0BC1\u0BAE\u0BA8\u0BCD\u0BA4\u0BC1 \u0B9A\u0BC6\u0BA9\u0BCD\u0BB1 \u0BB5\u0BA3\u0BBF\u0B95 \u0BB5\u0BBF\u0BA3\u0BCD\u0B95\u0BB2\u0BAE\u0BCD",
-    descriptionSi: "SpaceX Crew Dragon \u0DBA\u0DCF\u0DB1\u0DBA \u0DB8\u0D9F\u0DD2\u0DB1\u0DCA \u0DB1\u0DCF\u0DC3\u0DCF \u0D9C\u0D9C\u0DB1\u0D9C\u0DCF\u0DB8\u0DD3\u0DB1\u0DCA \u0DAF\u0DD9\u0DAF\u0DD9\u0DB1\u0DD9\u0D9A\u0DD4 \u0DA2\u0DCF\u0DAD\u0DCA\u200D\u0DBA\u0DB1\u0DCA\u0DAD\u0DBB \u0D85\u0DB7\u0DCA\u200D\u0DBA\u0DC0\u0D9A\u0DCF\u0DC1 \u0DB8\u0DB0\u0DCA\u200D\u0DBA\u0DC3\u0DCA\u0DAE\u0DCF\u0DB1\u0DBA\u0DA7 \u0DC3\u0DCF\u0DBB\u0DCA\u0DAE\u0D9A\u0DC0 \u0DBB\u0DD0\u0D9C\u0DD9\u0DB1 \u0DBA\u0DB1 \u0DBD\u0DAF\u0DD3.",
-    descriptionTa: "\u0BB8\u0BCD\u0BAA\u0BC7\u0BB8\u0BCD\u0B8E\u0B95\u0BCD\u0BB8\u0BCD \u0B95\u0BCD\u0BB0\u0BC2 \u0B9F\u0BBF\u0BB0\u0BBE\u0B95\u0BA9\u0BCD \u0BAE\u0BC2\u0BB2\u0BAE\u0BCD \u0B85\u0BAE\u0BC6\u0BB0\u0BBF\u0B95\u0BCD\u0B95 \u0BB5\u0BBF\u0BA3\u0BCD\u0BB5\u0BC6\u0BB3\u0BBF \u0BB5\u0BC0\u0BB0\u0BB0\u0BCD\u0B95\u0BB3\u0BCD \u0B9A\u0BB0\u0BCD\u0BB5\u0BA4\u0BC7\u0B9A \u0BB5\u0BBF\u0BA3\u0BCD\u0BB5\u0BC6\u0BB3\u0BBF \u0BA8\u0BBF\u0BB2\u0BC8\u0BAF\u0BA4\u0BCD\u0BA4\u0BBF\u0BB1\u0BCD\u0B95\u0BC1 \u0B9A\u0BC6\u0BA9\u0BCD\u0BB1\u0BA9\u0BB0\u0BCD."
-  },
-  {
-    id: "arch-2019-1",
-    nasaId: "M87-BLACK-HOLE-2019",
-    title: "First Ever Image of a Supermassive Black Hole Captured in M87",
-    date: "2019-04-10",
-    year: 2019,
-    category: "Deep Space",
-    source: "apod",
-    thumbnail: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=1200&q=80",
-    hdUrl: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=3840&q=95",
-    description: "The Event Horizon Telescope (EHT), a planet-scale array of eight ground-based radio telescopes, revealed the first direct visual evidence of a supermassive black hole and its shadow at the center of galaxy Messier 87.",
-    titleSi: "\u0D89\u0DAD\u0DD2\u0DC4\u0DCF\u0DC3\u0DBA\u0DDA \u0DB4\u0DCA\u200D\u0DBB\u0DAE\u0DB8 \u0DC0\u0DAD\u0DCF\u0DC0\u0DA7 \u0D9A\u0DC5\u0DD4 \u0D9A\u0DD4\u0DC4\u0DBB\u0DBA\u0D9A \u0DC3\u0DD0\u0DB6\u0DD1 \u0DA1\u0DCF\u0DBA\u0DCF\u0DBB\u0DD6\u0DB4\u0DBA\u0D9A\u0DCA \u0DBD\u0DB6\u0DCF\u0D9C\u0DD0\u0DB1\u0DDA",
-    titleTa: "\u0BB5\u0BB0\u0BB2\u0BBE\u0BB1\u0BCD\u0BB1\u0BBF\u0BB2\u0BCD \u0BAE\u0BC1\u0BA4\u0BA9\u0BCD\u0BAE\u0BC1\u0BB1\u0BC8\u0BAF\u0BBE\u0B95 \u0B95\u0BB0\u0BC1\u0BA8\u0BCD\u0BA4\u0BC1\u0BB3\u0BC8\u0BAF\u0BBF\u0BA9\u0BCD \u0BA8\u0BC7\u0BB0\u0B9F\u0BBF \u0BAA\u0BC1\u0B95\u0BC8\u0BAA\u0BCD\u0BAA\u0B9F\u0BAE\u0BCD \u0BB5\u0BC6\u0BB3\u0BBF\u0BAF\u0BBF\u0B9F\u0BAA\u0BCD\u0BAA\u0B9F\u0BCD\u0B9F\u0BA4\u0BC1",
-    descriptionSi: "Messier 87 \u0DB8\u0DB1\u0DCA\u0DAF\u0DCF\u0D9A\u0DD2\u0DAB\u0DD2 \u0DB8\u0DB0\u0DCA\u200D\u0DBA\u0DBA\u0DDA \u0DB4\u0DD2\u0DC4\u0DD2\u0DA7\u0DD2 \u0D85\u0DAD\u0DD2 \u0DAF\u0DD0\u0DC0\u0DD0\u0DB1\u0DCA\u0DAD \u0D9A\u0DC5\u0DD4 \u0D9A\u0DD4\u0DC4\u0DBB\u0DBA\u0DDA \u0DA1\u0DCF\u0DBA\u0DCF\u0DBB\u0DD6\u0DB4\u0DBA Event Horizon \u0DAF\u0DD4\u0DBB\u0DDA\u0D9A\u0DCA\u0DC2 \u0DA2\u0DCF\u0DBD\u0DBA \u0DB8\u0D9F\u0DD2\u0DB1\u0DCA \u0D85\u0DB1\u0DCF\u0DC0\u0DBB\u0DAB\u0DBA \u0D9A\u0DD9\u0DBB\u0DD2\u0DAB\u0DD2.",
-    descriptionTa: "\u0BAE\u0BC6\u0BB8\u0BCD\u0BB8\u0BBF\u0BAF\u0BB0\u0BCD 87 \u0BB5\u0BBF\u0BA3\u0BCD\u0BAE\u0BC0\u0BA9\u0BCD \u0BAE\u0BA3\u0BCD\u0B9F\u0BB2\u0BA4\u0BCD\u0BA4\u0BBF\u0BA9\u0BCD \u0BAE\u0BC8\u0BAF\u0BA4\u0BCD\u0BA4\u0BBF\u0BB2\u0BCD \u0B89\u0BB3\u0BCD\u0BB3 \u0B95\u0BB0\u0BC1\u0BA8\u0BCD\u0BA4\u0BC1\u0BB3\u0BC8\u0BAF\u0BBF\u0BA9\u0BCD \u0BA8\u0BBF\u0BB4\u0BB2\u0BC8 \u0BB5\u0BBE\u0BA9\u0BBF\u0BAF\u0BB2\u0BBE\u0BB3\u0BB0\u0BCD\u0B95\u0BB3\u0BCD \u0BAA\u0B9F\u0BAE\u0BCD\u0BAA\u0BBF\u0B9F\u0BBF\u0BA4\u0BCD\u0BA4\u0BA9\u0BB0\u0BCD."
-  },
-  {
-    id: "arch-2018-1",
-    nasaId: "PARKER-SOLAR-PROBE-2018",
-    title: "Parker Solar Probe Launches on Historic Mission to Touch the Sun",
-    date: "2018-08-12",
-    year: 2018,
-    category: "Solar Science",
-    source: "nasa-images",
-    thumbnail: "https://images.unsplash.com/photo-1506703719100-a0f3a48c0f86?auto=format&fit=crop&w=1200&q=80",
-    hdUrl: "https://images.unsplash.com/photo-1506703719100-a0f3a48c0f86?auto=format&fit=crop&w=3840&q=95",
-    description: "Sprinting at record-breaking speeds up to 430,000 mph, NASA's Parker Solar Probe embarked on a revolutionary trajectory to fly directly through the Sun's outer corona and unlock coronal heating mysteries.",
-    titleSi: "\u0DC3\u0DD6\u0DBB\u0DCA\u0DBA\u0DBA\u0DCF\u0D9C\u0DDA \u0D9A\u0DDC\u0DBB\u0DDD\u0DB1\u0DCF \u0D9A\u0DBD\u0DCF\u0DB4\u0DBA \u0DC3\u0DCA\u0DB4\u0DBB\u0DCA\u0DC3 \u0D9A\u0DD2\u0DBB\u0DD3\u0DB8\u0DA7 \u0DB4\u0DCF\u0D9A\u0DBB\u0DCA \u0DBA\u0DCF\u0DB1\u0DBA \u0D9C\u0DB8\u0DB1\u0DCA \u0D85\u0DBB\u0DB9\u0DBA\u0DD2",
-    titleTa: "\u0B9A\u0BC2\u0BB0\u0BBF\u0BAF\u0BA9\u0BC8 \u0B86\u0BAF\u0BCD\u0BB5\u0BC1 \u0B9A\u0BC6\u0BAF\u0BCD\u0BAF \u0BB5\u0BB0\u0BB2\u0BBE\u0BB1\u0BCD\u0BB1\u0BC1 \u0B9A\u0BBF\u0BB1\u0BAA\u0BCD\u0BAA\u0BC1\u0BAE\u0BBF\u0B95\u0BCD\u0B95 \u0BAA\u0BBE\u0BB0\u0BCD\u0B95\u0BCD\u0B95\u0BB0\u0BCD \u0B9A\u0BCB\u0BB2\u0BBE\u0BB0\u0BCD \u0BAA\u0BC1\u0BB0\u0BCB\u0BAA\u0BCD \u0B8F\u0BB5\u0BAA\u0BCD\u0BAA\u0B9F\u0BCD\u0B9F\u0BA4\u0BC1",
-    descriptionSi: "\u0DC3\u0DD6\u0DBB\u0DCA\u0DBA\u0DBA\u0DCF\u0D9C\u0DDA \u0DB6\u0DCF\u0DC4\u0DD2\u0DBB \u0DC0\u0DCF\u0DBA\u0DD4\u0D9C\u0DDD\u0DBD\u0DBA \u0DC4\u0DBB\u0DC4\u0DCF \u0D9C\u0DB8\u0DB1\u0DCA \u0D9A\u0DBB\u0DB1 \u0DBD\u0DDC\u0DC0 \u0DC0\u0DDA\u0D9C\u0DC0\u0DAD\u0DCA\u0DB8 \u0DB8\u0DD2\u0DB1\u0DD2\u0DC3\u0DCF \u0DC0\u0DD2\u0DC3\u0DD2\u0DB1\u0DCA \u0DC3\u0DCF\u0DAF\u0DB1 \u0DBD\u0DAF \u0DBA\u0DCF\u0DB1\u0DBA \u0DBD\u0DD9\u0DC3 \u0DB4\u0DCF\u0D9A\u0DBB\u0DCA \u0DBA\u0DCF\u0DB1\u0DBA \u0D89\u0DAD\u0DD2\u0DC4\u0DCF\u0DC3\u0D9C\u0DAD \u0DC0\u0DD2\u0DBA.",
-    descriptionTa: "\u0B9A\u0BC2\u0BB0\u0BBF\u0BAF\u0BA9\u0BBF\u0BA9\u0BCD \u0BB5\u0BC6\u0BAA\u0BCD\u0BAA\u0BA8\u0BBF\u0BB2\u0BC8\u0BAF\u0BC8 \u0B86\u0BB0\u0BBE\u0BAF \u0BAA\u0BBE\u0BB0\u0BCD\u0B95\u0BCD\u0B95\u0BB0\u0BCD \u0BB5\u0BBF\u0BA3\u0BCD\u0B95\u0BB2\u0BAE\u0BCD \u0BB5\u0BBF\u0BA3\u0BCD\u0BB5\u0BC6\u0BB3\u0BBF\u0B95\u0BCD\u0B95\u0BC1 \u0BB5\u0BC6\u0BB1\u0BCD\u0BB1\u0BBF\u0B95\u0BB0\u0BAE\u0BBE\u0B95 \u0B8F\u0BB5\u0BAA\u0BCD\u0BAA\u0B9F\u0BCD\u0B9F\u0BA4\u0BC1."
-  },
-  {
-    id: "arch-2017-1",
-    nasaId: "CASSINI-GRAND-FINALE-2017",
-    title: "Cassini Spacecraft Plunges into Saturn in Poetic Grand Finale",
-    date: "2017-09-15",
-    year: 2017,
-    category: "Saturn Exploration",
-    source: "nasa-images",
-    thumbnail: "https://images.unsplash.com/photo-1614728894747-a83421e2b9c9?auto=format&fit=crop&w=1200&q=80",
-    hdUrl: "https://images.unsplash.com/photo-1614728894747-a83421e2b9c9?auto=format&fit=crop&w=3840&q=95",
-    description: "After 13 years of revolutionary discoveries exploring Saturn and its moons Titan and Enceladus, Cassini executed its intentional death dive into the ringed giant to protect potentially habitable moons from contamination.",
-    titleSi: "\u0D9A\u0DD0\u0DC3\u0DD2\u0DB1\u0DD2 \u0DBA\u0DCF\u0DB1\u0DBA \u0DC3\u0DD9\u0DB1\u0DC3\u0DD4\u0DBB\u0DD4 \u0D9C\u0DCA\u200D\u0DBB\u0DC4\u0DBA\u0DCF \u0DAD\u0DD4\u0DC5\u0DA7 \u0D9A\u0DA9\u0DCF \u0DC0\u0DD0\u0DA7\u0DD9\u0DB8\u0DD2\u0DB1\u0DCA \u0DB8\u0DD9\u0DC4\u0DD9\u0DBA\u0DD4\u0DB8 \u0D85\u0DC0\u0DC3\u0DB1\u0DCA \u0D9A\u0DBB\u0DBA\u0DD2",
-    titleTa: "\u0B9A\u0BA9\u0BBF \u0B95\u0BBF\u0BB0\u0B95\u0BA4\u0BCD\u0BA4\u0BBF\u0BA9\u0BCD \u0BB5\u0BB3\u0BBF\u0BAE\u0BA3\u0BCD\u0B9F\u0BB2\u0BA4\u0BCD\u0BA4\u0BBF\u0BB2\u0BCD \u0BAE\u0BC2\u0BB4\u0BCD\u0B95\u0BBF \u0B95\u0BBE\u0B9A\u0BBF\u0BA9\u0BBF \u0BB5\u0BBF\u0BA3\u0BCD\u0B95\u0BB2\u0BAE\u0BCD \u0BA4\u0BA9\u0BCD \u0BAA\u0BAF\u0BA3\u0BA4\u0BCD\u0BA4\u0BC8 \u0BAE\u0BC1\u0B9F\u0BBF\u0BA4\u0BCD\u0BA4\u0BC1\u0B95\u0BCD \u0B95\u0BCA\u0BA3\u0BCD\u0B9F\u0BA4\u0BC1",
-    descriptionSi: "\u0DC0\u0DC3\u0DBB 13\u0D9A\u0DCA \u0DC3\u0DD9\u0DB1\u0DC3\u0DD4\u0DBB\u0DD4 \u0DC3\u0DC4 \u0D91\u0DC4\u0DD2 \u0DA0\u0DB1\u0DCA\u0DAF\u0DCA\u200D\u0DBB\u0DBA\u0DB1\u0DCA \u0D9C\u0DC0\u0DDA\u0DC2\u0DAB\u0DBA \u0D9A\u0DC5 \u0D9A\u0DD0\u0DC3\u0DD2\u0DB1\u0DD2 \u0DBA\u0DCF\u0DB1\u0DBA \u0DC3\u0DD9\u0DB1\u0DC3\u0DD4\u0DBB\u0DD4 \u0DC0\u0DCF\u0DBA\u0DD4\u0D9C\u0DDD\u0DBD\u0DBA\u0DA7 \u0D87\u0DAD\u0DD4\u0DC5\u0DD4 \u0DC0\u0DD9\u0DB8\u0DD2\u0DB1\u0DCA \u0DC3\u0DD2\u0DBA \u0D93\u0DAD\u0DD2\u0DC4\u0DCF\u0DC3\u0DD2\u0D9A \u0D9C\u0DB8\u0DB1 \u0DB1\u0DD2\u0DB8\u0DCF \u0D9A\u0DC5\u0DDA\u0DBA.",
-    descriptionTa: "13 \u0B86\u0BA3\u0BCD\u0B9F\u0BC1\u0B95\u0BB3\u0BCD \u0B9A\u0BA9\u0BBF \u0B95\u0BBF\u0BB0\u0B95\u0BA4\u0BCD\u0BA4\u0BC8 \u0B86\u0BAF\u0BCD\u0BB5\u0BC1 \u0B9A\u0BC6\u0BAF\u0BCD\u0BA4 \u0B95\u0BBE\u0B9A\u0BBF\u0BA9\u0BBF \u0BB5\u0BBF\u0BA3\u0BCD\u0B95\u0BB2\u0BAE\u0BCD \u0BA4\u0BBF\u0B9F\u0BCD\u0B9F\u0BAE\u0BBF\u0B9F\u0BCD\u0B9F\u0BAA\u0B9F\u0BBF \u0B9A\u0BA9\u0BBF \u0B95\u0BBF\u0BB0\u0B95\u0BA4\u0BCD\u0BA4\u0BBF\u0BA9\u0BCD \u0BB5\u0BB3\u0BBF\u0BAE\u0BA3\u0BCD\u0B9F\u0BB2\u0BA4\u0BCD\u0BA4\u0BBF\u0BB2\u0BCD \u0B8E\u0BB0\u0BBF\u0BA8\u0BCD\u0BA4\u0BC1 \u0B9A\u0BBE\u0BAE\u0BCD\u0BAA\u0BB2\u0BBE\u0BA9\u0BA4\u0BC1."
-  },
-  {
-    id: "arch-2015-1",
-    nasaId: "NEW-HORIZONS-PLUTO-2015",
-    title: "New Horizons Makes Historic First Flyby of Pluto and Charon",
-    date: "2015-07-14",
-    year: 2015,
-    category: "Kuiper Belt",
-    source: "nasa-images",
-    thumbnail: "https://images.unsplash.com/photo-1462331940025-496dfbfc7564?auto=format&fit=crop&w=1200&q=80",
-    hdUrl: "https://images.unsplash.com/photo-1462331940025-496dfbfc7564?auto=format&fit=crop&w=3840&q=95",
-    description: "Traveling three billion miles over nine and a half years, New Horizons captured the first close-up portraits of Pluto, revealing towering water-ice mountains, smooth nitrogen glaciers, and Tombaugh Regio's famous heart.",
-    titleSi: "\u0DB1\u0DD2\u0DC0\u0DCA \u0DC4\u0DDC\u0DBB\u0DBA\u0DD2\u0DC3\u0DB1\u0DCA\u0DC3\u0DCA \u0DBA\u0DCF\u0DB1\u0DBA \u0DB4\u0DCA\u0DBD\u0DD6\u0DA7\u0DDD \u0D9C\u0DCA\u200D\u0DBB\u0DC4\u0DBD\u0DDC\u0DC0 \u0D85\u0DC3\u0DBD\u0DD2\u0DB1\u0DCA \u0DC3\u0DCF\u0DBB\u0DCA\u0DAE\u0D9A\u0DC0 \u0DB4\u0DD2\u0DBA\u0DCF\u0DC3\u0DBB \u0D9A\u0DBB\u0DBA\u0DD2",
-    titleTa: "\u0BAA\u0BC1\u0BB3\u0BC2\u0B9F\u0BCD\u0B9F\u0BCB\u0BB5\u0BC8 \u0BAE\u0BBF\u0B95 \u0B85\u0BB0\u0BC1\u0B95\u0BBF\u0BB2\u0BCD \u0BAA\u0BC1\u0B95\u0BC8\u0BAA\u0BCD\u0BAA\u0B9F\u0BAE\u0BCD \u0B8E\u0B9F\u0BC1\u0BA4\u0BCD\u0BA4 \u0BA8\u0BBF\u0BAF\u0BC2 \u0BB9\u0BCA\u0BB0\u0BC8\u0B9A\u0BA9\u0BCD\u0BB8\u0BCD \u0BB5\u0BBF\u0BA3\u0BCD\u0B95\u0BB2\u0BAE\u0BCD",
-    descriptionSi: "\u0DB4\u0DCA\u0DBD\u0DD6\u0DA7\u0DDD\u0D9C\u0DDA \u0D85\u0DBA\u0DD2\u0DC3\u0DCA \u0D9A\u0DB3\u0DD4\u0DC0\u0DD0\u0DA7\u0DD2 \u0DC3\u0DC4 \u0DC4\u0DD8\u0DAF \u0DC4\u0DD0\u0DA9\u0DD0\u0DAD\u0DD2 \u0DB1\u0DBA\u0DD2\u0DA7\u0DCA\u200D\u0DBB\u0DA2\u0DB1\u0DCA \u0DAD\u0DD0\u0DB1\u0DD2\u0DAD\u0DBD\u0DCF \u0DB4\u0DCA\u200D\u0DBB\u0DAE\u0DB8 \u0DC0\u0DBB\u0DA7 \u0DB4\u0DD8\u0DAE\u0DD2\u0DC0\u0DD2\u0DBA\u0DA7 \u0DAF\u0DD0\u0D9A\u0D9C\u0DD0\u0DB1\u0DD3\u0DB8\u0DA7 \u0DC4\u0DD0\u0D9A\u0DD2 \u0DC0\u0DD2\u0DBA.",
-    descriptionTa: "\u0B92\u0BA9\u0BCD\u0BAA\u0BA4\u0BB0\u0BC8 \u0B86\u0BA3\u0BCD\u0B9F\u0BC1\u0B95\u0BB3\u0BCD \u0BAA\u0BAF\u0BA3\u0BBF\u0BA4\u0BCD\u0BA4\u0BC1 \u0BAA\u0BC1\u0BB3\u0BC2\u0B9F\u0BCD\u0B9F\u0BCB\u0BB5\u0BBF\u0BA9\u0BCD \u0B85\u0BA4\u0BBF\u0B9A\u0BAF \u0B89\u0BB2\u0B95\u0BC8 \u0BAE\u0BC1\u0BA4\u0BA9\u0BCD\u0BAE\u0BC1\u0BB1\u0BC8\u0BAF\u0BBE\u0B95 \u0B89\u0BB2\u0B95\u0BC1\u0B95\u0BCD\u0B95\u0BC1\u0B95\u0BCD \u0B95\u0BBE\u0B9F\u0BCD\u0B9F\u0BBF\u0BAF\u0BA4\u0BC1 \u0BA8\u0BBF\u0BAF\u0BC2 \u0BB9\u0BCA\u0BB0\u0BC8\u0B9A\u0BA9\u0BCD\u0BB8\u0BCD."
-  }
-];
 var SATELLITE_REGISTRY = [
   {
     id: "iss",
@@ -5142,6 +5110,54 @@ var GROUNDED_DISCOVERY_ARCHIVE = {
 };
 var groundedSearchCache = /* @__PURE__ */ new Map();
 var GROUNDED_CACHE_TTL_MS = 2 * 60 * 60 * 1e3;
+var KP_INDEX_URL = "https://services.swpc.noaa.gov/json/planetary_k_index.json";
+var PLASMA_SPEED_URL = "https://services.swpc.noaa.gov/products/solar-wind/plasma-7-day.json";
+var lastKnownSolarWeather = null;
+async function fetchSwpcJson(url) {
+  try {
+    const response = await fetch(url, { signal: AbortSignal.timeout(4e3) });
+    if (!response.ok) return null;
+    return await response.json();
+  } catch {
+    return null;
+  }
+}
+function parsePlanetaryKIndex(payload) {
+  if (!Array.isArray(payload)) return null;
+  for (let index = payload.length - 1; index >= 0; index -= 1) {
+    const row = payload[index];
+    if (!Array.isArray(row) || row.length < 2) continue;
+    const [timeTag, rawKp] = row;
+    const kp = typeof rawKp === "number" ? rawKp : Number.parseFloat(String(rawKp ?? ""));
+    if (!Number.isFinite(kp) || kp < 0 || kp > 9) continue;
+    const observed = typeof timeTag === "string" ? /* @__PURE__ */ new Date(`${timeTag.replace(" ", "T")}Z`) : null;
+    const observedAt = observed && !Number.isNaN(observed.getTime()) ? observed.toISOString() : (/* @__PURE__ */ new Date()).toISOString();
+    return { kpIndex: kp, observedAt, ...kpStormScale(kp) };
+  }
+  return null;
+}
+function kpStormScale(kp) {
+  if (kp >= 9) return { stormKey: "G5", stormStatus: "extreme" };
+  if (kp >= 8) return { stormKey: "G4", stormStatus: "severe" };
+  if (kp >= 7) return { stormKey: "G3", stormStatus: "strong" };
+  if (kp >= 6) return { stormKey: "G2", stormStatus: "moderate" };
+  if (kp >= 5) return { stormKey: "G1", stormStatus: "minor" };
+  return { stormKey: "G0", stormStatus: "quiet" };
+}
+function parsePlasmaSpeed(payload) {
+  if (!Array.isArray(payload)) return null;
+  for (let index = payload.length - 1; index >= 0; index -= 1) {
+    const row = payload[index];
+    if (!Array.isArray(row) || row.length < 3) continue;
+    const [timeTag, , rawSpeed] = row;
+    const speed = typeof rawSpeed === "number" ? rawSpeed : Number.parseFloat(String(rawSpeed ?? ""));
+    if (!Number.isFinite(speed) || speed <= 0) continue;
+    const observed = typeof timeTag === "string" ? /* @__PURE__ */ new Date(`${timeTag.replace(" ", "T")}Z`) : null;
+    const observedAt = observed && !Number.isNaN(observed.getTime()) ? observed.toISOString() : (/* @__PURE__ */ new Date()).toISOString();
+    return { speedKmS: speed, observedAt };
+  }
+  return null;
+}
 function setupNasaRoutes(app2, ai2) {
   app2.get("/api/apod", async (req, res) => {
     const date = req.query.date || "";
@@ -5616,9 +5632,9 @@ function setupNasaRoutes(app2, ai2) {
       if (targetLang === "en") {
         return res.json({ success: true, data: { title, explanation } });
       }
-      const cacheKey = `${targetLang}:${title.trim().slice(0, 40)}`;
-      if (translationCache.has(cacheKey)) {
-        return res.json({ success: true, data: translationCache.get(cacheKey) });
+      const cacheKey2 = `${targetLang}:${title.trim().slice(0, 40)}`;
+      if (translationCache.has(cacheKey2)) {
+        return res.json({ success: true, data: translationCache.get(cacheKey2) });
       }
       const languageNames = {
         si: "Sinhala (\u0DC3\u0DD2\u0D82\u0DC4\u0DBD)",
@@ -5663,11 +5679,11 @@ Explanation to translate: "${explanation}"`;
       } catch {
       }
       if (parsedResult) {
-        translationCache.set(cacheKey, parsedResult);
+        translationCache.set(cacheKey2, parsedResult);
         return res.json({ success: true, data: parsedResult });
       }
       const fallbackTranslation = generateSmartAstronomicalTranslation(title, explanation, targetLang);
-      translationCache.set(cacheKey, fallbackTranslation);
+      translationCache.set(cacheKey2, fallbackTranslation);
       return res.json({ success: true, data: fallbackTranslation });
     } catch {
       const fallback = generateSmartAstronomicalTranslation(req.body.title || "", req.body.explanation || "", req.body.targetLang || "si");
@@ -5675,31 +5691,43 @@ Explanation to translate: "${explanation}"`;
     }
   });
   app2.get("/api/nasa-archive", async (req, res) => {
-    const yearQuery = req.query.year ? parseInt(req.query.year, 10) : null;
-    const searchQuery = (req.query.q || "").trim().toLowerCase();
-    const page = Math.max(1, parseInt(req.query.page || "1", 10));
-    const limit = Math.max(1, Math.min(24, parseInt(req.query.limit || "12", 10)));
-    let filtered = HISTORICAL_NASA_ARCHIVE;
-    if (yearQuery) {
-      filtered = filtered.filter((item) => item.year === yearQuery);
+    const q = String(req.query.q ?? "").trim();
+    const yearRaw = req.query.year ? Number.parseInt(String(req.query.year), 10) : null;
+    const page = req.query.page ? Number.parseInt(String(req.query.page), 10) : 1;
+    const limit = req.query.limit ? Number.parseInt(String(req.query.limit), 10) : 8;
+    if (!q) {
+      return res.status(400).json({
+        success: false,
+        code: "INVALID_QUERY",
+        error: "A search term is required: the archive is a live NASA Images search, not a local list.",
+        source: "NASA Images (images.nasa.gov)"
+      });
     }
-    if (searchQuery) {
-      filtered = filtered.filter(
-        (item) => item.title.toLowerCase().includes(searchQuery) || item.description.toLowerCase().includes(searchQuery) || item.titleSi && item.titleSi.toLowerCase().includes(searchQuery) || item.titleTa && item.titleTa.toLowerCase().includes(searchQuery) || item.category && item.category.toLowerCase().includes(searchQuery)
-      );
+    const result2 = await searchNasaImages({
+      q,
+      year: Number.isFinite(yearRaw) ? yearRaw : null,
+      page: Number.isFinite(page) ? page : 1,
+      limit: Number.isFinite(limit) ? limit : 8
+    });
+    if (!result2.ok) {
+      return res.status(result2.status).json({
+        success: false,
+        code: result2.code,
+        error: result2.message,
+        source: "NASA Images (images.nasa.gov)"
+      });
     }
-    const total = filtered.length;
-    const totalPages = Math.ceil(total / limit);
-    const start = (page - 1) * limit;
-    const pageItems = filtered.slice(start, start + limit);
-    res.json({
+    return res.json({
       success: true,
-      articles: pageItems,
-      total,
-      page,
-      limit,
-      totalPages,
-      hasMore: page < totalPages
+      articles: result2.items,
+      total: result2.total,
+      page: result2.page,
+      limit: result2.limit,
+      totalPages: result2.totalPages,
+      hasMore: result2.hasMore,
+      cached: result2.cached,
+      fetchedAt: result2.fetchedAt,
+      source: result2.source
     });
   });
   app2.get("/api/apod-range", async (req, res) => {
@@ -5764,19 +5792,44 @@ Explanation to translate: "${explanation}"`;
     });
   });
   app2.get("/api/solar-weather", async (_req, res) => {
-    try {
-      const url = "https://services.swpc.noaa.gov/json/planetary_k_index.json";
-      const nasaRes = await fetch(url, { signal: AbortSignal.timeout(4e3) });
-      if (nasaRes.ok) {
-        const data = redactApiKeys(await nasaRes.json());
-        return res.json({ success: true, data, source: "NOAA SWPC" });
-      }
-    } catch {
+    const K = parsePlanetaryKIndex(await fetchSwpcJson(KP_INDEX_URL));
+    const speed = parsePlasmaSpeed(await fetchSwpcJson(PLASMA_SPEED_URL));
+    if (K) {
+      lastKnownSolarWeather = {
+        data: {
+          kpIndex: K.kpIndex,
+          observedAt: K.observedAt,
+          stormKey: K.stormKey,
+          stormStatus: K.stormStatus,
+          solarWindSpeedKmS: speed ? speed.speedKmS : null,
+          solarWindObservedAt: speed ? speed.observedAt : null
+        },
+        fetchedAt: (/* @__PURE__ */ new Date()).toISOString()
+      };
+      return res.json({
+        success: true,
+        data: lastKnownSolarWeather.data,
+        source: "NOAA SWPC",
+        fetchedAt: lastKnownSolarWeather.fetchedAt,
+        stale: false
+      });
     }
-    return res.json({
-      success: true,
-      data: { kpIndex: 2, status: "quiet", note: "Using fallback solar weather data" },
-      isFallback: true
+    if (lastKnownSolarWeather) {
+      return res.json({
+        success: true,
+        data: lastKnownSolarWeather.data,
+        source: "NOAA SWPC",
+        fetchedAt: lastKnownSolarWeather.fetchedAt,
+        stale: true,
+        code: "CACHED",
+        note: "NOAA SWPC is unreachable; this is the last observation that was actually measured."
+      });
+    }
+    return res.status(503).json({
+      success: false,
+      code: "UPSTREAM_UNAVAILABLE",
+      error: "NOAA SWPC did not answer and no earlier observation is held by this server.",
+      source: "NOAA SWPC"
     });
   });
   app2.get("/api/satellites", async (_req, res) => {
@@ -5790,16 +5843,16 @@ Explanation to translate: "${explanation}"`;
         code: "INVALID_REQUEST"
       });
     }
-    const cacheKey = `grounded:${q}`;
+    const cacheKey2 = `grounded:${q}`;
     const now = Date.now();
-    const cached2 = groundedSearchCache.get(cacheKey);
+    const cached2 = groundedSearchCache.get(cacheKey2);
     if (cached2 && now - cached2.timestamp < GROUNDED_CACHE_TTL_MS) {
       return res.json({ success: true, data: cached2.data, cached: true });
     }
     const results = Object.values(GROUNDED_DISCOVERY_ARCHIVE).filter(
       (item) => item.name.toLowerCase().includes(q) || item.hostStar.toLowerCase().includes(q) || item.type.toLowerCase().includes(q) || item.description.toLowerCase().includes(q)
     );
-    groundedSearchCache.set(cacheKey, { data: results, timestamp: now });
+    groundedSearchCache.set(cacheKey2, { data: results, timestamp: now });
     return res.json({ success: true, data: results, count: results.length });
   });
 }
@@ -5917,8 +5970,8 @@ async function getText(url, headers = {}) {
   }
 }
 async function getJson(url, headers = {}) {
-  const text = await getText(url, headers);
-  return JSON.parse(text);
+  const text2 = await getText(url, headers);
+  return JSON.parse(text2);
 }
 async function fetchSpaceflight(topic, query, limit) {
   const search = new URLSearchParams({ limit: String(limit), ordering: "-published_at" });
@@ -6179,22 +6232,22 @@ function sortAndDedupe(items, limit) {
 }
 function createSpaceNewsRouter() {
   const router = Router4();
-  const cache2 = /* @__PURE__ */ new Map();
-  const readCache = (cacheKey, now) => {
-    const entry = cache2.get(cacheKey);
+  const cache3 = /* @__PURE__ */ new Map();
+  const readCache = (cacheKey2, now) => {
+    const entry = cache3.get(cacheKey2);
     if (!entry) return null;
     if (entry.expires <= now) {
-      cache2.delete(cacheKey);
+      cache3.delete(cacheKey2);
       return null;
     }
     return entry.body;
   };
-  const writeCache = (cacheKey, body, ttl, now) => {
-    if (cache2.size >= MAX_CACHE_ENTRIES) {
-      const oldest = cache2.keys().next();
-      if (!oldest.done) cache2.delete(oldest.value);
+  const writeCache = (cacheKey2, body, ttl, now) => {
+    if (cache3.size >= MAX_CACHE_ENTRIES) {
+      const oldest = cache3.keys().next();
+      if (!oldest.done) cache3.delete(oldest.value);
     }
-    cache2.set(cacheKey, { expires: now + ttl, body });
+    cache3.set(cacheKey2, { expires: now + ttl, body });
   };
   router.get("/sources", (_req, res) => {
     res.json({ ok: true, version: NEWS_API_VERSION, sources: newsSourceInventory() });
@@ -6221,8 +6274,8 @@ function createSpaceNewsRouter() {
       return res.status(400).json({ ok: false, code: "invalid-query", message: "q must be at most 120 characters." });
     }
     const now = Date.now();
-    const cacheKey = `news:${topic}:${limit}:${query}`;
-    const cached2 = readCache(cacheKey, now);
+    const cacheKey2 = `news:${topic}:${limit}:${query}`;
+    const cached2 = readCache(cacheKey2, now);
     if (cached2) return res.json({ ...cached2, cached: true });
     const attempts = NEWS_SOURCES.map(async (source) => {
       if (!isConfigured(source.envVar)) {
@@ -6264,7 +6317,7 @@ function createSpaceNewsRouter() {
       sources,
       generatedAt: new Date(now).toISOString()
     };
-    writeCache(cacheKey, body, CACHE_TTL_MS, now);
+    writeCache(cacheKey2, body, CACHE_TTL_MS, now);
     return res.json(body);
   });
   router.get("/papers", rateLimit2("papers", RATE_MAX, RATE_WINDOW_MS2), async (req, res) => {
@@ -6281,8 +6334,8 @@ function createSpaceNewsRouter() {
       return res.status(400).json({ ok: false, code: "invalid-query", message: "q must be at most 120 characters." });
     }
     const now = Date.now();
-    const cacheKey = `papers:${limit}:${query}`;
-    const cached2 = readCache(cacheKey, now);
+    const cacheKey2 = `papers:${limit}:${query}`;
+    const cached2 = readCache(cacheKey2, now);
     if (cached2) return res.json({ ...cached2, cached: true });
     try {
       const items = (await fetchArxiv(query, limit)).slice(0, limit);
@@ -6294,7 +6347,7 @@ function createSpaceNewsRouter() {
         items,
         generatedAt: new Date(now).toISOString()
       };
-      writeCache(cacheKey, body, PAPERS_TTL_MS, now);
+      writeCache(cacheKey2, body, PAPERS_TTL_MS, now);
       return res.json(body);
     } catch {
       return res.status(502).json({
@@ -7590,15 +7643,15 @@ function hashString(value) {
 }
 var SINHALA = /[\u0D80-\u0DFF]/g;
 var TAMIL = /[\u0B80-\u0BFF]/g;
-function detectLanguage2(text) {
-  const sinhala = (text.match(SINHALA) || []).length;
-  const tamil = (text.match(TAMIL) || []).length;
+function detectLanguage2(text2) {
+  const sinhala = (text2.match(SINHALA) || []).length;
+  const tamil = (text2.match(TAMIL) || []).length;
   if (sinhala >= 3 && sinhala >= tamil) return "si";
   if (tamil >= 3 && tamil > sinhala) return "ta";
   return "en";
 }
-function containsKeyword(text, keyword) {
-  const haystack = text.toLowerCase();
+function containsKeyword(text2, keyword) {
+  const haystack = text2.toLowerCase();
   const needle = keyword.toLowerCase();
   if (!needle) return false;
   const ascii = /^[\x00-\x7F]+$/.test(needle);
@@ -7607,12 +7660,12 @@ function containsKeyword(text, keyword) {
     haystack
   );
 }
-function scoreDomain(text) {
+function scoreDomain(text2) {
   let best = { domain: "unsupported", score: 0 };
   for (const definition of DOMAIN_DEFINITIONS) {
     let score = 0;
     for (const keyword of definition.keywords) {
-      if (containsKeyword(text, keyword)) score += keyword.includes(" ") ? 3 : 2;
+      if (containsKeyword(text2, keyword)) score += keyword.includes(" ") ? 3 : 2;
     }
     if (score > best.score) best = { domain: definition.id, score };
   }
@@ -7688,8 +7741,8 @@ function clampToNow(range, now) {
   const end = range.end > nowIso2 ? nowIso2 : range.end;
   return { start, end };
 }
-function parseTimeRange(text, domain, language, now = /* @__PURE__ */ new Date()) {
-  const lower = text.toLowerCase();
+function parseTimeRange(text2, domain, language, now = /* @__PURE__ */ new Date()) {
+  const lower = text2.toLowerCase();
   for (const event of NAMED_EVENTS) {
     if (event.names.some((token) => containsKeyword(lower, token))) {
       return {
@@ -7820,8 +7873,8 @@ var REGION_ALIASES = [
   { alias: ["hambantota", "\u0DC4\u0DB8\u0DCA\u0DB6\u0DB1\u0DCA\u0DAD\u0DDC\u0DA7", "\u0B85\u0BAE\u0BCD\u0BAA\u0BBE\u0BA8\u0BCD\u0BA4\u0BCB\u0B9F\u0BCD\u0B9F\u0BC8"], place: "Hambantota" },
   { alias: ["nuwara eliya", "\u0DB1\u0DD4\u0DC0\u0DBB\u0D91\u0DC5\u0DD2\u0DBA", "\u0BA8\u0BC1\u0BB5\u0BB0\u0BC6\u0BB2\u0BBF\u0BAF\u0BBE"], place: "Nuwara Eliya" }
 ];
-function parseRegion(text) {
-  const lower = text.toLowerCase();
+function parseRegion(text2) {
+  const lower = text2.toLowerCase();
   for (const entry of REGION_ALIASES) {
     if (entry.alias.some((alias) => lower.includes(alias.toLowerCase()))) {
       const place = SRI_LANKA_PLACES.find((candidate) => candidate.name === entry.place) || WORLD_PLACES.find((candidate) => candidate.name === entry.place);
@@ -7864,13 +7917,13 @@ var VARIABLE_KEYWORDS = {
   asteroid_diameter: ["size", "diameter", "how big"],
   orbital_altitude: ["altitude", "height", "orbit height"]
 };
-function detectVariables(text, domain) {
+function detectVariables(text2, domain) {
   const definition = DOMAIN_DEFINITIONS.find((entry) => entry.id === domain);
   const allowed = new Set(definition?.variables ?? []);
   const found = [];
   for (const [id, keywords] of Object.entries(VARIABLE_KEYWORDS)) {
     if (!allowed.has(id)) continue;
-    if (keywords.some((keyword) => containsKeyword(text, keyword))) found.push(id);
+    if (keywords.some((keyword) => containsKeyword(text2, keyword))) found.push(id);
   }
   if (found.length > 0) return found;
   return definition?.variables.length ? [definition.variables[0]] : [];
@@ -7908,22 +7961,22 @@ function selectMethods(domain, variables, range) {
 }
 function interpret(question, options = {}) {
   const now = options.now ?? /* @__PURE__ */ new Date();
-  const text = String(question || "").trim();
-  const detected = detectLanguage2(text);
+  const text2 = String(question || "").trim();
+  const detected = detectLanguage2(text2);
   const language = detected === "en" && options.preferredLanguage ? options.preferredLanguage : detected;
   const notes = [];
-  const scored = scoreDomain(text);
+  const scored = scoreDomain(text2);
   let domain = scored.domain;
-  const isFollowUp = Boolean(options.context && (scored.score === 0 || !parseTimeRange(text, domain, language, now)));
+  const isFollowUp = Boolean(options.context && (scored.score === 0 || !parseTimeRange(text2, domain, language, now)));
   if (isFollowUp && options.context) domain = options.context.domain;
-  const parsed = parseTimeRange(text, domain, language, now);
+  const parsed = parseTimeRange(text2, domain, language, now);
   const inherited = !parsed && options.context ? options.context.timeRange : null;
   const inheritsRange = inherited !== null;
   const range = parsed?.range ?? inherited ?? defaultRange(domain, language, now).range;
   if (parsed) notes.push(...parsed.notes);
   else if (inheritsRange) notes.push(forgeText(language, "followUpMerged"));
   else notes.push(forgeText(language, "rangeDefault"));
-  const region = parseRegion(text);
+  const region = parseRegion(text2);
   if (region.source === "gazetteer") {
     notes.push(
       forgeText(language, "regionResolved", {
@@ -7935,7 +7988,7 @@ function interpret(question, options = {}) {
   } else if (domain !== "space-weather" && domain !== "near-earth-objects") {
     notes.push(forgeText(language, "regionGlobal"));
   }
-  let variables = detectVariables(text, domain);
+  let variables = detectVariables(text2, domain);
   if (variables.length === 0 && isFollowUp && options.context) {
     variables = options.context.variables.map((variable) => variable.id);
   }
@@ -7954,8 +8007,8 @@ function interpret(question, options = {}) {
   const confidence = domain === "unsupported" ? "low" : parsed && !range.assumed && region.source !== "none" ? "high" : range.assumed ? "medium" : "high";
   return {
     version: FORGE_MODEL_VERSION,
-    id: hashString(`${text}|${language}|${range.start}|${range.end}`),
-    question: text,
+    id: hashString(`${text2}|${language}|${range.start}|${range.end}`),
+    question: text2,
     language,
     domain,
     objective,
@@ -10500,10 +10553,10 @@ function withNasaKey(url, key2) {
   parsed.searchParams.set("api_key", key2);
   return parsed.toString();
 }
-async function fetchText(url, options, cacheKey, ttlMs) {
-  const cache2 = options.cache ?? DEFAULT_CACHE;
+async function fetchText(url, options, cacheKey2, ttlMs) {
+  const cache3 = options.cache ?? DEFAULT_CACHE;
   const nowMs = (options.now ?? (() => /* @__PURE__ */ new Date()))().getTime();
-  const cached2 = cache2.get(cacheKey);
+  const cached2 = cache3.get(cacheKey2);
   if (cached2 && cached2.expires > nowMs) {
     return { ok: true, text: cached2.value, status: 200, retrievedAt: new Date(nowMs).toISOString() };
   }
@@ -10519,25 +10572,25 @@ async function fetchText(url, options, cacheKey, ttlMs) {
         "User-Agent": "NOVA-Hypothesis-Forge/1.0 (NASA Space Explorer scientific investigation)"
       }
     });
-    const text = await response.text();
+    const text2 = await response.text();
     const retrievedAt = (/* @__PURE__ */ new Date()).toISOString();
     if (!response.ok) {
       return {
         ok: false,
-        text,
+        text: text2,
         status: response.status,
         errorCode: response.status === 429 ? "SOURCE_RATE_LIMITED" : "SOURCE_REJECTED",
         detail: `HTTP ${response.status}`,
         retrievedAt
       };
     }
-    if (cache2.size > MAX_CACHE_ENTRIES2) {
-      for (const [key2, entry] of cache2) {
-        if (entry.expires <= nowMs) cache2.delete(key2);
+    if (cache3.size > MAX_CACHE_ENTRIES2) {
+      for (const [key2, entry] of cache3) {
+        if (entry.expires <= nowMs) cache3.delete(key2);
       }
     }
-    cache2.set(cacheKey, { expires: retrieveStart + ttlMs, value: text });
-    return { ok: true, text, status: response.status, retrievedAt };
+    cache3.set(cacheKey2, { expires: retrieveStart + ttlMs, value: text2 });
+    return { ok: true, text: text2, status: response.status, retrievedAt };
   } catch (error) {
     const aborted = error instanceof Error && error.name === "AbortError";
     return {
@@ -10552,9 +10605,9 @@ async function fetchText(url, options, cacheKey, ttlMs) {
     clearTimeout(timeout);
   }
 }
-function parseJson(text) {
+function parseJson(text2) {
   try {
-    return JSON.parse(text);
+    return JSON.parse(text2);
   } catch {
     throw new NormalisationError("Response was not valid JSON.");
   }
@@ -11091,8 +11144,8 @@ function citableIds(context) {
   };
 }
 function allowedNumbers(context) {
-  const text = JSON.stringify(context);
-  const tokens = text.match(/-?\d+(?:\.\d+)?/g) ?? [];
+  const text2 = JSON.stringify(context);
+  const tokens = text2.match(/-?\d+(?:\.\d+)?/g) ?? [];
   const allowed = /* @__PURE__ */ new Set();
   for (const token of tokens) {
     allowed.add(token);
@@ -11238,10 +11291,10 @@ function validateContextPayload(value) {
   return { ok: true, context };
 }
 var ASSERTIVE_CLAIM = /\b(is a discovery|was discovered|we discovered|has been proven|is proven|proves that|definitively (confirms|shows))\b/i;
-function parseAssistantAnswer(text, context) {
+function parseAssistantAnswer(text2, context) {
   let parsed;
   try {
-    parsed = extractJson(text);
+    parsed = extractJson(text2);
   } catch {
     throw new ProviderError("Model reply contained no JSON object", { code: "UNPARSABLE_RESPONSE", retryable: false });
   }
@@ -11356,9 +11409,9 @@ async function runProjectAssistant(options) {
   let validationCode = null;
   const orchestrator = createOrchestrator({
     providers,
-    parseAnswer: (text, ctx) => {
+    parseAnswer: (text2, ctx) => {
       try {
-        return parseAssistantAnswer(text, ctx);
+        return parseAssistantAnswer(text2, ctx);
       } catch (error) {
         validationCode = error instanceof ProviderError ? error.code : "UNPARSABLE_RESPONSE";
         throw error;
@@ -12077,8 +12130,8 @@ var SECRET_PATTERNS = [
   }
 ];
 function redactSecrets(input) {
-  const text = typeof input === "string" ? input : String(input ?? "");
-  let output = text;
+  const text2 = typeof input === "string" ? input : String(input ?? "");
+  let output = text2;
   const found = [];
   for (const { name, pattern, replace } of SECRET_PATTERNS) {
     pattern.lastIndex = 0;
@@ -12105,13 +12158,13 @@ var INJECTION_SIGNALS = [
 function sanitizeUntrusted(input, { maxChars = 2e4 } = {}) {
   const raw = typeof input === "string" ? input : String(input ?? "");
   const truncated = raw.length > maxChars;
-  const { text, redacted } = redactSecrets(raw.slice(0, maxChars));
+  const { text: text2, redacted } = redactSecrets(raw.slice(0, maxChars));
   const signals = [];
   for (const { id, pattern } of INJECTION_SIGNALS) {
-    if (pattern.test(text)) signals.push(id);
+    if (pattern.test(text2)) signals.push(id);
   }
   return {
-    text,
+    text: text2,
     redacted,
     signals,
     suspicious: signals.length > 0,
@@ -12709,11 +12762,11 @@ function createModelFabric({
     hardware,
     inflight: () => [...inflight.keys()],
     /** Embeddings are optional: memory retrieval works without them. */
-    embed: async (text, { providerId = "ollama" } = {}) => {
+    embed: async (text2, { providerId = "ollama" } = {}) => {
       const provider = resolve(providerId);
       if (!provider || !provider.capabilities.embeddings) return null;
       try {
-        return await provider.embed(text);
+        return await provider.embed(text2);
       } catch {
         return null;
       }
@@ -12721,8 +12774,8 @@ function createModelFabric({
   };
 }
 function estimateTokens(content) {
-  const text = typeof content === "string" ? content : JSON.stringify(content ?? "");
-  return Math.ceil(text.length / 4);
+  const text2 = typeof content === "string" ? content : JSON.stringify(content ?? "");
+  return Math.ceil(text2.length / 4);
 }
 function toLifeError(error, provider, signal) {
   if (error instanceof LifeError) return error;
@@ -12809,11 +12862,11 @@ function buildProviders(env, fetchImpl) {
           if (line.message?.content) yield { delta: line.message.content, done: Boolean(line.done) };
         }
       },
-      embed: async (text) => {
+      embed: async (text2) => {
         const response = await fetchImpl(`${ollamaBase}/api/embeddings`, {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ model: env.NOVA_EMBED_MODEL || "nomic-embed-text", prompt: text })
+          body: JSON.stringify({ model: env.NOVA_EMBED_MODEL || "nomic-embed-text", prompt: text2 })
         });
         if (!response.ok) return null;
         const body = await response.json();
@@ -13003,9 +13056,9 @@ function buildProviders(env, fetchImpl) {
         );
         if (!response.ok) throw new LifeError("PROVIDER_ERROR", `Gemini answered ${response.status}`, { provider: "gemini" });
         const body = await response.json();
-        const text = (body.candidates?.[0]?.content?.parts || []).map((part) => part.text || "").join("");
+        const text2 = (body.candidates?.[0]?.content?.parts || []).map((part) => part.text || "").join("");
         return {
-          text,
+          text: text2,
           toolCalls: [],
           usage: {
             promptTokens: body.usageMetadata?.promptTokenCount ?? null,
@@ -13147,10 +13200,10 @@ var RANGES = {
   en: /[A-Za-z]/g
 };
 function detectLanguage3(input) {
-  const text = typeof input === "string" ? input : String(input ?? "");
+  const text2 = typeof input === "string" ? input : String(input ?? "");
   const counts = { si: 0, ta: 0, en: 0 };
   for (const [language, pattern] of Object.entries(RANGES)) {
-    counts[language] = (text.match(pattern) || []).length;
+    counts[language] = (text2.match(pattern) || []).length;
   }
   const total = counts.si + counts.ta + counts.en;
   if (total === 0) return { language: "und", confidence: 0, counts };
@@ -13168,8 +13221,8 @@ function languageInstruction(language) {
   }
 }
 function normalizeText(input) {
-  const text = typeof input === "string" ? input : String(input ?? "");
-  return text.normalize("NFC").replace(/\s+/g, " ").trim();
+  const text2 = typeof input === "string" ? input : String(input ?? "");
+  return text2.normalize("NFC").replace(/\s+/g, " ").trim();
 }
 var GLOSSARY = [
   { en: "moon", si: "\u0DA0\u0DB1\u0DCA\u0DAF\u0DCA\u200D\u0DBB\u0DBA\u0DCF", ta: "\u0BA8\u0BBF\u0BB2\u0BBE" },
@@ -13939,8 +13992,8 @@ ${result2.stderr}`.trim(), { maxChars: MAX_OUTPUT });
       const response = await fetchImpl(parsed.toString(), {
         headers: { "user-agent": "NOVA-NEXUS/1.0 (local research assistant)" }
       });
-      const text = await response.text();
-      const clean = sanitizeUntrusted(text, { maxChars: 2e4 });
+      const text2 = await response.text();
+      const clean = sanitizeUntrusted(text2, { maxChars: 2e4 });
       return { url: parsed.toString(), status: response.status, body: clean.text, suspicious: clean.signals };
     }
   });
@@ -14005,15 +14058,15 @@ function createVerificationService({ store, security, graph = null, clock = () =
     if (!label || String(label).trim().length === 0) {
       throw new LifeError("INVALID_EVIDENCE", "Evidence needs a label.", { status: 400 });
     }
-    const text = typeof detail === "string" ? detail : JSON.stringify(detail);
+    const text2 = typeof detail === "string" ? detail : JSON.stringify(detail);
     const record = {
       id: randomId("ev"),
       task_id: taskId,
       user_id: userId,
       kind,
       label: String(label).slice(0, 200),
-      detail: text.slice(0, 2e4),
-      digest: createHash("sha256").update(text).digest("hex").slice(0, 32),
+      detail: text2.slice(0, 2e4),
+      digest: createHash("sha256").update(text2).digest("hex").slice(0, 32),
       created_at: nowIso(clock)
     };
     store.run(
@@ -14732,15 +14785,15 @@ function createOrchestrator2({
   }
   const now = () => nowIso(clock);
   const detectIntent = (objective) => {
-    const text = String(objective || "").toLowerCase();
+    const text2 = String(objective || "").toLowerCase();
     const intents = [];
-    if (/\b(run|execute)\b[^.]*\b(test|tests|suite)\b/.test(text)) intents.push("run-tests");
-    const readMatch = text.match(/\b(?:read|open|inspect|show)\s+([\w./-]+\.[a-z]{1,6})/);
+    if (/\b(run|execute)\b[^.]*\b(test|tests|suite)\b/.test(text2)) intents.push("run-tests");
+    const readMatch = text2.match(/\b(?:read|open|inspect|show)\s+([\w./-]+\.[a-z]{1,6})/);
     if (readMatch) intents.push(`read:${readMatch[1]}`);
     const searchMatch = objective.match(/\b(?:search|find|grep)\s+(?:for\s+)?["“']?([^"”'\n]{2,60})/i);
     if (searchMatch) intents.push(`search:${searchMatch[1].trim()}`);
-    if (/\b(list|inventory|tree|structure)\b/.test(text)) intents.push("list");
-    if (/\b(review|analyse|analyze|audit)\b/.test(text)) intents.push("review");
+    if (/\b(list|inventory|tree|structure)\b/.test(text2)) intents.push("list");
+    if (/\b(review|analyse|analyze|audit)\b/.test(text2)) intents.push("review");
     return intents.length > 0 ? intents : ["review"];
   };
   const planFor = ({ objective, allowedTools, limits }) => {
@@ -14793,9 +14846,9 @@ function createOrchestrator2({
     limits = {}
   } = {}) => {
     security.require("tasks.write");
-    const text = String(objective || "").trim();
-    if (text.length < 3) throw new LifeError("INVALID_OBJECTIVE", "Describe the objective in a few words.", { status: 400 });
-    if (text.length > 2e3) throw new LifeError("INVALID_OBJECTIVE", "That objective is too long.", { status: 400 });
+    const text2 = String(objective || "").trim();
+    if (text2.length < 3) throw new LifeError("INVALID_OBJECTIVE", "Describe the objective in a few words.", { status: 400 });
+    if (text2.length > 2e3) throw new LifeError("INVALID_OBJECTIVE", "That objective is too long.", { status: 400 });
     const known = new Set(tools.list().map((tool) => tool.id));
     const requested = (Array.isArray(allowedTools) ? allowedTools : DEFAULT_TOOLS).filter((id2) => {
       if (!known.has(id2)) {
@@ -14808,8 +14861,8 @@ function createOrchestrator2({
       maxToolCalls: clamp2(limits.maxToolCalls, 0, 8, DEFAULT_LIMITS.maxToolCalls),
       maxIterations: clamp2(limits.maxIterations, 1, 4, DEFAULT_LIMITS.maxIterations)
     };
-    const detected = language || detectLanguage3(text).language;
-    const plan = planFor({ objective: text, allowedTools: requested, limits: resolvedLimits });
+    const detected = language || detectLanguage3(text2).language;
+    const plan = planFor({ objective: text2, allowedTools: requested, limits: resolvedLimits });
     const id = randomId("task");
     const stamp = now();
     store.tx(() => {
@@ -14820,7 +14873,7 @@ function createOrchestrator2({
         [
           id,
           userId,
-          text,
+          text2,
           ["en", "si", "ta"].includes(detected) ? detected : "en",
           JSON.stringify({ intents: plan.intents, truncated: plan.truncated, toolType: taskType }),
           JSON.stringify(requested),
