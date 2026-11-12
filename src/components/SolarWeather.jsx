@@ -23,10 +23,14 @@ import { fetchSpaceWeather } from '@/lib/nasaApi';
  * - Real-time planetary Kp-index and solar wind telemetry simulation
  */
 export function SolarWeather({ initialKp = 3.5, className = '', lang = 'en' }) {
+  // `initialKp` is the pre-fetch placeholder, so the panel starts in `loading` and
+  // never claims a feed it has not received. Feed state is one of:
+  //   loading | live | stale | sample
   const [kpIndex, setKpIndex] = useState(initialKp);
-  const [solarWindSpeed, setSolarWindSpeed] = useState(412);
+  const [solarWindSpeed, setSolarWindSpeed] = useState(null);
+  const [observedAt, setObservedAt] = useState(null);
   const [isLiveSimulating, setIsLiveSimulating] = useState(false);
-  const [feedSource, setFeedSource] = useState('sample');
+  const [feedSource, setFeedSource] = useState('loading');
 
   // Fetch real-time space weather via central API pipeline on mount
   useEffect(() => {
@@ -34,12 +38,16 @@ export function SolarWeather({ initialKp = 3.5, className = '', lang = 'en' }) {
     async function loadSpaceWeather() {
       try {
         const sw = await fetchSpaceWeather();
-        if (mounted && sw) {
-          if (typeof sw.kpIndex === 'number') setKpIndex(sw.kpIndex);
-          if (typeof sw.solarWindSpeedKmS === 'number') setSolarWindSpeed(sw.solarWindSpeedKmS);
-          setFeedSource(sw._isSample ? 'sample' : 'live');
-        }
-      } catch {}
+        if (!mounted || !sw) return;
+        if (typeof sw.kpIndex === 'number') setKpIndex(sw.kpIndex);
+        setSolarWindSpeed(typeof sw.solarWindSpeedKmS === 'number' ? sw.solarWindSpeedKmS : null);
+        setObservedAt(sw.observedAt || null);
+        if (sw._isSample) setFeedSource('sample');
+        else if (sw.stale) setFeedSource('stale');
+        else setFeedSource('live');
+      } catch {
+        if (mounted) setFeedSource('sample');
+      }
     }
     loadSpaceWeather();
     return () => { mounted = false; };
@@ -53,7 +61,9 @@ export function SolarWeather({ initialKp = 3.5, className = '', lang = 'en' }) {
         const delta = (Math.random() - 0.5) * 0.4;
         return parseFloat(Math.max(1, Math.min(9, prev + delta)).toFixed(1));
       });
-      setSolarWindSpeed(prev => Math.round(prev + (Math.random() - 0.5) * 8));
+      setSolarWindSpeed((prev) =>
+        typeof prev === 'number' ? Math.round(prev + (Math.random() - 0.5) * 8) : null,
+      );
     }, 45000);
     return () => clearInterval(interval);
   }, [isLiveSimulating]);
@@ -113,6 +123,19 @@ export function SolarWeather({ initialKp = 3.5, className = '', lang = 'en' }) {
 
   const weather = getSpaceWeatherStatus(kpIndex);
   const StatusIcon = weather.icon;
+  const simulating = isLiveSimulating;
+  const feedLabel = simulating
+    ? 'Simulated values (user-controlled)'
+    : feedSource === 'live'
+      ? 'NOAA SWPC · measured'
+      : feedSource === 'stale'
+        ? 'NOAA SWPC · last measured observation'
+        : feedSource === 'loading'
+          ? 'Fetching NOAA SWPC…'
+          : 'Reference values — not a live observation';
+  const observedLabel = observedAt
+    ? `observed ${new Date(observedAt).toUTCString().slice(17, 22)} UTC`
+    : null;
 
   return (
     <div 
@@ -125,8 +148,12 @@ export function SolarWeather({ initialKp = 3.5, className = '', lang = 'en' }) {
             <Sun className="h-5 w-5 text-caution" strokeWidth={1.7} />
           </div>
           <div>
-            <span className="block font-mono text-[10px] uppercase tracking-[0.14em] text-atmo">
-              {feedSource === 'live' ? 'NOAA SWPC feed' : 'Simulated conditions'}
+            <span
+              className="block font-mono text-[10px] uppercase tracking-[0.14em] text-atmo"
+              data-feed={simulating ? 'simulated' : feedSource}
+            >
+              {feedLabel}
+              {observedLabel && !simulating && feedSource !== 'loading' ? ` · ${observedLabel}` : ''}
             </span>
             <h3 className="mt-1 font-display text-base font-bold leading-tight text-ink">
               Space weather monitor
@@ -160,7 +187,15 @@ export function SolarWeather({ initialKp = 3.5, className = '', lang = 'en' }) {
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 font-mono text-xs">
         <div className="rounded-[10px] border border-line bg-abyss/60 p-3.5">
           <span className="mb-0.5 block text-[10px] uppercase text-ink-3">
-            {feedSource === 'live' ? 'Planetary Kp' : 'Planetary Kp (simulated)'}
+            {simulating
+              ? 'Planetary Kp (simulated)'
+              : feedSource === 'live'
+                ? 'Planetary Kp'
+                : feedSource === 'stale'
+                  ? 'Planetary Kp (last measured)'
+                  : feedSource === 'loading'
+                    ? 'Planetary Kp (awaiting feed)'
+                    : 'Planetary Kp (reference value)'}
           </span>
           <span className={`text-base font-bold font-display ${weather.color}`}>
             {kpIndex.toFixed(1)} / 9.0
@@ -171,10 +206,18 @@ export function SolarWeather({ initialKp = 3.5, className = '', lang = 'en' }) {
         <div className="p-3.5 rounded-[10px] bg-abyss/60 border border-line">
           <span className="text-ink-3 block text-[10px] uppercase mb-0.5">Solar Wind Speed</span>
           <span className="text-base font-bold font-display text-cyan-300">
-            {solarWindSpeed} km/s
+            {typeof solarWindSpeed === 'number' ? `${Math.round(solarWindSpeed)} km/s` : 'not reported'}
           </span>
           <span className="mt-0.5 block text-[10px] text-ink-4">
-            {feedSource === 'live' ? 'NOAA SWPC via server' : 'Bundled reference value'}
+            {typeof solarWindSpeed !== 'number'
+              ? 'NOAA SWPC plasma feed did not answer'
+              : simulating
+                ? 'Simulated'
+                : feedSource === 'sample'
+                  ? 'Bundled reference value (not measured)'
+                  : feedSource === 'stale'
+                    ? 'NOAA SWPC via server (same observation as Kp)'
+                    : 'NOAA SWPC via server'}
           </span>
         </div>
 
@@ -239,8 +282,9 @@ export function SolarWeather({ initialKp = 3.5, className = '', lang = 'en' }) {
             value={kpIndex}
             onChange={(e) => {
               const val = parseFloat(e.target.value);
+              setIsLiveSimulating(false);
               setKpIndex(val);
-              setSolarWindSpeed(Math.round(300 + val * 65));
+              setSolarWindSpeed(null);
             }}
             className="w-full accent-cyan-400 cursor-pointer h-1.5 bg-surface-2 rounded-[8px]"
           />

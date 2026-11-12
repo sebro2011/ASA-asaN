@@ -1,6 +1,7 @@
 import type { Request, Response, NextFunction } from 'express';
 import { GoogleGenAI, Type } from '@google/genai';
 import { DEFAULT_GEMINI_MODEL } from './novaChat.js';
+import { searchNasaImages } from './nasaImageLibrary.js';
 
 // ====================================================
 // NASA API Routes Module
@@ -218,218 +219,6 @@ function generateSmartAstronomicalTranslation(title: string, explanation: string
 }
 
 // Curated decade-long historical space news archive (2015 - 2026)
-export const HISTORICAL_NASA_ARCHIVE = [
-  {
-    id: 'arch-2026-1',
-    nasaId: 'JWST-EARLY-COSMOS-2026',
-    title: "James Webb Discovers Most Distant Primordial Galaxy Cluster",
-    date: '2026-08-14',
-    year: 2026,
-    category: 'James Webb',
-    source: 'nasa-images',
-    thumbnail: 'https://images.unsplash.com/photo-1614728894747-a83421e2b9c9?auto=format&fit=crop&w=1200&q=80',
-    hdUrl: 'https://images.unsplash.com/photo-1614728894747-a83421e2b9c9?auto=format&fit=crop&w=3840&q=95',
-    description: "Deep spectroscopic surveys with JWST reveal a gravitationally bound proto-cluster of galaxies shining only 350 million years after the Big Bang, challenging prevailing models of early dark matter halo formation.",
-    titleSi: "ජේම්ස් වෙබ් දුරේක්ෂය විශ්වයේ ඈතම මන්දාකිණි පොකුර සොයාගනියි",
-    titleTa: "ஜேம்ஸ் வெப் விண்வெளியின் மிகத் தொலைதூர விண்மீன் திரளைக் கண்டுபிடித்தது",
-    descriptionSi: "මහා පිපිරුමෙන් වසර මිලියන 350 කට පසුව බිහිවූ පැරණිතම මන්දාකිණි පොකුරක් ජේම්ස් වෙබ් අධෝරක්ත දුරේක්ෂය මඟින් තහවුරු කරගෙන ඇත.",
-    descriptionTa: "பெருவெடிப்பிற்கு 350 மில்லியன் ஆண்டுகளுக்குப் பிறகு தோன்றிய ஆதி விண்மீன் திரளை ஜேம்ஸ் வெப் தொலைநோக்கி கண்டறிந்துள்ளது."
-  },
-  {
-    id: 'arch-2025-1',
-    nasaId: 'ARTEMIS-ORION-CREW-2025',
-    title: "Artemis II Orion Spacecraft Completes Altitude Chamber Tests",
-    date: '2025-11-20',
-    year: 2025,
-    category: 'Artemis',
-    source: 'press-release',
-    thumbnail: 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&w=1200&q=80',
-    hdUrl: 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&w=3840&q=95',
-    description: "NASA's Orion spacecraft for the crewed Artemis II lunar flyby successfully endured deep vacuum and extreme thermal stress simulations inside Kennedy Space Center's Neil Armstrong Operations Building.",
-    titleSi: "ආටෙමිස් II ඔරායන් අභ්‍යවකාශ යානය පීඩන කුටීර පරීක්ෂණ සාර්ථකව අවසන් කරයි",
-    titleTa: "ஆர்ட்டெமிஸ் II ஓரியன் விண்கலம் வெற்றிட சோதனைகளை நிறைவு செய்தது",
-    descriptionSi: "ගගනගාමීන් සහිත චන්ද්‍ර චාරිකාව සඳහා සූදානම් වන ඔරායන් යානය රික්තක සහ අන්ත උෂ්ණත්ව පරීක්ෂාවන්ගෙන් සමත් විය.",
-    descriptionTa: "நிலவைச் சுற்றி வரவிருக்கும் விண்வெளி வீரர்களுக்கான ஓரியன் விண்கலம் வெப்பம் மற்றும் வெற்றிட சோதனைகளில் வெற்றி பெற்றது."
-  },
-  {
-    id: 'arch-2024-1',
-    nasaId: 'EUROPA-CLIPPER-LAUNCH-2024',
-    title: "Europa Clipper Launches on Falcon Heavy Toward Jupiter's Ocean World",
-    date: '2024-10-14',
-    year: 2024,
-    category: 'Solar System',
-    source: 'nasa-images',
-    thumbnail: 'https://images.unsplash.com/photo-1541185933-ef5d8ed016c2?auto=format&fit=crop&w=1200&q=80',
-    hdUrl: 'https://images.unsplash.com/photo-1541185933-ef5d8ed016c2?auto=format&fit=crop&w=3840&q=95',
-    description: "NASA's largest planetary probe, Europa Clipper, lifted off from Launch Complex 39A to determine whether conditions beneath the icy crust of Jupiter's moon Europa could support extraterrestrial life.",
-    titleSi: "යුරෝපා ක්ලිපර් යානය බ්‍රහස්පතිගේ සාගර උපග්‍රහයා බලා ගමන් අරඹයි",
-    titleTa: "யூரோப்பா கிளிப்பர் வியாழனின் பனி உலகை நோக்கி ஏவப்பட்டது",
-    descriptionSi: "නාසා ආයතනයේ විශාලතම ග්‍රහලෝක ගවේෂණ යානය වන යුරෝපා ක්ලිපර් සාර්ථකව අභ්‍යවකාශ ගත කෙරිණි.",
-    descriptionTa: "வியாழனின் நிலவான யூரோப்பாவில் உள்ள பெருங்கடலை ஆய்வு செய்ய நாசாவின் மிகப்பெரிய விண்கலம் ஏவப்பட்டது."
-  },
-  {
-    id: 'arch-2023-1',
-    nasaId: 'OSIRIS-REX-SAMPLE-RETURN-2023',
-    title: "OSIRIS-REx Successfully Delivers Pristine Asteroid Bennu Samples to Earth",
-    date: '2023-09-24',
-    year: 2023,
-    category: 'Asteroid Missions',
-    source: 'nasa-images',
-    thumbnail: 'https://images.unsplash.com/photo-1506703719100-a0f3a48c0f86?auto=format&fit=crop&w=1200&q=80',
-    hdUrl: 'https://images.unsplash.com/photo-1506703719100-a0f3a48c0f86?auto=format&fit=crop&w=3840&q=95',
-    description: "After a seven-year billion-mile journey, the sample return capsule landed softly in the Utah Desert, bearing over 120 grams of carbon-rich regolith dating back to the dawn of the solar system 4.5 billion years ago.",
-    titleSi: "ඔසයිරිස්-රෙක්ස් යානය බෙනු ග්‍රහකයේ පාෂාණ සාම්පල පෘථිවියට රැගෙන එයි",
-    titleTa: "பென்னு சிறுகோளின் மாதிரிகளை பூமிக்கு வெற்றிகரமாகக் கொண்டு சேர்த்த ஒசிரிஸ்-ரெக்ஸ்",
-    descriptionSi: "වසර බිලියන 4.5ක් පැරණි කාබන් බහුල ග්‍රහක කොටස් ග්‍රෑම් 120කට වැඩි ප්‍රමාණයක් යූටා කාන්තාරයට ආරක්ෂිතව ගොඩබැස්විණි.",
-    descriptionTa: "சூரிய குடும்பத்தின் ஆரம்ப காலத்து பென்னு சிறுகோளிலிருந்து பாறை மாதிரிகள் பூமிக்கு பத்திரமாகக் கொண்டுவரப்பட்டன."
-  },
-  {
-    id: 'arch-2022-1',
-    nasaId: 'JWST-FIRST-DEEP-FIELD-2022',
-    title: "NASA Releases James Webb's First Deep Field of Universe SMACS 0723",
-    date: '2022-07-12',
-    year: 2022,
-    category: 'James Webb',
-    source: 'apod',
-    thumbnail: 'https://images.unsplash.com/photo-1462331940025-496dfbfc7564?auto=format&fit=crop&w=1200&q=80',
-    hdUrl: 'https://images.unsplash.com/photo-1462331940025-496dfbfc7564?auto=format&fit=crop&w=3840&q=95',
-    description: "The deepest and sharpest infrared image of the distant universe ever seen. Thousands of galaxies, including the faintest objects ever observed in the infrared, appeared in Webb's view for the first time.",
-    titleSi: "ජේම්ස් වෙබ් දුරේක්ෂයේ ඓතිහාසික ප්‍රථම විශ්ව ගැඹුරු ඡායාරූපය මුදාහැරේ",
-    titleTa: "ஜேம்ஸ் வெப் விண்வெளி தொலைநோக்கியின் வரலாற்று சிறப்புமிக்க முதல் ஆழமான படம்",
-    descriptionSi: "ඈත විශ්වයේ මන්දාකිණි දහස් ගණනක් ඇතුළත් ප්‍රථම පූර්ණ වර්ණ අධෝරක්ත ඡායාරූපය නාසා ආයතනය විසින් නිකුත් කරන ලදී.",
-    descriptionTa: "பிரபஞ்சத்தின் பல்லாயிரக்கணக்கான விண்மீன் திரள்களைக் காட்டும் மிகத் தெளிவான அகச்சிவப்பு படத்தை நாசா வெளியிட்டது."
-  },
-  {
-    id: 'arch-2022-2',
-    nasaId: 'DART-IMPACT-2022',
-    title: "DART Mission Successfully Alters Asteroid Dimorphos Orbit",
-    date: '2022-09-26',
-    year: 2022,
-    category: 'Planetary Defense',
-    source: 'press-release',
-    thumbnail: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=1200&q=80',
-    hdUrl: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=3840&q=95',
-    description: "In humanity's first planetary defense test, NASA's DART spacecraft purposefully impacted the asteroid Dimorphos at 14,000 mph, shortening its orbital period around Didymos by 33 minutes.",
-    titleSi: "ඩාර්ට් (DART) මෙහෙයුම මඟින් ග්‍රහකයක කක්ෂය සාර්ථකව වෙනස් කරයි",
-    titleTa: "டிமோர்போஸ் சிறுகோளின் சுற்றுப்பாதையை வெற்றிகரமாக மாற்றிய டார்ட் விண்கலம்",
-    descriptionSi: "මනුෂ්‍ය ඉතිහාසයේ ප්‍රථම වරට පෘථිවි ආරක්ෂණ තාක්ෂණය අත්හදා බලමින් ග්‍රහකයක ගමන් මඟ සාර්ථකව වෙනස් කිරීමට නාසා සමත් විය.",
-    descriptionTa: "பூமியைப் பாதுகாக்கும் முதல் முயற்சியாக, நாசாவின் டார்ட் விண்கலம் சிறுகோளை மோதி அதன் சுற்றுப்பாதையை மாற்றியது."
-  },
-  {
-    id: 'arch-2021-1',
-    nasaId: 'PERSEVERANCE-MARS-LANDING-2021',
-    title: "Perseverance Rover Successfully Touches Down on Mars Jezero Crater",
-    date: '2021-02-18',
-    year: 2021,
-    category: 'Mars Rover',
-    source: 'nasa-images',
-    thumbnail: 'https://images.unsplash.com/photo-1614728894747-a83421e2b9c9?auto=format&fit=crop&w=1200&q=80',
-    hdUrl: 'https://images.unsplash.com/photo-1614728894747-a83421e2b9c9?auto=format&fit=crop&w=3840&q=95',
-    description: "Surviving the 'seven minutes of terror' with a sky crane maneuver, NASA's Perseverance rover landed safely inside Jezero Crater to search for signs of ancient microbial life and deploy the Ingenuity Mars Helicopter.",
-    titleSi: "පර්සෙවරන්ස් රෝවරය අඟහරු මත ජෙසීරෝ ආවාටයට සාර්ථකව ගොඩබසී",
-    titleTa: "செவ்வாய் கிரகத்தின் ஜெசெரோ பள்ளத்தில் பெர்சவரன்ஸ் ரோவர் வெற்றிகரமாகத் தரையிறங்கியது",
-    descriptionSi: "පැරණි ක්ෂුද්‍රජීවී ජීව සාක්ෂි සෙවීම සඳහා නාසාහි වඩාත්ම දියුණු රෝවරය අඟහරු මතට ආරක්ෂිතව ගොඩබැස්විණි.",
-    descriptionTa: "பண்டைய உயிரினங்களின் தடயங்களைத் தேட நாசாவின் பெர்சவரன்ஸ் ரோவர் செவ்வாயில் வெற்றிகரமாகத் தரையிறங்கியது."
-  },
-  {
-    id: 'arch-2021-2',
-    nasaId: 'JWST-LAUNCH-CHRISTMAS-2021',
-    title: "James Webb Space Telescope Launches on Ariane 5 from Kourou",
-    date: '2021-12-25',
-    year: 2021,
-    category: 'James Webb',
-    source: 'nasa-images',
-    thumbnail: 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&w=1200&q=80',
-    hdUrl: 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&w=3840&q=95',
-    description: "On Christmas Day 2021, the premier space observatory of the next decade launched flawlessly atop an Ariane 5 rocket, beginning its one-million-mile journey to the Sun-Earth L2 Lagrange point.",
-    titleSi: "ජේම්ස් වෙබ් අභ්‍යවකාශ දුරේක්ෂය ප්‍රංශ ගයනාවෙන් සාර්ථකව අභ්‍යවකාශගත කෙරේ",
-    titleTa: "ஜேம்ஸ் வெப் விண்வெளி தொலைநோக்கி ஏரியான் 5 ராக்கெட் மூலம் வெற்றிகரமாக ஏவப்பட்டது",
-    descriptionSi: "2021 නත්තල් දිනයේදී ජේම්ස් වෙබ් දුරේක්ෂය L2 ලක්ෂ්‍යය බලා සිය ඓතිහාසික ගමන ආරම්භ කළේය.",
-    descriptionTa: "வரலாற்று சிறப்புமிக்க ஜேம்ஸ் வெப் தொலைநோக்கி விண்வெளியை நோக்கி தனது பயணத்தைத் தொடங்கியது."
-  },
-  {
-    id: 'arch-2020-1',
-    nasaId: 'CREW-DRAGON-DEMO2-2020',
-    title: "NASA Astronauts Launch from American Soil on Commercial Spacecraft",
-    date: '2020-05-30',
-    year: 2020,
-    category: 'Commercial Crew',
-    source: 'nasa-images',
-    thumbnail: 'https://images.unsplash.com/photo-1517976487502-5e0e3300f556?auto=format&fit=crop&w=1200&q=80',
-    hdUrl: 'https://images.unsplash.com/photo-1517976487502-5e0e3300f556?auto=format&fit=crop&w=3840&q=95',
-    description: "NASA astronauts Robert Behnken and Douglas Hurley launched aboard SpaceX Crew Dragon from Launch Complex 39A, restoring American orbital human spaceflight capabilities after nearly a decade.",
-    titleSi: "වසර 9 කට පසු ඇමරිකානු භූමියෙන් මිනිසුන් රැගත් ප්‍රථම වාණිජ අභ්‍යවකාශ චාරිකාව",
-    titleTa: "அமெரிக்க மண்ணிலிருந்து மனிதர்களை சுமந்து சென்ற வணிக விண்கலம்",
-    descriptionSi: "SpaceX Crew Dragon යානය මඟින් නාසා ගගනගාමීන් දෙදෙනෙකු ජාත්‍යන්තර අභ්‍යවකාශ මධ්‍යස්ථානයට සාර්ථකව රැගෙන යන ලදී.",
-    descriptionTa: "ஸ்பேஸ்எக்ஸ் க்ரூ டிராகன் மூலம் அமெரிக்க விண்வெளி வீரர்கள் சர்வதேச விண்வெளி நிலையத்திற்கு சென்றனர்."
-  },
-  {
-    id: 'arch-2019-1',
-    nasaId: 'M87-BLACK-HOLE-2019',
-    title: "First Ever Image of a Supermassive Black Hole Captured in M87",
-    date: '2019-04-10',
-    year: 2019,
-    category: 'Deep Space',
-    source: 'apod',
-    thumbnail: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=1200&q=80',
-    hdUrl: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=3840&q=95',
-    description: "The Event Horizon Telescope (EHT), a planet-scale array of eight ground-based radio telescopes, revealed the first direct visual evidence of a supermassive black hole and its shadow at the center of galaxy Messier 87.",
-    titleSi: "ඉතිහාසයේ ප්‍රථම වතාවට කළු කුහරයක සැබෑ ඡායාරූපයක් ලබාගැනේ",
-    titleTa: "வரலாற்றில் முதன்முறையாக கருந்துளையின் நேரடி புகைப்படம் வெளியிடப்பட்டது",
-    descriptionSi: "Messier 87 මන්දාකිණි මධ්‍යයේ පිහිටි අති දැවැන්ත කළු කුහරයේ ඡායාරූපය Event Horizon දුරේක්ෂ ජාලය මඟින් අනාවරණය කෙරිණි.",
-    descriptionTa: "மெஸ்ஸியர் 87 விண்மீன் மண்டலத்தின் மையத்தில் உள்ள கருந்துளையின் நிழலை வானியலாளர்கள் படம்பிடித்தனர்."
-  },
-  {
-    id: 'arch-2018-1',
-    nasaId: 'PARKER-SOLAR-PROBE-2018',
-    title: "Parker Solar Probe Launches on Historic Mission to Touch the Sun",
-    date: '2018-08-12',
-    year: 2018,
-    category: 'Solar Science',
-    source: 'nasa-images',
-    thumbnail: 'https://images.unsplash.com/photo-1506703719100-a0f3a48c0f86?auto=format&fit=crop&w=1200&q=80',
-    hdUrl: 'https://images.unsplash.com/photo-1506703719100-a0f3a48c0f86?auto=format&fit=crop&w=3840&q=95',
-    description: "Sprinting at record-breaking speeds up to 430,000 mph, NASA's Parker Solar Probe embarked on a revolutionary trajectory to fly directly through the Sun's outer corona and unlock coronal heating mysteries.",
-    titleSi: "සූර්යයාගේ කොරෝනා කලාපය ස්පර්ස කිරීමට පාකර් යානය ගමන් අරඹයි",
-    titleTa: "சூரியனை ஆய்வு செய்ய வரலாற்று சிறப்புமிக்க பார்க்கர் சோலார் புரோப் ஏவப்பட்டது",
-    descriptionSi: "සූර්යයාගේ බාහිර වායුගෝලය හරහා ගමන් කරන ලොව වේගවත්ම මිනිසා විසින් සාදන ලද යානය ලෙස පාකර් යානය ඉතිහාසගත විය.",
-    descriptionTa: "சூரியனின் வெப்பநிலையை ஆராய பார்க்கர் விண்கலம் விண்வெளிக்கு வெற்றிகரமாக ஏவப்பட்டது."
-  },
-  {
-    id: 'arch-2017-1',
-    nasaId: 'CASSINI-GRAND-FINALE-2017',
-    title: "Cassini Spacecraft Plunges into Saturn in Poetic Grand Finale",
-    date: '2017-09-15',
-    year: 2017,
-    category: 'Saturn Exploration',
-    source: 'nasa-images',
-    thumbnail: 'https://images.unsplash.com/photo-1614728894747-a83421e2b9c9?auto=format&fit=crop&w=1200&q=80',
-    hdUrl: 'https://images.unsplash.com/photo-1614728894747-a83421e2b9c9?auto=format&fit=crop&w=3840&q=95',
-    description: "After 13 years of revolutionary discoveries exploring Saturn and its moons Titan and Enceladus, Cassini executed its intentional death dive into the ringed giant to protect potentially habitable moons from contamination.",
-    titleSi: "කැසිනි යානය සෙනසුරු ග්‍රහයා තුළට කඩා වැටෙමින් මෙහෙයුම අවසන් කරයි",
-    titleTa: "சனி கிரகத்தின் வளிமண்டலத்தில் மூழ்கி காசினி விண்கலம் தன் பயணத்தை முடித்துக் கொண்டது",
-    descriptionSi: "වසර 13ක් සෙනසුරු සහ එහි චන්ද්‍රයන් ගවේෂණය කළ කැසිනි යානය සෙනසුරු වායුගෝලයට ඇතුළු වෙමින් සිය ඓතිහාසික ගමන නිමා කළේය.",
-    descriptionTa: "13 ஆண்டுகள் சனி கிரகத்தை ஆய்வு செய்த காசினி விண்கலம் திட்டமிட்டபடி சனி கிரகத்தின் வளிமண்டலத்தில் எரிந்து சாம்பலானது."
-  },
-  {
-    id: 'arch-2015-1',
-    nasaId: 'NEW-HORIZONS-PLUTO-2015',
-    title: "New Horizons Makes Historic First Flyby of Pluto and Charon",
-    date: '2015-07-14',
-    year: 2015,
-    category: 'Kuiper Belt',
-    source: 'nasa-images',
-    thumbnail: 'https://images.unsplash.com/photo-1462331940025-496dfbfc7564?auto=format&fit=crop&w=1200&q=80',
-    hdUrl: 'https://images.unsplash.com/photo-1462331940025-496dfbfc7564?auto=format&fit=crop&w=3840&q=95',
-    description: "Traveling three billion miles over nine and a half years, New Horizons captured the first close-up portraits of Pluto, revealing towering water-ice mountains, smooth nitrogen glaciers, and Tombaugh Regio's famous heart.",
-    titleSi: "නිව් හොරයිසන්ස් යානය ප්ලූටෝ ග්‍රහලොව අසලින් සාර්ථකව පියාසර කරයි",
-    titleTa: "புளூட்டோவை மிக அருகில் புகைப்படம் எடுத்த நியூ ஹொரைசன்ஸ் விண்கலம்",
-    descriptionSi: "ප්ලූටෝගේ අයිස් කඳුවැටි සහ හෘද හැඩැති නයිට්‍රජන් තැනිතලා ප්‍රථම වරට පෘථිවියට දැකගැනීමට හැකි විය.",
-    descriptionTa: "ஒன்பதரை ஆண்டுகள் பயணித்து புளூட்டோவின் அதிசய உலகை முதன்முறையாக உலகுக்குக் காட்டியது நியூ ஹொரைசன்ஸ்."
-  }
-];
-
-// Satellite registry for /api/satellites
 export const SATELLITE_REGISTRY = [
   {
     id: 'iss',
@@ -606,6 +395,79 @@ export const GROUNDED_CACHE_TTL_MS = 2 * 60 * 60 * 1000;
  * @param app - Express application instance
  * @param ai - GoogleGenAI instance (used by /api/translate and /api/nova/chat)
  */
+/* ---------------------------- NOAA SWPC parsing ---------------------------- */
+
+export const KP_INDEX_URL = 'https://services.swpc.noaa.gov/json/planetary_k_index.json';
+export const PLASMA_SPEED_URL = 'https://services.swpc.noaa.gov/products/solar-wind/plasma-7-day.json';
+
+/** Last observation this process actually measured — never a guess. */
+export let lastKnownSolarWeather:
+  | { data: Record<string, unknown>; fetchedAt: string }
+  | null = null;
+
+async function fetchSwpcJson(url: string): Promise<unknown> {
+  try {
+    const response = await fetch(url, { signal: AbortSignal.timeout(4000) });
+    if (!response.ok) return null;
+    return await response.json();
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * NOAA's planetary_k_index.json is a header row followed by
+ * `[time_tag, Kp, a_running, station_count]`. The newest row is last, and Kp can
+ * be a string or null while a slot is being filled, so the newest *finite* value
+ * wins and anything else is discarded rather than defaulted.
+ */
+export function parsePlanetaryKIndex(
+  payload: unknown,
+): { kpIndex: number; observedAt: string; stormKey: string; stormStatus: string } | null {
+  if (!Array.isArray(payload)) return null;
+  for (let index = payload.length - 1; index >= 0; index -= 1) {
+    const row = payload[index];
+    if (!Array.isArray(row) || row.length < 2) continue;
+    const [timeTag, rawKp] = row as [unknown, unknown];
+    const kp = typeof rawKp === 'number' ? rawKp : Number.parseFloat(String(rawKp ?? ''));
+    if (!Number.isFinite(kp) || kp < 0 || kp > 9) continue;
+    const observed = typeof timeTag === 'string' ? new Date(`${timeTag.replace(' ', 'T')}Z`) : null;
+    const observedAt = observed && !Number.isNaN(observed.getTime())
+      ? observed.toISOString()
+      : new Date().toISOString();
+    return { kpIndex: kp, observedAt, ...kpStormScale(kp) };
+  }
+  return null;
+}
+
+/** NOAA G-scale: G1 = Kp 5 … G5 = Kp 9. Below 5 there is no storm. */
+export function kpStormScale(kp: number): { stormKey: string; stormStatus: string } {
+  if (kp >= 9) return { stormKey: 'G5', stormStatus: 'extreme' };
+  if (kp >= 8) return { stormKey: 'G4', stormStatus: 'severe' };
+  if (kp >= 7) return { stormKey: 'G3', stormStatus: 'strong' };
+  if (kp >= 6) return { stormKey: 'G2', stormStatus: 'moderate' };
+  if (kp >= 5) return { stormKey: 'G1', stormStatus: 'minor' };
+  return { stormKey: 'G0', stormStatus: 'quiet' };
+}
+
+/** plasma-7-day.json is `[time_tag, density, speed, temperature]`, newest last. */
+export function parsePlasmaSpeed(payload: unknown): { speedKmS: number; observedAt: string } | null {
+  if (!Array.isArray(payload)) return null;
+  for (let index = payload.length - 1; index >= 0; index -= 1) {
+    const row = payload[index];
+    if (!Array.isArray(row) || row.length < 3) continue;
+    const [timeTag, , rawSpeed] = row as [unknown, unknown, unknown];
+    const speed = typeof rawSpeed === 'number' ? rawSpeed : Number.parseFloat(String(rawSpeed ?? ''));
+    if (!Number.isFinite(speed) || speed <= 0) continue;
+    const observed = typeof timeTag === 'string' ? new Date(`${timeTag.replace(' ', 'T')}Z`) : null;
+    const observedAt = observed && !Number.isNaN(observed.getTime())
+      ? observed.toISOString()
+      : new Date().toISOString();
+    return { speedKmS: speed, observedAt };
+  }
+  return null;
+}
+
 export function setupNasaRoutes(app: any, ai: GoogleGenAI) {
   // ====================================================
   // NASA APOD API route with high-resilience cache & graceful timeout
@@ -1208,39 +1070,54 @@ Explanation to translate: "${explanation}"`;
   // Multi-Year NASA Archive & Search Endpoint
   // ====================================================
   app.get('/api/nasa-archive', async (req: Request, res: Response) => {
-    const yearQuery = req.query.year ? parseInt(req.query.year as string, 10) : null;
-    const searchQuery = (req.query.q as string || '').trim().toLowerCase();
-    const page = Math.max(1, parseInt(req.query.page as string || '1', 10));
-    const limit = Math.max(1, Math.min(24, parseInt(req.query.limit as string || '12', 10)));
+    /**
+     * Real NASA Images search. The previous handler served thirteen hardcoded
+     * records whose `nasaId` values were synthesised and whose thumbnails were
+     * Unsplash stock photos, which the client printed as verified NASA IDs. This
+     * handler has no local data at all: every field comes from the upstream
+     * record, and an upstream outage is reported as an outage.
+     */
+    const q = String(req.query.q ?? '').trim();
+    const yearRaw = req.query.year ? Number.parseInt(String(req.query.year), 10) : null;
+    const page = req.query.page ? Number.parseInt(String(req.query.page), 10) : 1;
+    const limit = req.query.limit ? Number.parseInt(String(req.query.limit), 10) : 8;
 
-    let filtered = HISTORICAL_NASA_ARCHIVE;
-
-    if (yearQuery) {
-      filtered = filtered.filter((item: any) => item.year === yearQuery);
+    if (!q) {
+      return res.status(400).json({
+        success: false,
+        code: 'INVALID_QUERY',
+        error: 'A search term is required: the archive is a live NASA Images search, not a local list.',
+        source: 'NASA Images (images.nasa.gov)',
+      });
     }
-    if (searchQuery) {
-      filtered = filtered.filter((item: any) =>
-        item.title.toLowerCase().includes(searchQuery) ||
-        item.description.toLowerCase().includes(searchQuery) ||
-        (item.titleSi && item.titleSi.toLowerCase().includes(searchQuery)) ||
-        (item.titleTa && item.titleTa.toLowerCase().includes(searchQuery)) ||
-        (item.category && item.category.toLowerCase().includes(searchQuery))
-      );
+
+    const result = await searchNasaImages({
+      q,
+      year: Number.isFinite(yearRaw) ? yearRaw : null,
+      page: Number.isFinite(page) ? page : 1,
+      limit: Number.isFinite(limit) ? limit : 8,
+    });
+
+    if (!result.ok) {
+      return res.status(result.status).json({
+        success: false,
+        code: result.code,
+        error: result.message,
+        source: 'NASA Images (images.nasa.gov)',
+      });
     }
 
-    const total = filtered.length;
-    const totalPages = Math.ceil(total / limit);
-    const start = (page - 1) * limit;
-    const pageItems = filtered.slice(start, start + limit);
-
-    res.json({
+    return res.json({
       success: true,
-      articles: pageItems,
-      total,
-      page,
-      limit,
-      totalPages,
-      hasMore: page < totalPages,
+      articles: result.items,
+      total: result.total,
+      page: result.page,
+      limit: result.limit,
+      totalPages: result.totalPages,
+      hasMore: result.hasMore,
+      cached: result.cached,
+      fetchedAt: result.fetchedAt,
+      source: result.source,
     });
   });
 
@@ -1318,21 +1195,55 @@ Explanation to translate: "${explanation}"`;
   // ====================================================
   // Solar Weather Endpoint
   // ====================================================
+  //
+  // Kp is a *measurement*. This endpoint used to answer an outage with a
+  // hardcoded `{ kpIndex: 2, status: 'quiet' }`, which the client then rendered
+  // as "NOAA SWPC feed" — a fabricated calm reading shown as observed science.
+  // Now: parse the real Kp table, remember the last genuine sample, serve that
+  // sample marked `stale` when the upstream fails, and answer with an explicit
+  // error when there has never been one. There is no synthetic value anywhere.
   app.get('/api/solar-weather', async (_req: Request, res: Response) => {
-    try {
-      const url = 'https://services.swpc.noaa.gov/json/planetary_k_index.json';
-      const nasaRes = await fetch(url, { signal: AbortSignal.timeout(4000) });
-      if (nasaRes.ok) {
-        const data = redactApiKeys(await nasaRes.json());
-        return res.json({ success: true, data, source: 'NOAA SWPC' });
-      }
-    } catch {
-      // Fall through to fallback
+    const K = parsePlanetaryKIndex(await fetchSwpcJson(KP_INDEX_URL));
+    const speed = parsePlasmaSpeed(await fetchSwpcJson(PLASMA_SPEED_URL));
+
+    if (K) {
+      lastKnownSolarWeather = {
+        data: {
+          kpIndex: K.kpIndex,
+          observedAt: K.observedAt,
+          stormKey: K.stormKey,
+          stormStatus: K.stormStatus,
+          solarWindSpeedKmS: speed ? speed.speedKmS : null,
+          solarWindObservedAt: speed ? speed.observedAt : null,
+        },
+        fetchedAt: new Date().toISOString(),
+      };
+      return res.json({
+        success: true,
+        data: lastKnownSolarWeather.data,
+        source: 'NOAA SWPC',
+        fetchedAt: lastKnownSolarWeather.fetchedAt,
+        stale: false,
+      });
     }
-    return res.json({
-      success: true,
-      data: { kpIndex: 2, status: 'quiet', note: 'Using fallback solar weather data' },
-      isFallback: true,
+
+    if (lastKnownSolarWeather) {
+      return res.json({
+        success: true,
+        data: lastKnownSolarWeather.data,
+        source: 'NOAA SWPC',
+        fetchedAt: lastKnownSolarWeather.fetchedAt,
+        stale: true,
+        code: 'CACHED',
+        note: 'NOAA SWPC is unreachable; this is the last observation that was actually measured.',
+      });
+    }
+
+    return res.status(503).json({
+      success: false,
+      code: 'UPSTREAM_UNAVAILABLE',
+      error: 'NOAA SWPC did not answer and no earlier observation is held by this server.',
+      source: 'NOAA SWPC',
     });
   });
 

@@ -23,7 +23,8 @@ import {
   Maximize2, 
   X,
   Compass,
-  Rocket
+  Rocket,
+  AlertTriangle
 } from 'lucide-react';
 import { useFavorites } from '../utils/favorites';
 import { fetchNasaArchive } from '@/lib/nasaApi';
@@ -78,6 +79,10 @@ export default function NASANewsExplorer({ className = '' }) {
   const [selectedDetailItem, setSelectedDetailItem] = useState(null);
   const [copiedId, setCopiedId] = useState(null);
   const [translatedMap, setTranslatedMap] = useState({});
+  // The archive is a live NASA Images search. When it fails the panel says so and
+  // offers a retry — an outage must not be dressed up as "no results".
+  const [archiveError, setArchiveError] = useState(null);
+  const [archiveSource, setArchiveSource] = useState(null);
 
   // Multilingual UI Strings
   const UI = {
@@ -143,6 +148,7 @@ export default function NASANewsExplorer({ className = '' }) {
   const fetchArchive = useCallback(async (targetPage = 1, append = false) => {
     if (targetPage === 1) setIsLoading(true);
     else setIsFetchingMore(true);
+    setArchiveError(null);
 
     try {
       const activeSearch = activeTopic || searchQuery;
@@ -153,8 +159,19 @@ export default function NASANewsExplorer({ className = '' }) {
         limit: 8
       });
 
+      if (data && data.success === false) {
+        setArchiveError(data.error || 'The NASA Images archive could not be reached.');
+        if (!append) setArticles([]);
+        return;
+      }
+
       if (data && data.articles) {
         const incoming = data.articles || [];
+        setArchiveSource({
+          source: data.source || 'NASA Images (images.nasa.gov)',
+          fetchedAt: data.fetchedAt || null,
+          cached: Boolean(data.cached),
+        });
         setTotalCount(data.total || incoming.length);
         setHasMore(data.hasMore ?? incoming.length >= 8);
 
@@ -169,7 +186,11 @@ export default function NASANewsExplorer({ className = '' }) {
         }
       }
     } catch (err) {
-      console.warn('Error fetching NASA archive via pipeline:', err);
+      setArchiveError(
+        err && err.name === 'AbortError'
+          ? 'The NASA Images archive did not answer in time.'
+          : 'The NASA Images archive could not be reached.',
+      );
     } finally {
       setIsLoading(false);
       setIsFetchingMore(false);
@@ -349,8 +370,12 @@ export default function NASANewsExplorer({ className = '' }) {
             {articles.length} {t.resultsCount} {selectedYear ? `(${selectedYear})` : '(2015-2026)'}
           </span>
         </div>
-        <div>
-          <span>Multi-Year Archive Mode</span>
+        <div className="text-right">
+          <span data-archive-source={archiveSource ? 'live' : 'none'}>
+            {archiveSource
+              ? `${archiveSource.source}${archiveSource.fetchedAt ? ` · ${new Date(archiveSource.fetchedAt).toLocaleTimeString()}` : ''}${archiveSource.cached ? ' · cached' : ''}`
+              : 'NASA Images search'}
+          </span>
         </div>
       </div>
 
@@ -367,6 +392,23 @@ export default function NASANewsExplorer({ className = '' }) {
               </div>
             </div>
           ))}
+        </div>
+      ) : archiveError ? (
+        <div className="rounded-3xl bg-surface/60/40 border border-amber-500/40 p-10 text-center space-y-4" role="alert">
+          <AlertTriangle className="w-10 h-10 text-amber-400 mx-auto" />
+          <h3 className="text-base font-bold text-white font-display">NASA Images is unreachable</h3>
+          <p className="text-xs text-ink-3 max-w-md mx-auto">{archiveError}</p>
+          <p className="text-[11px] text-ink-4 max-w-md mx-auto">
+            This panel only shows real records from images.nasa.gov. Nothing is shown rather than
+            an invented archive entry.
+          </p>
+          <button
+            type="button"
+            onClick={() => fetchArchive(1, false)}
+            className="px-4 py-2 rounded-[10px] bg-surface-2 hover:bg-slate-700 text-white text-xs font-mono transition-colors"
+          >
+            Retry NASA Images
+          </button>
         </div>
       ) : articles.length === 0 ? (
         <div className="rounded-3xl bg-surface/60/40 border border-line p-12 text-center space-y-4">
@@ -555,7 +597,9 @@ export default function NASANewsExplorer({ className = '' }) {
                     {selectedDetailItem.year || selectedDetailItem.date?.slice(0, 4)}
                   </span>
                   <span className="text-ink-3">• {selectedDetailItem.category}</span>
-                  <span className="text-ink-4">• NASA ID: {selectedDetailItem.nasaId}</span>
+                  {selectedDetailItem.nasaId ? (
+                    <span className="text-ink-4">• NASA ID: {selectedDetailItem.nasaId}</span>
+                  ) : null}
                 </div>
                 <h3 className="text-xl sm:text-2xl font-bold font-display text-white">
                   {getLocalized(selectedDetailItem).title}
@@ -589,7 +633,10 @@ export default function NASANewsExplorer({ className = '' }) {
               {/* External NASA Links & Actions */}
               <div className="pt-4 border-t border-line flex items-center justify-between flex-wrap gap-3">
                 <a
-                  href={`https://images.nasa.gov/details/${selectedDetailItem.nasaId || ''}`}
+                  href={
+                    selectedDetailItem.detailsUrl ||
+                    `https://images.nasa.gov/details/${encodeURIComponent(selectedDetailItem.nasaId)}`
+                  }
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-2 px-4 py-2 rounded-[10px] bg-surface/60 hover:bg-surface-2 border border-line text-xs font-mono text-cyan-300 transition-colors"
