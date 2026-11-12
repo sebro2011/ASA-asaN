@@ -425,7 +425,7 @@ function ApodPanel({
               ) : null}
               <div className="mt-auto flex flex-wrap items-center justify-between gap-3 border-t border-line/60 pt-4">
                 <SourceNote className="max-w-[18rem]">
-                  {t('apodCredit')}: {apod.copyright || 'NASA'}
+                  {apod.source === 'NASA Science APOD archive' ? t('apodScienceSource') : `${t('apodCredit')}: ${apod.copyright || 'See APOD record'}`}
                 </SourceNote>
                 <Button variant="ghost" size="sm" onClick={() => onNavigate('apod')} trailingIcon={ArrowRight}>
                   {t('apodOpen')}

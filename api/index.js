@@ -4581,7 +4581,7 @@ function createDiagnosticsHandler({
           const modelMissing = outcome.status === 404 || outcome.status === 422;
           if (modelMissing) {
             entry.modelInvalid = true;
-            entry.hint = `NOVA_GEMINI_MODEL="${models.gemini}" is not a Gemini model id. Set it to a real one (for example ${DEFAULT_GEMINI_MODEL}) or unset it.`;
+            entry.hint = `The requested model returned HTTP ${outcome.status}; check NOVA_GEMINI_MODEL and whether this key can access that model.`;
           }
           const alternatives2 = [...GEMINI_MODEL_FALLBACKS, DEFAULT_GEMINI_MODEL].filter((candidate) => candidate !== models.gemini);
           const tried = [];
@@ -4597,9 +4597,9 @@ function createDiagnosticsHandler({
           if (!entry.fallbackModel && tried.length) entry.fallbackModel = tried[tried.length - 1];
           entry.modelsTried = [models.gemini, ...tried.map((attempt) => attempt.model)];
           if (entry.fallbackModel?.ok) {
-            entry.hint = `${entry.hint ? `${entry.hint} ` : ""}${entry.fallbackModel.model} answered with the same key, so this is a model problem and not a key problem \u2014 set NOVA_GEMINI_MODEL to it.`;
-          } else if (!modelMissing) {
-            entry.hint = `${entry.hint ? `${entry.hint} ` : ""}Every model id tried was refused the same way, so this is not a model-id problem: the key is valid but the API is refusing generation (quota, billing or a project restriction).`;
+            entry.hint = `${entry.hint ? `${entry.hint} ` : ""}${entry.fallbackModel.model} answered with the same key; the original model request failed. Review model availability and configuration.`;
+          } else {
+            entry.hint = `${entry.hint ? `${entry.hint} ` : ""}No alternative model probe succeeded. Failures may have different causes; inspect the statuses and provider configuration before drawing a conclusion.`;
           }
           const available = await listGeminiModels({ fetchImpl, key: keys.gemini, secrets, timeoutMs: keyCheckTimeoutMs, now });
           if (available.length) {
@@ -4735,10 +4735,10 @@ function normaliseNasaImageCollection(payload) {
   if (!collection || typeof collection !== "object") return null;
   const rawItems = collection.items;
   const metadata = collection.metadata;
-  const totalHits = metadata && typeof metadata === "object" ? Number(metadata.total_hits) : NaN;
-  const items = (Array.isArray(rawItems) ? rawItems : []).map(normaliseNasaImageItem).filter((item) => item !== null);
-  const total = Number.isFinite(totalHits) ? totalHits : items.length;
-  return { items, total };
+  const totalHits = metadata && typeof metadata === "object" ? metadata.total_hits : void 0;
+  if (!Array.isArray(rawItems) || typeof totalHits !== "number" || !Number.isSafeInteger(totalHits) || totalHits < 0) return null;
+  const items = rawItems.map(normaliseNasaImageItem).filter((item) => item !== null);
+  return { items, total: totalHits };
 }
 async function searchNasaImages(query, deps = {}) {
   const built = nasaImagesUrl(query);
@@ -4826,6 +4826,69 @@ async function searchNasaImages(query, deps = {}) {
     fetchedAt,
     source: NASA_IMAGES_ATTRIBUTION
   };
+}
+
+// server/apodScience.ts
+var MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+var BASE = "https://science.nasa.gov/wp-json/wp/v2";
+var SOURCE = "NASA Science APOD archive";
+function plain(value) {
+  return value.replace(/<script\b[^>]*>[\s\S]*?<\/script\s*>/gi, " ").replace(/<style\b[^>]*>[\s\S]*?<\/style\s*>/gi, " ").replace(/<[^>]*>/g, " ").replace(/&(#x[\da-f]+|#\d+|amp|lt|gt|quot|apos|nbsp|ndash|mdash|rsquo|lsquo|ldquo|rdquo);/gi, (all, entity) => {
+    const named = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " ", ndash: "\u2013", mdash: "\u2014", rsquo: "\u2019", lsquo: "\u2018", ldquo: "\u201C", rdquo: "\u201D" };
+    if (entity[0] !== "#") return named[entity.toLowerCase()] ?? all;
+    const number = entity[1].toLowerCase() === "x" ? parseInt(entity.slice(2), 16) : parseInt(entity.slice(1), 10);
+    return number > 0 && number <= 1114111 && !(number >= 55296 && number <= 57343) ? String.fromCodePoint(number) : "";
+  }).replace(/\s+/g, " ").trim();
+}
+function validUrl(value, host) {
+  if (typeof value !== "string") return null;
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" && url.hostname === host && !url.username && !url.password && !url.port ? url.toString() : null;
+  } catch {
+    return null;
+  }
+}
+async function readJson(url, fetchImpl) {
+  const response = await fetchImpl(url, { signal: AbortSignal.timeout(3e3), redirect: "error", headers: { Accept: "application/json" } });
+  if (!response.ok) throw new Error("NASA Science unavailable");
+  const size = Number(response.headers.get("content-length"));
+  if (size > 15e5) throw new Error("NASA Science response too large");
+  const raw = await response.text();
+  if (raw.length > 15e5) throw new Error("NASA Science response too large");
+  return JSON.parse(raw);
+}
+async function fetchScienceApod(date, fetchImpl = globalThis.fetch) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
+  if (!match) return null;
+  const year = Number(match[1]), month = Number(match[2]), day = Number(match[3]);
+  if (!MONTHS[month - 1] || day < 1 || day > 31) return null;
+  try {
+    const params = new URLSearchParams({ search: `APOD ${year} ${MONTHS[month - 1]} ${day}`, per_page: "20", _fields: "id,link,title,content,featured_media" });
+    const posts = await readJson(`${BASE}/image-article?${params}`, fetchImpl);
+    if (!Array.isArray(posts)) return null;
+    const expected = new RegExp(`^APOD:\\s*${year}\\s+${MONTHS[month - 1]}\\s+0?${day}\\s*[\u2013\u2014-]\\s*(.+)$`, "i");
+    const candidates = posts.flatMap((post2) => {
+      if (typeof post2?.title?.rendered !== "string") return [];
+      const title2 = expected.exec(plain(post2.title.rendered));
+      return title2 ? [{ post: post2, title: title2[1] }] : [];
+    });
+    if (candidates.length !== 1) return null;
+    const { post, title } = candidates[0];
+    const articleUrl = validUrl(post.link, "science.nasa.gov");
+    const html = post.content?.rendered;
+    if (!articleUrl || !new URL(articleUrl).pathname.startsWith("/image-article/apod-") || !Number.isSafeInteger(post.featured_media) || post.featured_media <= 0 || typeof html !== "string" || html.length > 5e5) return null;
+    if (/<(?:iframe|video|object|embed)\b|(?:youtube\.com|youtu\.be|vimeo\.com)/i.test(html)) return null;
+    const explanationMatch = /Explanation:\s*(?:<\/(?:strong|b)>\s*)?([\s\S]*?)<\/p\s*>/i.exec(html);
+    const explanation = explanationMatch ? plain(explanationMatch[1]) : "";
+    if (!title || title.length > 500 || explanation.length < 20 || explanation.length > 15e3) return null;
+    const media = await readJson(`${BASE}/media/${post.featured_media}?_fields=id,source_url,media_type,mime_type`, fetchImpl);
+    const image = validUrl(media?.source_url, "assets.science.nasa.gov");
+    if (media?.id !== post.featured_media || media.media_type !== "image" || typeof media.mime_type !== "string" || !/^image\/(jpeg|png|gif|webp)$/i.test(media.mime_type) || !image || !new URL(image).pathname.toLowerCase().includes("/apod/")) return null;
+    return { date, title, explanation, media_type: "image", url: image, source: SOURCE, source_url: articleUrl, media_note: "NASA Science featured image; check the original record for media and credits." };
+  } catch {
+    return null;
+  }
 }
 
 // server/nasaRoutes.ts
@@ -5176,6 +5239,16 @@ function setupNasaRoutes(app2, ai2) {
       if (timeout) clearTimeout(timeout);
     }
     if (degradeReason) failureKind = degradeReason;
+    const scienceDate = date || (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+    const scienceRecord = await fetchScienceApod(scienceDate);
+    if (scienceRecord) {
+      if (date) apodCache.set(date, scienceRecord);
+      else {
+        apodCache.set("today", scienceRecord);
+        apodTodayCachedAt = Date.now();
+      }
+      return res.json({ success: true, data: scienceRecord });
+    }
     const usingDemoKey = nasaApiKey === "DEMO_KEY";
     return res.status(503).json({
       success: false,
@@ -5339,10 +5412,16 @@ ${JSON.stringify({ title, explanation })}`;
     }
   });
   app2.get("/api/nasa-archive", async (req, res) => {
-    const q = String(req.query.q ?? "").trim();
-    const yearRaw = req.query.year ? Number.parseInt(String(req.query.year), 10) : null;
-    const page = req.query.page ? Number.parseInt(String(req.query.page), 10) : 1;
-    const limit = req.query.limit ? Number.parseInt(String(req.query.limit), 10) : 8;
+    const q = typeof req.query.q === "string" ? req.query.q.trim() : "";
+    const parseOptionalInteger = (value, fallback) => {
+      if (value === void 0) return fallback;
+      if (typeof value !== "string" || !/^\d+$/.test(value)) return NaN;
+      const parsed = Number(value);
+      return Number.isSafeInteger(parsed) ? parsed : NaN;
+    };
+    const year = parseOptionalInteger(req.query.year, null);
+    const page = parseOptionalInteger(req.query.page, 1);
+    const limit = parseOptionalInteger(req.query.limit, 8);
     if (!q) {
       return res.status(400).json({
         success: false,
@@ -5353,9 +5432,9 @@ ${JSON.stringify({ title, explanation })}`;
     }
     const result2 = await searchNasaImages({
       q,
-      year: Number.isFinite(yearRaw) ? yearRaw : null,
-      page: Number.isFinite(page) ? page : 1,
-      limit: Number.isFinite(limit) ? limit : 8
+      year,
+      page: page ?? NaN,
+      limit: limit ?? NaN
     });
     if (!result2.ok) {
       return res.status(result2.status).json({
@@ -5401,7 +5480,10 @@ ${JSON.stringify({ title, explanation })}`;
       const nasaRes = await fetch(url, { signal: controller.signal });
       if (nasaRes.ok) {
         const data = redactApiKeys(await nasaRes.json());
-        if (Array.isArray(data)) return res.json({ success: true, data });
+        if (Array.isArray(data) && data.every((entry) => {
+          const normalised = normaliseApodMedia(entry);
+          return normalised && typeof normalised.title === "string" && normalised.title.trim() && typeof normalised.url === "string" && isValidApodDate(normalised.date) && normalised.date >= startDate && normalised.date <= endDate && !isDegradedApodRecord(normalised);
+        })) return res.json({ success: true, data: data.map(normaliseApodMedia) });
       }
     } catch (err) {
     } finally {
@@ -5892,14 +5974,13 @@ async function fetchArxiv(query, limit) {
   const xml = await getText(`https://export.arxiv.org/api/query?${search.toString()}`, ARXIV_HEADERS);
   return parseArxivFeed(xml);
 }
-var buckets = /* @__PURE__ */ new Map();
-function rateLimit2(name, max, windowMs) {
+function rateLimit2(buckets, name, max, windowMs) {
   return (req, res, next) => {
-    const ip = req.headers["x-forwarded-for"]?.split(",")[0]?.trim() || req.ip || "unknown";
+    const ip = req.ip || req.socket.remoteAddress || "unknown";
     const bucketKey = `${name}:${ip}`;
     const now = Date.now();
     const bucket = buckets.get(bucketKey);
-    if (!bucket || now > bucket.resetAt) {
+    if (!bucket || now >= bucket.resetAt) {
       buckets.set(bucketKey, { count: 1, resetAt: now + windowMs });
       return next();
     }
@@ -5954,6 +6035,7 @@ function sortAndDedupe(items, limit) {
 function createSpaceNewsRouter() {
   const router = Router4();
   const cache3 = /* @__PURE__ */ new Map();
+  const buckets = /* @__PURE__ */ new Map();
   const readCache = (cacheKey2, now) => {
     const entry = cache3.get(cacheKey2);
     if (!entry) return null;
@@ -5973,7 +6055,7 @@ function createSpaceNewsRouter() {
   router.get("/sources", (_req, res) => {
     res.json({ ok: true, version: NEWS_API_VERSION, sources: newsSourceInventory() });
   });
-  router.get("/", rateLimit2("news", RATE_MAX, RATE_WINDOW_MS2), async (req, res) => {
+  router.get("/", rateLimit2(buckets, "news", RATE_MAX, RATE_WINDOW_MS2), async (req, res) => {
     const topic = parseTopic(req.query.topic);
     if (!topic) {
       return res.status(400).json({
@@ -6041,7 +6123,7 @@ function createSpaceNewsRouter() {
     writeCache(cacheKey2, body, CACHE_TTL_MS, now);
     return res.json(body);
   });
-  router.get("/papers", rateLimit2("papers", RATE_MAX, RATE_WINDOW_MS2), async (req, res) => {
+  router.get("/papers", rateLimit2(buckets, "papers", RATE_MAX, RATE_WINDOW_MS2), async (req, res) => {
     const limit = parseLimit(req.query.limit);
     if (limit === null) {
       return res.status(400).json({
@@ -7392,7 +7474,7 @@ function scoreDomain(text2) {
   }
   return best;
 }
-var MONTHS = {
+var MONTHS2 = {
   january: 0,
   jan: 0,
   february: 1,
@@ -7503,13 +7585,13 @@ function parseTimeRange(text2, domain, language, now = /* @__PURE__ */ new Date(
       };
     }
   }
-  const monthNames = Object.keys(MONTHS).join("|");
+  const monthNames = Object.keys(MONTHS2).join("|");
   const monthYear = new RegExp(`(${monthNames})\\s+?(\\d{4})|(\\d{4})\\s+?(${monthNames})`, "i");
   const monthMatch = lower.match(monthYear);
   if (monthMatch) {
     const monthToken = monthMatch[1] || monthMatch[4];
     const yearToken = monthMatch[2] || monthMatch[3];
-    const month = MONTHS[monthToken.toLowerCase()] ?? MONTHS[monthToken];
+    const month = MONTHS2[monthToken.toLowerCase()] ?? MONTHS2[monthToken];
     const year = Number(yearToken);
     if (month !== void 0 && Number.isFinite(year)) {
       const start = startOfDayUtc(year, month, 1);
@@ -11188,14 +11270,14 @@ async function runProjectAssistant(options) {
 }
 
 // server/forgeRoutes.ts
-function createRateLimit(buckets2, name, max, windowMs) {
+function createRateLimit(buckets, name, max, windowMs) {
   return (req, res, next) => {
-    const ip = req.headers["x-forwarded-for"]?.split(",")[0]?.trim() || req.ip || req.socket.remoteAddress || "unknown";
+    const ip = req.ip || req.socket.remoteAddress || "unknown";
     const key2 = `${name}:${ip}`;
     const now = Date.now();
-    const bucket = buckets2.get(key2);
-    if (!bucket || now > bucket.resetAt) {
-      buckets2.set(key2, { count: 1, resetAt: now + windowMs });
+    const bucket = buckets.get(key2);
+    if (!bucket || now >= bucket.resetAt) {
+      buckets.set(key2, { count: 1, resetAt: now + windowMs });
       return next();
     }
     bucket.count += 1;
@@ -11218,8 +11300,8 @@ function createRateLimit(buckets2, name, max, windowMs) {
 }
 function createForgeRouter(deps = {}) {
   const router = express3.Router();
-  const buckets2 = /* @__PURE__ */ new Map();
-  const rateLimit4 = (name, max, windowMs) => createRateLimit(buckets2, name, max, windowMs);
+  const buckets = /* @__PURE__ */ new Map();
+  const rateLimit4 = (name, max, windowMs) => createRateLimit(buckets, name, max, windowMs);
   const nasaKey = () => {
     if (deps.nasaKey !== void 0) return deps.nasaKey;
     const configured = process.env.NASA_API_KEY;

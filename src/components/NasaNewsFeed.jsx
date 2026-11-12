@@ -246,7 +246,9 @@ function NasaNewsFeed() {
                 {apodDisplay?.explanation || apod.explanation}
               </p>
 
+              {apod._source === 'NASA Science APOD archive' && <p className="text-xs text-ink-3">{t('apodScienceSource')}</p>}
               <div className="pt-2 flex flex-wrap items-center gap-3">
+                {apod._source === 'NASA Science APOD archive' && apod.source_url?.startsWith('https://science.nasa.gov/image-article/apod-') && <a href={apod.source_url} target="_blank" rel="noreferrer noopener" className="text-xs text-atmo underline">Open NASA record ↗</a>}
                 <a
                   href={apod.hdurl || apod.url}
                   target="_blank"

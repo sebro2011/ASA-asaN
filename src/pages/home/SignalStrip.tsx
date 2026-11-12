@@ -98,7 +98,7 @@ export default function SignalStrip({
         <SignalTile
           icon={Aperture}
           title={t('signalApod')}
-          detail="api.nasa.gov/planetary/apod"
+          detail="NASA APOD / NASA Science"
           state={toDataState(signal(apod))}
         />
         <SignalTile

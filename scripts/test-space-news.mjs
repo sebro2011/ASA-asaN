@@ -22,7 +22,7 @@ const FAKE = {
   GUARDIAN_API_KEY: 'guardian-secret-TEST-789',
 };
 
-async function withServer({ keys = {}, upstream }, run) {
+async function withServer({ keys = {}, upstream, trustProxy }, run) {
   for (const name of KEYS) {
     const value = keys[name];
     if (value === undefined) delete process.env[name];
@@ -34,6 +34,7 @@ async function withServer({ keys = {}, upstream }, run) {
     return upstream(String(url), options);
   };
   const app = express();
+  if (trustProxy !== undefined) app.set('trust proxy', trustProxy);
   app.use('/api/news', createSpaceNewsRouter());
   const server = await new Promise((resolve) => {
     const s = app.listen(0, '127.0.0.1', () => resolve(s));
@@ -332,6 +333,46 @@ test('the news routes are rate limited per client', async () => {
     }
     assert.equal(lastStatus, 429);
   });
+});
+
+test('spoofed forwarding headers cannot bypass news or papers limits with default proxy trust', async () => {
+  await withServer({ keys: {}, upstream: () => json({ results: [] }) }, async (get) => {
+    for (const route of ['/', '/papers']) {
+      for (let i = 0; i < 30; i++) {
+        const response = await get(`${route}?limit=0`, { headers: { 'x-forwarded-for': `203.0.113.${i + 1}` } });
+        assert.equal(response.status, 400);
+      }
+      const blocked = await get(`${route}?limit=0`, { headers: { 'x-forwarded-for': '198.51.100.250' } });
+      assert.equal(blocked.status, 429);
+      assert.equal((await blocked.json()).code, 'rate-limited');
+      assert.ok(Number(blocked.headers.get('retry-after')) > 0);
+    }
+  });
+});
+
+test('configured trusted proxy walks the chain from the trusted peer, not the attacker-controlled leftmost value', async () => {
+  await withServer({ keys: {}, trustProxy: 'loopback', upstream: () => json({ results: [] }) }, async (get) => {
+    for (let i = 0; i < 30; i++) {
+      const response = await get('/?limit=0', { headers: { 'x-forwarded-for': `203.0.113.${i + 1}, 198.51.100.7` } });
+      assert.equal(response.status, 400);
+    }
+    assert.equal((await get('/?limit=0', { headers: { 'x-forwarded-for': '203.0.113.200, 198.51.100.7' } })).status, 429);
+    assert.equal((await get('/?limit=0', { headers: { 'x-forwarded-for': '203.0.113.200, 198.51.100.8' } })).status, 400);
+  });
+});
+
+test('news window resets at its boundary', async () => {
+  const realNow = Date.now;
+  let now = realNow();
+  Date.now = () => now;
+  try {
+    await withServer({ keys: {}, upstream: () => json({ results: [] }) }, async (get) => {
+      for (let i = 0; i < 30; i++) assert.equal((await get('/?limit=0')).status, 400);
+      assert.equal((await get('/?limit=0')).status, 429);
+      now += 60_000;
+      assert.equal((await get('/?limit=0')).status, 400);
+    });
+  } finally { Date.now = realNow; }
 });
 
 test('stripHtml decodes the entities the feeds actually use', () => {

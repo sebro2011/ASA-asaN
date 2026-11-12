@@ -191,3 +191,67 @@ in-memory success cache, preserves upstream `generatedAt` and cache status, and
 reports failed providers as partial. Refresh drops and bypasses the client cache,
 but the server may still respond from its own cache. A request sequence prevents
 stale news responses from replacing a newer request in the component.
+
+### News limiter and proxy trust
+
+News and papers use separate 30-request/60-second fixed-window buckets per
+Express-resolved client address and router instance. The router no longer parses
+forwarding headers itself. The application leaves Express `trust proxy` at its
+default false, so `req.ip` is normally the socket peer; behind a reverse proxy
+users can share that peer's bucket. Do not set trust to true or a hop count
+without verifying every network path and header sanitization. The fixed-window
+map is in process memory, not shared or globally purged; it is not a distributed
+abuse-control mechanism. Forge has its own separate forwarding-header issue.
+
+### Live diagnostics caveat
+
+Provider deep diagnostics performs upstream probe requests and classifies success
+by HTTP status, not by a validated completion body. A successful metadata key
+check proves only that metadata request succeeded, not generation permission.
+Legacy `modelInvalid` and `keyValid` fields are retained for compatibility, while
+UI copy and hints now qualify their meanings. Live production observations and
+branch changes are separately documented; this change was not deployed.
+
+### Forge limiter and proxy trust
+
+Forge's independent fixed-window limiter now uses Express `req.ip` and socket
+fallback instead of parsing forwarded headers. The four route-specific budgets
+remain per router instance and process. Express `trust proxy` remains disabled by
+default; deployment-specific proxy topology and header sanitization must be
+verified before trust is changed. Bucket maps do not provide global enforcement
+or bound long-term cardinality.
+
+### Mars archive explorer
+
+The Missions explorer calls the existing same-origin NASA Images archive proxy,
+not the unavailable sol-based Mars Rover Photos endpoint. It searches `Mars
+rover <name>` and exposes the NASA record link and source; results are not
+claimed to be captured on Mars or on any selected sol. Only NASA Images asset
+and record hosts are used as browser links/previews; rejected or missing previews
+are not replaced with stock imagery. Server collection parsing requires an items
+array and a valid nonnegative integer total. Source schema, cache, pagination
+and other clients remain shared with the existing archive.
+
+### NASA archive input and APOD outage navigation
+
+`/api/nasa-archive` requires a scalar query and rejects blank, fractional,
+duplicate or malformed optional numeric parameters rather than defaulting them.
+The adapter enforces numeric ranges. When the APOD proxy fails, the viewer
+exposes the selected date's historical NASA APOD record URL as an external link;
+it does not turn that link into in-app data. NASA controls redirects and source
+availability, and no universal date-link guarantee is made.
+
+### APOD NASA Science image recovery
+
+On legacy APOD failure/degraded response, the single-record proxy searches NASA
+Science's WordPress image-article endpoint with the requested date (UTC date when
+omitted). It matches the APOD title's full date rather than the CMS publication
+date, rejects ambiguity and obvious video embeds, extracts bounded plain-text
+explanation, and resolves the associated image ID from NASA Science media. It
+accepts only NASA Science article and APOD asset hosts/paths, times out each
+request after 3 seconds, and returns source and original record URL. No scraped
+credit is invented; the featured image may not always represent original media,
+so the UI labels it and links to the source. Fallback uses the existing APOD
+cache. Range requests remain on the legacy provider and fail closed on degraded
+or out-of-range records. The WordPress integration is dependent on an observed
+schema and markup, not a formally verified stable APOD API contract.

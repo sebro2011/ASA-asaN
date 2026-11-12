@@ -440,11 +440,11 @@ const en: Copy = {
   wsAiProbeNotConfigured: 'Not configured',
   wsAiProbeNotConfiguredDetail: 'No API key on this deployment, so NOVA cannot use it.',
   wsAiProbeFailed: 'The status check itself failed — the server did not answer.',
-  wsAiKeyValid: 'API key is valid — the model itself did not answer in time.',
+  wsAiKeyValid: 'Provider metadata accepted this key; generation may still fail.',
   wsAiKeyRejected: 'API key rejected by the provider.',
-  wsAiModelInvalid: 'The configured model id does not exist at the provider — check NOVA_GEMINI_MODEL.',
-  wsAiModelFallbackWorking: 'Requests fall back to the default model, which answered.',
-  wsAiModelsAvailable: 'This key may use:',
+  wsAiModelInvalid: 'The model request was not found or rejected — check NOVA_GEMINI_MODEL and model access.',
+  wsAiModelFallbackWorking: 'An alternative model probe returned a successful status.',
+  wsAiModelsAvailable: 'Models listed by the provider:',
   wsAiProbeCheckedAt: 'Checked',
 
   /* ---------------------------------------------------------------- search */
@@ -1132,11 +1132,11 @@ const si: Copy = {
   wsAiProbeNotConfigured: 'Configure කරලා නෑ',
   wsAiProbeNotConfiguredDetail: 'මේ deployment එකේ API key එකක් නෑ, ඒ නිසා NOVA ට එය පාවිච්චි කරන්න බෑ.',
   wsAiProbeFailed: 'පරීක්ෂාවම අසාර්ථක වුණා — සර්වර් එක පිළිතුරු දුන්නේ නෑ.',
-  wsAiKeyValid: 'API යතුර වලංගුයි — මොඩලය විනාඩියක් තුළ පිළිතුරු දුන්නේ නෑ.',
+  wsAiKeyValid: 'Provider metadata සඳහා යතුර පිළිගැනුණි; generation තවමත් අසාර්ථක විය හැක.',
   wsAiKeyRejected: 'සැපයුම්කරු API යතුර ප්‍රතික්ෂේප කළා.',
-  wsAiModelInvalid: 'වින්‍යාසගත මොඩලයේ හැඳුනුම සැපයුම්කරු ළඟ නැහැ — NOVA_GEMINI_MODEL පරීක්ෂා කරන්න.',
-  wsAiModelFallbackWorking: 'ඉල්ලීම් පෙරනිමි මොඩලයට මාරු වෙනවා, එය පිළිතුරු දුන්නා.',
-  wsAiModelsAvailable: 'මේ යතුරට භාවිත කළ හැකි මොඩල:',
+  wsAiModelInvalid: 'Model request එක හමු නොවීය හෝ ප්‍රතික්ෂේප විය — NOVA_GEMINI_MODEL සහ model access පරීක්ෂා කරන්න.',
+  wsAiModelFallbackWorking: 'විකල්ප model probe එක සාර්ථක status එකක් ලබා දුන්නා.',
+  wsAiModelsAvailable: 'Provider ලැයිස්තුගත කළ models:',
   wsAiProbeCheckedAt: 'පරීක්ෂා කළේ',
 
   /* ---------------------------------------------------------------- search */
@@ -1825,11 +1825,11 @@ const ta: Copy = {
   wsAiProbeNotConfigured: 'அமைக்கப்படவில்லை',
   wsAiProbeNotConfiguredDetail: 'இந்த deployment இல் API key இல்லை, எனவே NOVA அதைப் பயன்படுத்த முடியாது.',
   wsAiProbeFailed: 'சரிபார்ப்பே தோல்வியடைந்தது — சேவையகம் பதிலளிக்கவில்லை.',
-  wsAiKeyValid: 'API விசை செல்லுபடியாகும் — மாதிரியே நேரத்தில் பதிலளிக்கவில்லை.',
+  wsAiKeyValid: 'வழங்குநரின் metadata விசையை ஏற்றது; generation இன்னும் தோல்வியடையலாம்.',
   wsAiKeyRejected: 'வழங்குநர் API விசையை நிராகரித்தார்.',
-  wsAiModelInvalid: 'கட்டமைக்கப்பட்ட மாதிரி அடையாளம் வழங்குநரிடம் இல்லை — NOVA_GEMINI_MODEL சரிபார்க்கவும்.',
-  wsAiModelFallbackWorking: 'கோரிக்கைகள் இயல்புநிலை மாதிரிக்கு மாறுகின்றன, அது பதிலளித்தது.',
-  wsAiModelsAvailable: 'இந்த விசை பயன்படுத்தக்கூடிய மாதிரிகள்:',
+  wsAiModelInvalid: 'Model request கிடைக்கவில்லை அல்லது நிராகரிக்கப்பட்டது — NOVA_GEMINI_MODEL மற்றும் model access சரிபார்க்கவும்.',
+  wsAiModelFallbackWorking: 'மாற்று model probe வெற்றிகரமான status வழங்கியது.',
+  wsAiModelsAvailable: 'வழங்குநர் பட்டியலிட்ட models:',
   wsAiProbeCheckedAt: 'சரிபார்த்தது',
 
   /* ---------------------------------------------------------------- search */

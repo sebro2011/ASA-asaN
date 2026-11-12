@@ -3,6 +3,7 @@ import { GoogleGenAI, Type } from '@google/genai';
 import { DEFAULT_GEMINI_MODEL } from './novaChat.js';
 import { createHash } from 'node:crypto';
 import { searchNasaImages } from './nasaImageLibrary.js';
+import { fetchScienceApod } from './apodScience.js';
 
 // ====================================================
 // NASA API Routes Module
@@ -547,6 +548,16 @@ export function setupNasaRoutes(app: any, ai: GoogleGenAI) {
 
     if (degradeReason) failureKind = degradeReason;
 
+    // A separate official NASA Science record can recover an image-only entry
+    // when the legacy APOD API is degraded. It must match the requested date.
+    const scienceDate = date || new Date().toISOString().slice(0, 10);
+    const scienceRecord = await fetchScienceApod(scienceDate);
+    if (scienceRecord) {
+      if (date) apodCache.set(date, scienceRecord);
+      else { apodCache.set('today', scienceRecord); apodTodayCachedAt = Date.now(); }
+      return res.json({ success: true, data: scienceRecord });
+    }
+
     const usingDemoKey = nasaApiKey === 'DEMO_KEY';
     return res.status(503).json({
       success: false,
@@ -756,10 +767,16 @@ export function setupNasaRoutes(app: any, ai: GoogleGenAI) {
      * handler has no local data at all: every field comes from the upstream
      * record, and an upstream outage is reported as an outage.
      */
-    const q = String(req.query.q ?? '').trim();
-    const yearRaw = req.query.year ? Number.parseInt(String(req.query.year), 10) : null;
-    const page = req.query.page ? Number.parseInt(String(req.query.page), 10) : 1;
-    const limit = req.query.limit ? Number.parseInt(String(req.query.limit), 10) : 8;
+    const q = typeof req.query.q === 'string' ? req.query.q.trim() : '';
+    const parseOptionalInteger = (value: unknown, fallback: number | null): number | null => {
+      if (value === undefined) return fallback;
+      if (typeof value !== 'string' || !/^\d+$/.test(value)) return NaN;
+      const parsed = Number(value);
+      return Number.isSafeInteger(parsed) ? parsed : NaN;
+    };
+    const year = parseOptionalInteger(req.query.year, null);
+    const page = parseOptionalInteger(req.query.page, 1);
+    const limit = parseOptionalInteger(req.query.limit, 8);
 
     if (!q) {
       return res.status(400).json({
@@ -772,9 +789,9 @@ export function setupNasaRoutes(app: any, ai: GoogleGenAI) {
 
     const result = await searchNasaImages({
       q,
-      year: Number.isFinite(yearRaw) ? yearRaw : null,
-      page: Number.isFinite(page) ? page : 1,
-      limit: Number.isFinite(limit) ? limit : 8,
+      year,
+      page: page ?? NaN,
+      limit: limit ?? NaN,
     });
 
     if (!result.ok) {
@@ -825,7 +842,12 @@ export function setupNasaRoutes(app: any, ai: GoogleGenAI) {
 
       if (nasaRes.ok) {
         const data = redactApiKeys(await nasaRes.json());
-        if (Array.isArray(data)) return res.json({ success: true, data });
+        if (Array.isArray(data) && data.every((entry: any) => {
+          const normalised = normaliseApodMedia(entry);
+          return normalised && typeof normalised.title === 'string' && normalised.title.trim() &&
+            typeof normalised.url === 'string' && isValidApodDate(normalised.date) &&
+            normalised.date >= startDate && normalised.date <= endDate && !isDegradedApodRecord(normalised);
+        })) return res.json({ success: true, data: data.map(normaliseApodMedia) });
       }
     } catch (err: any) {
       // Upstream failure is reported below.

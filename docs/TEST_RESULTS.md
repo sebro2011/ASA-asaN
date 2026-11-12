@@ -131,3 +131,106 @@ Latest full run: **2026-11-12**, branch `arena/ad469a17-asa-asan`.
 - `npm run lint` exit 0; `npm test` exit 0, 737 passed, 0 failed or skipped;
   `npm run build` exit 0, 159 PWA precache entries, large-chunk warning persists.
   `git diff --check` passed.
+
+### News rate limiter / proxy trust audit (2026-11-12)
+
+- The first targeted test attempt could not load `tsx` because dependencies
+  were absent. `npm install --no-package-lock --ignore-scripts` succeeded and
+  reported 6 advisories (2 low, 4 moderate); no lockfile was created.
+- `npm run test:space-news`: 12 passed, including both routes under changing
+  forged headers, a simulated trusted loopback proxy chain, separate route
+  budgets, 429/Retry-After and exact fixed-window reset.
+- `npm run test:security-performance`: 7 passed including real app's default
+  `trust proxy` setting. `npm run lint` passed.
+- `npm test`: exit 0, 741 passed, 0 failed, 0 skipped. `npm run build`: exit 0,
+  159 precache entries; large-chunk warning persists. `git diff --check` passed.
+- Tests use local Express servers and simulated headers, not a real Vercel,
+  Netlify or reverse-proxy deployment; no live production behavior was tested.
+
+### Live NASA / AI verification preflight — 2026-11-12
+
+- Outbound policy excludes the NASA and remote AI provider hosts, so no live
+  provider calls or live-provider results are claimed in this workspace.
+- Shell environment presence only: `NASA_API_KEY`, `NEXT_PUBLIC_NASA_API_KEY`,
+  `GEMINI_API_KEY`, `OPENROUTER_API_KEY`, `ARENA_API_KEY`, `ARENA_BASE_URL` not
+  set; `.env`, `.env.local` and `.env.production` absent. This does not inspect
+  deployment configuration. No key values were displayed or recorded.
+- Existing 741/741 results above are local regression results and are not live
+  verification. No new source changes, tests or deployment were performed for
+  this preflight. See API status report for the proposed verification scope.
+
+### Authorized live smoke checks and diagnostic wording fix — 2026-11-12
+
+- Page-fetch requests reached the production alias (production `f3d5e21`).
+  NeoWs, EPIC and POWER returned plausible requested data; APOD and Mars returned
+  explicit unavailable responses. Direct DEMO_KEY probes returned an APOD NASA
+  logo for the historical request and a Mars page titled `No such app`.
+  Page-fetch did not expose HTTP status for those direct responses; do not infer
+  a precise Mars status. See `docs/API_STATUS_REPORT.md` for details.
+- A single production deep diagnostics request reported OpenRouter HTTP 200,
+  Gemini 503 primary and 404 final fallback, and Arena unconfigured. Diagnostics
+  only checks HTTP success, not generated text; actual chat was not tested.
+- Corrected misleading Gemini diagnostic hints and English/Sinhala/Tamil status
+  copy in this branch. The initial full suite failed on an outdated UI copy
+  assertion; updated the fixture/assertions to the corrected wording. Targeted
+  diagnostics 19/19 and workspace suite passed. Final `npm test`: 742 passed,
+  0 failed or skipped. `npm run lint` and `npm run build` passed; build reports
+  large chunks and generated 159 precache entries. No production deployment was
+  made, so live diagnostics still uses the previous code until separately deployed.
+
+### Forge rate limiter follow-up — 2026-11-12
+
+- `node --import tsx --test --test-force-exit scripts/test-forge-api.mjs`: 15
+  passed, including spoofed forwarding headers on all four endpoints, independent
+  budgets, simulated trusted loopback proxy chain, 429/Retry-After and reset at
+  60 seconds. These are local tests with stubbed upstreams, not production tests.
+- `npm run lint` passed. Full `npm test`: 745 passed, 0 failed, 0 skipped;
+  `npm run build` exit 0, 159 precache entries, large-chunk warning persists.
+  `git diff --check` passed.
+
+### NASA Mars imagery exploration — 2026-11-12
+
+- Production NASA Images archive search returned actual library metadata for one
+  Curiosity query, including an Earth-based testing record. This does not test
+  the newly added branch UI or prove all future queries and image URLs work.
+- `npm run test:nasa` passed, including existing archive tests with malformed
+  collection/total checks and new jsdom tests for source warning, rover search,
+  paging, empty, outage, retry and rejection of non-NASA preview/record URLs.
+- Full `npm test`: 746 passed, 0 failed or skipped. Lint passed in the full
+  suite; `npm run build`: exit 0, 160 precache entries, large-chunk warning.
+  Real browser/mobile layouts and actual image rendering were not tested.
+
+### NASA archive validation / APOD outage navigation — 2026-11-12
+
+- `scripts/test-nasa-archive.mjs`: 11 passed, including invalid and duplicate
+  parameters rejected without an upstream call. `scripts/test-apod-unavailable-dom.mjs`:
+  1 passed, covering selected-date external link, retry and unavailable copy.
+- The NASA APOD 2024-01-01 historical link redirected to its matching NASA
+  Science record in a point-in-time page-fetch; not all dates were checked.
+- Full `npm test`: 748 passed, 0 failed or skipped; lint passed. `npm run build`
+  exit 0 with 160 precache entries and the existing large-chunk warning.
+  Real-device UI and the undeployed branch against live upstreams were not tested.
+
+### APOD NASA Science fallback — 2026-11-12
+
+- `scripts/test-apod-science.mjs`: 4 passed with stubbed NASA data: exact date,
+  source/media handling, ambiguity, video, unsafe URL and failure rejection,
+  single-route recovery/cache/client provenance and range rejection.
+- `npm run test:apod` passed. Full `npm test`: 752 passed, 0 failed or skipped;
+  `npm run build` exit 0, 160 precache entries, large-chunk warning persists.
+  Lint is included in the full suite. `git diff --check` passed.
+- NASA Science search and media JSON for two individual dates were inspected via
+  page-fetch, but the new adapter was not executed against live NASA, deployed,
+  or tested in a real browser/device. Tests use representative fixtures, not raw
+  live HTTP payload captures. More dates, video days and credits need validation.
+
+### APOD recheck following user-reported key update — 2026-11-12
+
+- Production `/api/apod` for today and 2024-01-01 reported degraded NASA logo
+  responses; Vercel listed production `f3d5e21`, which lacks this branch's fix.
+  It is unknown whether the reported key change is in that deployed instance.
+- Expanded `scripts/test-apod-science.mjs` to 6/6 passing with representative
+  title/asset URL patterns observed on two dates and a stubbed legacy network
+  failure recovery. These are fixture tests, not a live execution of the adapter.
+- Previous full suite and build results (752 tests and build pass) predate these
+  two additional test-only cases. `git diff --check` passed; no deploy was made.

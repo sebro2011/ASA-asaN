@@ -356,7 +356,7 @@ export function createDiagnosticsHandler({
           const modelMissing = outcome.status === 404 || outcome.status === 422;
           if (modelMissing) {
             entry.modelInvalid = true;
-            entry.hint = `NOVA_GEMINI_MODEL="${models.gemini}" is not a Gemini model id. Set it to a real one (for example ${DEFAULT_GEMINI_MODEL}) or unset it.`;
+            entry.hint = `The requested model returned HTTP ${outcome.status}; check NOVA_GEMINI_MODEL and whether this key can access that model.`;
           }
 
           // Try the other ids once each, in order, and keep the first that answers.
@@ -375,9 +375,9 @@ export function createDiagnosticsHandler({
           entry.modelsTried = [models.gemini, ...tried.map((attempt) => attempt.model)];
 
           if (entry.fallbackModel?.ok) {
-            entry.hint = `${entry.hint ? `${entry.hint} ` : ''}${entry.fallbackModel.model} answered with the same key, so this is a model problem and not a key problem — set NOVA_GEMINI_MODEL to it.`;
-          } else if (!modelMissing) {
-            entry.hint = `${entry.hint ? `${entry.hint} ` : ''}Every model id tried was refused the same way, so this is not a model-id problem: the key is valid but the API is refusing generation (quota, billing or a project restriction).`;
+            entry.hint = `${entry.hint ? `${entry.hint} ` : ''}${entry.fallbackModel.model} answered with the same key; the original model request failed. Review model availability and configuration.`;
+          } else {
+            entry.hint = `${entry.hint ? `${entry.hint} ` : ''}No alternative model probe succeeded. Failures may have different causes; inspect the statuses and provider configuration before drawing a conclusion.`;
           }
 
           // The authoritative answer to "what can this key call?".

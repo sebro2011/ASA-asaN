@@ -47,6 +47,8 @@ interface ApodData {
   _isSample?: boolean;
   _fromCache?: boolean;
   _source?: string;
+  source_url?: string;
+  media_note?: string;
 }
 
 interface ApodViewerProps {
@@ -199,9 +201,16 @@ export const ApodViewer: React.FC<ApodViewerProps> = React.memo(({ lang, onOpenE
   }, [playback.sources, playback.kind, apod?.hdurl, fullResolution]);
   const mediaSrc = orderedSources[Math.min(mediaIndex, Math.max(orderedSources.length - 1, 0))];
   const lightboxSrc = orderedSources[Math.min(lightboxIndex, Math.max(orderedSources.length - 1, 0))];
-  const archiveUrl = apod
+  const archiveUrl = apod?.source_url?.startsWith('https://science.nasa.gov/image-article/')
+    ? apod.source_url
+    : apod
     ? `https://apod.nasa.gov/apod/ap${apod.date.replace(/-/g, '').slice(2)}.html`
-    : 'https://apod.nasa.gov/apod/astropix.html';
+    : 'https://science.nasa.gov/apod/archive/';
+  // This is a user-opened NASA link, not an in-app data fallback. NASA may
+  // redirect historical URLs as its APOD site evolves.
+  const selectedRecordUrl = /^\d{4}-\d{2}-\d{2}$/.test(selectedDate)
+    ? `https://apod.nasa.gov/apod/ap${selectedDate.replace(/-/g, '').slice(2)}.html`
+    : 'https://science.nasa.gov/apod/archive/';
 
   return (
     <div className="space-y-5">
@@ -311,7 +320,7 @@ export const ApodViewer: React.FC<ApodViewerProps> = React.memo(({ lang, onOpenE
       {phase === 'error' && (
         <ErrorState
           title={t('apodErrorTitle')}
-          message={t('apodErrorBody')}
+          message={<><p>{t('apodErrorBody')}</p><a href={selectedRecordUrl} target="_blank" rel="noreferrer noopener" className="mt-2 inline-block text-atmo underline underline-offset-4">{t('apodOpenSource')} ↗</a></>}
           onRetry={() => load(selectedDate)}
           retryLabel={t('apodRetry')}
         />
@@ -382,7 +391,7 @@ export const ApodViewer: React.FC<ApodViewerProps> = React.memo(({ lang, onOpenE
                 <div className="pointer-events-none absolute inset-x-0 bottom-0 flex items-end justify-between gap-3 bg-[linear-gradient(0deg,rgba(3,6,14,0.92),rgba(3,6,14,0))] p-4 pt-12">
                   <p className="max-w-[70%] text-[11px] leading-snug text-ink-2">
                     <span className="font-mono uppercase tracking-[0.12em] text-ink-4">{t('apodCreditLabel')} </span>
-                    {apod.copyright || 'NASA'}
+                    {apod.copyright || (apod._source === 'NASA Science APOD archive' ? t('apodScienceCredit') : 'NASA')}
                   </p>
                   {playback.kind === 'image' && (
                     <button
@@ -469,9 +478,7 @@ export const ApodViewer: React.FC<ApodViewerProps> = React.memo(({ lang, onOpenE
                   <p className="eyebrow">{t('apodReadNasa').split('.')[0]}</p>
                   <p className="mt-2 text-[12px] leading-relaxed text-ink-2">{t('apodReadNasa')}</p>
                   <SourceNote className="mt-3">
-                    {apod._fromCache
-                      ? 'Source: api.nasa.gov/planetary/apod (cached copy)'
-                      : `Source: api.nasa.gov/planetary/apod · retrieved ${new Date().toLocaleTimeString()}`}
+                    {apod._source === 'NASA Science APOD archive' ? t('apodScienceSource') : 'Source: api.nasa.gov/planetary/apod'}{apod._fromCache ? ' (cached copy)' : ''}
                   </SourceNote>
                 </Panel>
               )}
@@ -533,7 +540,7 @@ export const ApodViewer: React.FC<ApodViewerProps> = React.memo(({ lang, onOpenE
               {legacy.close}
             </button>
             <p className="mt-2 text-center text-[11px] text-ink-3">
-              {apod.copyright || 'NASA'} · {apod.date}
+              {apod.copyright || (apod._source === 'NASA Science APOD archive' ? t('apodScienceCredit') : 'NASA')} · {apod.date}
             </p>
           </div>
         </div>

@@ -377,15 +377,15 @@ interface CacheEntry {
   body: unknown;
 }
 
-const buckets = new Map<string, { count: number; resetAt: number }>();
-
-function rateLimit(name: string, max: number, windowMs: number) {
+function rateLimit(buckets: Map<string, { count: number; resetAt: number }>, name: string, max: number, windowMs: number) {
   return (req: Request, res: Response, next: NextFunction) => {
-    const ip = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.ip || 'unknown';
+    // Express resolves the client according to the application's trust proxy setting.
+    // Never trust an arbitrary forwarding header directly.
+    const ip = req.ip || req.socket.remoteAddress || 'unknown';
     const bucketKey = `${name}:${ip}`;
     const now = Date.now();
     const bucket = buckets.get(bucketKey);
-    if (!bucket || now > bucket.resetAt) {
+    if (!bucket || now >= bucket.resetAt) {
       buckets.set(bucketKey, { count: 1, resetAt: now + windowMs });
       return next();
     }
@@ -445,6 +445,8 @@ export function sortAndDedupe(items: NewsItem[], limit: number): NewsItem[] {
 export function createSpaceNewsRouter() {
   const router = Router();
   const cache = new Map<string, CacheEntry>();
+  // State is isolated per router and process, not shared across server instances.
+  const buckets = new Map<string, { count: number; resetAt: number }>();
 
   const readCache = (cacheKey: string, now: number): unknown | null => {
     const entry = cache.get(cacheKey);
@@ -468,7 +470,7 @@ export function createSpaceNewsRouter() {
     res.json({ ok: true, version: NEWS_API_VERSION, sources: newsSourceInventory() });
   });
 
-  router.get('/', rateLimit('news', RATE_MAX, RATE_WINDOW_MS), async (req, res) => {
+  router.get('/', rateLimit(buckets, 'news', RATE_MAX, RATE_WINDOW_MS), async (req, res) => {
     const topic = parseTopic(req.query.topic);
     if (!topic) {
       return res.status(400).json({
@@ -542,7 +544,7 @@ export function createSpaceNewsRouter() {
     return res.json(body);
   });
 
-  router.get('/papers', rateLimit('papers', RATE_MAX, RATE_WINDOW_MS), async (req, res) => {
+  router.get('/papers', rateLimit(buckets, 'papers', RATE_MAX, RATE_WINDOW_MS), async (req, res) => {
     const limit = parseLimit(req.query.limit);
     if (limit === null) {
       return res.status(400).json({

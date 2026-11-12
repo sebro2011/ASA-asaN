@@ -586,3 +586,95 @@ provider failure, while preserving the existing array-returning helper. Request
 ordering guards keep an older news request from replacing a newer one. Stubbed
 client and jsdom tests cover outage, retry, empty and success; live provider and
 real browser verification remain outstanding.
+
+### Security audit — news rate limiting and proxy trust (2026-11-12)
+
+Scope: `server/spaceNews.ts`, the Express application and Vercel entry/config,
+news router tests and a targeted search of server forwarding-header use. No live
+infrastructure, trusted proxy chain or production configuration was inspected.
+
+| Priority | Finding | Disposition |
+| --- | --- | --- |
+| High | News and papers limiters used the first `X-Forwarded-For` entry directly, so a direct client could choose a new bucket per request. | Both now use Express `req.ip`, falling back to the socket peer, with spoofing tests. |
+| High / deployment | `server.ts` does not set `trust proxy` (Express default false). Behind a proxy many users may share a bucket; blindly enabling trust permits spoofing if the network path or header sanitization is wrong. | No production setting changed. Operators must verify their actual proxy chain and configure a narrowly trusted policy separately; platform behavior was not verified. |
+| High / separate scope | `server/forgeRoutes.ts` also reads the first forwarded address directly for Forge rate limits. | Not changed in this news-specific pass; requires its own remediation and tests. |
+| Medium | News/papers buckets are fixed-window, per-process, and expired entries are not globally purged. Instances/restarts do not share limits; high client cardinality can grow the map. `/sources` is not covered by this limiter. | Documented; distributed controls and bounded state require separate design. |
+
+The news and papers budgets remain separate at 30 requests per minute per resolved
+client per router instance; a 429 includes Retry-After. The per-router bucket map
+is now isolated alongside the existing per-router cache. Stubbed Express tests
+cover default trust spoofing, a simulated explicitly trusted loopback proxy chain,
+window reset and independent routes. These tests are not proof of Vercel, Netlify
+or other real deployment IP/header behavior. See `docs/TEST_RESULTS.md`.
+
+### Authorized live provider smoke checks — 2026-11-12
+
+Production checks through the page-fetch tool found NeoWs, EPIC and POWER data,
+while APOD and Mars returned unavailable responses. OpenRouter's diagnostics
+probe got HTTP 200, Gemini's primary got 503 and its last reported alternative
+404, and Arena was unconfigured. Diagnostics checks status rather than completion
+content. Production diagnostic copy wrongly asserted all Gemini failures had the
+same cause; branch code now reports uncertainty and the status UI no longer
+asserts metadata success proves generation access. Details and caveats are in
+`docs/API_STATUS_REPORT.md`. The branch changes have not been deployed; live
+provider failure causes remain unresolved and were not guessed.
+
+### Forge rate limiter follow-up — 2026-11-12
+
+The news security audit identified the same direct `X-Forwarded-For` trust in
+Forge. The four Forge routes now use Express-resolved `req.ip` with socket fallback,
+and fixed windows reset at their exact boundary. Regression tests exercise changing
+forged headers against each route and a locally simulated trusted proxy chain.
+No production proxy policy or settings changed; these branch changes are not
+live. Per-instance state, potential map growth, proxy sharing, and distributed
+rate limiting remain limitations, not solved by this local fix.
+
+### NASA imagery update — 2026-11-12
+
+A production NASA Images archive search for `Mars rover Curiosity` returned
+actual NASA library records, including Earth-based test imagery; it is not a
+substitute for the sol-filtered rover API. The separate Missions explorer added
+in this branch searches this existing library adapter, clearly labels the source
+and warns that results can include models, artwork or terrestrial testing and
+that record dates need not be capture dates. The original rover/sol feature is
+preserved without substituting different results. The archive adapter now rejects
+missing or malformed collection items/total rather than presenting them as a
+valid empty search. This is not an assertion that the old rover upstream is fixed.
+
+APOD direct testing and NASA's issue https://github.com/nasa/apod-api/issues/184
+indicate a generic-logo problem; NASA Science's WordPress endpoints returned a
+dated post and featured image for one recent date, and one historical title in
+separate exploratory requests. These point samples do not establish a stable
+APOD replacement, especially for video, credits, date and archive completeness.
+No new APOD fallback was introduced or claimed as fixed. Review of alternatives
+remains open and any major source architecture change requires approval.
+
+### NASA archive validation and APOD outage navigation — 2026-11-12
+
+The NASA Images route previously used `parseInt` and silently defaulted malformed
+`year`, `page`, and `limit` values, turning malformed or duplicate queries into
+a different successful search. It now rejects non-scalar, blank, fractional and
+malformed values before querying the adapter. The APOD error copy promised a
+NASA record link but provided no link: the error panel now offers a link for the
+selected date, without supplying or inventing in-app data. A single old-date URL
+was observed redirecting to the corresponding NASA Science record; not every
+date or future redirect was tested. Upstream APOD availability is not fixed.
+
+### APOD NASA Science fallback — 2026-11-12
+
+After user authorization to address the APOD outage, the existing APOD route
+retains its legacy NASA API as first choice, and on failure or a degraded NASA
+logo attempts a separately labelled NASA Science WordPress image-article lookup.
+It requires one exact APOD date in the title, a NASA article URL, a bounded
+explanation, a linked featured-image ID and a NASA Science APOD asset URL; it
+refuses detected embedded video and ambiguous, malformed or inaccessible records.
+A featured image is not asserted to be the original media, and the UI points to
+the NASA record for credits. The range route also rejects degraded/out-of-range
+records rather than returning NASA's logo as an APOD.
+
+Live page-fetch exploration confirmed the underlying WordPress search and media
+endpoints for one 2024 date and one 2026 date, but the new adapter itself was
+only tested using stubs; the sandbox cannot call NASA directly and the branch is
+not deployed. WordPress search ranking, upstream HTML, image associations, video
+detection, record credits, other dates and real-device rendering need further
+verification. Do not describe this as a universal or production-verified fix.

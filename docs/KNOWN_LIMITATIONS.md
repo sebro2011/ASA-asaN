@@ -142,5 +142,76 @@ what a user or operator would actually see, and where the audit records it.
   after an explicit UI refresh. The feed does not display the returned generation
   timestamp or detailed provider status. Timeout behavior and request races are
   not directly exercised; live provider and real device checks remain outstanding.
-- The news server's separate rate limiter currently reads `x-forwarded-for`
-  directly; its trust and spoofing behavior needs a separate security review.
+- The news server previously read `x-forwarded-for` directly. See the news
+  security follow-up below for the fix and remaining deployment constraints.
+
+## News rate limiter / proxy trust security audit
+
+- Express proxy trust remains disabled. Proxied users may share a bucket; the
+  actual deployment chain and header sanitization must be verified before any
+  narrowly scoped trusted-proxy configuration is considered. Trusting all
+  proxies or blindly picking a hop count can enable spoofing. No production
+  settings were changed.
+- News/papers limits are per router and process and reset on process restart;
+  serverless instances do not share budgets. Fixed-window buckets have no global
+  expired-entry purge or cardinality cap. `/api/news/sources` is not rate-limited
+  by this router. These limits alone are not a distributed DoS defense.
+- At the news-scoped pass, Forge's independent limiter also read the first
+  `x-forwarded-for` directly. See the subsequent Forge security follow-up below.
+  No real proxy/deployment testing was performed.
+
+## Authorized live provider smoke checks
+
+- At ~15:01 UTC on 2026-11-12, production APOD and Mars photo requests failed;
+  direct APOD returned generic logo data and direct Mars showed `No such app`.
+  The cause and direct Mars HTTP status are not established. No production
+  workaround or provider configuration change was made.
+- Production diagnostics returned OpenRouter probe HTTP 200, Gemini primary 503
+  and last reported alternative 404, Arena unconfigured. HTTP status alone is
+  not proof that valid chat text was generated; metadata success does not prove
+  generation access. Branch wording was corrected but is not yet deployed.
+- Live checks cover only the requested paths and point in time, not images,
+  actual chat output, translation quality, browser rendering or future health.
+
+## Forge rate limiter follow-up
+
+- The branch fix removes direct forwarded-header trust for Forge, but it is not
+  deployed. Express trust proxy remains off; users behind a proxy can share a
+  bucket. Do not enable proxy trust without verifying the actual deployment path.
+- Forge limits remain process-local fixed windows with no shared store, global
+  expired-entry purge or cardinality cap. A distributed rate-limit strategy and
+  real deployment proxy verification remain future work.
+
+## NASA imagery exploration update
+
+- The Mars Image Library explorer is a keyword search, not a rover/sol photo
+  feed. NASA results can include artwork, models and Earth testing; the metadata
+  date is not necessarily capture date. No guarantee every record is relevant,
+  and the UI caps page navigation at the archive adapter's page 100 limit.
+- The old rover API and APOD remain unavailable/degraded in observed production
+  checks. NASA Science WordPress samples do not establish a safe APOD replacement
+  for video, credit and historic-date cases. Neither provider was changed and no
+  new UI has been deployed. Real browser/mobile rendering remains unverified.
+
+## NASA archive / APOD outage navigation
+
+- The APOD viewer's failure state now links to the selected date on NASA's
+  historical URL pattern. One historic date's redirect was checked; other dates
+  and NASA's future redirect behavior were not verified. This link is not an
+  in-app fallback and does not resolve the degraded APOD API response.
+- NASA archive input validation and UI changes are branch-only, not deployed.
+  Real browser and device behavior remain unverified.
+
+## APOD NASA Science fallback — branch only
+
+- APOD fallback uses observed NASA Science WordPress search, title and HTML
+  structure; upstream changes, search ranking or missing records can make it
+  return unavailable. Only the first 20 search hits are inspected. Two data
+  points are not proof of historical or future coverage. Actual branch adapter
+  execution against live NASA has not been verified or deployed.
+- Only matched featured images are supported; detected video entries are refused,
+  but detection is heuristic and a featured image may not be the original media.
+  The viewer labels it and directs users to NASA for credits. Credit is not
+  guessed. The APOD range endpoint remains legacy-only and can still return 503.
+- On a legacy timeout the extra requests can increase latency; client timeouts
+  were raised accordingly. APOD upstream and production remain unchanged.

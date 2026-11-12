@@ -331,10 +331,10 @@ test('a bogus NOVA_GEMINI_MODEL is named, and the default is probed instead', as
   assert.equal(gemini.model, 'gemini-9.9-ultra');
   assert.equal(gemini.modelInvalid, true, 'the report says the model id is wrong');
   assert.equal(gemini.code, 'PROVIDER_MODEL_NOT_FOUND');
-  assert.match(gemini.hint, /is not a Gemini model id/);
+  assert.match(gemini.hint, /check NOVA_GEMINI_MODEL/);
   assert.match(gemini.fallbackModel.model, /^gemini-/);
   assert.equal(gemini.fallbackModel.ok, true, 'the retry proves another model works with this key');
-  assert.match(gemini.hint, /not a key problem/);
+  assert.match(gemini.hint, /answered with the same key/);
   assert.equal(calls.filter((url) => url.includes('gemini-9.9-ultra')).length, 1, 'the bad id is tried once, not looped');
 });
 
@@ -374,7 +374,7 @@ test('the busy default is compared against the alias, without probing the same i
   assert.equal(gemini.modelInvalid, undefined, 'a busy model is not an invalid model');
   assert.notEqual(gemini.fallbackModel.model, 'gemini-3.8-flash');
   assert.equal(gemini.fallbackModel.ok, true);
-  assert.match(gemini.hint, /model problem and not a key problem/);
+  assert.match(gemini.hint, /original model request failed/);
 
   const modelUrls = calls.filter((url) => url.includes('/models/'));
   assert.equal(new Set(modelUrls).size, modelUrls.length, 'no model id is probed twice');
@@ -412,8 +412,7 @@ test('when every Gemini model id is busy, the report says so and lists what the 
   assert.equal(gemini.modelInvalid, undefined, 'a busy model is never called an invalid model');
   assert.equal(gemini.fallbackModel.ok, false, 'the alternatives were tried and also refused');
   assert.ok(gemini.modelsTried.length > 1, 'more than one id was attempted');
-  assert.match(gemini.hint, /not a model-id problem/);
-  assert.match(gemini.hint, /quota, billing or a project restriction/);
+  assert.match(gemini.hint, /No alternative model probe succeeded/);
   // Only generateContent models, and no `models/` prefix.
   assert.deepEqual(gemini.availableModels, ['gemini-2.5-flash', 'gemini-3.8-flash']);
   assert.equal(gemini.availableModelCount, 2);
@@ -434,4 +433,19 @@ test('the model list never leaks the key and survives a broken response', async 
   const text = JSON.stringify(report);
   assert.equal(text.includes(KEYS.GEMINI_API_KEY), false);
   assert.equal(/AIzaSy/.test(text), false);
+});
+
+
+test('mixed Gemini probe failures do not assert one cause or key validity', async () => {
+  const fetchImpl = async (url, init) => {
+    if ((init?.method || 'GET') === 'GET') return { status: 200, ok: true, text: async () => '{}', json: async () => ({ models: [] }) };
+    const status = url.includes('gemini-3.8-flash') ? 503 : 404;
+    return { status, ok: false, text: async () => '{}', json: async () => ({}) };
+  };
+  const report = await createDiagnosticsHandler({ fetchImpl, env: { GEMINI_API_KEY: KEYS.GEMINI_API_KEY } })({ probe: true });
+  const gemini = report.providers.gemini;
+  assert.equal(gemini.httpStatus, 503);
+  assert.equal(gemini.fallbackModel.httpStatus, 404);
+  assert.match(gemini.hint, /different causes/);
+  assert.doesNotMatch(gemini.hint, /same way|key is valid|not a model-id problem/);
 });

@@ -93,6 +93,10 @@ test('rows without a real identifier or title are dropped, not patched', () => {
   assert.equal(collectionResult.total, 7, 'the upstream hit count is preserved');
   assert.equal(normaliseNasaImageCollection({}), null);
   assert.equal(normaliseNasaImageCollection(null), null);
+  assert.equal(normaliseNasaImageCollection({ collection: { items: 'invalid' } }), null);
+  assert.equal(normaliseNasaImageCollection({ collection: {} }), null);
+  assert.equal(normaliseNasaImageCollection({ collection: { items: [] } }), null);
+  assert.equal(normaliseNasaImageCollection({ collection: { items: [], metadata: { total_hits: -1 } } }), null);
 });
 
 test('the upstream URL is https, allowlisted, and argument-checked', () => {
@@ -271,6 +275,21 @@ test('the route requires a search term: it has no local catalogue to serve', asy
   assert.equal(body.code, 'INVALID_QUERY');
   assert.match(body.error, /live NASA Images search/i);
   assert.ok(!Array.isArray(body.articles) || body.articles.length === 0);
+});
+
+test('archive route rejects malformed and duplicate parameters before upstream requests', async () => {
+  const before = upstreamCalls;
+  for (const query of [
+    'q=apollo&page=2abc', 'q=apollo&page=1.5', 'q=apollo&page=',
+    'q=apollo&limit=nope', 'q=apollo&limit=2&limit=3',
+    'q=apollo&year=garbage', 'q=apollo&year=2020.5', 'q=apollo&year=',
+    'q=apollo&q=mars', 'q=apollo&page=101', 'q=apollo&year=1900',
+  ]) {
+    const { status, body } = await callArchive(query);
+    assert.equal(status, 400, query);
+    assert.equal(body.code, 'INVALID_QUERY', query);
+  }
+  assert.equal(upstreamCalls, before);
 });
 
 test('the route returns real upstream records with attribution', async () => {

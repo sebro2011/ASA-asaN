@@ -175,17 +175,15 @@ export function normaliseNasaImageCollection(payload: unknown): { items: NasaIma
   if (!collection || typeof collection !== 'object') return null;
   const rawItems = (collection as { items?: unknown }).items;
   const metadata = (collection as { metadata?: unknown }).metadata;
-  const totalHits =
-    metadata && typeof metadata === 'object'
-      ? Number((metadata as { total_hits?: unknown }).total_hits)
-      : NaN;
-
-  const items = (Array.isArray(rawItems) ? rawItems : [])
+  const totalHits = metadata && typeof metadata === 'object'
+    ? (metadata as { total_hits?: unknown }).total_hits
+    : undefined;
+  if (!Array.isArray(rawItems) || typeof totalHits !== 'number' || !Number.isSafeInteger(totalHits) || totalHits < 0) return null;
+  const items = rawItems
     .map(normaliseNasaImageItem)
     .filter((item): item is NasaImageRecord => item !== null);
 
-  const total = Number.isFinite(totalHits) ? totalHits : items.length;
-  return { items, total };
+  return { items, total: totalHits };
 }
 
 export async function searchNasaImages(

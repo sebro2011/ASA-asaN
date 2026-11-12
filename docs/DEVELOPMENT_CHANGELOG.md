@@ -217,3 +217,68 @@ Nothing here is a plan; if it was not executed it is not listed.
   states. Explicit refresh bypasses its client cache, and request sequence guards
   prevent older news requests from overwriting newer results.
 - Expanded news integrity tests with structured-result and jsdom retry flows.
+
+### News rate limiter / proxy trust security audit (2026-11-12)
+
+- `server/spaceNews.ts`: use Express-resolved `req.ip` (socket fallback) rather
+  than directly trusting `X-Forwarded-For` for both news and papers. Isolated
+  bucket state per router and reset a fixed window at its exact boundary.
+- `scripts/test-space-news.mjs`: cover spoofed forwarding headers, separate
+  route limits, simulated trusted proxy chain and window reset.
+- `scripts/test-security-performance.mjs`: assert the real Express app leaves
+  proxy trust disabled by default. Rebuilt the tracked `api/index.js` bundle.
+- No trust policy, production configuration or deployment was changed.
+
+### Live verification and diagnostic honesty — 2026-11-12
+
+- Ran user-authorized production read-only smoke checks and one deep diagnostics
+  request; results and limitations are in `docs/API_STATUS_REPORT.md`.
+- `server/novaDiagnostics.js`: stop asserting all Gemini failures share a cause,
+  or that a 404 proves an invalid model ID; retain compatible response fields.
+- `src/i18n/workspaceCopy.ts`: make provider metadata, model-list and fallback
+  status copy appropriately qualified in English, Sinhala and Tamil.
+- Added a mixed-status diagnostic regression and updated workspace copy assertions;
+  regenerated `api/index.js`. No production deployment/settings changed.
+
+### Forge rate limiter follow-up — 2026-11-12
+
+- `server/forgeRoutes.ts`: replace direct forwarded-header trust with Express IP
+  resolution and align fixed-window expiry to the boundary. Existing endpoint
+  budgets, response codes and per-router state are preserved.
+- `scripts/test-forge-api.mjs`: cover forged headers on all four routes, local
+  trusted proxy chain resolution and fixed-window reset. Rebuilt `api/index.js`.
+- No production configuration change or deployment was performed.
+
+### NASA Mars imagery exploration — 2026-11-12
+
+- Added `src/components/MarsArchiveExplorer.tsx` to Missions, separately from the
+  existing sol-based rover gallery. It uses the existing `/api/nasa-archive`
+  route for NASA Images searches by rover name, including Perseverance, and
+  displays source, record date, center, NASA ID, retrieval time, paging, error
+  and retry states, with multilingual source/interpretation warnings.
+- `server/nasaImageLibrary.ts` now rejects malformed collection item arrays and
+  missing/invalid total hit counts rather than fabricating an empty/partial total.
+- Added jsdom search, paging, failure/retry and unsafe-link coverage in
+  `scripts/test-mars-archive-dom.mjs`, included in `test:nasa`. No deployment.
+
+### NASA archive validation and APOD outage navigation — 2026-11-12
+
+- `server/nasaRoutes.ts`: parse archive `q`, `year`, `page` and `limit` as
+  scalar, valid values instead of silently accepting partial or malformed input.
+- `src/components/ApodViewer.tsx`: make the selected date's NASA record link
+  available when APOD data is unavailable; retain retry and no fabricated fallback.
+- Added archive route validation tests and `scripts/test-apod-unavailable-dom.mjs`
+  to `test:apod`; production bundle regenerated, no deployment performed.
+
+### APOD NASA Science recovery — 2026-11-12
+
+- Added `server/apodScience.ts`: date-matched, NASA-host-restricted image-article
+  and featured-media lookup as an additive fallback when the legacy APOD API
+  fails or returns the NASA logo. Unverifiable/video records remain unavailable.
+- `server/nasaRoutes.ts`: integrate fallback with existing cache and reject
+  degraded/out-of-range range entries. Existing endpoint shapes are retained.
+- `lib/nasaApi.js`, APOD viewer, news, home and workspace: preserve and label the
+  alternative source and point users to the original record for credits. Client
+  timeouts were increased for the additional bounded upstream requests.
+- Added stubbed `scripts/test-apod-science.mjs` to `test:apod` and regenerated
+  `api/index.js`. No production settings or deployment changed.
