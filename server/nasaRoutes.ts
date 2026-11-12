@@ -397,7 +397,15 @@ export const GROUNDED_CACHE_TTL_MS = 2 * 60 * 60 * 1000;
  */
 /* ---------------------------- NOAA SWPC parsing ---------------------------- */
 
-export const KP_INDEX_URL = 'https://services.swpc.noaa.gov/json/planetary_k_index.json';
+// SWPC publishes the same product twice: the `products/` copy is an array of
+// rows (header first), the `json/` copy is an array of objects. Both are real and
+// both have been observed to change shape over time, so both are tried and both
+// shapes are parsed.
+export const KP_INDEX_URLS = [
+  'https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json',
+  'https://services.swpc.noaa.gov/json/planetary_k_index.json',
+];
+export const KP_INDEX_URL = KP_INDEX_URLS[0];
 export const PLASMA_SPEED_URL = 'https://services.swpc.noaa.gov/products/solar-wind/plasma-7-day.json';
 
 /** Last observation this process actually measured — never a guess. */
@@ -416,26 +424,46 @@ async function fetchSwpcJson(url: string): Promise<unknown> {
 }
 
 /**
- * NOAA's planetary_k_index.json is a header row followed by
- * `[time_tag, Kp, a_running, station_count]`. The newest row is last, and Kp can
- * be a string or null while a slot is being filled, so the newest *finite* value
- * wins and anything else is discarded rather than defaulted.
+ * Kp parsing, tolerant of both published shapes:
+ *   - `products/noaa-planetary-k-index.json` → header row, then
+ *     `[time_tag, Kp, a_running, station_count]`
+ *   - `json/planetary_k_index.json` → objects with `time_tag` plus
+ *     `kp_index` / `estimated_kp` / `kp`
+ * The newest *finite* value wins, and anything unusable is discarded rather than
+ * defaulted — a missing measurement is not a quiet measurement.
  */
 export function parsePlanetaryKIndex(
   payload: unknown,
 ): { kpIndex: number; observedAt: string; stormKey: string; stormStatus: string } | null {
   if (!Array.isArray(payload)) return null;
+
+  const readKp = (value: unknown): number | null => {
+    const kp = typeof value === 'number' ? value : Number.parseFloat(String(value ?? ''));
+    return Number.isFinite(kp) && kp >= 0 && kp <= 9 ? kp : null;
+  };
+  const readTime = (value: unknown): string => {
+    if (typeof value !== 'string' || !value.trim()) return new Date().toISOString();
+    const normalised = value.includes('T') ? value : `${value.replace(' ', 'T')}Z`;
+    const parsed = new Date(normalised);
+    return Number.isNaN(parsed.getTime()) ? new Date().toISOString() : parsed.toISOString();
+  };
+
   for (let index = payload.length - 1; index >= 0; index -= 1) {
     const row = payload[index];
-    if (!Array.isArray(row) || row.length < 2) continue;
-    const [timeTag, rawKp] = row as [unknown, unknown];
-    const kp = typeof rawKp === 'number' ? rawKp : Number.parseFloat(String(rawKp ?? ''));
-    if (!Number.isFinite(kp) || kp < 0 || kp > 9) continue;
-    const observed = typeof timeTag === 'string' ? new Date(`${timeTag.replace(' ', 'T')}Z`) : null;
-    const observedAt = observed && !Number.isNaN(observed.getTime())
-      ? observed.toISOString()
-      : new Date().toISOString();
-    return { kpIndex: kp, observedAt, ...kpStormScale(kp) };
+
+    if (Array.isArray(row) && row.length >= 2) {
+      const kp = readKp(row[1]);
+      if (kp === null) continue;
+      return { kpIndex: kp, observedAt: readTime(row[0]), ...kpStormScale(kp) };
+    }
+
+    if (row && typeof row === 'object') {
+      const record = row as Record<string, unknown>;
+      const kp =
+        readKp(record.kp_index) ?? readKp(record.estimated_kp) ?? readKp(record.kp) ?? readKp(record.Kp);
+      if (kp === null) continue;
+      return { kpIndex: kp, observedAt: readTime(record.time_tag), ...kpStormScale(kp) };
+    }
   }
   return null;
 }
@@ -1203,7 +1231,11 @@ Explanation to translate: "${explanation}"`;
   // sample marked `stale` when the upstream fails, and answer with an explicit
   // error when there has never been one. There is no synthetic value anywhere.
   app.get('/api/solar-weather', async (_req: Request, res: Response) => {
-    const K = parsePlanetaryKIndex(await fetchSwpcJson(KP_INDEX_URL));
+    let K = null;
+    for (const kpUrl of KP_INDEX_URLS) {
+      K = parsePlanetaryKIndex(await fetchSwpcJson(kpUrl));
+      if (K) break;
+    }
     const speed = parsePlasmaSpeed(await fetchSwpcJson(PLASMA_SPEED_URL));
 
     if (K) {

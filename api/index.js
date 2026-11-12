@@ -4710,7 +4710,8 @@ function normaliseNasaImageItem(item) {
     // `center` is the real publishing centre; if absent the field stays empty
     // rather than borrowing a plausible-looking one.
     category: text(entry.center),
-    thumbnail: preview ?? "",
+    // NASA asset filenames contain spaces; a raw space in `src` is unreliable.
+    thumbnail: preview ? encodeURI(preview) : "",
     hdUrl: null,
     detailsUrl: `https://images.nasa.gov/details/${encodeURIComponent(nasaId)}`,
     assetUrl: `https://images-api.nasa.gov/asset/${encodeURIComponent(nasaId)}`,
@@ -5110,7 +5111,11 @@ var GROUNDED_DISCOVERY_ARCHIVE = {
 };
 var groundedSearchCache = /* @__PURE__ */ new Map();
 var GROUNDED_CACHE_TTL_MS = 2 * 60 * 60 * 1e3;
-var KP_INDEX_URL = "https://services.swpc.noaa.gov/json/planetary_k_index.json";
+var KP_INDEX_URLS = [
+  "https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json",
+  "https://services.swpc.noaa.gov/json/planetary_k_index.json"
+];
+var KP_INDEX_URL = KP_INDEX_URLS[0];
 var PLASMA_SPEED_URL = "https://services.swpc.noaa.gov/products/solar-wind/plasma-7-day.json";
 var lastKnownSolarWeather = null;
 async function fetchSwpcJson(url) {
@@ -5124,15 +5129,29 @@ async function fetchSwpcJson(url) {
 }
 function parsePlanetaryKIndex(payload) {
   if (!Array.isArray(payload)) return null;
+  const readKp = (value) => {
+    const kp = typeof value === "number" ? value : Number.parseFloat(String(value ?? ""));
+    return Number.isFinite(kp) && kp >= 0 && kp <= 9 ? kp : null;
+  };
+  const readTime = (value) => {
+    if (typeof value !== "string" || !value.trim()) return (/* @__PURE__ */ new Date()).toISOString();
+    const normalised = value.includes("T") ? value : `${value.replace(" ", "T")}Z`;
+    const parsed = new Date(normalised);
+    return Number.isNaN(parsed.getTime()) ? (/* @__PURE__ */ new Date()).toISOString() : parsed.toISOString();
+  };
   for (let index = payload.length - 1; index >= 0; index -= 1) {
     const row = payload[index];
-    if (!Array.isArray(row) || row.length < 2) continue;
-    const [timeTag, rawKp] = row;
-    const kp = typeof rawKp === "number" ? rawKp : Number.parseFloat(String(rawKp ?? ""));
-    if (!Number.isFinite(kp) || kp < 0 || kp > 9) continue;
-    const observed = typeof timeTag === "string" ? /* @__PURE__ */ new Date(`${timeTag.replace(" ", "T")}Z`) : null;
-    const observedAt = observed && !Number.isNaN(observed.getTime()) ? observed.toISOString() : (/* @__PURE__ */ new Date()).toISOString();
-    return { kpIndex: kp, observedAt, ...kpStormScale(kp) };
+    if (Array.isArray(row) && row.length >= 2) {
+      const kp = readKp(row[1]);
+      if (kp === null) continue;
+      return { kpIndex: kp, observedAt: readTime(row[0]), ...kpStormScale(kp) };
+    }
+    if (row && typeof row === "object") {
+      const record = row;
+      const kp = readKp(record.kp_index) ?? readKp(record.estimated_kp) ?? readKp(record.kp) ?? readKp(record.Kp);
+      if (kp === null) continue;
+      return { kpIndex: kp, observedAt: readTime(record.time_tag), ...kpStormScale(kp) };
+    }
   }
   return null;
 }
@@ -5792,7 +5811,11 @@ Explanation to translate: "${explanation}"`;
     });
   });
   app2.get("/api/solar-weather", async (_req, res) => {
-    const K = parsePlanetaryKIndex(await fetchSwpcJson(KP_INDEX_URL));
+    let K = null;
+    for (const kpUrl of KP_INDEX_URLS) {
+      K = parsePlanetaryKIndex(await fetchSwpcJson(kpUrl));
+      if (K) break;
+    }
     const speed = parsePlasmaSpeed(await fetchSwpcJson(PLASMA_SPEED_URL));
     if (K) {
       lastKnownSolarWeather = {

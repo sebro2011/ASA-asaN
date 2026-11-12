@@ -21,9 +21,9 @@ Latest full run: **2026-11-12**, branch `arena/ad469a17-asa-asan`.
 
 | Suite | Tests | What it pins |
 | --- | --- | --- |
-| `scripts/test-solar-weather.mjs` | 5 | Kp/plasma parsing, NOAA G-scale, outage → 503, last-measured sample marked stale |
+| `scripts/test-solar-weather.mjs` | 5 | both published SWPC shapes, official-vs-estimated Kp precedence, NOAA G-scale, outage → 503, last-measured sample marked stale |
 | `scripts/test-solar-weather-dom.mjs` | 3 | panel states `live`/`stale`/`sample` and their labels, "not reported" solar wind |
-| `scripts/test-nasa-archive.mjs` | 10 | normalisation from real fields only, dropped malformed rows, allowlist, TTL cache, typed failures, route contract |
+| `scripts/test-nasa-archive.mjs` | 10 | normalisation from real fields only, dropped malformed rows, encoded preview URLs for spaced ids, allowlist, TTL cache, typed failures, route contract |
 | `scripts/test-nasa-archive-client.mjs` | 4 | failure is not an empty success, retry not cached, no fabricated ids in the module |
 
 ## What these tests do not cover, and cannot here

@@ -52,6 +52,23 @@ Nothing here is a plan; if it was not executed it is not listed.
   identifiers. Mars Rover imagery comes back as a server-side adapter in the
   Phase 3 work (audit finding M5) rather than as a client-side mock.
 
+### Follow-up after the first production deploy (same day)
+- **Live archive verified.** Production `/api/nasa-archive?q=artemis&limit=2`
+  returned real records (15 260 hits, `nasaId` values such as
+  `Artemis Logo Color Positive RGB-July 2021`, `images-assets.nasa.gov`
+  thumbnails, `detailsUrl` on images.nasa.gov). Confirmed from
+  `https://nasa-space-expolere.vercel.app` on 2026-11-12T10:52:30Z.
+- **Space weather still returned `UPSTREAM_UNAVAILABLE` in production**, which was
+  correct behaviour but the wrong outcome: SWPC publishes the same product in two
+  shapes and the parser only accepted the array form. `parsePlanetaryKIndex` now
+  accepts both `products/noaa-planetary-k-index.json` (header + rows) and
+  `json/planetary_k_index.json` (objects with `kp_index` / `estimated_kp`), tries
+  both URLs in order, and prefers the official `kp_index` over the preliminary
+  estimate. Rows with no Kp are still discarded, never read as calm.
+- **Thumbnail encoding.** Real NASA ids contain spaces
+  (`Artemis Logo RGB`), so preview URLs are now `encodeURI`-ed before they reach
+  `<img src>`.
+
 ### Verification
 - `npm test` → **704 pass / 0 fail** (was 682; +22 from the new suites).
 - `npm run lint` (`tsc --noEmit`) → clean.
