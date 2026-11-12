@@ -123,9 +123,10 @@ test('a bundled fixture is never served as cached NASA data', async () => {
     });
     const body = await response.json();
     assert.equal(body.cached, undefined, 'a placeholder is never labelled as a cache hit');
-    assert.equal(body.isFallback, true, 'it is served as the labelled fallback');
+    assert.equal(response.status, 503);
+    assert.equal(body.code, 'APOD_UNAVAILABLE');
+    assert.equal(body.data, null);
     assert.ok(body.hint, 'and it explains why');
-    assert.match(body.data.url, /^https:\/\//, 'every media URL is https');
   } finally {
     server.close();
   }
@@ -291,6 +292,6 @@ test('the NASA logo is rejected as the day’s picture, and said so plainly', as
 
   const hint = apodFallbackHint({ failureKind: 'degraded', upstreamStatus: 200, usingDemoKey: false });
   assert.match(hint, /site logo/);
-  assert.match(hint, /reference entry/);
+  assert.match(hint, /retry later/i);
   assert.doesNotMatch(hint, /did not answer in time/);
 });

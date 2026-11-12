@@ -223,7 +223,7 @@ test('Explore still mounts its science destinations behind the workspace', async
         status: 200,
         headers: { get: () => 'application/json' },
         json: async () => ({
-          date: '2026-11-05',
+          date: new URL(String(input), 'http://localhost').searchParams.get('date') || new Date().toISOString().slice(0, 10),
           title: 'Carina Nebula Test Frame',
           explanation: 'A canned APOD payload used by the shell test.',
           url: 'https://example.invalid/apod.jpg',

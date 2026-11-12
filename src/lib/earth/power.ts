@@ -138,6 +138,9 @@ export function parseParameter(raw: unknown): Map<string, number> {
   for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
     const match = /^(\d{4})(0[1-9]|1[0-2])$/.exec(key);
     if (!match) continue; // month '13' is POWER's annual aggregate and is recomputed here
+    // Missing or malformed values must never become zero through Number(null),
+    // Number('') or Number(false); zero itself is a valid observation.
+    if (typeof value !== 'number' && (typeof value !== 'string' || !value.trim())) continue;
     const num = Number(value);
     if (!Number.isFinite(num) || num <= POWER_FILL_VALUE_THRESHOLD) continue;
     byMonth.set(key, num);
@@ -379,7 +382,9 @@ async function fetchPowerViaServer(args: FetchPowerArgs, requested: string[]): P
     if (!payload?.ok || !payload.payload) return null;
 
     const used: string[] = Array.isArray(payload.usedParameters) ? payload.usedParameters : requested;
-    const parsed = parsePowerResponse(payload.payload, used);
+    // Parse against the original request so parameters omitted during server
+    // degradation remain visible as unavailable rather than disappearing.
+    const parsed = parsePowerResponse(payload.payload, requested);
     if (!parsed.rows.length) return null;
 
     return buildDataset({
@@ -409,7 +414,9 @@ async function fetchPowerViaServer(args: FetchPowerArgs, requested: string[]): P
  */
 export async function fetchPowerDataset(args: FetchPowerArgs): Promise<Sourced<PowerDataset>> {
   const requested = args.parameters?.length ? args.parameters : POWER_PARAMETERS.map((p) => p.code);
-  const cacheKey = `power:${args.latitude.toFixed(3)}:${args.longitude.toFixed(3)}:${clampYear(args.startYear)}:${clampYear(
+  // Version the key so entries stored with the old three-decimal precision
+  // cannot be mistaken for results of the corrected request.
+  const cacheKey = `power-v2:${args.latitude.toFixed(4)}:${args.longitude.toFixed(4)}:${clampYear(args.startYear)}:${clampYear(
     args.endYear
   )}:${[...requested].sort().join(',')}`;
 
@@ -419,7 +426,7 @@ export async function fetchPowerDataset(args: FetchPowerArgs): Promise<Sourced<P
       return {
         ...cached.value,
         status: 'cached',
-        provenance: { ...cached.value.provenance, fromCache: true, retrievedAt: cached.storedAt }
+        provenance: { ...cached.value.provenance, fromCache: true }
       };
     }
   }
@@ -443,7 +450,7 @@ export async function fetchPowerMonthly(args: FetchPowerArgs): Promise<Sourced<P
   const requested = args.parameters?.length ? args.parameters : POWER_PARAMETERS.map((p) => p.code);
   const startYear = clampYear(args.startYear);
   const endYear = clampYear(args.endYear);
-  const cacheKey = `power:${args.latitude.toFixed(3)}:${args.longitude.toFixed(3)}:${startYear}:${endYear}:${[...requested].sort().join(',')}`;
+  const cacheKey = `power-v2:${args.latitude.toFixed(4)}:${args.longitude.toFixed(4)}:${startYear}:${endYear}:${[...requested].sort().join(',')}`;
 
   const provenanceBase: Omit<Provenance, 'retrievedAt' | 'sourceUrl'> = {
     dataset: 'NASA POWER monthly climate & land-surface archive',
@@ -463,8 +470,7 @@ export async function fetchPowerMonthly(args: FetchPowerArgs): Promise<Sourced<P
         provenance: {
           ...cached.value.provenance,
           fromCache: true,
-          retrievedAt: cached.storedAt,
-          note: `${GRID_NOTE} Served from local cache (original retrieval ${cached.storedAt}).`
+          note: `${GRID_NOTE} Served from local cache (original retrieval ${cached.value.provenance.retrievedAt}).`
         }
       };
     }
@@ -487,7 +493,7 @@ export async function fetchPowerMonthly(args: FetchPowerArgs): Promise<Sourced<P
     } catch {
       throw new PowerRequestError('POWER returned an unreadable JSON response.', response.status, false);
     }
-    const parsed = parsePowerResponse(payload, codes);
+    const parsed = parsePowerResponse(payload, requested);
     if (!parsed.rows.length) {
       throw new PowerRequestError('POWER returned no usable monthly values for this location.', response.status, false);
     }

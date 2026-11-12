@@ -90,6 +90,9 @@ export const ApodViewer: React.FC<ApodViewerProps> = React.memo(({ lang, onOpenE
   const [mediaFailed, setMediaFailed] = useState(false);
   const [lightboxIndex, setLightboxIndex] = useState(0);
   const closeRef = useRef<HTMLButtonElement>(null);
+  const requestRef = useRef(0);
+
+  useEffect(() => () => { requestRef.current += 1; }, []);
 
   useEffect(() => {
     if (initialDate) setSelectedDate(initialDate);
@@ -97,10 +100,12 @@ export const ApodViewer: React.FC<ApodViewerProps> = React.memo(({ lang, onOpenE
 
   const load = useCallback(
     async (date: string) => {
+      const request = ++requestRef.current;
       setPhase('loading');
       setTranslation(null);
       setTranslationPhase('idle');
-      const record = (await fetchApod(date)) as ApodData;
+      const record = (await fetchApod(date)) as ApodData | null;
+      if (request !== requestRef.current) return;
       if (!record || !record.title) {
         setApod(null);
         setPhase('error');

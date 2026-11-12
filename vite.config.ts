@@ -47,9 +47,10 @@ export default defineConfig(({ mode }) => {
               }
             },
             {
-              // Earth Intelligence Lab: validated NASA proxies (domains, POWER,
-              // capability report). NetworkFirst keeps live values authoritative.
-              urlPattern: ({ url }) => url.pathname.startsWith('/api/earth/'),
+              // POWER responses carry retrieval timestamps and have their own
+              // provenance-aware cache. A service-worker fallback would return
+              // old data without marking it cached, so do not cache it here.
+              urlPattern: ({ url }) => url.origin === self.location.origin && url.pathname.startsWith('/api/earth/') && url.pathname !== '/api/earth/power',
               handler: 'NetworkFirst',
               options: {
                 cacheName: 'earth-intelligence-api',
@@ -100,10 +101,9 @@ export default defineConfig(({ mode }) => {
               }
             },
             {
-              urlPattern: ({ request, url }) => 
-                request.destination === 'image' || 
-                url.hostname.includes('nasa.gov') || 
-                url.hostname.includes('unsplash.com'),
+              // Only image requests belong in this long-lived cache. Matching
+              // hostnames also captured NASA JSON and made it stale for 60 days.
+              urlPattern: ({ request }) => request.destination === 'image',
               handler: 'CacheFirst',
               options: {
                 cacheName: 'nasa-imagery-assets',

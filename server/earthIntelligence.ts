@@ -72,7 +72,9 @@ const rateBuckets = new Map<string, { count: number; resetAt: number }>();
 
 function rateLimit(name: string, max: number, windowMs: number) {
   return (req: Request, res: Response, next: NextFunction) => {
-    const ip = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.ip || 'unknown';
+    // Express only trusts forwarded addresses when the operator explicitly
+    // configures trusted proxies; never accept a caller-supplied header here.
+    const ip = req.ip || req.socket.remoteAddress || 'unknown';
     // Buckets are per endpoint, so a burst of tile probes cannot throttle the
     // analyst (or any other capability) for the same client.
     const key = `${name}:${ip}`;
@@ -98,6 +100,7 @@ function rateLimit(name: string, max: number, windowMs: number) {
 }
 
 function numberParam(value: unknown, min: number, max: number): number | null {
+  if (typeof value !== 'string' || !value.trim()) return null;
   const num = Number(value);
   if (!Number.isFinite(num) || num < min || num > max) return null;
   return num;
@@ -118,7 +121,8 @@ earthRouter.get('/health', (_req, res) => {
       gibsDomains: true,
       gibsProbe: true,
       firmsHotspots: Boolean(process.env.FIRMS_MAP_KEY),
-      aiAnalyst: Boolean(process.env.GEMINI_API_KEY),
+      // This reports configuration, not a successful provider health probe.
+      aiAnalyst: Boolean(process.env.GEMINI_API_KEY || process.env.OPENROUTER_API_KEY || process.env.ARENA_API_KEY),
       aiAnalystProviders: [
         process.env.GEMINI_API_KEY ? 'gemini' : null,
         process.env.OPENROUTER_API_KEY ? 'openrouter' : null,
@@ -130,9 +134,9 @@ earthRouter.get('/health', (_req, res) => {
       firmsHotspots: process.env.FIRMS_MAP_KEY
         ? 'NASA FIRMS area API proxy enabled.'
         : 'No FIRMS_MAP_KEY configured — hotspot counts are not offered (the app never estimates them).',
-      aiAnalyst: process.env.GEMINI_API_KEY
-        ? 'Gemini interpretation enabled; answers are grounded in the retrieved data bundle only.'
-        : 'No GEMINI_API_KEY configured — the Lab uses its deterministic local analysis engine.',
+      aiAnalyst: process.env.GEMINI_API_KEY || process.env.OPENROUTER_API_KEY || process.env.ARENA_API_KEY
+        ? 'Remote analyst provider configured, but availability is not guaranteed; responses are grounded in the retrieved data bundle.'
+        : 'No remote analyst provider configured — the Lab uses its deterministic local analysis engine.',
       aiAnalystFailover: [
         process.env.OPENROUTER_API_KEY ? 'OpenRouter' : null,
         process.env.ARENA_API_KEY ? 'Arena AI' : null
@@ -160,12 +164,17 @@ earthRouter.get('/power', rateLimit('power', 60, 60_000), async (req, res) => {
   if (latitude === null || longitude === null || start === null || end === null) {
     return res.status(400).json({ ok: false, code: 'invalid-arguments', message: 'latitude, longitude, start and end are required and must be numeric.' });
   }
+  if (!Number.isInteger(start) || !Number.isInteger(end)) {
+    return res.status(400).json({ ok: false, code: 'invalid-arguments', message: 'start and end must be whole years.' });
+  }
   if (start > end) {
     return res.status(400).json({ ok: false, code: 'invalid-range', message: 'start year must not be after end year.' });
   }
 
   const parameters = requested.length ? requested.slice(0, 12) : CORE_PARAMETER_CODES;
-  const cacheKey = `power:${latitude.toFixed(3)}:${longitude.toFixed(3)}:${start}:${end}:${[...parameters].sort().join(',')}`;
+  // Use the same precision as buildUrl: distinct upstream coordinates must not
+  // share a cached result (including its provenance and geometry).
+  const cacheKey = `power:${latitude.toFixed(4)}:${longitude.toFixed(4)}:${start}:${end}:${[...parameters].sort().join(',')}`;
   const cached = cacheGet<Record<string, unknown>>(cacheKey);
   if (cached) {
     return res.json({ ...cached, fromCache: true });
@@ -216,6 +225,11 @@ earthRouter.get('/power', rateLimit('power', 60, 60_000), async (req, res) => {
       payload = JSON.parse(result.body);
     } catch {
       return res.status(502).json({ ok: false, code: 'power-unreadable', message: 'NASA POWER returned a non-JSON body.', sourceUrl: result.url });
+    }
+
+    const parameterBlock = (payload as any)?.properties?.parameter;
+    if (!parameterBlock || typeof parameterBlock !== 'object' || Array.isArray(parameterBlock)) {
+      return res.status(502).json({ ok: false, code: 'power-invalid-response', message: 'NASA POWER returned an unexpected data structure.', sourceUrl: result.url });
     }
 
     const envelope = {

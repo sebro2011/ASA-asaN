@@ -12,6 +12,7 @@ import { communityVideosRouter } from './server/communityVideos.ts';
 import { getNovaPublicConfig, handleNovaChatRequest } from './server/novaChat.js';
 import { handleNovaDiagnostics } from './server/novaDiagnostics.js';
 import { setupNasaRoutes } from './server/nasaRoutes.ts';
+import { createMarsPhotosRouter } from './server/marsPhotos.ts';
 import { workspaceConfigRouter } from './server/workspaceConfig.ts';
 import { spaceNewsRouter } from './server/spaceNews.ts';
 import { forgeRouter } from './server/forgeRoutes.ts';
@@ -164,6 +165,12 @@ function rateLimit(options: {
 // YouTube meta proxy: modest limit — it fetches an external page per call.
 app.use('/api/youtube/meta', rateLimit({ windowMs: 60_000, max: 30, keyPrefix: 'youtube-meta' }));
 
+// Translation calls a paid remote model; limit anonymous requests per process.
+app.use('/api/translate', rateLimit({ windowMs: 60_000, max: 15, keyPrefix: 'translate' }));
+
+// Public NASA proxy: prevent uncontrolled quota consumption.
+app.use('/api/mars', rateLimit({ windowMs: 60_000, max: 60, keyPrefix: 'mars-photos' }));
+
 // Community submissions/reports: stricter — write operations.
 app.use('/api/community', rateLimit({ windowMs: 60_000, max: 20, keyPrefix: 'community' }));
 
@@ -228,6 +235,7 @@ const ai = new GoogleGenAI({
 
 // Mount all NASA API routes from the modular nasaRoutes module (ISSUE-2)
 setupNasaRoutes(app, ai);
+app.use('/api/mars', createMarsPhotosRouter());
 
 app.get('/api/nova/config', (_req, res) => {
   res.setHeader('Cache-Control', 'no-store');

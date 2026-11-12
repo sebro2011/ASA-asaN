@@ -135,3 +135,10 @@ test('the service worker never answers an API navigation with the app shell', as
   assert.ok(match, 'vite.config.ts declares a navigateFallbackDenylist');
   assert.match(match[1], /\^\\\/api\\\//, 'the denylist covers /api/*');
 });
+
+test('PWA runtime image caching does not capture POWER JSON', async () => {
+  const config = await readFile(new URL('../vite.config.ts', import.meta.url), 'utf8');
+  assert.match(config, /url\.pathname !== '\/api\/earth\/power'/);
+  assert.match(config, /urlPattern:\s*\(\{ request \}\) => request\.destination === 'image'/);
+  assert.doesNotMatch(config, /url\.hostname\.includes\('nasa\.gov'\)/);
+});

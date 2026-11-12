@@ -142,6 +142,11 @@ test('parseParameter skips fill values and the month-13 annual aggregate', () =>
   assert.equal(parsed.get('201901'), 27.5);
 });
 
+test('parseParameter never turns missing values into measurements', () => {
+  const parsed = parseParameter({ '202001': null, '202002': '', '202003': '  ', '202004': false, '202005': 0, '202006': '0' });
+  assert.deepEqual([...parsed], [['202005', 0], ['202006', 0]]);
+});
+
 test('buildPowerUrl requests only the requested parameters and clamps years', () => {
   const url = buildPowerUrl(6.9271, 79.8612, ['T2M', 'PRECTOTCORR'], 2015, 2024);
   assert.match(url, /parameters=T2M%2CPRECTOTCORR/);
