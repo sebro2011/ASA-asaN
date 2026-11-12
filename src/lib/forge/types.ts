@@ -435,6 +435,7 @@ export interface Investigation {
 
 export const FORGE_SECTION_IDS = [
   'workspace',
+  'research',
   'hypotheses',
   'data',
   'evidence',

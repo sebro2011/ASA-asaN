@@ -5,6 +5,7 @@
  *   GET  /api/forge/catalogue    dataset registry + capability flags (no secrets)
  *   POST /api/forge/interpret    question → structured request, hypotheses, plan
  *   POST /api/forge/investigate  full pipeline: retrieve → analyse → evidence → passport input
+ *   POST /api/forge/assistant    contextual research assistant for one project
  *
  * Protections: per-IP rate limits per endpoint, strict body validation, no key
  * material in any response, `Cache-Control: no-store` on POSTs, and a bounded
@@ -19,6 +20,13 @@ import {
   validateQuestion,
 } from './forge/investigate';
 import type { FetchLike } from './forge/connectors';
+import {
+  runProjectAssistant,
+  validateAssistantQuestion,
+  validateContextPayload,
+  type AssistantRun,
+} from './forge/projectAssistant';
+import type { ProviderAdapter } from './earth/providerOrchestrator';
 
 type Bucket = { count: number; resetAt: number };
 
@@ -67,6 +75,9 @@ export interface ForgeRouterDeps {
   timeoutMs?: number;
   /** Isolated connector cache; tests pass a fresh map per server. */
   cache?: Map<string, never>;
+  /** Injected provider chain for the research assistant; tests supply stubs. */
+  assistantProviders?: ProviderAdapter[];
+  assistantTimeoutMs?: number;
 }
 
 export function createForgeRouter(deps: ForgeRouterDeps = {}) {
@@ -153,6 +164,58 @@ export function createForgeRouter(deps: ForgeRouterDeps = {}) {
           ? error.message
           : 'The investigation could not be completed. Partial sources are never replaced with simulated values.';
       return res.status(502).json({ ok: false, code: 'SOURCE_UNAVAILABLE', error: message });
+    }
+  });
+
+  router.post('/assistant', rateLimit('forge-assistant', 20, 60_000), async (req, res) => {
+    res.setHeader('Cache-Control', 'no-store');
+    const questionValidation = validateAssistantQuestion(req.body?.question);
+    if (questionValidation) {
+      return res.status(questionValidation.status).json({
+        ok: false,
+        code: questionValidation.code,
+        error: questionValidation.message,
+      });
+    }
+    const contextValidation = validateContextPayload(req.body?.context);
+    if (!contextValidation.ok) {
+      return res.status(400).json({
+        ok: false,
+        code: 'INVALID_CONTEXT',
+        error: `The project context was rejected: ${contextValidation.reason}`,
+      });
+    }
+    try {
+      const outcome: AssistantRun = await runProjectAssistant({
+        context: contextValidation.context,
+        question: String(req.body.question),
+        language: typeof req.body?.language === 'string' ? req.body.language : 'en',
+        providers: deps.assistantProviders,
+        timeoutMs: deps.assistantTimeoutMs,
+        now: deps.now ? () => deps.now!().getTime() : undefined,
+      });
+      return res.json({
+        ok: true,
+        mode: outcome.mode,
+        noticeCode: outcome.noticeCode,
+        provider: outcome.provider,
+        providerLabel: outcome.providerLabel,
+        answer: outcome.answer,
+        brief: outcome.brief,
+        rejectedCode: outcome.rejectedCode,
+        attempts: outcome.attempts,
+        retries: outcome.retries,
+        durationMs: outcome.durationMs,
+        deduped: outcome.deduped,
+        providerChain: outcome.providerChain,
+      });
+    } catch {
+      // Never leak a provider message: it can contain an upstream URL.
+      return res.status(502).json({
+        ok: false,
+        code: 'ASSISTANT_UNAVAILABLE',
+        error: 'The research assistant could not answer. Your project data was not sent anywhere it could be modified.',
+      });
     }
   });
 

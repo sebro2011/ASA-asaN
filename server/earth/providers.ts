@@ -100,6 +100,28 @@ export function analystPrompt(question: string, context: unknown, languageName: 
   )}`;
 }
 
+/**
+ * A persona is what makes a provider call specific to one surface: its system
+ * instruction, the prompt it builds from (question, context, language) and the
+ * JSON schema the model must return.
+ *
+ * The Earth analyst and the Forge research assistant share the same retry,
+ * backoff, circuit-breaker and timeout code (providerOrchestrator) and differ
+ * only here — which is why they cannot drift apart in resilience behaviour.
+ */
+export interface Persona {
+  systemInstruction: string;
+  buildPrompt: (args: { question: string; context: unknown; languageName: string }) => string;
+  /** Gemini structured-output schema; omitted for providers without schema support. */
+  responseSchema?: unknown;
+}
+
+export const EARTH_ANALYST_PERSONA: Persona = {
+  systemInstruction: ANALYST_SYSTEM_INSTRUCTION,
+  buildPrompt: ({ question, context, languageName }) => analystPrompt(question, context, languageName),
+  responseSchema: ANALYST_RESPONSE_SCHEMA,
+};
+
 function statusFromError(error: any): number | undefined {
   const candidates = [error?.status, error?.code, error?.error?.code, error?.response?.status];
   for (const candidate of candidates) {
@@ -116,6 +138,16 @@ function retryAfterFromError(error: any): number | undefined {
 }
 
 export function createGeminiProvider(options: { client: GoogleGenAI; model?: string }): ProviderAdapter {
+  return createGeminiPersonaProvider({ ...options, persona: EARTH_ANALYST_PERSONA });
+}
+
+/** Gemini adapter for any persona; the Earth analyst passes its own. */
+export function createGeminiPersonaProvider(options: {
+  client: GoogleGenAI;
+  model?: string;
+  persona: Persona;
+}): ProviderAdapter {
+  const persona = options.persona;
   const model = options.model || ANALYST_MODEL;
   return {
     id: 'gemini',
@@ -126,11 +158,11 @@ export function createGeminiProvider(options: { client: GoogleGenAI; model?: str
       const languageName = ({ en: 'English', si: 'Sinhala (සිංහල)', ta: 'Tamil (தமிழ்)' } as Record<string, string>)[lang] || 'English';
       const call = options.client.models.generateContent({
         model,
-        contents: analystPrompt(question, context, languageName),
+        contents: persona.buildPrompt({ question, context, languageName }),
         config: {
-          systemInstruction: ANALYST_SYSTEM_INSTRUCTION,
+          systemInstruction: persona.systemInstruction,
           responseMimeType: 'application/json',
-          responseSchema: ANALYST_RESPONSE_SCHEMA,
+          ...(persona.responseSchema ? { responseSchema: persona.responseSchema } : {}),
           temperature: 0.2,
           // The SDK forwards this when it supports it; the orchestrator's own
           // timeout still bounds the attempt either way.
@@ -167,13 +199,17 @@ interface ChatProviderOptions {
   baseUrl: string;
   extraHeaders?: Record<string, string>;
   fetchImpl?: typeof fetch;
+  /** Defaults to the Earth analyst persona for the existing call sites. */
+  persona?: Persona;
 }
 
-function createChatCompletionsProvider(
-  id: 'openrouter' | 'arena',
+/** Exported so the Forge assistant can reuse the same transport with its own persona. */
+export function createChatCompletionsProvider(
+  id: 'openrouter' | 'arena' | 'forge',
   label: string,
   options: ChatProviderOptions
 ): ProviderAdapter {
+  const persona = options.persona ?? EARTH_ANALYST_PERSONA;
   const model = options.model || OPENROUTER_MODEL;
   const fetchImpl = options.fetchImpl || fetch;
   return {
@@ -197,8 +233,8 @@ function createChatCompletionsProvider(
             temperature: 0.2,
             response_format: { type: 'json_object' },
             messages: [
-              { role: 'system', content: ANALYST_SYSTEM_INSTRUCTION },
-              { role: 'user', content: analystPrompt(question, context, languageName) },
+              { role: 'system', content: persona.systemInstruction },
+              { role: 'user', content: persona.buildPrompt({ question, context, languageName }) },
             ],
           }),
           signal,

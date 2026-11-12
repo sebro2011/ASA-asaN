@@ -42,6 +42,7 @@ const en: Copy = {
 
   /* ------------------------------------------------------------------ tabs */
   hfTabWorkspace: 'Investigation workspace',
+  hfTabResearch: 'Research projects',
   hfTabHypotheses: 'Hypothesis explorer',
   hfTabData: 'Data explorer',
   hfTabEvidence: 'Evidence laboratory',
@@ -317,6 +318,7 @@ const si: Copy = {
   hfFollowUpPlaceholder: 'මෙම විමර්ශනය ගැන අනුගාමී ප්‍රශ්නය…',
 
   hfTabWorkspace: 'විමර්ශන කාර්යාලය',
+  hfTabResearch: 'පර්යේෂණ ව්‍යාපෘති',
   hfTabHypotheses: 'උපකල්පන ගවේෂකය',
   hfTabData: 'දත්ත ගවේෂකය',
   hfTabEvidence: 'සාක්ෂි පර්යේෂණාගාරය',
@@ -582,6 +584,7 @@ const ta: Copy = {
   hfFollowUpPlaceholder: 'இந்த ஆய்வு பற்றிய தொடர் கேள்வி…',
 
   hfTabWorkspace: 'ஆய்வுப் பணியிடம்',
+  hfTabResearch: 'ஆய்வுத் திட்டங்கள்',
   hfTabHypotheses: 'கருதுகோள் ஆய்வு',
   hfTabData: 'தரவு ஆய்வு',
   hfTabEvidence: 'சான்று ஆய்வகம்',

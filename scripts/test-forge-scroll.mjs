@@ -281,7 +281,9 @@ async function mountForge() {
 
 test('every tab is reachable, selects its own panel, and exposes correct ARIA', async () => {
   const { container, act, tabs, tabByText } = await mountForge();
-  assert.equal(tabs().length, 8, 'all eight sections must be rendered as tabs');
+  // Nine sections since the research workspace was added; the original eight
+  // must all still be present, so the count is pinned rather than relaxed.
+  assert.equal(tabs().length, 9, 'all nine sections must be rendered as tabs');
 
   // Initial state: exactly one selected tab, and only it points at a panel.
   const selected = tabs().filter((tab) => tab.getAttribute('aria-selected') === 'true');
@@ -298,6 +300,7 @@ test('every tab is reachable, selects its own panel, and exposes correct ARIA', 
 
   // Click each section and confirm the rendered panel follows the selection.
   const expected = {
+    research: 'forge-panel-research',
     hypotheses: 'forge-panel-hypotheses',
     data: 'forge-panel-data',
     evidence: 'forge-panel-evidence',
@@ -335,8 +338,11 @@ test('the tab strip supports Arrow/Home/End keyboard navigation', async () => {
   };
 
   await press('ArrowRight');
-  assert.equal(document.activeElement.id, 'forge-tab-hypotheses', 'ArrowRight moves to the next tab');
+  assert.equal(document.activeElement.id, 'forge-tab-research', 'ArrowRight moves to the next tab');
   assert.equal(document.activeElement.getAttribute('aria-selected'), 'true');
+
+  await press('ArrowRight');
+  assert.equal(document.activeElement.id, 'forge-tab-hypotheses', 'ArrowRight advances again');
 
   await press('End');
   assert.equal(document.activeElement.id, 'forge-tab-history', 'End jumps to the last tab');
