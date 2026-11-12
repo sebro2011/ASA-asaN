@@ -6,6 +6,7 @@ import { pageCopy } from './i18n/pageCopy';
 import { spaceShortsCopy } from './i18n/spaceShorts';
 import { workspaceCopy } from './i18n/workspaceCopy';
 import { hypothesisForgeCopy } from './i18n/hypothesisForge';
+import { forgeResearchCopy } from './i18n/forgeResearch';
 
 export const resources = {
   en: {
@@ -429,6 +430,8 @@ export const resources = {
     Object.assign(bucket, workspaceCopy[lang]);
     // NOVA Hypothesis Forge interface copy (scientific investigation mode).
     Object.assign(bucket, hypothesisForgeCopy[lang]);
+    // Forge research workspace (projects / hypotheses / evidence / versions).
+    Object.assign(bucket, forgeResearchCopy[lang as 'en' | 'si' | 'ta']);
   }
 });
 

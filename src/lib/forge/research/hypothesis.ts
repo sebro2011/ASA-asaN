@@ -318,6 +318,11 @@ export function fromGenerated(options: {
   });
 }
 
+/** States reachable from the current one, ignoring content gates. */
+export function nextStates(hypothesis: ResearchHypothesis): HypothesisLifecycle[] {
+  return TRANSITIONS[hypothesis.lifecycle].slice();
+}
+
 export interface ComparisonRow {
   field: keyof ResearchHypothesisFields;
   values: string[];

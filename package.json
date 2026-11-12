@@ -57,7 +57,7 @@
     "test:workspace-sync": "node --import tsx --test scripts/test-workspace-sync.mjs",
     "verify:earth": "node --import tsx scripts/verify-earth-services.mjs",
     "verify:explore": "node --import tsx scripts/verify-explore-destinations.mjs",
-    "test:forge": "node --import tsx --test scripts/test-forge-engine.mjs && node --import tsx --test --test-force-exit scripts/test-forge-api.mjs && node --import tsx --test scripts/test-forge-ui.mjs && node --import tsx --test --test-force-exit scripts/test-forge-dom.mjs && node --import tsx --test --test-force-exit scripts/test-forge-scroll.mjs && node --import tsx --test scripts/test-forge-science.mjs && node --import tsx --test scripts/test-forge-science-connectors.mjs && node --import tsx --test scripts/test-forge-research.mjs && node --import tsx --test --test-force-exit scripts/test-forge-science-dom.mjs"
+    "test:forge": "node --import tsx --test scripts/test-forge-engine.mjs && node --import tsx --test --test-force-exit scripts/test-forge-api.mjs && node --import tsx --test scripts/test-forge-ui.mjs && node --import tsx --test --test-force-exit scripts/test-forge-dom.mjs && node --import tsx --test --test-force-exit scripts/test-forge-scroll.mjs && node --import tsx --test scripts/test-forge-science.mjs && node --import tsx --test scripts/test-forge-science-connectors.mjs && node --import tsx --test scripts/test-forge-research.mjs && node --import tsx --test --test-force-exit scripts/test-forge-science-dom.mjs && node --import tsx --test scripts/test-forge-assistant.mjs && node --import tsx --test --test-force-exit scripts/test-forge-research-workspace.mjs"
   },
   "dependencies": {
     "@fontsource-variable/inter": "^5.3.0",

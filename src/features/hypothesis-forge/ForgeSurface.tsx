@@ -76,6 +76,7 @@ import {
   type StoredInvestigation,
 } from '../../lib/forge/memory';
 import { ScienceLab } from './ScienceLab';
+import { ResearchWorkspace } from './research/ResearchWorkspace';
 import {
   EvidenceChart,
   HypothesisGraph,
@@ -88,6 +89,7 @@ import {
 
 const SECTIONS: ForgeSectionId[] = [
   'workspace',
+  'research',
   'hypotheses',
   'data',
   'evidence',
@@ -99,6 +101,7 @@ const SECTIONS: ForgeSectionId[] = [
 
 const SECTION_KEY: Record<ForgeSectionId, string> = {
   workspace: 'hfTabWorkspace',
+  research: 'hfTabResearch',
   hypotheses: 'hfTabHypotheses',
   data: 'hfTabData',
   evidence: 'hfTabEvidence',
@@ -588,6 +591,16 @@ export default function ForgeSurface({ onExitToChat }: { onExitToChat?: () => vo
         aria-labelledby={`forge-tab-${section}`}
         className="forge-body"
       >
+        {/* -------------------------------------------------------- research */}
+        {section === 'research' ? (
+          <Section
+            title={t('hfTabResearch')}
+            hint={t('frSubtitle')}
+          >
+            <ResearchWorkspace />
+          </Section>
+        ) : null}
+
         {/* ------------------------------------------------------- workspace */}
         {section === 'workspace' ? (
           <>

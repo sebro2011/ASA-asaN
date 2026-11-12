@@ -58,6 +58,7 @@ const {
   clearDraft,
   summariseProject,
   canonicalJson,
+  PROJECT_SCHEMA_VERSION,
   PROJECT_STORE_KEY,
   MAX_VERSIONS_PER_PROJECT,
 } = await import('../src/lib/forge/research/project.ts');
@@ -92,7 +93,7 @@ const {
 test('a new project is valid, empty and explicitly incomplete', () => {
   const project = emptyProject({ title: 'Solar wind coupling' });
   assert.equal(validateProject(project).ok, true);
-  assert.equal(project.schemaVersion, 1);
+  assert.equal(project.schemaVersion, PROJECT_SCHEMA_VERSION);
   const summary = summariseProject(project);
   assert.ok(summary.gaps.length >= 5);
   assert.ok(summary.gaps.some((gap) => /No hypothesis/.test(gap)));
@@ -113,7 +114,7 @@ test('a partial legacy payload is migrated with its arrays restored', () => {
     // no variables / evidence / versions at all
   });
   assert.ok(migrated);
-  assert.equal(migrated.schemaVersion, 1);
+  assert.equal(migrated.schemaVersion, PROJECT_SCHEMA_VERSION);
   assert.deepEqual(migrated.questions, ['Does X follow Y?']);
   assert.deepEqual(migrated.evidence, []);
   assert.deepEqual(migrated.versions, []);
@@ -150,7 +151,7 @@ test('a stored project round-trips through the versioned store', () => {
   const read = readProjects();
   assert.equal(read.projects.length, 1);
   assert.equal(read.projects[0].title, 'Stored project');
-  assert.equal(read.version, 1);
+  assert.equal(read.version, PROJECT_SCHEMA_VERSION);
   const removed = deleteProject(project.id);
   assert.equal(removed.projects.length, 0);
 });

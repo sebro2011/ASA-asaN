@@ -16,15 +16,23 @@
  *     and any recomputation is an explicit, labelled action.
  *  3. **Autosave is not a commit.** Drafts are recovered on crash; versions are
  *     explicit snapshots with a content hash so two people can tell them apart.
+ *  4. **One representation per fact.** A hypothesis lives in `hypotheses` — not
+ *     also in an id list beside it. Evidence lives in `evidence` as a research
+ *     record — engine evidence items are *converted* on import, never kept in a
+ *     parallel shape.
  */
 
 import type { EvidenceItem, LanguageCode } from '../types';
+import { fromEngineEvidence, type EvidenceRecord } from './evidenceIntel';
+import type { ResearchHypothesis } from './hypothesis';
 
 export const PROJECT_STORE_KEY = 'nova_forge_projects_v1';
 export const PROJECT_DRAFT_KEY = 'nova_forge_project_draft_v1';
-export const PROJECT_SCHEMA_VERSION = 1;
+export const PROJECT_SCHEMA_VERSION = 2;
 export const MAX_PROJECTS = 24;
 export const MAX_VERSIONS_PER_PROJECT = 40;
+export const MAX_HYPOTHESES_PER_PROJECT = 24;
+export const MAX_EVIDENCE_PER_PROJECT = 200;
 
 export type Discipline =
   | 'space-weather'
@@ -37,6 +45,18 @@ export type Discipline =
   | 'life-sciences'
   | 'interdisciplinary'
   | 'unsupported';
+
+export const DISCIPLINES: Discipline[] = [
+  'space-weather',
+  'earth-environment',
+  'near-earth-objects',
+  'orbital-mechanics',
+  'planetary-science',
+  'astronomy',
+  'exoplanets',
+  'life-sciences',
+  'interdisciplinary',
+];
 
 export interface ResearchVariable {
   id: string;
@@ -92,6 +112,20 @@ export interface SimulationRecord {
   validationPassed: boolean | null;
 }
 
+/** A deterministic computation recorded against the project, as it was run. */
+export interface ProjectAnalysisRecord {
+  id: string;
+  method: string;
+  engineVersion: string;
+  /** Dataset snapshots the computation used. */
+  datasetIds: string[];
+  sampleSize: number;
+  /** Headline values exactly as computed; never recomputed on read. */
+  values: Record<string, number | string | null>;
+  limitations: string[];
+  computedAt: string;
+}
+
 export interface ConclusionRecord {
   id: string;
   statement: string;
@@ -127,9 +161,12 @@ export interface ResearchProject {
   variables: ResearchVariable[];
   assumptions: ResearchAssumption[];
   methods: MethodPlan[];
-  hypothesisIds: string[];
-  evidence: EvidenceItem[];
+  /** The single source of truth for hypotheses. */
+  hypotheses: ResearchHypothesis[];
+  /** The single source of truth for evidence (research records). */
+  evidence: EvidenceRecord[];
   datasets: DatasetSnapshot[];
+  analyses: ProjectAnalysisRecord[];
   simulations: SimulationRecord[];
   conclusions: ConclusionRecord[];
   citations: CitationRecord[];
@@ -138,6 +175,8 @@ export interface ResearchProject {
   investigationIds: string[];
   /** Change log; each entry carries the content hash it produced. */
   versions: ProjectVersion[];
+  /** ISO timestamp when archived, null while active. */
+  archivedAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -190,9 +229,17 @@ export function contentHash(value: unknown): string {
   return (hash >>> 0).toString(16).padStart(8, '0');
 }
 
+let idCounter = 0;
+
+/**
+ * Ids stay unique without a network or a clock dependency in tests: the counter
+ * is process-local, the timestamp keeps them sortable, the random suffix keeps
+ * two tabs apart.
+ */
 export function newId(prefix: string): string {
-  const random = Math.random().toString(36).slice(2, 8);
-  return `${prefix}_${Date.now().toString(36)}_${random}`;
+  idCounter = (idCounter + 1) % 1_000_000;
+  const random = Math.random().toString(36).slice(2, 7);
+  return `${prefix}_${Date.now().toString(36)}${idCounter.toString(36)}_${random}`;
 }
 
 export function emptyProject(options: { title: string; discipline?: Discipline; language?: LanguageCode }): ResearchProject {
@@ -209,15 +256,17 @@ export function emptyProject(options: { title: string; discipline?: Discipline; 
     variables: [],
     assumptions: [],
     methods: [],
-    hypothesisIds: [],
+    hypotheses: [],
     evidence: [],
     datasets: [],
+    analyses: [],
     simulations: [],
     conclusions: [],
     citations: [],
     reports: [],
     investigationIds: [],
     versions: [],
+    archivedAt: null,
     createdAt: now,
     updatedAt: now,
   };
@@ -230,6 +279,24 @@ export interface ProjectValidation {
   errors: string[];
   warnings: string[];
 }
+
+const ARRAY_FIELDS = [
+  'questions',
+  'objectives',
+  'variables',
+  'assumptions',
+  'methods',
+  'hypotheses',
+  'evidence',
+  'datasets',
+  'analyses',
+  'simulations',
+  'conclusions',
+  'citations',
+  'reports',
+  'versions',
+  'investigationIds',
+] as const;
 
 /**
  * Structural validation on load. Unknown or corrupt fields are dropped rather
@@ -247,10 +314,43 @@ export function validateProject(value: unknown): ProjectValidation {
   if (record.schemaVersion !== PROJECT_SCHEMA_VERSION) {
     warnings.push(`Schema version ${String(record.schemaVersion)} will be migrated to ${PROJECT_SCHEMA_VERSION}.`);
   }
-  for (const key of ['questions', 'objectives', 'variables', 'assumptions', 'methods', 'evidence', 'datasets', 'simulations', 'conclusions', 'citations', 'reports', 'versions', 'hypothesisIds', 'investigationIds']) {
+  if (Array.isArray(record.hypothesisIds) && !Array.isArray(record.hypotheses)) {
+    warnings.push('Legacy "hypothesisIds" found: ids alone cannot rebuild a hypothesis, so the list is reported and reset.');
+  }
+  for (const key of ARRAY_FIELDS) {
     if (!Array.isArray(record[key])) warnings.push(`Field "${key}" was missing or not an array; it was reset to an empty list.`);
   }
   return { ok: errors.length === 0, errors, warnings };
+}
+
+function isEngineEvidence(value: unknown): value is EvidenceItem {
+  if (!value || typeof value !== 'object') return false;
+  const record = value as Record<string, unknown>;
+  return typeof record.classification === 'string' && typeof record.datasetTitle === 'string';
+}
+
+/** Drafts made after PR #46 stored engine evidence items; convert, don't discard. */
+function migrateEvidence(entry: unknown): EvidenceRecord | null {
+  if (!entry || typeof entry !== 'object') return null;
+  if (isEngineEvidence(entry)) {
+    return fromEngineEvidence(entry, { datasetVersion: 'unversioned (migrated from v1)' });
+  }
+  const record = entry as Partial<EvidenceRecord>;
+  if (typeof record.id !== 'string' || typeof record.title !== 'string') return null;
+  return {
+    ...record,
+    authors: Array.isArray(record.authors) ? record.authors : [],
+    limitations: Array.isArray(record.limitations) ? record.limitations : [],
+    hypothesisIds: Array.isArray(record.hypothesisIds) ? record.hypothesisIds : [],
+    stance: record.stance ?? 'unverified',
+    sourceType: record.sourceType ?? 'secondary',
+    origin: record.origin ?? 'user',
+    fullText: record.fullText ?? 'metadata-only',
+    verification: record.verification ?? 'unverified',
+    verificationNote: record.verificationNote ?? 'Migrated record: no verification was recorded with it.',
+    accessNote: record.accessNote ?? 'No access note was recorded with this migrated item.',
+    citation: record.citation ?? `${record.title}`,
+  } as EvidenceRecord;
 }
 
 /** Migrates any older/partial payload to the current schema, losslessly. */
@@ -260,6 +360,10 @@ export function migrateProject(value: unknown): ResearchProject | null {
   const record = value as Record<string, unknown>;
   const base = emptyProject({ title: String(record.title) });
   const pickArray = <T>(key: string): T[] => (Array.isArray(record[key]) ? (record[key] as T[]) : []);
+  const evidence = pickArray<unknown>('evidence')
+    .map(migrateEvidence)
+    .filter((entry): entry is EvidenceRecord => entry !== null)
+    .slice(-MAX_EVIDENCE_PER_PROJECT);
   return {
     ...base,
     ...record,
@@ -271,15 +375,17 @@ export function migrateProject(value: unknown): ResearchProject | null {
     variables: pickArray<ResearchVariable>('variables'),
     assumptions: pickArray<ResearchAssumption>('assumptions'),
     methods: pickArray<MethodPlan>('methods'),
-    hypothesisIds: pickArray<string>('hypothesisIds'),
-    evidence: pickArray<EvidenceItem>('evidence'),
+    hypotheses: pickArray<ResearchHypothesis>('hypotheses').slice(-MAX_HYPOTHESES_PER_PROJECT),
+    evidence,
     datasets: pickArray<DatasetSnapshot>('datasets'),
+    analyses: pickArray<ProjectAnalysisRecord>('analyses'),
     simulations: pickArray<SimulationRecord>('simulations'),
     conclusions: pickArray<ConclusionRecord>('conclusions'),
     citations: pickArray<CitationRecord>('citations'),
     reports: pickArray<ReportRecord>('reports'),
     investigationIds: pickArray<string>('investigationIds'),
     versions: pickArray<ProjectVersion>('versions').slice(-MAX_VERSIONS_PER_PROJECT),
+    archivedAt: typeof record.archivedAt === 'string' ? record.archivedAt : null,
   };
 }
 
@@ -294,9 +400,10 @@ const TRACKED_FIELDS = [
   'variables',
   'assumptions',
   'methods',
-  'hypothesisIds',
+  'hypotheses',
   'evidence',
   'datasets',
+  'analyses',
   'simulations',
   'conclusions',
   'citations',
@@ -304,7 +411,7 @@ const TRACKED_FIELDS = [
 ] as const;
 
 export function projectHash(project: ResearchProject): string {
-  const { versions: _versions, updatedAt: _updatedAt, ...rest } = project;
+  const { versions: _versions, updatedAt: _updatedAt, archivedAt: _archivedAt, ...rest } = project;
   return contentHash(rest);
 }
 
@@ -376,7 +483,7 @@ export function checkReproducibility(
       drift.push({ datasetId: snapshot.datasetId, pinnedHash: snapshot.payloadHash, currentHash: null });
       continue;
     }
-    if (live.payloadHash && live.payloadHash !== snapshot.payloadHash) {
+    if (live.payloadHash !== snapshot.payloadHash) {
       drift.push({ datasetId: snapshot.datasetId, pinnedHash: snapshot.payloadHash, currentHash: live.payloadHash });
     }
   }
@@ -510,12 +617,185 @@ export function clearDraft(): void {
   storage()?.removeItem(PROJECT_DRAFT_KEY);
 }
 
+/* --------------------------- editing operations --------------------------- */
+
+/**
+ * Every mutation below is a pure function returning a new project plus the time
+ * it changed. Keeping them here (rather than in components) is what makes the
+ * research workflow testable without a DOM.
+ */
+export function touch(project: ResearchProject): ResearchProject {
+  return { ...project, updatedAt: new Date().toISOString() };
+}
+
+export function hypothesisIdsOf(project: ResearchProject): string[] {
+  return project.hypotheses.map((hypothesis) => hypothesis.id);
+}
+
+export function findHypothesis(project: ResearchProject, id: string): ResearchHypothesis | null {
+  return project.hypotheses.find((hypothesis) => hypothesis.id === id) ?? null;
+}
+
+export function upsertHypothesis(project: ResearchProject, hypothesis: ResearchHypothesis): ResearchProject {
+  const exists = project.hypotheses.some((entry) => entry.id === hypothesis.id);
+  const hypotheses = exists
+    ? project.hypotheses.map((entry) => (entry.id === hypothesis.id ? hypothesis : entry))
+    : [...project.hypotheses, hypothesis].slice(-MAX_HYPOTHESES_PER_PROJECT);
+  return touch({ ...project, hypotheses });
+}
+
+export function removeHypothesis(project: ResearchProject, hypothesisId: string): ResearchProject {
+  return touch({
+    ...project,
+    hypotheses: project.hypotheses.filter((entry) => entry.id !== hypothesisId),
+    // Evidence links to a hypothesis that no longer exists would be dangling.
+    evidence: project.evidence.map((record) => ({
+      ...record,
+      hypothesisIds: record.hypothesisIds.filter((id) => id !== hypothesisId),
+    })),
+    conclusions: project.conclusions.filter((conclusion) => conclusion.hypothesisId !== hypothesisId),
+  });
+}
+
+export function upsertEvidence(project: ResearchProject, record: EvidenceRecord): ResearchProject {
+  const exists = project.evidence.some((entry) => entry.id === record.id);
+  const evidence = exists
+    ? project.evidence.map((entry) => (entry.id === record.id ? record : entry))
+    : [...project.evidence, record].slice(-MAX_EVIDENCE_PER_PROJECT);
+  return touch({ ...project, evidence });
+}
+
+export function removeEvidence(project: ResearchProject, evidenceId: string): ResearchProject {
+  return touch({ ...project, evidence: project.evidence.filter((entry) => entry.id !== evidenceId) });
+}
+
+/** Links or unlinks an existing record to a hypothesis; never edits the claim. */
+export function setEvidenceLink(
+  project: ResearchProject,
+  evidenceId: string,
+  hypothesisId: string,
+  linked: boolean,
+): ResearchProject {
+  return touch({
+    ...project,
+    evidence: project.evidence.map((record) => {
+      if (record.id !== evidenceId) return record;
+      const has = record.hypothesisIds.includes(hypothesisId);
+      if (linked === has) return record;
+      return {
+        ...record,
+        hypothesisIds: linked
+          ? [...record.hypothesisIds, hypothesisId]
+          : record.hypothesisIds.filter((id) => id !== hypothesisId),
+      };
+    }),
+  });
+}
+
+export function upsertVariable(project: ResearchProject, variable: ResearchVariable): ResearchProject {
+  const exists = project.variables.some((entry) => entry.id === variable.id);
+  return touch({
+    ...project,
+    variables: exists
+      ? project.variables.map((entry) => (entry.id === variable.id ? variable : entry))
+      : [...project.variables, variable],
+  });
+}
+
+export function removeVariable(project: ResearchProject, variableId: string): ResearchProject {
+  return touch({ ...project, variables: project.variables.filter((entry) => entry.id !== variableId) });
+}
+
+export function upsertAssumption(project: ResearchProject, assumption: ResearchAssumption): ResearchProject {
+  const exists = project.assumptions.some((entry) => entry.id === assumption.id);
+  return touch({
+    ...project,
+    assumptions: exists
+      ? project.assumptions.map((entry) => (entry.id === assumption.id ? assumption : entry))
+      : [...project.assumptions, assumption],
+  });
+}
+
+export function removeAssumption(project: ResearchProject, assumptionId: string): ResearchProject {
+  return touch({ ...project, assumptions: project.assumptions.filter((entry) => entry.id !== assumptionId) });
+}
+
+export function upsertMethod(project: ResearchProject, method: MethodPlan): ResearchProject {
+  const exists = project.methods.some((entry) => entry.id === method.id);
+  return touch({
+    ...project,
+    methods: exists ? project.methods.map((entry) => (entry.id === method.id ? method : entry)) : [...project.methods, method],
+  });
+}
+
+export function removeMethod(project: ResearchProject, methodId: string): ResearchProject {
+  return touch({ ...project, methods: project.methods.filter((entry) => entry.id !== methodId) });
+}
+
+export function addDatasetSnapshot(project: ResearchProject, snapshot: DatasetSnapshot): ResearchProject {
+  const exists = project.datasets.some((entry) => entry.datasetId === snapshot.datasetId);
+  return touch({
+    ...project,
+    datasets: exists
+      ? project.datasets.map((entry) => (entry.datasetId === snapshot.datasetId ? snapshot : entry))
+      : [...project.datasets, snapshot],
+  });
+}
+
+export function addAnalysis(project: ResearchProject, record: ProjectAnalysisRecord): ResearchProject {
+  return touch({ ...project, analyses: [...project.analyses, record] });
+}
+
+export function addSimulation(project: ResearchProject, record: SimulationRecord): ResearchProject {
+  return touch({ ...project, simulations: [...project.simulations, record] });
+}
+
+export function upsertConclusion(project: ResearchProject, conclusion: ConclusionRecord): ResearchProject {
+  const exists = project.conclusions.some((entry) => entry.id === conclusion.id);
+  return touch({
+    ...project,
+    conclusions: exists
+      ? project.conclusions.map((entry) => (entry.id === conclusion.id ? conclusion : entry))
+      : [...project.conclusions, conclusion],
+  });
+}
+
+export function removeConclusion(project: ResearchProject, conclusionId: string): ResearchProject {
+  return touch({ ...project, conclusions: project.conclusions.filter((entry) => entry.id !== conclusionId) });
+}
+
+export function addCitation(project: ResearchProject, citation: CitationRecord): ResearchProject {
+  return touch({ ...project, citations: [...project.citations, citation] });
+}
+
+export function removeCitation(project: ResearchProject, citationId: string): ResearchProject {
+  return touch({ ...project, citations: project.citations.filter((entry) => entry.id !== citationId) });
+}
+
+export function linkInvestigation(project: ResearchProject, investigationId: string): ResearchProject {
+  if (project.investigationIds.includes(investigationId)) return project;
+  return touch({ ...project, investigationIds: [...project.investigationIds, investigationId] });
+}
+
+export function unlinkInvestigation(project: ResearchProject, investigationId: string): ResearchProject {
+  return touch({ ...project, investigationIds: project.investigationIds.filter((id) => id !== investigationId) });
+}
+
+export function archiveProject(project: ResearchProject): ResearchProject {
+  return touch({ ...project, archivedAt: new Date().toISOString() });
+}
+
+export function unarchiveProject(project: ResearchProject): ResearchProject {
+  return touch({ ...project, archivedAt: null });
+}
+
 /* ------------------------------- summary ---------------------------------- */
 
 export interface ProjectSummary {
   id: string;
   title: string;
   discipline: Discipline;
+  archived: boolean;
   hypothesisCount: number;
   evidenceCount: number;
   datasetCount: number;
@@ -530,7 +810,7 @@ export interface ProjectSummary {
 export function summariseProject(project: ResearchProject): ProjectSummary {
   const gaps: string[] = [];
   if (project.questions.length === 0) gaps.push('No research question recorded.');
-  if (project.hypothesisIds.length === 0) gaps.push('No hypothesis linked.');
+  if (project.hypotheses.length === 0) gaps.push('No hypothesis recorded.');
   if (project.variables.length === 0) gaps.push('No variables defined.');
   if (project.datasets.length === 0) gaps.push('No dataset snapshot pinned.');
   if (project.evidence.length === 0) gaps.push('No evidence recorded.');
@@ -542,7 +822,8 @@ export function summariseProject(project: ResearchProject): ProjectSummary {
     id: project.id,
     title: project.title,
     discipline: project.discipline,
-    hypothesisCount: project.hypothesisIds.length,
+    archived: project.archivedAt !== null,
+    hypothesisCount: project.hypotheses.length,
     evidenceCount: project.evidence.length,
     datasetCount: project.datasets.length,
     simulationCount: project.simulations.length,
