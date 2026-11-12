@@ -131,6 +131,13 @@ test('an outage with no earlier observation is an error, never a calm reading', 
   assert.ok(!JSON.stringify(body).includes('"kpIndex"'), 'no Kp may appear in an outage payload');
   assert.ok(!JSON.stringify(body).includes('quiet'), 'no invented condition may appear');
   assert.ok(noaaCalls > 0, 'the handler really tried the upstream');
+  // The failure carries a coarse reason from a fixed set — enough for an operator
+  // to tell "NOAA refused us" from "we timed out", and nothing internal.
+  assert.ok(
+    /^(timeout|network|http|shape|ok)(,(timeout|network|http|shape|ok)){2}$/.test(body.reason),
+    `reason must be coarse, got ${body.reason}`,
+  );
+  assert.match(body.reason, /http/, 'a 500 from the upstream is reported as http');
 });
 
 test('a live observation is parsed, scaled and timestamped', async () => {

@@ -409,17 +409,35 @@ export const KP_INDEX_URL = KP_INDEX_URLS[0];
 export const PLASMA_SPEED_URL = 'https://services.swpc.noaa.gov/products/solar-wind/plasma-7-day.json';
 
 /** Last observation this process actually measured — never a guess. */
+/** SWPC is fetched in parallel; 8 s is the per-request budget. */
+export const SWPC_TIMEOUT_MS = 8000;
+
 export let lastKnownSolarWeather:
   | { data: Record<string, unknown>; fetchedAt: string }
   | null = null;
 
-async function fetchSwpcJson(url: string): Promise<unknown> {
+export type SwpcFailureReason = 'timeout' | 'network' | 'http' | 'shape';
+
+/**
+ * One SWPC fetch. The failure *kind* is kept (coarsely, with no host internals) so
+ * an operator can tell "NOAA refused us" from "we timed out" — the difference
+ * decides whether to move the timeout or move the upstream.
+ */
+async function fetchSwpcJson(
+  url: string,
+  timeoutMs = SWPC_TIMEOUT_MS,
+): Promise<{ data: unknown; reason?: SwpcFailureReason }> {
   try {
-    const response = await fetch(url, { signal: AbortSignal.timeout(4000) });
-    if (!response.ok) return null;
-    return await response.json();
-  } catch {
-    return null;
+    const response = await fetch(url, { signal: AbortSignal.timeout(timeoutMs) });
+    if (!response.ok) return { data: null, reason: 'http' };
+    try {
+      return { data: await response.json() };
+    } catch {
+      return { data: null, reason: 'shape' };
+    }
+  } catch (error) {
+    const aborted = error instanceof Error && /abort|timeout/i.test(`${error.name} ${error.message}`);
+    return { data: null, reason: aborted ? 'timeout' : 'network' };
   }
 }
 
@@ -1231,12 +1249,20 @@ Explanation to translate: "${explanation}"`;
   // sample marked `stale` when the upstream fails, and answer with an explicit
   // error when there has never been one. There is no synthetic value anywhere.
   app.get('/api/solar-weather', async (_req: Request, res: Response) => {
-    let K = null;
-    for (const kpUrl of KP_INDEX_URLS) {
-      K = parsePlanetaryKIndex(await fetchSwpcJson(kpUrl));
+    // All upstreams in parallel: sequential attempts turned a slow NOAA into a
+    // 12 s request and a cold function timed out on every one of them.
+    const attempts = await Promise.all([
+      fetchSwpcJson(KP_INDEX_URLS[0]),
+      fetchSwpcJson(KP_INDEX_URLS[1]),
+      fetchSwpcJson(PLASMA_SPEED_URL),
+    ]);
+
+    let K: ReturnType<typeof parsePlanetaryKIndex> = null;
+    for (const attempt of attempts.slice(0, 2)) {
+      K = parsePlanetaryKIndex(attempt.data);
       if (K) break;
     }
-    const speed = parsePlasmaSpeed(await fetchSwpcJson(PLASMA_SPEED_URL));
+    const speed = parsePlasmaSpeed(attempts[2].data);
 
     if (K) {
       lastKnownSolarWeather = {
@@ -1274,6 +1300,9 @@ Explanation to translate: "${explanation}"`;
     return res.status(503).json({
       success: false,
       code: 'UPSTREAM_UNAVAILABLE',
+      // Coarse reason only: which upstream failed and how, never a stack trace or
+      // an internal host detail.
+      reason: attempts.map((attempt) => attempt.reason ?? 'ok').join(','),
       error: 'NOAA SWPC did not answer and no earlier observation is held by this server.',
       source: 'NOAA SWPC',
     });

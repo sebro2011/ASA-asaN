@@ -5117,14 +5117,20 @@ var KP_INDEX_URLS = [
 ];
 var KP_INDEX_URL = KP_INDEX_URLS[0];
 var PLASMA_SPEED_URL = "https://services.swpc.noaa.gov/products/solar-wind/plasma-7-day.json";
+var SWPC_TIMEOUT_MS = 8e3;
 var lastKnownSolarWeather = null;
-async function fetchSwpcJson(url) {
+async function fetchSwpcJson(url, timeoutMs = SWPC_TIMEOUT_MS) {
   try {
-    const response = await fetch(url, { signal: AbortSignal.timeout(4e3) });
-    if (!response.ok) return null;
-    return await response.json();
-  } catch {
-    return null;
+    const response = await fetch(url, { signal: AbortSignal.timeout(timeoutMs) });
+    if (!response.ok) return { data: null, reason: "http" };
+    try {
+      return { data: await response.json() };
+    } catch {
+      return { data: null, reason: "shape" };
+    }
+  } catch (error) {
+    const aborted = error instanceof Error && /abort|timeout/i.test(`${error.name} ${error.message}`);
+    return { data: null, reason: aborted ? "timeout" : "network" };
   }
 }
 function parsePlanetaryKIndex(payload) {
@@ -5811,12 +5817,17 @@ Explanation to translate: "${explanation}"`;
     });
   });
   app2.get("/api/solar-weather", async (_req, res) => {
+    const attempts = await Promise.all([
+      fetchSwpcJson(KP_INDEX_URLS[0]),
+      fetchSwpcJson(KP_INDEX_URLS[1]),
+      fetchSwpcJson(PLASMA_SPEED_URL)
+    ]);
     let K = null;
-    for (const kpUrl of KP_INDEX_URLS) {
-      K = parsePlanetaryKIndex(await fetchSwpcJson(kpUrl));
+    for (const attempt of attempts.slice(0, 2)) {
+      K = parsePlanetaryKIndex(attempt.data);
       if (K) break;
     }
-    const speed = parsePlasmaSpeed(await fetchSwpcJson(PLASMA_SPEED_URL));
+    const speed = parsePlasmaSpeed(attempts[2].data);
     if (K) {
       lastKnownSolarWeather = {
         data: {
@@ -5851,6 +5862,9 @@ Explanation to translate: "${explanation}"`;
     return res.status(503).json({
       success: false,
       code: "UPSTREAM_UNAVAILABLE",
+      // Coarse reason only: which upstream failed and how, never a stack trace or
+      // an internal host detail.
+      reason: attempts.map((attempt) => attempt.reason ?? "ok").join(","),
       error: "NOAA SWPC did not answer and no earlier observation is held by this server.",
       source: "NOAA SWPC"
     });
