@@ -3,6 +3,37 @@
 Newest first. Every entry states what changed, which files, and how it was verified.
 Nothing here is a plan; if it was not executed it is not listed.
 
+## 2026-11-13 — After the merge: `modelAttempts` answers the last question (branch `arena/8a962084-asa-asan`)
+
+PR #54 merged as `44c2cc7`; Vercel redeployed production to it; the probe was run
+again at **17:50:01Z**, and this time the payload carried `modelAttempts`, so every
+step of the Gemini chain reports its own status:
+
+| Attempt | Status | Code | ms |
+| --- | --- | --- | --- |
+| `gemini-3.8-flash` (pinned) | **429** | `UPSTREAM_RATE_LIMITED` | 124 |
+| `gemini-flash-latest` | **503** | `PROVIDER_UNAVAILABLE` | 721 |
+| `gemini-2.5-pro` | **404** | `PROVIDER_MODEL_NOT_FOUND` | 147 |
+| `gemini-2.5-flash-lite` | **404** | `PROVIDER_MODEL_NOT_FOUND` | 136 |
+| `gemini-2.5-flash` | **404** | `PROVIDER_MODEL_NOT_FOUND` | 149 |
+| OpenRouter | **200** | `OK` | 2 090 |
+
+The primary's body is more specific than the 503 seen earlier:
+
+> `{ "error": { "code": 429, "message": "You exceeded your current quota, please
+> check your plan and billing details…" } }`
+
+The field added in `6316825` did exactly the job it was added for: **no id can be
+pinned into working order** (the only surviving alternative answers 503, the three
+2.5 ids are 404), so "try another model" is retired as a hypothesis and the
+remaining action is quota/plan in Google Cloud or AI Studio. `modelListed: true` on
+the same payload restates the trap — the id *is* in the key's catalogue.
+
+Both readings are kept with timestamps rather than smoothed into one cause, because
+the same id has now answered 503 and 429 on different days. `API_STATUS_REPORT`,
+`MASTER_AUDIT_REPORT` §M4, `KNOWN_LIMITATIONS` and the Sinhala runbook (§3-B is now
+a measured table instead of a guess list; §5 covers 429) were corrected to match.
+
 ## 2026-11-13 — M4 measured live: the refusal is upstream (`modelAttempts`) (branch `arena/8a962084-asa-asan`)
 
 Audit **M4**, last step: it needed a working key *and* egress. This workspace has
