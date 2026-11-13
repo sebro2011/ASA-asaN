@@ -42,9 +42,13 @@ jobs:
         env:
           NODE_OPTIONS: --max-old-space-size=4096
         run: |
+          # GitHub runs this shell with -e, which would abort before the
+          # diagnostics below could run. Capture the status explicitly.
+          set +e
           set -o pipefail
           npm test 2>&1 | tee test-output.log
           status=${PIPESTATUS[0]}
+          set -e
           if [ "$status" -ne 0 ]; then
             # Surface the failing cases as annotations: the raw job log is served
             # from a host that is sometimes unreachable, annotations are not.
