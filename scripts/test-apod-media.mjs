@@ -113,6 +113,18 @@ test('a bundled fixture is never served as cached NASA data', async () => {
   const server = await new Promise((resolve) => {
     const listener = app.listen(0, '127.0.0.1', () => resolve(listener));
   });
+  // The claim under test is "when NASA cannot answer, the fixture is not passed
+  // off as a cache hit". Relying on this machine's egress to fail made the test
+  // pass only where the network was blocked: on a CI runner with internet the
+  // request could succeed. The outage is stubbed so the test proves the
+  // behaviour rather than the environment.
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async (url, init) => {
+    if (String(url).includes('api.nasa.gov')) {
+      throw new TypeError('fetch failed: stubbed NASA outage');
+    }
+    return realFetch(url, init);
+  };
   try {
     const { port } = server.address();
     // This date is one of the bundled fixtures. It used to answer
@@ -128,6 +140,7 @@ test('a bundled fixture is never served as cached NASA data', async () => {
     assert.equal(body.data, null);
     assert.ok(body.hint, 'and it explains why');
   } finally {
+    globalThis.fetch = realFetch;
     server.close();
   }
 });
