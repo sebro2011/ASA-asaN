@@ -68,6 +68,48 @@ correction rather than a rewrite, because the first reading — "the list and th
 call disagree, so this must be an access problem" — is the trap a future reader
 will fall into too.
 
+## AI providers — after the merge, with per-id evidence (2026-11-13T17:50:01Z)
+
+The three probes above ran on `aeb601e`, which could not report *per attempt*
+statuses. PR #54 merged as `44c2cc7`; production redeployed and was probed again,
+and the one question the earlier probes could not answer is now answered:
+
+| Attempt (in order) | Status | Code | ms |
+| --- | --- | --- | --- |
+| `gemini-3.8-flash` (pinned) | **429** | `UPSTREAM_RATE_LIMITED` | 124 |
+| `gemini-flash-latest` | **503** | `PROVIDER_UNAVAILABLE` | 721 |
+| `gemini-2.5-pro` | **404** | `PROVIDER_MODEL_NOT_FOUND` | 147 |
+| `gemini-2.5-flash-lite` | **404** | `PROVIDER_MODEL_NOT_FOUND` | 136 |
+| `gemini-2.5-flash` | **404** | `PROVIDER_MODEL_NOT_FOUND` | 149 |
+| OpenRouter `openrouter/free` | **200** | `OK` | 2 090 |
+| local engine | **ok** | `OK` | — |
+
+The primary id's body changed with the same deployment, and it is more specific
+than "high demand":
+
+```
+{ "error": { "code": 429, "message": "You exceeded your current quota, please
+  check your plan and billing details. For more information on this error, head
+  to: https://aistudio.go…" } }
+```
+
+What this settles, and what it retires:
+
+1. **No model id in the fallback chain can be pinned into working order.** Only
+   `gemini-flash-latest` still exists and it answers 503; the three 2.5 ids are
+   404 for this project. "Pin a different model" is therefore no longer a
+   hypothesis worth testing — the report itself carries the measurement.
+2. **The 429 names quota and billing**, which is an account action in Google
+   Cloud / AI Studio, not a code change. `modelListed: true` on the same payload
+   restates the trap: the id *is* in the key's catalogue.
+3. **NOVA is unaffected.** OpenRouter answered 200 in 2.09 s and the local engine
+   is `ok`, so the answer path is intact; only this optional provider is refused.
+
+Caveat, stated rather than smoothed over: the primary's code has now been seen as
+**503 and 429** on different days, so the upstream refusal is not one fixed cause.
+Both readings are recorded with their timestamps. The constant is the key: valid,
+listing 49 models, generation refused.
+
 ## NASA data
 
 | Route | Upstream | Cache | Freshness | Status |

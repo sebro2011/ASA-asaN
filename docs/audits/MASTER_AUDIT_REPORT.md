@@ -260,15 +260,35 @@ now returns **`modelAttempts`** — one row per alternative, with `model`, `ok`,
 `scripts/test-nova-diagnostics.mjs`, including that the rows line up with
 `modelsTried` in order).
 
-What remains, and it is a console action rather than code: if none of the
-alternatives can generate for this project, the project needs Gemini access enabled
-(billing / allowlist) or `NOVA_GEMINI_MODEL` pinned to an id that does answer —
-which `modelAttempts`, `suggestedModel` and `availableModels` now make a one-glance
-decision. NOVA does not depend on it: OpenRouter and the local engine are the
-answering providers, and both were `ok` in the same probes.
+### Answered after the merge: no id can be pinned into working order
+
+PR #54 merged as `44c2cc7`, production redeployed, and the probe was repeated at
+**2026-11-13T17:50:01Z** — this time with `modelAttempts` in the payload (the field
+this batch added), so every step of the chain reports its own status:
+
+| Attempt | Status | Code |
+| --- | --- | --- |
+| `gemini-3.8-flash` (pinned) | **429** | `UPSTREAM_RATE_LIMITED` |
+| `gemini-flash-latest` | **503** | `PROVIDER_UNAVAILABLE` |
+| `gemini-2.5-pro` | **404** | `PROVIDER_MODEL_NOT_FOUND` |
+| `gemini-2.5-flash-lite` | **404** | `PROVIDER_MODEL_NOT_FOUND` |
+| `gemini-2.5-flash` | **404** | `PROVIDER_MODEL_NOT_FOUND` |
+
+The 429 body is explicit: *"You exceeded your current quota, please check your plan
+and billing details."* Combined with the 404s, that retires the last open
+hypothesis: **there is no pin that fixes this**. The remaining action is an account
+action — quota/plan in Google Cloud or AI Studio — and it is outside this
+repository. NOVA does not depend on it: OpenRouter answered 200 in 2.09 s and the
+local engine is `ok` in the same probe.
+
+Honest caveat carried forward: the primary id has answered both **503** and **429**
+on different days, so "the" cause is not one fixed thing; both readings are in
+`docs/API_STATUS_REPORT.md` with timestamps. What is constant is the key: valid,
+listing 49 models, generation refused.
 
 Those console steps are written out for an operator, in Sinhala, in
-`docs/nova/GEMINI_ACCESS_RUNBOOK.md` — including the two traps this audit hit
+`docs/nova/GEMINI_ACCESS_RUNBOOK.md` (its §3-B candidate order is now measured
+rather than guessed — see the table above) — including the two traps this audit hit
 itself: production already has `NOVA_GEMINI_MODEL` **set** (to the 503 model, so it
 is an *update*, not a *create*), and an env change does nothing until the next
 deployment; and `?probe=1` is cached at the edge, so a repeat needs a fresh query

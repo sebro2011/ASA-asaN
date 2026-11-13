@@ -1,6 +1,6 @@
 # Gemini access — console runbook (Sinhala)
 
-> **තත්ත්වය 2026-11-13:** NOVA production එකේ Gemini generation **වැඩ නොකරයි**. හේතුව මනිනු ලැබ ඇත — ප්‍රතික්ෂේපය **upstream** එකෙන්, අපගේ code, key හෝ config එකෙන් නොවේ.
+> **තත්ත්වය 2026-11-13 (post-merge):** NOVA production එකේ Gemini generation **වැඩ නොකරයි** — pin කර ඇති `gemini-3.8-flash` දැන් **429 quota exceeded** ද, සියලු විකල්ප 503/404 ද වේ (§3-B). හේතුව මනිනු ලැබ ඇත — ප්‍රතික්ෂේපය **upstream** එකෙන්, අපගේ code, key හෝ config එකෙන් නොවේ.
 > මෙම ලේඛනය කේත වෙනසක් නොවේ; Vercel/Google console එකේ කළ යුතු **ක්‍රියා පිළිවෙල**යි. කේතය සම්පූර්ණ වී ඇත — `docs/API_STATUS_REPORT.md`, audit **M4** (`docs/audits/MASTER_AUDIT_REPORT.md`).
 
 ## 1. දැන් තත්ත්වය (මනින ලද, අනුමාන නොවේ)
@@ -68,16 +68,21 @@ probe එකේ gemini.status  ─┬─ "ok"            → ✅ pin එක හ�
 - **සියල්ල 404** → `modelAttempts` එක පමණක් නොව `suggestedModel` ද බලන්න; එය පවසන්නේ *"this id may be listed for the key yet restricted by access"* වගේ පණිවිඩයක් — එවිට §4.
 - **503 / 429** → §5.
 
-### B. deploy එකේ `modelAttempts` නැත්නම් (අද production එකේ තත්ත්වය)
+### B. **මිනුම් කර අවසන් — pin කිරීම විසඳුමක් නොවේ** (2026-11-13, production `44c2cc7`)
 
-එක් උත්සාහයකට එක් id එකක් පමණක් තහවුරු කළ හැක (එක් env වෙනසක් + එක් redeploy). නිර්දේශිත අනුපිළිවෙල:
+PR #54 merge වී production එක `44c2cc7` ට ගිය පසු `modelAttempts` සහිතව probe එක ලබා ගන්නා ලදී. **සියලු id වල සැබෑ තත්ත්වය දැන් දන්නා බැවින්** පෙර පිටපතේ තිබූ "එකින් එක pin කර උත්සාහ කරන්න" උපදෙස **ඉවත් කර ඇත**:
 
-| පිළිවෙල | අගය | හේතුව |
-| --- | --- | --- |
-| 1 | `gemini-flash-latest` | alias එකක් — Google නවතම stable flash එකට යොමු කරයි, එබැවින් retirement අවදානම අඩුය |
-| 2 | `gemini-2.5-pro` | 49-මාදිලි ලැයිස්තුවේ ඇත; 2.5 flash පවුලට වඩා වෙනස් capacity pool |
-| 3 | `gemini-2.5-flash-lite` | ලාභදායී/වේගවත් නමුත් flash පවුලේම — 404 අවදානම වැඩිය |
-| 4 | `gemini-2.5-flash` | **මෙය අවසන්** — 404 ලෙස දැනටමත් මනිනු ලැබ ඇත |
+| උත්සාහය (පිළිවෙලින්) | තත්ත්වය | `code` | ms |
+| --- | --- | --- | --- |
+| `gemini-3.8-flash` (pin වී ඇති) | **429** | `UPSTREAM_RATE_LIMITED` | 124 |
+| `gemini-flash-latest` | **503** | `PROVIDER_UNAVAILABLE` | 721 |
+| `gemini-2.5-pro` | **404** | `PROVIDER_MODEL_NOT_FOUND` | 147 |
+| `gemini-2.5-flash-lite` | **404** | `PROVIDER_MODEL_NOT_FOUND` | 136 |
+| `gemini-2.5-flash` | **404** | `PROVIDER_MODEL_NOT_FOUND` | 149 |
+
+429 හි පෙළ: *"You exceeded your current quota, please check your plan and billing details."*
+
+**අර්ථය:** වෙනත් id එකකට pin කිරීමෙන් මෙය විසඳෙන්නේ නැත — `gemini-flash-latest` පමණක් තවම පවතී (එයත් 503), අනෙක් තුන 404 ය. එබැවින් ඊළඟ පියවර **§4.1 නොවේ**; **§7 (quota/plan/billing)** ය. පැරණි deployment එකක් මතට වැටුණොත් පමණක් ඉහත වගුව පිටපත් කරගෙන එක් id එකක් තෝරා §4.1 අනුගමනය කරන්න.
 
 ## 4. Console ක්‍රියා — පියවරෙන් පියවර
 
@@ -85,7 +90,7 @@ probe එකේ gemini.status  ─┬─ "ok"            → ✅ pin එක හ�
 
 1. Vercel → team **`lucky-5048`** → project **`nasa-space-explorer.`**
 2. **Settings → Environment Variables** → සොයන්න `NOVA_GEMINI_MODEL`
-3. ⋯ → **Edit** → Value එක §3-B හි ඊළඟ candidate එකට වෙනස් කරන්න
+3. ⋯ → **Edit** → Value එක වෙනස් කරන්න — **නමුත් §3-B කියවා ඇත්නම් මෙය අවශ්‍ය නොවන බව පෙනේ** (pin කිරීමෙන් මෙය විසඳෙන්නේ නැත)
    - Targets තුනම (`Production`, `Preview`, `Development`) එලෙසම තබන්න
    - Type: `plain` (රහසක් නොවේ; model id එකක් පමණි)
 4. **Save**
@@ -111,7 +116,7 @@ https://nasa-space-expolere.vercel.app/api/nova/diagnostics?probe=1&recheck=<ඕ
 | `OK` | 200 | ජනනය සාර්ථක | ✅ අවසන් |
 | `PROVIDER_UNAVAILABLE` | ≥ 500 | මාදිලිය busy | §5 (කිසිවක් වෙනස් නොකරන්න) |
 | `UPSTREAM_RATE_LIMITED` | 429 | quota/rate | §5, පසුව §7 (quota) |
-| `PROVIDER_MODEL_NOT_FOUND` | 404 | මෙම id එක **මෙම project එකට** නොගැලපේ | §3-B ඊළඟ candidate / §7 |
+| `PROVIDER_MODEL_NOT_FOUND` | 404 | මෙම id එක **මෙම project එකට** නොගැලපේ | §7 (සියලු id වල තත්ත්වය §3-B හි ඇත) |
 | `PROVIDER_AUTH_ERROR` | 401/403 | key පිළිගැනීමක් නැත | §7.4 (key නැවත සාදන්න) |
 | `PROVIDER_CREDIT_REQUIRED` | 402 | billing | §7.3 |
 | `AI_TIMEOUT` | 408/504 | මන්දගාමී | නැවත probe කරන්න |
@@ -133,14 +138,14 @@ https://nasa-space-expolere.vercel.app/api/nova/diagnostics?probe=1&recheck=<ඕ
 
 එවිට **§3-B අවසන්** — එම අගයම තබන්න. තවත් වෙනස්කම් අවශ්‍ය නැත.
 
-## 5. 503 තත්ත්වය නම්
+## 5. 503 හෝ 429 තත්ත්වය නම්
 
-503 යනු *"ඔබගේ project එකට අවසර නැත"* නොවේ; *"දැන් ඉල්ලුම වැඩියි"* යන්නයි. එබැවින්:
+503 යනු *"ඔබගේ project එකට අවසර නැත"* නොවේ; *"දැන් ඉල්ලුම වැඩියි"* යන්නයි. 429 යනු *"quota ඉක්මවා ඇත"* යන්නයි. එබැවින්:
 
 1. **කිසිවක් වෙනස් නොකරන්න.** `gemini-3.8-flash` හෝ `gemini-flash-latest` මත තබන්න.
 2. පැයකට වරක් පමණ `?probe=1&recheck=<n>` ධාවනය කරන්න. `status: "ok"` ලැබුණු විට අවසන්.
 3. NOVA එකට මේ කාලය තුළ බලපෑමක් නැත: OpenRouter (`openrouter/free`, 200) සහ local engine `ok`. UI එකේ provider එක *configured* ලෙස පෙන්වයි, *healthy* ලෙස නොවේ — එය නිවැරදිය.
-4. දිගු කාලයක් 503 පවතී නම් (2026-11-09, -10, -12, -13 යන දිනවල එසේ විය) → §4 ට යන්න, නමුත් හේතුව 503 නිසා නොව **quota/plan** ගැන Google Cloud console එකේ බැලීමට යන්න.
+4. **429** ලැබෙන විට කිසිවක් වෙනස් නොකර **§7** ට යන්න: එය quota/plan ප්‍රශ්නයක් (2026-11-13 17:50Z හි දැක්කේ 429). දිගු කාලයක් 503/429 පවතී නම් (2026-11-09, -10, -12, -13 යන දිනවල එසේ විය) ද එයම කරන්න.
 
 ## 6. Rollback
 
