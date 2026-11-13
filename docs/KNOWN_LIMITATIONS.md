@@ -1,7 +1,26 @@
 # Known limitations
 
-Honest list as of **2026-11-12** (branch `arena/ad469a17-asa-asan`). Each item says
-what a user or operator would actually see, and where the audit records it.
+Honest list as of **2026-11-13** (branch `arena/8a962084-asa-asan`).
+Each item says what a user or operator would actually see, and where it is
+recorded. Entries dated 2026-11-12 below the current table remain accurate unless
+the table supersedes them.
+
+## 2026-11-13 — Phase 1 re-audit additions
+
+These are current, measured limits. Each names the command or file behind it.
+
+| Limit | Detail |
+| --- | --- |
+| **First-load JavaScript is half translation data** | The nine dictionaries total **740 KB raw / 121 KB gzip**; the entry chunk is **246 KB gzip**. All three languages load eagerly because `src/i18n.ts` imports every dictionary and initialises en/si/ta synchronously. Fixing it needs an architectural decision (see audit M2). |
+| **Per-IP limits are per process** | `server/requestRateLimit.ts` bounds memory (prune at 5,000, cap 10,000) and prevents spoofing by using `req.ip`, but instances do not share counters. Fleet-wide budgets exist only in the Guardian, and only with a shared store configured. |
+| **`trust proxy` is unset** | Express reports the socket peer. Behind a proxy, many users can share one bucket; the change cannot be made safely without knowing the real hop count. |
+| **The committed server bundle can drift** | `api/index.js` is byte-identical to a fresh build today, but nothing enforces that. A stale commit deploys old server code while the tests pass against new source. |
+| **No CI** | 67 suites run only when a human runs `npm test`; there is no `.github/` workflow, dependency scan or required check. |
+| **Gemini generation is unavailable in production** | Primary 503 `PROVIDER_UNAVAILABLE`, fallbacks 404, while the key lists 48 models. Cause unresolved; NOVA runs on OpenRouter and the local engine. The diagnostics hint is a hypothesis, not a finding. |
+| **No browser verification** | No Playwright in this environment; DOM behaviour is proven with jsdom, never pixels. |
+| **Build-chain advisories** | 6 (`npm audit`: 2 low, 4 moderate) inside `vite-plugin-pwa` → `workbox-build`. No runtime exposure; the fix is a downgrade that was previously rejected. |
+| **TypeScript is not strict** | 72 `any`s remain; enabling `strict` is a separate, large migration. |
+
 
 ## Data integrity
 

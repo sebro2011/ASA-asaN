@@ -1,5 +1,349 @@
 # MASTER AUDIT REPORT — NASA Space Explorer
 
+**Current audit: 2026-11-13.** Branch `arena/8a962084-asa-asan` (branched from
+`aeb601e4`, `main`), HEAD `a2fcfa1` before this pass. This audit read the whole
+working tree and ran the commands in §0. It modified no source file during the
+inspection itself; the four findings marked **FIXED** were remediated immediately
+afterwards, in the same branch, and are recorded with their verification in §6.
+
+Earlier audits (2026-11-12 and its follow-ups) are preserved verbatim at the end
+of this document — see [§10 Appendix](#10-appendix-earlier-audits-preserved). They
+remain accurate as history; several of their findings are now closed, and where
+that is true this report says so rather than repeating them as open.
+
+Severity scale: **Critical** = the repository misrepresents its own state or a
+documented command does not work · **Major** = user-visible failure, a requirement
+not met, or a production risk · **Minor** = debt, polish, latent risk.
+
+Complexity: **S** = under an hour, local · **M** = a day, contained · **L** =
+architectural, needs a decision before code.
+
+---
+
+## 0. Method — what was actually executed
+
+No claim below rests on reading alone; each has a command behind it.
+
+| Command | Result |
+| --- | --- |
+| `npx tsc --noEmit` | clean (exit 0) |
+| `npm test` | **819 pass / 0 fail** across 67 test scripts (was 810 at the start of this pass; +9 from the new limiter suite) |
+| `npm run build` | exit 0 · 89 JS chunks · 4.98 MB raw / **1.42 MB gzip total** · entry `index-*.js` **920.85 kB raw / 245.83 kB gzip** · CSS 63.65 kB gzip |
+| `npm start` (as documented, `node server.ts`) | **crash** — `ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX` (see C1) |
+| `npx tsx server.ts` + `GET /api/health` | 200 `{"status":"ok"}` |
+| `npm audit` | **6 advisories** (2 low, 4 moderate, 0 high/critical), all in the build chain |
+| `esbuild server/vercelEntry.ts` vs committed `api/index.js` | **byte-identical** — the committed bundle matches its source today |
+| i18n key parity (all 9 dictionaries, 3 languages) | **0 missing keys** across **1,732** English keys |
+| i18n bundle weight (`esbuild` on `src/i18n.ts`) | **740 KB raw / 121 KB gzip** |
+| live `GET /api/guardian/{health,status,cron,run}` on the mounted app | 200 / 200 (13 providers, memory store, honest reason) / 503 `SCHEDULE_SECRET_MISSING` / 403 `GUARDIAN_LOCKED` |
+| source inventory | 389 files under `src`/`server`/`api`/`lib`, 94,370 lines of TS/TSX/JS |
+
+Not executable from this environment, therefore **not claimed**: requests to any
+NASA host, Gemini/OpenRouter/Arena, Supabase, or a real browser (no Playwright).
+Anything depending on those is labelled *unverified* below.
+
+---
+
+## 1. Critical findings
+
+### C1 — The documented production start command crashes — **FIXED**
+
+**Evidence.** `package.json` had `"start": "node server.ts"`, and
+`docs/NOVA_INSTALLATION_GUIDE.md:37` advertised it as *"tsx-free, Node strips types
+on 22"*. Reproduced on Node v22.22.3:
+
+```
+file:///home/user/ASA-asaN/server/spaceVideos.ts:32
+  constructor(public code: SpaceVideoFailure) { super(code); }
+SyntaxError [ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX]:
+  TypeScript parameter property is not supported in strip-only mode
+```
+
+Node's type *stripping* removes annotations; it does not transform parameter
+properties or enums. Every self-hoster following the guide crashed on boot. Vercel
+was unaffected because it runs the pre-built `api/index.js`.
+
+**Fix.** `"start": "tsx server.ts"` (tsx is already a dependency and is what `dev`
+uses), and the guide line corrected. Verified: `PORT=3989 npm start` → server
+listening, `/api/health` 200.
+
+### C2 — The repository's own verification record was false — **FIXED**
+
+**Evidence.** `docs/TEST_RESULTS.md` announced "Latest full run 2026-11-12 …
+**704 pass**", "44 suites", "entry chunk 888 KB". The tree actually has 67 test
+scripts, 819 passing tests and a 245.83 kB gzip entry. The Guardian module — 57
+files-worth of new behaviour — appeared in none of `TEST_RESULTS.md`,
+`DEVELOPMENT_CHANGELOG.md` or `API_STATUS_REPORT.md`.
+
+For a project whose first rule is "never fabricate results", a stale green record
+is worse than no record: it is the artifact a reader trusts instead of re-running
+the suite.
+
+**Fix.** `docs/TEST_RESULTS.md` now leads with the 2026-11-13 run; the changelog
+carries the Guardian and this pass; `docs/API_STATUS_REPORT.md` documents the
+guardian routes. Each states the commands run and what could not be verified.
+
+---
+
+## 2. Major findings
+
+### M1 — Rate limiting leaked memory and one limiter was built per request — **FIXED**
+
+**Evidence.** `server.ts` (pre-fix, lines 124–199) held one module-level
+`const rateStore = new Map()` for every limiter, appended to on every request and
+**never pruned**. A client rotating IPv6 addresses grows that map without bound —
+a slow leak that doubles as a denial-of-service vector on a long-lived container.
+Worse, the NOVA chat limiter was *constructed inside* the `app.use` handler
+(`rateLimit({...})(req, res, next)`); it only limited anything because the bucket
+map happened to be shared module state. The moment anyone gave each limiter its own
+store — the obvious fix — the AI budget would have silently disappeared.
+
+**Fix.** New `server/requestRateLimit.ts`:
+- each limiter owns its map (unrelated routes can no longer evict each other);
+- expired windows are swept once the map passes 5,000 entries, with a hard 10,000
+  ceiling as backstop;
+- the NOVA limiter is now built **once**, outside the handler.
+
+`scripts/test-request-rate-limit.mjs` (9 tests) pins: exact `max` boundary, 429
+code/message/`Retry-After`, window reset on the exact boundary, per-client
+isolation, store separation, `skip()` not consuming budget, prune correctness,
+bounded growth under 5,200 distinct clients, and `clientKey` preferring the
+Express-resolved address over headers. Full suite 819/819.
+
+### M2 — Half of the first-load JavaScript is translation dictionaries — **OPEN, needs approval**
+
+**Evidence.** Measured, not estimated:
+
+```
+i18n dictionaries alone: 740 KB raw / 121 KB gzip
+entry chunk:             920 KB raw / 246 KB gzip
+```
+
+`src/i18n.ts` statically imports all nine dictionaries (`workspaceCopy` alone is
+200 KB of source) and calls `i18next.init` synchronously for **en + si + ta**, so a
+first-time mobile visitor downloads all three languages to read one screen.
+
+**Options.**
+
+| Option | Effect | Cost / risk |
+| --- | --- | --- |
+| **A. Lazy-load non-active locales** (`import()` per language, `changeLanguage` awaits the chunk) | ~121 KB gzip → ~45 KB on first load (English stays inline); roughly halves first-load JS | M–L: touches `src/i18n.ts` init and the language switcher; needs a loading state; 1,732 keys must stay key-parity-verified |
+| **B. Split dictionaries per surface** (chat keys only in the chat chunk) | Better long-term; per-route payloads | L: every `t()` call site's module must own its keys |
+| **C. Do nothing, document it** | Zero risk | First load stays at 246 KB gzip |
+
+This is an architectural decision (A changes when translations are available), so
+it waits for approval. Recommendation: **A**, in its own branch, with the key-parity
+check kept as a test.
+
+### M3 — `trust proxy` is unset, so per-IP limits may be a single global bucket — **OPEN, deployment fact required**
+
+`server.ts` never calls `app.set('trust proxy', …)`. Express then reports the socket
+peer, which behind Vercel is not the user. Two consequences, opposite in sign:
+per-IP limits may collapse onto one bucket (everyone shares 15 NOVA requests/min —
+an outage for everyone once one client bursts), or, if a future change starts
+reading `X-Forwarded-For` directly, spoofing per request.
+
+The news and Forge limiters were already moved onto `req.ip` with socket fallback
+(2026-11-12), which fixes *spoofing* but not *attribution*. Correct remediation
+needs the real proxy chain: `app.set('trust proxy', 1)` is right for one hop, wrong
+for zero or three. **Not changed** — guessing here converts a fairness bug into a
+security bug. Requires an operator statement about the deployed path.
+
+### M4 — Gemini generation is unavailable in production, and the hint is a guess — **OPEN, external**
+
+Live production diagnostics (2026-11-12T10:32Z, re-read from
+`docs/API_STATUS_REPORT.md`): primary `gemini-3.8-flash` → **503**
+`PROVIDER_UNAVAILABLE`; every fallback failed, ending with `gemini-2.5-flash` →
+**404** `PROVIDER_MODEL_NOT_FOUND`; `keyValid: true`, 48 models listed for the key.
+
+A model that is *listed* for the key yet 404s when called points at access or
+region, not at the model id — but the diagnostics copy blamed quota/billing. That
+is a guess presented as a finding, which is exactly what this project forbids.
+Rewriting the hint to cross-check "model is in the key's model list" against the
+404 belongs to Phase 2 (NOVA), and needs either a working key or a documented
+"cannot distinguish" answer. OpenRouter answered 200 in 1,754 ms, so NOVA is
+**not** down — it is running on OpenRouter and the local engine.
+
+### M5 — 67 test suites, none executed automatically — **OPEN, proposal**
+
+There is no `.github/` directory at all: no workflow, no required check, no
+dependency or secret scanning. Every claim of "tests pass" in this repository is a
+human running `npm test`, and PR #54 shows preview builds succeeding while nothing
+verifies the suite.
+
+Proposed: one workflow on `push`/`pull_request` running `npm ci`, `npm run lint`,
+`npm test`, `npm run build`, plus `npm audit --audit-level=high`. No secrets
+needed. This changes nothing about the app, but it is a new repository convention,
+so it is listed here rather than added unasked.
+
+### M6 — No README at the repository root — **FIXED**
+
+Nothing told a newcomer what this is, how to run it, or where the truth about its
+state lives. `README.md` now exists: stack, quick start, scripts, the route map,
+env names (values never), the docs index, and a blunt "what is verified / what is
+not" section.
+
+### M7 — `.env.example` was missing the variables added since it was written — **FIXED**
+
+Absent: every `GUARDIAN_*`, `CRON_SECRET`, both `NOVA_LIFE_*`, `NOVA_ANALYST_MODEL`,
+`EARTH_ANALYST_*`, `FORGE_ASSISTANT_*`. A self-hoster had no way to learn the admin
+token even existed, so the dashboard's action panel could only ever be "locked".
+Now documented **by name only**, including the fact that `GUARDIAN_STORE_KEY` must
+be a service-role key and that a publishable key is rejected.
+
+### M8 — The 920 KB committed server bundle will drift — **OPEN, needs approval**
+
+`api/index.js` (18,186 lines, 919,990 bytes) is a committed esbuild artifact and the
+file Vercel actually executes. Today it is **byte-identical** to a fresh
+`npm run build:api`, so there is no current defect — but it is a manual
+synchronisation step with no guard: edit `server/`, forget to rebuild, and the
+deploy silently runs old code while the tests prove the new code. Options: (a) keep
+it and add a CI check that a rebuild produces no diff, (b) stop tracking it and let
+the build regenerate it. (b) is cleaner and reversible but changes how the
+deployment resolves its function, so it needs approval.
+
+---
+
+## 3. Minor findings
+
+| # | Finding | Evidence | Fix / complexity |
+| --- | --- | --- | --- |
+| m1 | Four near-identical NOVA chat handlers | `server.ts` — `/api/nova/chat`, `/api/chat`, `/api/openrouter/chat`, `/api/nasa-ai` repeat the same 8 lines | extract one adapter; **S** |
+| m2 | `uncaughtException` is logged and swallowed, so the process keeps serving with possibly-corrupt state | `server.ts:23` | log, then exit and let the platform restart; **S**, but a behaviour change |
+| m3 | Clickable `<div>`s with no role/tabIndex; the logo control has `role="button"` and `tabIndex` but no key handler | `AmbientSoundscapeControl.tsx:209,223`; `Logo.tsx:42` | real buttons; **S** |
+| m4 | Icon-only buttons: only 3 `aria-label`s across 331 `<button>`s | spot check only — most buttons carry visible text, so this is **not** a claim that 328 are broken | audit the icon-only subset in Phase 5; **S–M** |
+| m5 | `GUARDIAN_API_KEY` (Guardian news Open Platform) reads as the COSMORA Guardian secret | `.env.example` | rename would break existing deployments; document the distinction instead; **S** |
+| m6 | Duplicate root-level reports | `PHASE1_AUDIT_REPORT.md`, `PHASE7_VALIDATION_REPORT.md` shadow `docs/` | move under `docs/audits/` with a redirect note; **S** |
+| m7 | Two lockfiles | `bun.lock` + `package-lock.json` | pick one (npm, since scripts and CI use it); **S** |
+| m8 | Package identity is boilerplate | `"name": "react-example", "version": "0.1.0"` | rename; **S** |
+| m9 | Two client fetches have no timeout, so a hung request leaves a permanent loading state | `lib/nasaApi.js:370` (`/api/satellites`), `:489` (`/api/news`) | add `AbortSignal.timeout`; **S** |
+| m10 | Production CSP allows `'unsafe-inline'` scripts | `server.ts` CSP array | nonce or hash pipeline; **M** |
+| m11 | Build-chain advisories | `npm audit`: deepmerge prototype poisoning, glob/minimatch DoS, via `vite-plugin-pwa` → `workbox-build` | no runtime exposure; fixing requires downgrading `vite-plugin-pwa`, which was previously rejected | 
+| m12 | 72 `any`s and `tsconfig` without `strict` | `grep -rn ": any\b"`; `tsconfig.json` | documented before (M3 of the 2026-11-12 audit); enabling strict is a large, separate change |
+
+---
+
+## 4. What is genuinely healthy (do not "fix" these)
+
+- **Test depth.** 819 assertions-backed tests across 67 scripts, including
+  distribution races, security, regression and DOM behaviour. This is far above
+  the norm for a project of this size, and it is the reason most of the findings
+  above are debts rather than incidents.
+- **Multilingual completeness.** All nine dictionaries carry all 1,732 English
+  keys in both Sinhala and Tamil — **0 missing, 0 extra**, and only 18 values are
+  identical to English (proper nouns). Recorded so no future pass "discovers" a
+  gap that is not there.
+- **Credential hygiene.** No key in the client bundle, no `VITE_*` secret, keys
+  read server-side only, upstream bodies scrubbed with `api_key=[redacted]`
+  (`server/nasaRoutes.ts:18-30`), and the Guardian's own scrubber for audit rows.
+  22 of 24 server-side `fetch` calls carry an abort/timeout signal.
+- **Error surfaces.** Typed JSON for unknown API paths, typed 429s with
+  `Retry-After`, a last-resort Express error handler that never echoes provider
+  URLs, and JSON error pages instead of Express HTML.
+- **Media accessibility.** Every `<img>` checked has `alt` (or `alt=""` when
+  decorative); 28 `:focus-visible` rules; reduced-motion blocks in the workspace
+  and Forge sheets.
+- **Build discipline.** Lazy route surfaces (14 `lazy` + `Suspense`), the Guardian
+  dashboard as its own 13.7 kB chunk, PWA precache generated per build, and a
+  server bundle verified reproducible today.
+
+---
+
+## 5. Prioritised plan
+
+| Priority | Item | Status | Complexity |
+| --- | --- | --- | --- |
+| P0 | C1 broken `npm start` | **fixed** | S |
+| P0 | C2 stale verification record | **fixed** | S |
+| P0 | M1 limiter leak + per-request limiter | **fixed** | M |
+| P0 | M7 missing env documentation | **fixed** | S |
+| P1 | M6 README | **fixed** | S |
+| P1 | M5 CI workflow | needs a decision | S |
+| P1 | M2 lazy locale loading | needs approval | M–L |
+| P1 | M3 `trust proxy` policy | needs deployment facts | S once known |
+| P1 | M4 Gemini access / honest hint | external + Phase 2 | M |
+| P2 | Phase 2 NOVA (hint accuracy, history search/rename/archive, streaming) | open | L |
+| P2 | Phase 3 NASA data (cache headers on proxies, freshness badges) | open | M |
+| P2 | Phase 4 Earth Lab (trend uncertainty, coverage indicators — some shipped) | open | M |
+| P2 | Phase 5 UI/UX (icon-button labels, tablet sweep) | open | M |
+| P3 | Phase 6 (CSP nonce, strict type migration, bundle budget) | open | L |
+| P3 | m1–m12 | open | S each |
+
+---
+
+## 6. Remediation recorded in this pass
+
+All four fixes were verified by the commands in §0 after they landed.
+
+1. **`server/requestRateLimit.ts`** — extracted, per-limiter stores, bounded
+   memory, `clientKey`, `pruneRateEntries`. `server.ts` now imports
+   `createRateLimiter` and builds the NOVA limiter once. `scripts/test-request-rate-limit.mjs`
+   added (9 tests) and chained into `npm test` as `test:rate-limit`.
+2. **`package.json`** — `start` → `tsx server.ts`; new `test:rate-limit` script.
+3. **`docs/NOVA_INSTALLATION_GUIDE.md`** — the false "tsx-free" claim replaced.
+4. **`.env.example`** — Guardian, LIFE, analyst and Forge model variables added by
+   name only, with the service-role requirement spelled out.
+5. **`README.md`** — new, with an explicit "verified / not verified" section.
+6. **`docs/TEST_RESULTS.md`, `docs/DEVELOPMENT_CHANGELOG.md`, `docs/API_STATUS_REPORT.md`**
+   — refreshed to the 2026-11-13 state, Guardian included.
+
+Suite after all of it: **819 pass / 0 fail**, `tsc --noEmit` clean, production
+build exit 0.
+
+---
+
+## 7. Decisions requested before Phase 2
+
+1. **Locale loading** (M2) — option A (lazy non-active locales), B (per-surface
+   split) or C (accept and document)?
+2. **Committed server bundle** (M8) — keep with a CI drift check, or untrack and
+   build it?
+3. **CI workflow** (M5) — may I add `.github/workflows/verify.yml` (lint + test +
+   build + audit)? No secrets, no deployment steps.
+4. **`trust proxy`** (M3) — what is the actual deployed hop count in front of
+   Express? Without that number the change would be a guess.
+5. **Deployment settings stay untouched** until you approve: the Guardian migration,
+   `GUARDIAN_ADMIN_TOKEN`/`CRON_SECRET`, the Vercel cron entry, and PR #54's merge.
+
+---
+
+## 8. Environment variables — names only
+
+`GEMINI_API_KEY` · `OPENROUTER_API_KEY` · `ARENA_API_KEY` · `ARENA_BASE_URL` ·
+`NOVA_GEMINI_MODEL` · `NOVA_OPENROUTER_MODEL` · `NOVA_ARENA_MODEL` ·
+`NOVA_OPENROUTER_{FLASH,FLASH_THINKING,THINKING,DEEP_THINKING}_MODEL` ·
+`NOVA_ANALYST_MODEL` · `EARTH_ANALYST_{OPENROUTER,ARENA}_MODEL` ·
+`FORGE_ASSISTANT_{OPENROUTER,ARENA}_MODEL` · `NASA_API_KEY` ·
+`NEXT_PUBLIC_NASA_API_KEY` · `FIRMS_MAP_KEY` · `GNEWS_API_KEY` · `NEWSAPI_KEY` ·
+`GUARDIAN_API_KEY` (news, *not* COSMORA) · `YOUTUBE_API_KEY` · `SUPABASE_URL` ·
+`SUPABASE_PUBLISHABLE_KEY` / `SUPABASE_ANON_KEY` · `SUPABASE_SERVICE_ROLE_KEY` ·
+`GUARDIAN_ADMIN_TOKEN` · `CRON_SECRET` · `GUARDIAN_STORE_URL` ·
+`GUARDIAN_STORE_KEY` · `GUARDIAN_NAMESPACE` · `GUARDIAN_PROBE_LIMIT` ·
+`NOVA_LIFE_ALLOW_EXECUTE` · `NOVA_LIFE_DB` · `CORS_ORIGINS` · `PORT` ·
+`NODE_ENV`.
+
+No value from any of these appears in this document, in the repository, or in a
+response body.
+
+---
+
+## 9. Source inventory
+
+| Area | Files | Notes |
+| --- | --- | --- |
+| `src/` | React 19 + Vite 8 + TS, 15 workspace surfaces, 9 i18n dictionaries | 14 lazy surfaces |
+| `server/` | Express 4, 30 modules + `guardian/` (11 files) | mounted from `server.ts` |
+| `api/index.js` | committed esbuild bundle of `server/vercelEntry.ts` | verified in sync |
+| `scripts/` | 67 test scripts + 6 verification/build scripts | `node --test` |
+| `supabase/` | 3 SQL files + the Guardian migration | migration not applied |
+| `docs/` | 33 documents + `docs/audits/` | the audit history lives here |
+
+---
+
+## 10. Appendix: earlier audits (preserved)
+
+### Original audit — 2026-11-12 (`arena/ad469a17`, from `7251652`)
+
 Phase 1 of the master development programme. The audit itself modified no source
 file; the two P0 findings were fixed immediately afterwards and their remediation
 is recorded in §6, because leaving a fabricated NOAA reading and a fabricated NASA
@@ -678,3 +1022,7 @@ only tested using stubs; the sandbox cannot call NASA directly and the branch is
 not deployed. WordPress search ranking, upstream HTML, image associations, video
 detection, record credits, other dates and real-device rendering need further
 verification. Do not describe this as a universal or production-verified fix.
+
+
+Everything below this line is the 2026-11-12 audit and its follow-ups, kept
+unchanged. Where a finding here is closed above, the `Status` in §5 governs.

@@ -4,6 +4,7 @@ import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { decideCors, parseAllowHosts, platformHosts } from './server/cors.ts';
+import { createRateLimiter } from './server/requestRateLimit.ts';
 
 import { GoogleGenAI } from '@google/genai';
 import { earthRouter } from './server/earthIntelligence.ts';
@@ -117,51 +118,12 @@ app.use((req, res, next) => {
 });
 
 // ====================================================
-// In-memory rate limiter (defense against abuse).
-// Tracks request counts per IP+endpoint with a sliding window.
-// No client identifiers are stored — only IP + count + window start.
+// Per-instance rate limiting (defense against abuse).
+// The limiter itself lives in server/requestRateLimit.ts so its bucket
+// accounting and its memory bound can be tested without booting Express.
+// Fleet-wide budgets are a different layer: see server/guardian/rateLimit.ts.
 // ====================================================
-type RateEntry = { count: number; windowStart: number };
-const rateStore = new Map<string, RateEntry>();
-
-function rateLimit(options: {
-  windowMs: number;
-  max: number;
-  keyPrefix: string;
-  skip?: (req: import('express').Request) => boolean;
-  /** Wire code returned on 429. The NOVA chat family uses the same code its handler uses. */
-  code?: string;
-  message?: string;
-}) {
-  return (req: import('express').Request, res: import('express').Response, next: import('express').NextFunction) => {
-    if (options.skip?.(req)) { return next(); }
-    const ip = req.ip || req.socket.remoteAddress || 'unknown';
-    const key = `${options.keyPrefix}:${ip}`;
-    const now = Date.now();
-    const entry = rateStore.get(key) || { count: 0, windowStart: now };
-    if (now - entry.windowStart >= options.windowMs) {
-      entry.count = 0;
-      entry.windowStart = now;
-    }
-    entry.count += 1;
-    rateStore.set(key, entry);
-    res.setHeader('X-RateLimit-Limit', String(options.max));
-    res.setHeader('X-RateLimit-Remaining', String(Math.max(0, options.max - entry.count)));
-    res.setHeader('X-RateLimit-Reset', String(Math.ceil((entry.windowStart + options.windowMs - now) / 1000)));
-    if (entry.count > options.max) {
-      // Retry-After is what lets a client wait instead of hammering; the NOVA
-      // chat handler already sends it, and one endpoint must not answer 429 two
-      // different ways.
-      const retryAfterSeconds = Math.max(1, Math.ceil((entry.windowStart + options.windowMs - now) / 1000));
-      res.setHeader('Retry-After', String(retryAfterSeconds));
-      return res.status(429).json({
-        error: options.message || 'Too many requests. Please wait before trying again.',
-        code: options.code || 'rate-limit',
-      });
-    }
-    next();
-  };
-}
+const rateLimit = createRateLimiter;
 
 // YouTube meta proxy: modest limit — it fetches an external page per call.
 app.use('/api/youtube/meta', rateLimit({ windowMs: 60_000, max: 30, keyPrefix: 'youtube-meta' }));
@@ -181,18 +143,21 @@ app.use('/api/workspace/config', rateLimit({ windowMs: 60_000, max: 60, keyPrefi
 
 // NOVA chat family: expensive AI calls — strict limit per IP, consolidated
 // across all four chat entry points so a single IP cannot burst across paths.
-const NOVA_CHAT_PATHS = ['/api/nova/chat', '/api/chat', '/api/openrouter/chat', '/api/nasa-ai'];
+// The limiter is built ONCE: constructing it per request would hand every
+// request a fresh bucket and silently disable the limit.
+const NOVA_CHAT_PATHS = new Set(['/api/nova/chat', '/api/chat', '/api/openrouter/chat', '/api/nasa-ai']);
+const novaChatLimiter = rateLimit({
+  windowMs: 60_000,
+  max: 15,
+  keyPrefix: 'nova-chat',
+  // Same code and wording as the handler's own limiter, so a reader who
+  // bursts is told to slow down rather than told the provider is busy.
+  code: 'RATE_LIMITED',
+  message: 'Too many NOVA requests. Please wait a moment and try again.',
+});
 app.use((req, res, next) => {
-  if (NOVA_CHAT_PATHS.includes(req.path)) {
-    return rateLimit({
-      windowMs: 60_000,
-      max: 15,
-      keyPrefix: 'nova-chat',
-      // Same code and wording as the handler's own limiter, so a reader who
-      // bursts is told to slow down rather than told the provider is busy.
-      code: 'RATE_LIMITED',
-      message: 'Too many NOVA requests. Please wait a moment and try again.',
-    })(req, res, next);
+  if (NOVA_CHAT_PATHS.has(req.path)) {
+    return novaChatLimiter(req, res, next);
   }
   next();
 });

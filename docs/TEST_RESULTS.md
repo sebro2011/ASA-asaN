@@ -1,16 +1,41 @@
 # Test results
 
-Latest full run: **2026-11-12**, branch `arena/ad469a17-asa-asan`.
+Latest full run: **2026-11-13**, branch `arena/8a962084-asa-asan`.
 
 | Command | Result |
 | --- | --- |
 | `npm run lint` (`tsc --noEmit`) | clean |
-| `npm run build` | exit 0 · 158 precache entries · entry chunk 888 KB |
-| `npm test` | **704 pass / 0 fail** |
+| `npm run build` | exit 0 · 89 JS chunks · entry **920.85 kB raw / 245.83 kB gzip** · CSS 63.65 kB gzip · 161 precache entries |
+| `npm test` | **819 pass / 0 fail** across **67** test scripts |
+| `npm run test:guardian` | 56 pass / 0 fail (core 28 · monitor/routes 22 · dashboard 6) |
+| `npm run test:rate-limit` | 9 pass / 0 fail |
 | `npm run test:forge` | 224 pass / 0 fail |
-| `npm run test:nasa` | 22 pass / 0 fail |
+| `npm audit` | 6 advisories (2 low, 4 moderate), all in the build chain |
+| `npm start` → `GET /api/health` | 200 after the `tsx` fix (it crashed on `node server.ts`; see the audit's C1) |
+| `esbuild server/vercelEntry.ts` vs committed `api/index.js` | byte-identical |
 
-`npm test` runs 44 suites: `lint`, `test:api-routes`, `test:apod`, `test:earth`,
+### Suites added since 2026-11-12
+
+| Suite | Tests | What it pins |
+| --- | --- | --- |
+| `scripts/test-guardian-core.mjs` | 28 | store CAS/TTL/counters/leases, breaker races across two coordinators, fleet budgets, Postgres adapter (no key in a URL, typed timeouts), factory key validation |
+| `scripts/test-guardian-monitor.mjs` | 22 | sweep results, incident audit, metered skip vs deep sweep, circuit-open skip, deadline skips, analytics with `null` availability, recovery verification re-opening a breaker, admin/cron auth failing closed, scrubbing |
+| `scripts/test-guardian-ui.mjs` | 6 | incident rendering, unprobed provider is "no data", instance-local store labelled, token never in a URL, outage shows its code, metered labels |
+| `scripts/test-request-rate-limit.mjs` | 9 | exact `max` boundary, 429 + `Retry-After`, window reset, per-client isolation, per-limiter stores, `skip()`, prune, **bounded growth under 5,200 clients**, `req.ip` over headers |
+
+### What the 2026-11-13 run does not cover
+
+Same limits as before, stated again because they still apply: no outbound NASA,
+Gemini, OpenRouter, Arena or Supabase traffic from this environment, no browser
+automation (jsdom for DOM tests), and the Guardian's SQL migration has not been
+executed against PostgreSQL. The Guardian's distributed claims are proven with two
+coordinators over one store, not across processes.
+
+---
+
+## Earlier run — 2026-11-12, branch `arena/ad469a17-asa-asan`
+
+`npm test` then ran 44 suites: `lint`, `test:api-routes`, `test:apod`, `test:earth`,
 `test:nova-chat`, `test:nova-diagnostics`, `test:space-videos`, `test:space-news`,
 `test:community`, `test:ai-viewer`, `test:welcome`, `test:earth-server`,
 `test:earth-analyst`, `test:earth-analyst-ui`, `test:space-build-security`,

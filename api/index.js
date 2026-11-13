@@ -39,6 +39,65 @@ function platformHosts(env) {
   return [env.VERCEL_URL, env.VERCEL_BRANCH_URL, env.VERCEL_PROJECT_PRODUCTION_URL].map((value) => normaliseHost(value)).filter(Boolean);
 }
 
+// server/requestRateLimit.ts
+var RATE_PRUNE_THRESHOLD = 5e3;
+var RATE_MAX_ENTRIES = 1e4;
+function pruneRateEntries(entries, windowMs, now) {
+  let removed = 0;
+  for (const [key2, entry] of entries) {
+    if (now - entry.windowStart >= windowMs) {
+      entries.delete(key2);
+      removed += 1;
+    }
+  }
+  return removed;
+}
+function enforceCap(entries) {
+  if (entries.size <= RATE_MAX_ENTRIES) return;
+  const ordered = [...entries.entries()].sort((a, b) => a[1].windowStart - b[1].windowStart);
+  const excess = entries.size - RATE_MAX_ENTRIES;
+  for (let index = 0; index < excess; index += 1) {
+    entries.delete(ordered[index][0]);
+  }
+}
+function clientKey(req) {
+  return req.ip || req.socket?.remoteAddress || "unknown";
+}
+function createRateLimiter(options, now = Date.now) {
+  const entries = /* @__PURE__ */ new Map();
+  const limiter = ((req, res, next) => {
+    if (options.skip?.(req)) return next();
+    const current = now();
+    if (entries.size >= RATE_PRUNE_THRESHOLD) {
+      pruneRateEntries(entries, options.windowMs, current);
+      enforceCap(entries);
+    }
+    const key2 = `${options.keyPrefix}:${clientKey(req)}`;
+    const entry = entries.get(key2) || { count: 0, windowStart: current };
+    if (current - entry.windowStart >= options.windowMs) {
+      entry.count = 0;
+      entry.windowStart = current;
+    }
+    entry.count += 1;
+    entries.set(key2, entry);
+    const resetSeconds = Math.ceil((entry.windowStart + options.windowMs - current) / 1e3);
+    res.setHeader("X-RateLimit-Limit", String(options.max));
+    res.setHeader("X-RateLimit-Remaining", String(Math.max(0, options.max - entry.count)));
+    res.setHeader("X-RateLimit-Reset", String(resetSeconds));
+    if (entry.count > options.max) {
+      res.setHeader("Retry-After", String(Math.max(1, resetSeconds)));
+      res.status(429).json({
+        error: options.message || "Too many requests. Please wait before trying again.",
+        code: options.code || "rate-limit"
+      });
+      return void 0;
+    }
+    return next();
+  });
+  limiter.store = { entries, size: () => entries.size };
+  return limiter;
+}
+
 // server.ts
 import { GoogleGenAI as GoogleGenAI4 } from "@google/genai";
 
@@ -17873,53 +17932,25 @@ app.use((req, res, next) => {
   res.header("X-Content-Type-Options", "nosniff");
   next();
 });
-var rateStore = /* @__PURE__ */ new Map();
-function rateLimit3(options) {
-  return (req, res, next) => {
-    if (options.skip?.(req)) {
-      return next();
-    }
-    const ip = req.ip || req.socket.remoteAddress || "unknown";
-    const key2 = `${options.keyPrefix}:${ip}`;
-    const now = Date.now();
-    const entry = rateStore.get(key2) || { count: 0, windowStart: now };
-    if (now - entry.windowStart >= options.windowMs) {
-      entry.count = 0;
-      entry.windowStart = now;
-    }
-    entry.count += 1;
-    rateStore.set(key2, entry);
-    res.setHeader("X-RateLimit-Limit", String(options.max));
-    res.setHeader("X-RateLimit-Remaining", String(Math.max(0, options.max - entry.count)));
-    res.setHeader("X-RateLimit-Reset", String(Math.ceil((entry.windowStart + options.windowMs - now) / 1e3)));
-    if (entry.count > options.max) {
-      const retryAfterSeconds = Math.max(1, Math.ceil((entry.windowStart + options.windowMs - now) / 1e3));
-      res.setHeader("Retry-After", String(retryAfterSeconds));
-      return res.status(429).json({
-        error: options.message || "Too many requests. Please wait before trying again.",
-        code: options.code || "rate-limit"
-      });
-    }
-    next();
-  };
-}
+var rateLimit3 = createRateLimiter;
 app.use("/api/youtube/meta", rateLimit3({ windowMs: 6e4, max: 30, keyPrefix: "youtube-meta" }));
 app.use("/api/translate", rateLimit3({ windowMs: 6e4, max: 15, keyPrefix: "translate" }));
 app.use("/api/mars", rateLimit3({ windowMs: 6e4, max: 60, keyPrefix: "mars-photos" }));
 app.use("/api/community", rateLimit3({ windowMs: 6e4, max: 20, keyPrefix: "community" }));
 app.use("/api/workspace/config", rateLimit3({ windowMs: 6e4, max: 60, keyPrefix: "workspace-config" }));
-var NOVA_CHAT_PATHS = ["/api/nova/chat", "/api/chat", "/api/openrouter/chat", "/api/nasa-ai"];
+var NOVA_CHAT_PATHS = /* @__PURE__ */ new Set(["/api/nova/chat", "/api/chat", "/api/openrouter/chat", "/api/nasa-ai"]);
+var novaChatLimiter = rateLimit3({
+  windowMs: 6e4,
+  max: 15,
+  keyPrefix: "nova-chat",
+  // Same code and wording as the handler's own limiter, so a reader who
+  // bursts is told to slow down rather than told the provider is busy.
+  code: "RATE_LIMITED",
+  message: "Too many NOVA requests. Please wait a moment and try again."
+});
 app.use((req, res, next) => {
-  if (NOVA_CHAT_PATHS.includes(req.path)) {
-    return rateLimit3({
-      windowMs: 6e4,
-      max: 15,
-      keyPrefix: "nova-chat",
-      // Same code and wording as the handler's own limiter, so a reader who
-      // bursts is told to slow down rather than told the provider is busy.
-      code: "RATE_LIMITED",
-      message: "Too many NOVA requests. Please wait a moment and try again."
-    })(req, res, next);
+  if (NOVA_CHAT_PATHS.has(req.path)) {
+    return novaChatLimiter(req, res, next);
   }
   next();
 });

@@ -1,6 +1,8 @@
 # API status report
 
-Status of every server route as of **2026-11-12**. "Live" means a response was
+Status of every server route as of **2026-11-13** (Guardian routes added; the AI
+provider evidence block below is still the 2026-11-12 observation and is labelled
+with its timestamp). "Live" means a response was
 actually observed; "tested" means covered by injected-fetch tests; "unverified"
 means neither was possible from this environment.
 
@@ -86,6 +88,27 @@ Two notes for operators:
 | --- | --- |
 | `POST /api/forge/interpret`, `/investigate` | rate limited, provider seam |
 | `POST /api/forge/assistant` | bounded `research-context/1`, output audit, labelled local brief |
+
+## COSMORA API Guardian (added 2026-11-13)
+
+Public reads are credential-free and `no-store`; every action fails closed without
+`GUARDIAN_ADMIN_TOKEN`, and the cron entry fails closed without `CRON_SECRET`.
+"Tested" below means covered by `scripts/test-guardian-*.mjs`; the deployed
+behaviour was smoke-tested on the mounted Express app in this environment, **not**
+against a live Supabase project.
+
+| Route | Auth | Source | Cache | Failure mode | Verified |
+| --- | --- | --- | --- | --- | --- |
+| `GET /api/guardian/health` | none | store + monitor | `no-store` | 200 with `distributed: false` when the store is memory | tested + mounted-app smoke |
+| `GET /api/guardian/status` | none | store + monitor | `no-store` | 200; providers, breakers, store capability and its reason | tested + mounted-app smoke (13 providers, memory) |
+| `GET /api/guardian/providers` | none | catalogue | `no-store` | static | tested |
+| `GET /api/guardian/runs` · `GET /api/guardian/analytics` | admin | store | `no-store` | 403 `GUARDIAN_LOCKED` when unconfigured | tested |
+| `GET /api/guardian/audit` | admin | store | `no-store` | 403 when unconfigured; append-only rows | tested |
+| `GET /api/guardian/config` | admin | env | `no-store` | env **names** and readiness only, never values | tested |
+| `POST /api/guardian/run` | admin | 13 providers | — | `ran:false` + holder when a sweep is leased; metered providers skipped unless deep | tested |
+| `POST /api/guardian/verify` | admin | one provider | — | probe timeout → typed failure, never "ok" | tested |
+| `POST /api/guardian/recovery` | admin, 5/min | recovery actions | — | verification failure re-opens the circuit; human-only actions refused | tested |
+| `GET /api/guardian/cron` | `CRON_SECRET` | monitor | — | 503 `SCHEDULE_SECRET_MISSING` when unset; 200 `ran:false` when a sweep is held | tested + mounted-app smoke (503) |
 
 ## Environment variables (names only)
 

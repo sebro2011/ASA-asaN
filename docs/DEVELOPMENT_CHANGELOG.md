@@ -3,6 +3,45 @@
 Newest first. Every entry states what changed, which files, and how it was verified.
 Nothing here is a plan; if it was not executed it is not listed.
 
+## 2026-11-13 — COSMORA API Guardian, Phase 1 re-audit, bounded request limiting (branch `arena/8a962084-asa-asan`)
+
+### Added
+- **COSMORA API Guardian** (`server/guardian/`, 11 modules + migration): one store
+  contract with `MemoryStore` and `PostgresStore` adapters; fleet circuit breakers
+  with a single half-open trial; fleet rate limits below provider quotas; TTL lease
+  so overlapping sweeps cannot double-spend; 13-provider coverage where the AI
+  probes reuse `novaDiagnostics`; idempotent recovery actions that verify
+  themselves and never rotate credentials; constant-time admin/cron auth that fails
+  closed; secret scrubbing; an append-only audit table enforced by a trigger.
+- `/guardian` dashboard (`src/workspace/guardian/GuardianSurface.tsx`,
+  `src/styles/guardian.css`), 45 i18n keys in en/si/ta, route + nav wiring.
+- `supabase/migrations/20261112000000_guardian.sql` — **written, not applied**.
+- `server/requestRateLimit.ts` — the API's coarse limiter, extracted so it can be
+  tested; per-limiter stores, self-pruning, hard cap.
+- `scripts/test-request-rate-limit.mjs` (9 tests), `scripts/test-guardian-*.mjs`
+  (56 tests), `README.md`, `.env.example` coverage for Guardian/LIFE/analyst/Forge.
+
+### Fixed
+- **`npm start` crashed.** `node server.ts` cannot transform TypeScript parameter
+  properties (`ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX`); it is now `tsx server.ts`, and
+  `docs/NOVA_INSTALLATION_GUIDE.md` no longer claims Node strips types on 22.
+- **The rate-limit store grew without bound** and the NOVA limiter was constructed
+  inside a request handler (it only worked because the bucket map was module-level
+  shared state). Both fixed and pinned by tests.
+- **Stale verification record.** `docs/TEST_RESULTS.md` reported 704 tests and an
+  888 KB entry while the tree had 810 and 239 kB gzip; the Guardian appeared in no
+  status document. All three now reflect a real run.
+
+### Verification
+`npm test` → **819 pass / 0 fail** (67 scripts) · `tsc --noEmit` clean ·
+`npm run build` exit 0 · `npm start` + `/api/health` 200 · `api/index.js`
+byte-identical to a fresh esbuild · Guardian endpoints smoke-tested on the mounted
+app (13 providers, memory store with its reason, 503/403 when locked).
+
+### Not verified
+Live NASA/Gemini/OpenRouter/Supabase traffic, the Guardian SQL migration, and
+browser rendering. No deployment setting was changed.
+
 ## 2026-11-12 — Phase 1 audit + the two critical integrity fixes (branch `arena/ad469a17-asa-asan`)
 
 ### Added
