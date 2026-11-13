@@ -17,6 +17,7 @@ import { workspaceConfigRouter } from './server/workspaceConfig.ts';
 import { spaceNewsRouter } from './server/spaceNews.ts';
 import { forgeRouter } from './server/forgeRoutes.ts';
 import { createLifeRouter } from './server/life/router.js';
+import { mountGuardian } from './server/guardian/routes.ts';
 
 dotenv.config();
 
@@ -428,6 +429,11 @@ app.use('/api/news', spaceNewsRouter);
 // Assistant. Data connectors, statistical analysis and evidence classification
 // are server-side; the dataset registry carries documentation only.
 app.use('/api/forge', forgeRouter);
+// COSMORA API Guardian — dependency diagnostics, fleet circuit breakers, fleet
+// rate limiting, scheduled sweeps, bounded recovery and an append-only audit.
+// Read routes are public and credential-free; every action requires an admin
+// token or the cron secret (see server/guardian/routes.ts).
+mountGuardian(app);
 
 // NOVA NEXUS / L.I.F.E. — local-first intelligence engine. It owns its own
 // SQLite file, starts read-only for anything risky, and never shells out unless

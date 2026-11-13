@@ -15,7 +15,7 @@
     "lint": "tsc --noEmit",
     "preview": "vite preview",
     "start": "node server.ts",
-    "test": "npm run lint && npm run test:api-routes && npm run test:apod && npm run test:earth && npm run test:nova-chat && npm run test:nova-diagnostics && npm run test:space-videos && npm run test:space-news && npm run test:community && npm run test:ai-viewer && npm run test:welcome && npm run test:earth-server && npm run test:earth-analyst && npm run test:earth-analyst-ui && npm run test:space-build-security && npm run test:security-performance && npm run test:workspace && npm run test:nasa && npm run test:forge",
+    "test": "npm run lint && npm run test:api-routes && npm run test:apod && npm run test:earth && npm run test:nova-chat && npm run test:nova-diagnostics && npm run test:space-videos && npm run test:space-news && npm run test:community && npm run test:ai-viewer && npm run test:welcome && npm run test:earth-server && npm run test:earth-analyst && npm run test:earth-analyst-ui && npm run test:space-build-security && npm run test:security-performance && npm run test:workspace && npm run test:nasa && npm run test:guardian && npm run test:forge",
     "test:ai-viewer": "node --import tsx --test scripts/test-ai-earth-viewer.mjs",
     "test:apod": "node --import tsx --test --test-force-exit scripts/test-apod-media.mjs && node --import tsx --test --test-force-exit scripts/test-apod-unavailable-dom.mjs && node --import tsx --test --test-force-exit scripts/test-apod-science.mjs",
     "test:api-routes": "node --import tsx --test --test-force-exit scripts/test-api-routes.mjs && node --import tsx --test --test-force-exit scripts/test-neows-integrity.mjs && node --import tsx --test --test-force-exit scripts/test-translation-chat.mjs && node --import tsx --test --test-force-exit scripts/test-mars-photos.mjs && node --import tsx --test scripts/test-news-feed-integrity.mjs",
@@ -58,6 +58,7 @@
     "test:workspace-sync": "node --import tsx --test scripts/test-workspace-sync.mjs",
     "verify:earth": "node --import tsx scripts/verify-earth-services.mjs",
     "verify:explore": "node --import tsx scripts/verify-explore-destinations.mjs",
+    "test:guardian": "node --import tsx --test --test-force-exit scripts/test-guardian-core.mjs && node --import tsx --test --test-force-exit scripts/test-guardian-monitor.mjs",
     "test:forge": "node --import tsx --test scripts/test-forge-engine.mjs && node --import tsx --test --test-force-exit scripts/test-forge-api.mjs && node --import tsx --test scripts/test-forge-ui.mjs && node --import tsx --test --test-force-exit scripts/test-forge-dom.mjs && node --import tsx --test --test-force-exit scripts/test-forge-scroll.mjs && node --import tsx --test scripts/test-forge-science.mjs && node --import tsx --test scripts/test-forge-science-connectors.mjs && node --import tsx --test scripts/test-forge-research.mjs && node --import tsx --test --test-force-exit scripts/test-forge-science-dom.mjs && node --import tsx --test scripts/test-forge-assistant.mjs && node --import tsx --test --test-force-exit scripts/test-forge-research-workspace.mjs"
   },
   "dependencies": {

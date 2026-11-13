@@ -102,8 +102,8 @@ function parseTimeValues(xml) {
   ).sort((a, b) => a.start < b.start ? -1 : a.start > b.start ? 1 : 0);
 }
 function buildDomain({ layerId, tileMatrixSet, xml, sourceUrl, retrievedAt, fromCache }) {
-  const failure = classifyDescribeDomainsError(xml);
-  if (failure) throw failure;
+  const failure2 = classifyDescribeDomainsError(xml);
+  if (failure2) throw failure2;
   const ranges = parseTimeValues(xml);
   if (!ranges.length) {
     const error = new Error("No observation-date domain was found in the GIBS response.");
@@ -1036,29 +1036,29 @@ function createOrchestrator(options) {
           entry: { provider: provider.id, model: provider.model, outcome: "ok", attempts, ms: now() - started }
         };
       } catch (error) {
-        const failure = error instanceof ProviderError ? error : new ProviderError(error?.message || "provider call failed", {
+        const failure2 = error instanceof ProviderError ? error : new ProviderError(error?.message || "provider call failed", {
           code: error?.name === "AbortError" ? "TIMEOUT" : "NETWORK_ERROR",
           retryable: true
         });
-        if (failure.code === "ABORTED") {
-          lastError = failure;
+        if (failure2.code === "ABORTED") {
+          lastError = failure2;
           break;
         }
-        lastError = failure;
+        lastError = failure2;
         log({
           event: "earth.analyst.provider.attempt",
           provider: provider.id,
           model: provider.model,
           attempt: attempts,
-          code: failure.code,
-          status: failure.status,
-          retryable: failure.retryable,
+          code: failure2.code,
+          status: failure2.status,
+          retryable: failure2.retryable,
           ms: now() - started,
           sinceStartMs: now() - runStartedAt
         });
-        if (!failure.retryable) break;
+        if (!failure2.retryable) break;
         if (attempts >= config.maxAttempts) break;
-        const delay = Math.max(failure.retryAfterMs ?? 0, backoffMs(attempts));
+        const delay = Math.max(failure2.retryAfterMs ?? 0, backoffMs(attempts));
         try {
           await sleep(Math.min(delay, Math.max(0, deadline - now())), outerSignal);
         } catch {
@@ -2533,7 +2533,7 @@ async function searchYouTube(mode, category, query, token, key2, scope) {
 }
 function createSpaceVideosRouter() {
   const router = Router();
-  const cache3 = /* @__PURE__ */ new Map();
+  const cache4 = /* @__PURE__ */ new Map();
   const inflight = /* @__PURE__ */ new Map();
   const rates = /* @__PURE__ */ new Map();
   let misses = { count: 0, reset: Date.now() + RATE_WINDOW_MS };
@@ -2576,9 +2576,9 @@ function createSpaceVideosRouter() {
       return res.json({ ...getCuratedPage(mode, category, query, offset, 9, scope), source: "curated", ...!key2 ? { reason: "missing-key" } : {} });
     }
     const cacheKey2 = JSON.stringify([mode, scope, category, query.toLocaleLowerCase(), token]);
-    const cached2 = cache3.get(cacheKey2);
+    const cached2 = cache4.get(cacheKey2);
     if (cached2 && cached2.expires > now) return res.json({ ...cached2.data, cached: true });
-    if (cached2) cache3.delete(cacheKey2);
+    if (cached2) cache4.delete(cacheKey2);
     let pending = inflight.get(cacheKey2);
     if (!pending) {
       if (now >= misses.reset) misses = { count: 0, reset: now + RATE_WINDOW_MS };
@@ -2594,8 +2594,8 @@ function createSpaceVideosRouter() {
     }
     try {
       const data = await pending;
-      cache3.set(cacheKey2, { expires: Date.now() + CACHE_MS, data });
-      while (cache3.size > MAX_CACHE) cache3.delete(cache3.keys().next().value);
+      cache4.set(cacheKey2, { expires: Date.now() + CACHE_MS, data });
+      while (cache4.size > MAX_CACHE) cache4.delete(cache4.keys().next().value);
       return res.json(data);
     } catch (error) {
       const reason = error instanceof UpstreamFailure ? error.code : "upstream";
@@ -5624,7 +5624,7 @@ function normalizePhoto(item, sol, rover) {
 }
 function createMarsPhotosRouter({ fetchImpl = globalThis.fetch, getKey = () => process.env.NASA_API_KEY || process.env.NEXT_PUBLIC_NASA_API_KEY || "DEMO_KEY" } = {}) {
   const router = express2.Router();
-  const cache3 = /* @__PURE__ */ new Map();
+  const cache4 = /* @__PURE__ */ new Map();
   router.get("/photos", async (req, res) => {
     const rover = req.query.rover;
     const sol = integerParam(req.query.sol, 0, 1e4);
@@ -5633,9 +5633,9 @@ function createMarsPhotosRouter({ fetchImpl = globalThis.fetch, getKey = () => p
       return res.status(400).json({ ok: false, code: "INVALID_MARS_QUERY", message: "Choose curiosity, opportunity or spirit, a sol from 0 to 10000, and a page from 1 to 100." });
     }
     const cacheKey2 = `${rover}:${sol}:${page}`;
-    const hit = cache3.get(cacheKey2);
+    const hit = cache4.get(cacheKey2);
     if (hit && hit.expiresAt > Date.now()) return res.json({ ok: true, rover, sol, page, photos: hit.photos, hasMore: hit.hasMore, omitted: hit.omitted, retrievedAt: hit.retrievedAt, cached: true, source: "NASA Mars Rover Photos API" });
-    if (hit) cache3.delete(cacheKey2);
+    if (hit) cache4.delete(cacheKey2);
     const params = new URLSearchParams({ sol: String(sol), page: String(page), api_key: getKey() });
     const url = `https://api.nasa.gov/mars-photos/api/v1/rovers/${rover}/photos?${params}`;
     try {
@@ -5649,8 +5649,8 @@ function createMarsPhotosRouter({ fetchImpl = globalThis.fetch, getKey = () => p
       if (!Array.isArray(raw) || raw.length > 1e3) return res.status(502).json({ ok: false, code: "MARS_INVALID_RESPONSE", message: "NASA returned an unexpected photo response." });
       const photos = raw.map((item) => normalizePhoto(item, sol, rover)).filter((item) => item !== null);
       const entry = { retrievedAt: (/* @__PURE__ */ new Date()).toISOString(), expiresAt: Date.now() + TTL_MS, photos, hasMore: raw.length >= 25 && page < 100, omitted: raw.length - photos.length };
-      if (cache3.size >= MAX_CACHE_ENTRIES) cache3.delete(cache3.keys().next().value);
-      cache3.set(cacheKey2, entry);
+      if (cache4.size >= MAX_CACHE_ENTRIES) cache4.delete(cache4.keys().next().value);
+      cache4.set(cacheKey2, entry);
       return res.json({ ok: true, rover, sol, page, photos, hasMore: entry.hasMore, omitted: entry.omitted, retrievedAt: entry.retrievedAt, cached: false, source: "NASA Mars Rover Photos API" });
     } catch (error) {
       const timedOut = error?.name === "TimeoutError" || error?.name === "AbortError";
@@ -6034,23 +6034,23 @@ function sortAndDedupe(items, limit) {
 }
 function createSpaceNewsRouter() {
   const router = Router4();
-  const cache3 = /* @__PURE__ */ new Map();
+  const cache4 = /* @__PURE__ */ new Map();
   const buckets = /* @__PURE__ */ new Map();
   const readCache = (cacheKey2, now) => {
-    const entry = cache3.get(cacheKey2);
+    const entry = cache4.get(cacheKey2);
     if (!entry) return null;
     if (entry.expires <= now) {
-      cache3.delete(cacheKey2);
+      cache4.delete(cacheKey2);
       return null;
     }
     return entry.body;
   };
   const writeCache = (cacheKey2, body, ttl, now) => {
-    if (cache3.size >= MAX_CACHE_ENTRIES2) {
-      const oldest = cache3.keys().next();
-      if (!oldest.done) cache3.delete(oldest.value);
+    if (cache4.size >= MAX_CACHE_ENTRIES2) {
+      const oldest = cache4.keys().next();
+      if (!oldest.done) cache4.delete(oldest.value);
     }
-    cache3.set(cacheKey2, { expires: now + ttl, body });
+    cache4.set(cacheKey2, { expires: now + ttl, body });
   };
   router.get("/sources", (_req, res) => {
     res.json({ ok: true, version: NEWS_API_VERSION, sources: newsSourceInventory() });
@@ -10357,9 +10357,9 @@ function withNasaKey(url, key2) {
   return parsed.toString();
 }
 async function fetchText(url, options, cacheKey2, ttlMs) {
-  const cache3 = options.cache ?? DEFAULT_CACHE;
+  const cache4 = options.cache ?? DEFAULT_CACHE;
   const nowMs = (options.now ?? (() => /* @__PURE__ */ new Date()))().getTime();
-  const cached2 = cache3.get(cacheKey2);
+  const cached2 = cache4.get(cacheKey2);
   if (cached2 && cached2.expires > nowMs) {
     return { ok: true, text: cached2.value, status: 200, retrievedAt: new Date(nowMs).toISOString() };
   }
@@ -10387,12 +10387,12 @@ async function fetchText(url, options, cacheKey2, ttlMs) {
         retrievedAt
       };
     }
-    if (cache3.size > MAX_CACHE_ENTRIES3) {
-      for (const [key2, entry] of cache3) {
-        if (entry.expires <= nowMs) cache3.delete(key2);
+    if (cache4.size > MAX_CACHE_ENTRIES3) {
+      for (const [key2, entry] of cache4) {
+        if (entry.expires <= nowMs) cache4.delete(key2);
       }
     }
-    cache3.set(cacheKey2, { expires: retrieveStart + ttlMs, value: text2 });
+    cache4.set(cacheKey2, { expires: retrieveStart + ttlMs, value: text2 });
     return { ok: true, text: text2, status: response.status, retrievedAt };
   } catch (error) {
     const aborted = error instanceof Error && error.name === "AbortError";
@@ -10873,9 +10873,9 @@ function sanitiseContext(raw) {
     notes: []
   };
 }
-function nasaKeyMode(nasaKey) {
-  if (!nasaKey) return "none";
-  return nasaKey === "DEMO_KEY" ? "demo" : "key";
+function nasaKeyMode(nasaKey2) {
+  if (!nasaKey2) return "none";
+  return nasaKey2 === "DEMO_KEY" ? "demo" : "key";
 }
 function interpretQuestion(input) {
   const language = LANGUAGES.includes(input.language) ? input.language : void 0;
@@ -10919,13 +10919,13 @@ async function investigate(input) {
     investigationId: dependencies.investigationId
   });
 }
-function cataloguePayload(nasaKey) {
+function cataloguePayload(nasaKey2) {
   return {
     ok: true,
     engine: "nova-hypothesis-forge/1",
     datasets: DATASETS,
     capabilities: {
-      nasaKey: nasaKeyMode(nasaKey),
+      nasaKey: nasaKeyMode(nasaKey2),
       noaaKeyless: true,
       liveInvestigation: true,
       llmRequired: false,
@@ -11302,7 +11302,7 @@ function createForgeRouter(deps = {}) {
   const router = express3.Router();
   const buckets = /* @__PURE__ */ new Map();
   const rateLimit4 = (name, max, windowMs) => createRateLimit(buckets, name, max, windowMs);
-  const nasaKey = () => {
+  const nasaKey2 = () => {
     if (deps.nasaKey !== void 0) return deps.nasaKey;
     const configured = process.env.NASA_API_KEY;
     return configured && configured.trim() ? configured.trim() : "DEMO_KEY";
@@ -11310,7 +11310,7 @@ function createForgeRouter(deps = {}) {
   router.get("/catalogue", rateLimit4("forge-catalogue", 60, 6e4), (_req, res) => {
     res.setHeader("Cache-Control", "private, max-age=300");
     res.setHeader("X-Content-Type-Options", "nosniff");
-    return res.json(cataloguePayload(nasaKey()));
+    return res.json(cataloguePayload(nasaKey2()));
   });
   router.post("/interpret", rateLimit4("forge-interpret", 40, 6e4), (req, res) => {
     res.setHeader("Cache-Control", "no-store");
@@ -11329,7 +11329,7 @@ function createForgeRouter(deps = {}) {
         language: req.body?.language,
         context: req.body?.context,
         now,
-        nasaKey: nasaKey()
+        nasaKey: nasaKey2()
       });
       return res.json({
         ok: true,
@@ -11364,7 +11364,7 @@ function createForgeRouter(deps = {}) {
         dependencies: {
           fetchImpl: deps.fetchImpl,
           now: deps.now,
-          nasaKey: nasaKey(),
+          nasaKey: nasaKey2(),
           timeoutMs: deps.timeoutMs,
           cache: deps.cache
         }
@@ -15700,6 +15700,2105 @@ function createLifeRouter({ engine = null, env = process.env, root = process.cwd
   return router;
 }
 
+// server/guardian/routes.ts
+import { Router as Router5 } from "express";
+
+// server/guardian/store.ts
+var MEMORY_CAPS = {
+  distributed: false,
+  persistent: false,
+  atomicCounters: false,
+  atomicCas: false,
+  atomicLease: false
+};
+var POSTGRES_CAPS = {
+  distributed: true,
+  persistent: true,
+  atomicCounters: true,
+  atomicCas: true,
+  atomicLease: true
+};
+var MemoryStore = class {
+  constructor(options = {}, now = Date.now) {
+    this.now = now;
+    this.kind = "memory";
+    this.capabilities = MEMORY_CAPS;
+    this.entries = /* @__PURE__ */ new Map();
+    this.counters = /* @__PURE__ */ new Map();
+    this.leases = /* @__PURE__ */ new Map();
+    this.audit = [];
+    this.samples = [];
+    this.runs = [];
+    this.seq = 0;
+    this.limits = {
+      maxSamples: options.maxSamples ?? 5e3,
+      maxRuns: options.maxRuns ?? 200,
+      maxAudit: options.maxAudit ?? 2e3
+    };
+  }
+  alive(entry) {
+    if (!entry) return false;
+    if (entry.expiresAt === null) return true;
+    return entry.expiresAt > this.now();
+  }
+  async getJson(key2) {
+    const entry = this.entries.get(key2);
+    if (!this.alive(entry)) {
+      if (entry) this.entries.delete(key2);
+      return null;
+    }
+    return { value: entry.value, version: entry.version, expiresAt: entry.expiresAt };
+  }
+  async setJson(key2, value, options = {}) {
+    const previous = this.entries.get(key2);
+    const version = (previous?.version ?? 0) + 1;
+    const expiresAt = options.ttlMs === null || options.ttlMs === void 0 ? null : this.now() + options.ttlMs;
+    this.entries.set(key2, { value, version, expiresAt });
+    return { value, version, expiresAt };
+  }
+  /**
+   * The check and the write are one synchronous step inside the event loop.
+   * `await this.getJson()` followed by `await this.setJson()` would yield between
+   * the comparison and the write, so two coordinators sharing this store could
+   * both pass the check and both write — the exact double-acquire a CAS exists to
+   * prevent (the Postgres adapter gets this from a single SQL statement).
+   */
+  async compareAndSetJson(key2, expectedVersion, value, options = {}) {
+    const entry = this.entries.get(key2);
+    const live = entry && (entry.expiresAt === null || entry.expiresAt > this.now()) ? entry : null;
+    const currentVersion = live ? live.version : null;
+    if (currentVersion !== expectedVersion) {
+      return {
+        ok: false,
+        stored: live ? { value: live.value, version: live.version, expiresAt: live.expiresAt } : null
+      };
+    }
+    const version = (live?.version ?? 0) + 1;
+    const expiresAt = options.ttlMs === null || options.ttlMs === void 0 ? null : this.now() + options.ttlMs;
+    this.entries.set(key2, { value, version, expiresAt });
+    return { ok: true, stored: { value, version, expiresAt } };
+  }
+  async increment(key2, windowMs, amount = 1) {
+    const at = this.now();
+    const existing = this.counters.get(key2);
+    if (!existing || existing.resetAt <= at) {
+      const fresh = { count: amount, resetAt: at + windowMs };
+      this.counters.set(key2, fresh);
+      return { count: fresh.count, resetAt: fresh.resetAt };
+    }
+    existing.count += amount;
+    return { count: existing.count, resetAt: existing.resetAt };
+  }
+  async acquireLease(key2, owner, ttlMs) {
+    const at = this.now();
+    const existing = this.leases.get(key2);
+    if (existing && existing.expiresAt > at && existing.owner !== owner) return false;
+    this.leases.set(key2, { owner, expiresAt: at + ttlMs });
+    return true;
+  }
+  async renewLease(key2, owner, ttlMs) {
+    const at = this.now();
+    const existing = this.leases.get(key2);
+    if (!existing || existing.owner !== owner || existing.expiresAt <= at) return false;
+    existing.expiresAt = at + ttlMs;
+    return true;
+  }
+  async releaseLease(key2, owner) {
+    const existing = this.leases.get(key2);
+    if (existing && existing.owner === owner) this.leases.delete(key2);
+  }
+  async leaseHolder(key2) {
+    const existing = this.leases.get(key2);
+    if (!existing || existing.expiresAt <= this.now()) return null;
+    return { owner: existing.owner, expiresAt: existing.expiresAt };
+  }
+  async appendAudit(entry) {
+    this.seq += 1;
+    const record = { ...entry, id: `mem-${String(this.seq).padStart(6, "0")}` };
+    this.audit.push(record);
+    if (this.audit.length > this.limits.maxAudit) this.audit.splice(0, this.audit.length - this.limits.maxAudit);
+    return record;
+  }
+  async listAudit(query = {}) {
+    const limit = Math.max(1, Math.min(query.limit ?? 100, 1e3));
+    return this.audit.filter((entry) => query.since ? entry.at >= query.since : true).filter((entry) => query.severity ? entry.severity === query.severity : true).filter((entry) => query.action ? entry.action === query.action : true).filter((entry) => query.target ? entry.target === query.target : true).filter((entry) => query.actor ? entry.actor === query.actor : true).slice(-limit).reverse();
+  }
+  async appendSample(sample) {
+    this.samples.push(sample);
+    if (this.samples.length > this.limits.maxSamples) {
+      this.samples.splice(0, this.samples.length - this.limits.maxSamples);
+    }
+  }
+  async listSamples(query = {}) {
+    const limit = Math.max(1, Math.min(query.limit ?? 200, 5e3));
+    return this.samples.filter((sample) => query.since ? sample.at >= query.since : true).filter((sample) => query.providerId ? sample.providerId === query.providerId : true).slice(-limit).reverse();
+  }
+  async putRun(run) {
+    const index = this.runs.findIndex((entry) => entry.id === run.id);
+    if (index >= 0) this.runs[index] = run;
+    else this.runs.push(run);
+    if (this.runs.length > this.limits.maxRuns) this.runs.splice(0, this.runs.length - this.limits.maxRuns);
+  }
+  async listRuns(query = {}) {
+    const limit = Math.max(1, Math.min(query.limit ?? 50, 500));
+    return this.runs.filter((run) => query.since ? run.startedAt >= query.since : true).slice(-limit).reverse();
+  }
+  async prune(now = this.now()) {
+    let removed = 0;
+    for (const [key2, entry] of this.entries) {
+      if (entry.expiresAt !== null && entry.expiresAt <= now) {
+        this.entries.delete(key2);
+        removed += 1;
+      }
+    }
+    for (const [key2, counter] of this.counters) {
+      if (counter.resetAt <= now) {
+        this.counters.delete(key2);
+        removed += 1;
+      }
+    }
+    for (const [key2, lease] of this.leases) {
+      if (lease.expiresAt <= now) {
+        this.leases.delete(key2);
+        removed += 1;
+      }
+    }
+    return removed;
+  }
+  async health() {
+    return { ok: true, detail: "in-process store" };
+  }
+  describe() {
+    return {
+      kind: "memory",
+      keys: this.entries.size,
+      counters: this.counters.size,
+      leases: this.leases.size,
+      audit: this.audit.length,
+      samples: this.samples.length,
+      runs: this.runs.length,
+      limits: this.limits
+    };
+  }
+};
+var StoreError = class extends Error {
+  constructor(message, code, status) {
+    super(message);
+    this.code = code;
+    this.status = status;
+    this.name = "StoreError";
+  }
+};
+var PostgresStore = class {
+  constructor(options) {
+    this.kind = "postgres";
+    this.capabilities = POSTGRES_CAPS;
+    this.baseUrl = options.url.replace(/\/+$/, "");
+    this.key = options.serviceRoleKey;
+    this.fetchImpl = options.fetchImpl ?? ((...args) => globalThis.fetch(...args));
+    this.timeoutMs = options.timeoutMs ?? 5e3;
+    this.now = options.now ?? Date.now;
+    this.ns = options.namespace ?? "cosmora";
+  }
+  scoped(key2) {
+    return `${this.ns}:${key2}`;
+  }
+  headers() {
+    return {
+      apikey: this.key,
+      Authorization: `Bearer ${this.key}`,
+      "Content-Type": "application/json",
+      Accept: "application/json"
+    };
+  }
+  /**
+   * One place where PostgREST is called. Failures become a typed `StoreError`
+   * whose message never contains the URL query (which can carry filters built
+   * from state) and never the key.
+   */
+  async call(path2, init) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), this.timeoutMs);
+    let response;
+    try {
+      response = await this.fetchImpl(`${this.baseUrl}${path2}`, {
+        ...init,
+        headers: { ...this.headers(), ...init.headers },
+        signal: controller.signal
+      });
+    } catch (error) {
+      clearTimeout(timer);
+      const aborted = error?.name === "AbortError";
+      throw new StoreError(
+        aborted ? "Guardian store timed out." : "Guardian store was unreachable.",
+        aborted ? "STORE_TIMEOUT" : "STORE_NETWORK"
+      );
+    }
+    clearTimeout(timer);
+    const text2 = await response.text();
+    if (!response.ok) {
+      throw new StoreError(`Guardian store rejected the request (${response.status}).`, "STORE_HTTP", response.status);
+    }
+    if (!text2) return void 0;
+    try {
+      return JSON.parse(text2);
+    } catch {
+      throw new StoreError("Guardian store returned a non-JSON body.", "STORE_SHAPE");
+    }
+  }
+  rpc(fn, body) {
+    return this.call(`/rest/v1/rpc/${fn}`, { method: "POST", body: JSON.stringify(body) });
+  }
+  async getJson(key2) {
+    const rows = await this.rpc("guardian_kv_get", {
+      p_key: this.scoped(key2),
+      p_now: new Date(this.now()).toISOString()
+    });
+    const row = Array.isArray(rows) ? rows[0] : null;
+    if (!row) return null;
+    return {
+      value: row.value,
+      version: row.version,
+      expiresAt: row.expires_at ? Date.parse(row.expires_at) : null
+    };
+  }
+  async setJson(key2, value, options = {}) {
+    const rows = await this.rpc("guardian_kv_set", {
+      p_key: this.scoped(key2),
+      p_value: value,
+      p_ttl_ms: options.ttlMs ?? null
+    });
+    const row = rows?.[0];
+    return {
+      value,
+      version: row?.version ?? 0,
+      expiresAt: row?.expires_at ? Date.parse(row.expires_at) : null
+    };
+  }
+  async compareAndSetJson(key2, expectedVersion, value, options = {}) {
+    const result2 = await this.rpc(
+      "guardian_kv_cas",
+      {
+        p_key: this.scoped(key2),
+        p_expected_version: expectedVersion,
+        p_value: value,
+        p_ttl_ms: options.ttlMs ?? null
+      }
+    );
+    const row = Array.isArray(result2) ? result2[0] : null;
+    if (!row || !row.ok) return { ok: false, stored: null };
+    return {
+      ok: true,
+      stored: {
+        value,
+        version: row.version ?? 0,
+        expiresAt: row.expires_at ? Date.parse(row.expires_at) : null
+      }
+    };
+  }
+  async increment(key2, windowMs, amount = 1) {
+    const rows = await this.rpc("guardian_counter", {
+      p_key: this.scoped(key2),
+      p_window_ms: Math.max(1, Math.floor(windowMs)),
+      p_amount: amount
+    });
+    const row = rows?.[0];
+    if (!row) throw new StoreError("Guardian counter returned no row.", "STORE_SHAPE");
+    return { count: row.count, resetAt: Date.parse(row.reset_at) };
+  }
+  leaseCall(mode, key2, owner, ttlMs) {
+    return this.rpc("guardian_lease", {
+      p_key: this.scoped(key2),
+      p_owner: owner,
+      p_ttl_ms: mode === "release" ? 0 : Math.max(1, Math.floor(ttlMs)),
+      p_mode: mode
+    });
+  }
+  async acquireLease(key2, owner, ttlMs) {
+    return Boolean(await this.leaseCall("acquire", key2, owner, ttlMs));
+  }
+  async renewLease(key2, owner, ttlMs) {
+    return Boolean(await this.leaseCall("renew", key2, owner, ttlMs));
+  }
+  async releaseLease(key2, owner) {
+    await this.leaseCall("release", key2, owner, 0);
+  }
+  async leaseHolder(key2) {
+    const rows = await this.call(
+      `/rest/v1/guardian_leases?key=eq.${encodeURIComponent(this.scoped(key2))}&select=owner,expires_at`,
+      { method: "GET" }
+    );
+    const row = Array.isArray(rows) ? rows[0] : null;
+    if (!row) return null;
+    const expiresAt = Date.parse(row.expires_at);
+    if (!Number.isFinite(expiresAt) || expiresAt <= this.now()) return null;
+    return { owner: row.owner, expiresAt };
+  }
+  async appendAudit(entry) {
+    const rows = await this.call("/rest/v1/guardian_audit", {
+      method: "POST",
+      body: JSON.stringify({
+        at: new Date(entry.at).toISOString(),
+        actor: entry.actor,
+        action: entry.action,
+        target: entry.target,
+        severity: entry.severity,
+        detail: entry.detail ?? null
+      }),
+      headers: { Prefer: "return=representation" }
+    });
+    const row = Array.isArray(rows) ? rows[0] : null;
+    return { ...entry, id: row ? `pg-${row.id}` : "pg-unknown" };
+  }
+  async listAudit(query = {}) {
+    const limit = Math.max(1, Math.min(query.limit ?? 100, 1e3));
+    const filters = ["select=id,at,actor,action,target,severity,detail", "order=at.desc", `limit=${limit}`];
+    if (query.since) filters.push(`at=gte.${new Date(query.since).toISOString()}`);
+    if (query.severity) filters.push(`severity=eq.${query.severity}`);
+    if (query.action) filters.push(`action=eq.${encodeURIComponent(query.action)}`);
+    if (query.target) filters.push(`target=eq.${encodeURIComponent(query.target)}`);
+    if (query.actor) filters.push(`actor=eq.${encodeURIComponent(query.actor)}`);
+    const rows = await this.call(`/rest/v1/guardian_audit?${filters.join("&")}`, { method: "GET" });
+    return (rows || []).map((row) => ({
+      id: `pg-${row.id}`,
+      at: Date.parse(row.at),
+      actor: row.actor,
+      action: row.action,
+      target: row.target,
+      severity: row.severity,
+      detail: row.detail ?? void 0
+    }));
+  }
+  async appendSample(sample) {
+    await this.call("/rest/v1/guardian_samples", {
+      method: "POST",
+      body: JSON.stringify({
+        at: new Date(sample.at).toISOString(),
+        provider_id: sample.providerId,
+        status: sample.status,
+        code: sample.code,
+        latency_ms: sample.latencyMs,
+        http_status: sample.httpStatus ?? null,
+        reason: sample.reason ?? null,
+        run_id: sample.runId ?? null
+      }),
+      headers: { Prefer: "return=minimal" }
+    });
+  }
+  async listSamples(query = {}) {
+    const limit = Math.max(1, Math.min(query.limit ?? 200, 5e3));
+    const filters = ["select=at,provider_id,status,code,latency_ms,http_status,reason,run_id", "order=at.desc", `limit=${limit}`];
+    if (query.since) filters.push(`at=gte.${new Date(query.since).toISOString()}`);
+    if (query.providerId) filters.push(`provider_id=eq.${encodeURIComponent(query.providerId)}`);
+    const rows = await this.call(`/rest/v1/guardian_samples?${filters.join("&")}`, { method: "GET" });
+    return (rows || []).map((row) => ({
+      at: Date.parse(row.at),
+      providerId: row.provider_id,
+      status: row.status,
+      code: row.code,
+      latencyMs: row.latency_ms,
+      httpStatus: row.http_status,
+      reason: row.reason,
+      runId: row.run_id
+    }));
+  }
+  async putRun(run) {
+    await this.call("/rest/v1/guardian_runs", {
+      method: "POST",
+      body: JSON.stringify({
+        id: run.id,
+        started_at: new Date(run.startedAt).toISOString(),
+        finished_at: run.finishedAt ? new Date(run.finishedAt).toISOString() : null,
+        trigger: run.trigger,
+        instance_id: run.instanceId,
+        summary: run.summary,
+        error: run.error ?? null
+      }),
+      headers: { Prefer: "resolution=merge-duplicates,return=minimal" }
+    });
+  }
+  async listRuns(query = {}) {
+    const limit = Math.max(1, Math.min(query.limit ?? 50, 500));
+    const filters = ["select=id,started_at,finished_at,trigger,instance_id,summary,error", "order=started_at.desc", `limit=${limit}`];
+    if (query.since) filters.push(`started_at=gte.${new Date(query.since).toISOString()}`);
+    const rows = await this.call(`/rest/v1/guardian_runs?${filters.join("&")}`, { method: "GET" });
+    return (rows || []).map((row) => ({
+      id: row.id,
+      startedAt: Date.parse(row.started_at),
+      finishedAt: row.finished_at ? Date.parse(row.finished_at) : null,
+      trigger: row.trigger,
+      instanceId: row.instance_id,
+      summary: row.summary,
+      error: row.error
+    }));
+  }
+  async prune(now = this.now()) {
+    const result2 = await this.rpc("guardian_prune", { p_now: new Date(now).toISOString() });
+    return Number(result2) || 0;
+  }
+  async health() {
+    try {
+      await this.rpc("guardian_health", {});
+      return { ok: true, detail: "supabase postgrest" };
+    } catch (error) {
+      const storeError = error;
+      return { ok: false, detail: `${storeError.code ?? "STORE_ERROR"}: ${storeError.message}` };
+    }
+  }
+  describe() {
+    return {
+      kind: "postgres",
+      // Host only: never the full URL with query, never the key.
+      host: (() => {
+        try {
+          return new URL(this.baseUrl).host;
+        } catch {
+          return "invalid-url";
+        }
+      })(),
+      namespace: this.ns,
+      timeoutMs: this.timeoutMs
+    };
+  }
+};
+function isServiceRoleKey(key2) {
+  const value = (key2 || "").trim();
+  if (!value) return false;
+  if (value.startsWith("sb_secret_")) return true;
+  const parts = value.split(".");
+  if (parts.length !== 3) return false;
+  try {
+    const payload = JSON.parse(Buffer.from(parts[1], "base64url").toString("utf8"));
+    return payload?.role === "service_role";
+  } catch {
+    return false;
+  }
+}
+function createGuardianStore(env = process.env, overrides = {}) {
+  const url = (env.GUARDIAN_STORE_URL || env.SUPABASE_URL || "").trim();
+  const key2 = (env.GUARDIAN_STORE_KEY || env.SUPABASE_SERVICE_ROLE_KEY || "").trim();
+  const namespace = overrides.namespace || (env.GUARDIAN_NAMESPACE || "cosmora").trim() || "cosmora";
+  const memory = (reason, missing = []) => ({
+    store: new MemoryStore({}, overrides.now),
+    reason,
+    missing
+  });
+  if (!url) return memory("GUARDIAN_STORE_URL / SUPABASE_URL is not set \u2014 instance-local state only.", ["SUPABASE_URL"]);
+  if (!key2) {
+    return memory("No service-role key is configured \u2014 instance-local state only.", ["SUPABASE_SERVICE_ROLE_KEY"]);
+  }
+  let parsed;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return memory("The configured store URL is not a valid URL \u2014 instance-local state only.");
+  }
+  if (parsed.protocol !== "https:") {
+    return memory("The configured store URL is not https \u2014 instance-local state only.");
+  }
+  if (!isServiceRoleKey(key2)) {
+    return memory("The configured store key is not a service-role key \u2014 instance-local state only.");
+  }
+  return {
+    store: new PostgresStore({
+      url: parsed.toString(),
+      serviceRoleKey: key2,
+      fetchImpl: overrides.fetchImpl,
+      now: overrides.now,
+      namespace
+    }),
+    reason: "Supabase Postgres store with SQL-atomic primitives \u2014 state is shared across instances.",
+    missing: []
+  };
+}
+
+// server/guardian/breaker.ts
+var DEFAULT_BREAKER_CONFIG = {
+  failureThreshold: 3,
+  cooldownMs: 6e4,
+  jitter: 0.25,
+  ttlMs: 24 * 60 * 60 * 1e3
+};
+var CLOSED = {
+  state: "closed",
+  failures: 0,
+  degradations: 0,
+  openedAt: null,
+  cooldownUntil: null,
+  lastFailureAt: null,
+  lastSuccessAt: null,
+  lastCode: null,
+  updatedAt: 0
+};
+var keyFor = (providerId) => `breaker:${providerId}`;
+function cooldownWithJitter(config, random) {
+  const factor = 1 + config.jitter * random();
+  return Math.round(config.cooldownMs * factor);
+}
+function createBreaker(store, options = {}) {
+  const config = { ...DEFAULT_BREAKER_CONFIG, ...options.config };
+  const now = options.now ?? Date.now;
+  const random = options.random ?? Math.random;
+  const maxAttempts = Math.max(1, options.maxCasAttempts ?? 3);
+  async function mutate(providerId, mutateFn) {
+    const key2 = keyFor(providerId);
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      const stored = await store.getJson(key2);
+      const base = stored?.value ?? CLOSED;
+      const at = now();
+      const next = { ...mutateFn({ ...base, updatedAt: at }), updatedAt: at };
+      const result2 = await store.compareAndSetJson(key2, stored ? stored.version : null, next, {
+        ttlMs: config.ttlMs
+      });
+      if (result2.ok) return { ...next, version: result2.stored?.version ?? 0 };
+    }
+    const current = await store.getJson(key2);
+    return current ? { ...current.value, version: current.version } : null;
+  }
+  async function allow(providerId) {
+    let stored = null;
+    try {
+      stored = await store.getJson(keyFor(providerId));
+    } catch {
+      return { allowed: true, state: "closed", storeDegraded: true };
+    }
+    if (!stored) return { allowed: true, state: "closed" };
+    const state = stored.value;
+    const at = now();
+    if (state.state === "closed") return { allowed: true, state: "closed" };
+    if (state.state === "open") {
+      const retryAt = state.cooldownUntil ?? state.openedAt ?? at;
+      if (at < retryAt) return { allowed: false, state: "open", retryAt };
+      try {
+        const won = await store.compareAndSetJson(
+          keyFor(providerId),
+          stored.version,
+          { ...state, state: "half-open", updatedAt: at },
+          { ttlMs: config.ttlMs }
+        );
+        if (won.ok) return { allowed: true, state: "half-open", trial: true };
+        return { allowed: false, state: "open", retryAt: at + Math.round(config.cooldownMs / 4) };
+      } catch {
+        return { allowed: true, state: "open", storeDegraded: true };
+      }
+    }
+    return { allowed: false, state: "half-open", retryAt: at + Math.round(config.cooldownMs / 4) };
+  }
+  async function record(providerId, outcome, explicitCode) {
+    const status = typeof outcome === "string" ? outcome : outcome.status === "ok" ? "ok" : outcome.status === "degraded" ? "degraded" : "down";
+    const code = explicitCode ?? (typeof outcome === "string" ? null : outcome.code) ?? null;
+    try {
+      return await mutate(providerId, (current) => {
+        const at = now();
+        if (status === "ok") {
+          return { ...current, ...CLOSED, lastSuccessAt: at, lastCode: code, updatedAt: at };
+        }
+        if (status === "degraded") {
+          return { ...current, degradations: current.degradations + 1, lastCode: code, updatedAt: at };
+        }
+        const failures = current.failures + 1;
+        const shouldOpen = failures >= config.failureThreshold;
+        return {
+          ...current,
+          failures,
+          lastFailureAt: at,
+          lastCode: code,
+          state: shouldOpen ? "open" : current.state === "half-open" ? "open" : current.state,
+          openedAt: shouldOpen ? at : current.openedAt,
+          cooldownUntil: shouldOpen ? at + cooldownWithJitter(config, random) : current.cooldownUntil,
+          updatedAt: at
+        };
+      });
+    } catch {
+      return null;
+    }
+  }
+  async function trip(providerId, code) {
+    try {
+      return await mutate(providerId, (current) => {
+        const at = now();
+        return {
+          ...current,
+          state: "open",
+          failures: Math.max(current.failures, config.failureThreshold),
+          openedAt: at,
+          cooldownUntil: at + cooldownWithJitter(config, random),
+          lastFailureAt: at,
+          lastCode: code ?? current.lastCode,
+          updatedAt: at
+        };
+      });
+    } catch {
+      return null;
+    }
+  }
+  async function snapshot(providerId) {
+    try {
+      const stored = await store.getJson(keyFor(providerId));
+      if (!stored) return null;
+      return { ...stored.value, version: stored.version };
+    } catch {
+      return null;
+    }
+  }
+  async function snapshotAll(providerIds) {
+    const entries = await Promise.all(providerIds.map(async (id) => [id, await snapshot(id)]));
+    return Object.fromEntries(entries);
+  }
+  async function reset(providerId) {
+    await store.setJson(keyFor(providerId), { ...CLOSED, updatedAt: now() }, { ttlMs: config.ttlMs });
+  }
+  return { allow, record, trip, snapshot, snapshotAll, reset };
+}
+
+// server/guardian/lease.ts
+async function acquireLease(store, { key: key2, owner, ttlMs }) {
+  const acquired = await store.acquireLease(key2, owner, ttlMs);
+  if (!acquired) return null;
+  return {
+    renew: () => store.renewLease(key2, owner, ttlMs),
+    release: () => store.releaseLease(key2, owner)
+  };
+}
+async function withLease(store, options, work) {
+  const handle = await acquireLease(store, options);
+  if (!handle) {
+    const holder = await store.leaseHolder(options.key).catch(() => null);
+    return { acquired: false, holder: holder?.owner ?? null };
+  }
+  const renewEveryMs = Math.max(1e3, options.renewEveryMs ?? Math.floor(options.ttlMs / 3));
+  let lost = false;
+  const timer = setInterval(() => {
+    void handle.renew().then((ok) => {
+      if (!ok && !lost) {
+        lost = true;
+        options.onLeaseLost?.();
+      }
+    }).catch(() => {
+      if (!lost) {
+        lost = true;
+        options.onLeaseLost?.();
+      }
+    });
+  }, renewEveryMs);
+  if (typeof timer.unref === "function") timer.unref();
+  try {
+    const value = await work(handle);
+    return { acquired: true, value };
+  } finally {
+    clearInterval(timer);
+    await handle.release().catch(() => {
+    });
+  }
+}
+function newInstanceId(prefix = "gdn") {
+  const random = Math.random().toString(36).slice(2, 8);
+  return `${prefix}-${Date.now().toString(36)}-${random}`;
+}
+
+// server/guardian/rateLimit.ts
+var DEFAULT_QUOTAS = {
+  "nasa:key": { limit: 12, windowMs: 6e4 },
+  "nasa:demo": { limit: 25, windowMs: 60 * 6e4 },
+  "gemini:generate": { limit: 10, windowMs: 6e4 },
+  "openrouter:generate": { limit: 10, windowMs: 6e4 },
+  "arena:generate": { limit: 10, windowMs: 6e4 },
+  "guardian:probe": { limit: 30, windowMs: 6e4 },
+  "guardian:recovery": { limit: 5, windowMs: 6e4 }
+};
+function createFleetRateLimiter(store, options = {}) {
+  const now = options.now ?? Date.now;
+  const quotas = { ...DEFAULT_QUOTAS, ...options.quotas ?? {} };
+  const prefix = options.prefix ?? "ratelimit";
+  function ruleFor(bucket, rule) {
+    if (rule) return { cost: 1, ...rule };
+    const known = quotas[bucket];
+    if (known) return { cost: 1, ...known };
+    return { limit: 30, windowMs: 6e4, cost: 1 };
+  }
+  async function check(bucket, rule) {
+    const effective = ruleFor(bucket, rule);
+    const cost = Math.max(1, Math.floor(effective.cost ?? 1));
+    const at = now();
+    const windowKey = `${prefix}:${bucket}:${Math.floor(at / effective.windowMs)}`;
+    try {
+      const counter = await store.increment(windowKey, effective.windowMs, cost);
+      const allowed = counter.count <= effective.limit;
+      return {
+        allowed,
+        remaining: Math.max(0, effective.limit - counter.count),
+        limit: effective.limit,
+        resetAt: counter.resetAt,
+        bucket,
+        degraded: false
+      };
+    } catch {
+      return {
+        allowed: true,
+        remaining: effective.limit,
+        limit: effective.limit,
+        resetAt: at + effective.windowMs,
+        bucket,
+        degraded: true
+      };
+    }
+  }
+  async function peek(bucket, rule) {
+    const effective = ruleFor(bucket, rule);
+    const at = now();
+    const windowKey = `${prefix}:${bucket}:${Math.floor(at / effective.windowMs)}`;
+    try {
+      const stored = await store.getJson(`counter-view:${windowKey}`);
+      if (!stored) return { used: 0, resetAt: at + effective.windowMs };
+      return { used: stored.value.count, resetAt: stored.value.resetAt };
+    } catch {
+      return null;
+    }
+  }
+  return { check, peek };
+}
+
+// server/guardian/providers.ts
+var classifyHttp = (status) => {
+  if (status >= 200 && status < 300) return { status: "ok", code: "OK" };
+  if (status === 401 || status === 403) return { status: "down", code: "AUTH_ERROR" };
+  if (status === 404) return { status: "down", code: "ENDPOINT_MISSING" };
+  if (status === 408 || status === 504) return { status: "degraded", code: "TIMEOUT" };
+  if (status === 429) return { status: "degraded", code: "RATE_LIMITED" };
+  if (status >= 500) return { status: "down", code: "UPSTREAM_5XX" };
+  return { status: "down", code: "UNEXPECTED_STATUS" };
+};
+var ended = (startedAt, now) => Math.max(0, now() - startedAt);
+async function getJson2(context, providerId, url, validate) {
+  const startedAt = context.now();
+  const controller = new AbortController();
+  const onAbort = () => controller.abort();
+  context.signal.addEventListener("abort", onAbort, { once: true });
+  const timer = setTimeout(() => controller.abort(), context.timeoutMs);
+  try {
+    const response = await context.fetchImpl(url, {
+      method: "GET",
+      headers: { Accept: "application/json" },
+      signal: controller.signal,
+      // A redirect would silently turn a moved endpoint into a "healthy" one.
+      redirect: "error"
+    });
+    const latencyMs = ended(startedAt, context.now);
+    const verdict = classifyHttp(response.status);
+    if (response.status < 200 || response.status >= 300) {
+      return {
+        providerId,
+        status: verdict.status,
+        code: verdict.code,
+        latencyMs,
+        httpStatus: response.status,
+        reason: `Upstream answered ${response.status}.`,
+        checkedAt: context.now()
+      };
+    }
+    if (!validate) return { providerId, status: "ok", code: "OK", latencyMs, httpStatus: response.status, checkedAt: context.now() };
+    let body = null;
+    try {
+      body = await response.json();
+    } catch {
+      return {
+        providerId,
+        status: "degraded",
+        code: "SCHEMA_MISMATCH",
+        latencyMs,
+        httpStatus: response.status,
+        reason: "The response was not JSON.",
+        checkedAt: context.now()
+      };
+    }
+    const problem = validate(body);
+    if (problem) {
+      return {
+        providerId,
+        status: "degraded",
+        code: "SCHEMA_MISMATCH",
+        latencyMs,
+        httpStatus: response.status,
+        reason: problem,
+        checkedAt: context.now()
+      };
+    }
+    return { providerId, status: "ok", code: "OK", latencyMs, httpStatus: response.status, checkedAt: context.now() };
+  } catch (error) {
+    const aborted = error?.name === "AbortError";
+    const timedOut = aborted && controller.signal.aborted;
+    return {
+      providerId,
+      status: timedOut ? "degraded" : "down",
+      code: timedOut ? "TIMEOUT" : "NETWORK_ERROR",
+      latencyMs: ended(startedAt, context.now),
+      reason: timedOut ? `No answer within ${context.timeoutMs} ms.` : "The request could not be completed.",
+      checkedAt: context.now()
+    };
+  } finally {
+    clearTimeout(timer);
+    context.signal.removeEventListener("abort", onAbort);
+  }
+}
+var isRecord = (value) => typeof value === "object" && value !== null && !Array.isArray(value);
+var nasaKey = (env) => (env.NASA_API_KEY || env.NEXT_PUBLIC_NASA_API_KEY || "").trim();
+var nasaApod = {
+  id: "nasa:apod",
+  label: "NASA APOD",
+  kind: "nasa",
+  endpoint: "api.nasa.gov/planetary/apod",
+  docsUrl: "https://api.nasa.gov/",
+  requiresEnv: ["NASA_API_KEY"],
+  cost: "metered",
+  async run(context) {
+    const key2 = nasaKey(context.env);
+    if (!key2) {
+      return {
+        providerId: "nasa:apod",
+        status: "unconfigured",
+        code: "NASA_KEY_MISSING",
+        latencyMs: null,
+        reason: "NASA_API_KEY is not set; the app falls back to DEMO_KEY (30 requests/hour).",
+        checkedAt: context.now()
+      };
+    }
+    return getJson2(
+      context,
+      "nasa:apod",
+      `https://api.nasa.gov/planetary/apod?api_key=${encodeURIComponent(key2)}`,
+      (body) => isRecord(body) && typeof body.date === "string" && typeof body.title === "string" ? null : "APOD payload is missing date/title."
+    );
+  }
+};
+var nasaNeows = {
+  id: "nasa:neows",
+  label: "NASA NeoWs (near-Earth objects)",
+  kind: "nasa",
+  endpoint: "api.nasa.gov/neo/rest/v1",
+  docsUrl: "https://api.nasa.gov/",
+  requiresEnv: ["NASA_API_KEY"],
+  cost: "metered",
+  async run(context) {
+    const key2 = nasaKey(context.env);
+    if (!key2) {
+      return {
+        providerId: "nasa:neows",
+        status: "unconfigured",
+        code: "NASA_KEY_MISSING",
+        latencyMs: null,
+        reason: "NASA_API_KEY is not set; NeoWs is limited to the demo quota.",
+        checkedAt: context.now()
+      };
+    }
+    const today = new Date(context.now()).toISOString().slice(0, 10);
+    return getJson2(
+      context,
+      "nasa:neows",
+      `https://api.nasa.gov/neo/rest/v1/feed?start_date=${today}&end_date=${today}&api_key=${encodeURIComponent(key2)}`,
+      (body) => isRecord(body) && isRecord(body.near_earth_objects) ? null : "NeoWs payload has no near_earth_objects."
+    );
+  }
+};
+var nasaEpic = {
+  id: "nasa:epic",
+  label: "NASA EPIC (Earth imagery)",
+  kind: "nasa",
+  endpoint: "api.nasa.gov/EPIC/api",
+  docsUrl: "https://epic.gsfc.nasa.gov/",
+  requiresEnv: ["NASA_API_KEY"],
+  cost: "metered",
+  async run(context) {
+    const key2 = nasaKey(context.env);
+    if (!key2) {
+      return {
+        providerId: "nasa:epic",
+        status: "unconfigured",
+        code: "NASA_KEY_MISSING",
+        latencyMs: null,
+        reason: "NASA_API_KEY is not set; EPIC is limited to the demo quota.",
+        checkedAt: context.now()
+      };
+    }
+    return getJson2(
+      context,
+      "nasa:epic",
+      `https://api.nasa.gov/EPIC/api/natural?api_key=${encodeURIComponent(key2)}`,
+      (body) => Array.isArray(body) ? null : "EPIC payload is not a list."
+    );
+  }
+};
+var nasaImages = {
+  id: "nasa:images",
+  label: "NASA Image and Video Library",
+  kind: "nasa",
+  endpoint: "images-api.nasa.gov",
+  docsUrl: "https://images.nasa.gov/",
+  requiresEnv: [],
+  cost: "free",
+  run: (context) => getJson2(
+    context,
+    "nasa:images",
+    "https://images-api.nasa.gov/search?q=apollo&media_type=image&page_size=1",
+    (body) => isRecord(body) && isRecord(body.collection) ? null : "The image library returned no collection."
+  )
+};
+var power = {
+  id: "earth:power",
+  label: "NASA POWER (climate series)",
+  kind: "earth",
+  endpoint: "power.larc.nasa.gov",
+  docsUrl: "https://power.larc.nasa.gov/docs/",
+  requiresEnv: [],
+  cost: "free",
+  run: (context) => getJson2(
+    context,
+    "earth:power",
+    "https://power.larc.nasa.gov/api/temporal/monthly/point?parameters=T2M&community=AG&longitude=79.86&latitude=6.93&start=2020&end=2020&format=JSON",
+    (body) => isRecord(body) && isRecord(body.properties) && isRecord(body.properties.parameter) ? null : "POWER returned no properties.parameter block."
+  )
+};
+var gibs = {
+  id: "earth:gibs",
+  label: "NASA GIBS (imagery tiles)",
+  kind: "earth",
+  endpoint: "gibs.earthdata.nasa.gov",
+  docsUrl: "https://nasa-gibs.github.io/gibs-api-docs/",
+  requiresEnv: [],
+  cost: "free",
+  async run(context) {
+    const startedAt = context.now();
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), context.timeoutMs);
+    try {
+      const response = await context.fetchImpl(
+        "https://gibs.earthdata.nasa.gov/wmts/epsg4326/best/MODIS_Terra_CorrectedReflectance_TrueColor/default/2020-01-01/250m/0/0/0.jpg",
+        { method: "GET", signal: controller.signal, redirect: "error" }
+      );
+      const latencyMs = ended(startedAt, context.now);
+      const type = response.headers.get("content-type") || "";
+      if (response.ok && type.startsWith("image/")) {
+        return { providerId: "earth:gibs", status: "ok", code: "OK", latencyMs, httpStatus: response.status, checkedAt: context.now() };
+      }
+      const verdict = classifyHttp(response.status);
+      return {
+        providerId: "earth:gibs",
+        status: response.ok ? "degraded" : verdict.status,
+        code: response.ok ? "SCHEMA_MISMATCH" : verdict.code,
+        latencyMs,
+        httpStatus: response.status,
+        reason: response.ok ? `Expected an image, received "${type || "no content type"}".` : `Tile answered ${response.status}.`,
+        checkedAt: context.now()
+      };
+    } catch {
+      return {
+        providerId: "earth:gibs",
+        status: "down",
+        code: "NETWORK_ERROR",
+        latencyMs: ended(startedAt, context.now),
+        reason: "The tile request could not be completed.",
+        checkedAt: context.now()
+      };
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+};
+var exoplanetTap = {
+  id: "nasa:exoplanet-tap",
+  label: "NASA Exoplanet Archive (TAP)",
+  kind: "science",
+  endpoint: "exoplanetarchive.ipac.caltech.edu",
+  docsUrl: "https://exoplanetarchive.ipac.caltech.edu/docs/TAP/usingTAP.html",
+  requiresEnv: [],
+  cost: "free",
+  run: (context) => getJson2(
+    context,
+    "nasa:exoplanet-tap",
+    "https://exoplanetarchive.ipac.caltech.edu/TAP/sync?query=select+top+1+pl_name+from+ps&format=json",
+    (body) => Array.isArray(body) ? null : "TAP did not return a JSON array."
+  )
+};
+var jplSbdb = {
+  id: "nasa:jpl-sbdb",
+  label: "JPL Small-Body Database",
+  kind: "science",
+  endpoint: "ssd.jpl.nasa.gov/api/sbdb.api",
+  docsUrl: "https://ssd-api.jpl.nasa.gov/doc/sbdb.html",
+  requiresEnv: [],
+  cost: "free",
+  run: (context) => getJson2(
+    context,
+    "nasa:jpl-sbdb",
+    "https://ssd-api.jpl.nasa.gov/sbdb.api?sstr=433",
+    (body) => isRecord(body) && (body.object !== void 0 || body.moreInfo !== void 0 || body.orbit !== void 0) ? null : "SBDB returned no object block."
+  )
+};
+var osdr = {
+  id: "nasa:osdr",
+  label: "NASA Open Science Data Repository",
+  kind: "science",
+  endpoint: "osdr.nasa.gov",
+  docsUrl: "https://osdr.nasa.gov/bio/api/",
+  requiresEnv: [],
+  cost: "free",
+  run: (context) => getJson2(
+    context,
+    "nasa:osdr",
+    "https://osdr.nasa.gov/bio/api/search?term=radiation&type=study&size=1",
+    (body) => isRecord(body) || Array.isArray(body) ? null : "OSDR returned an unexpected payload."
+  )
+};
+function aiProbe(id, label) {
+  return {
+    id: `ai:${id}`,
+    label,
+    kind: "ai",
+    endpoint: id === "gemini" ? "generativelanguage.googleapis.com" : id === "openrouter" ? "openrouter.ai" : "api.arena.ai",
+    requiresEnv: [id === "gemini" ? "GEMINI_API_KEY" : id === "openrouter" ? "OPENROUTER_API_KEY" : "ARENA_API_KEY"],
+    cost: "metered",
+    async run(context) {
+      const handler = createDiagnosticsHandler({
+        fetchImpl: context.fetchImpl,
+        env: context.env,
+        timeoutMs: context.timeoutMs,
+        now: context.now
+      });
+      const report = await handler({ probe: true });
+      const providers = report?.providers ?? {};
+      const verdict = providers[id] ?? {};
+      const status = verdict.status === "ok" ? "ok" : verdict.status === "error" ? "down" : verdict.configured === false ? "unconfigured" : "skipped";
+      return {
+        providerId: `ai:${id}`,
+        status,
+        code: verdict.code || (status === "unconfigured" ? "PROVIDER_NOT_CONFIGURED" : "NOT_PROBED"),
+        latencyMs: typeof verdict.ms === "number" ? verdict.ms : null,
+        httpStatus: typeof verdict.httpStatus === "number" ? verdict.httpStatus : null,
+        reason: verdict.reason ? String(verdict.reason).slice(0, 240) : null,
+        evidence: {
+          model: verdict.model ?? null,
+          probedAt: report?.checkedAt ?? null
+        },
+        checkedAt: context.now()
+      };
+    }
+  };
+}
+var localEngine = {
+  id: "ai:local",
+  label: "NOVA local engine",
+  kind: "internal",
+  endpoint: "in-process",
+  requiresEnv: [],
+  cost: "free",
+  async run(context) {
+    return { providerId: "ai:local", status: "ok", code: "OK", latencyMs: 0, checkedAt: context.now() };
+  }
+};
+var PROVIDERS = [
+  localEngine,
+  nasaApod,
+  nasaNeows,
+  nasaEpic,
+  nasaImages,
+  power,
+  gibs,
+  exoplanetTap,
+  jplSbdb,
+  osdr,
+  aiProbe("gemini", "Google Gemini"),
+  aiProbe("openrouter", "OpenRouter"),
+  aiProbe("arena", "Arena AI")
+];
+var PROVIDER_INDEX = Object.fromEntries(
+  PROVIDERS.map((provider) => [provider.id, provider])
+);
+var METERED_PROVIDER_IDS = new Set(PROVIDERS.filter((p) => p.cost === "metered").map((p) => p.id));
+
+// server/guardian/monitor.ts
+var percentile = (values2, p) => {
+  if (values2.length === 0) return null;
+  const sorted = [...values2].sort((a, b) => a - b);
+  const index = Math.min(sorted.length - 1, Math.max(0, Math.ceil(p / 100 * sorted.length) - 1));
+  return Math.round(sorted[index]);
+};
+function createGuardianMonitor(options) {
+  const store = options.store;
+  const env = options.env ?? (typeof process !== "undefined" ? process.env : {});
+  const fetchImpl = options.fetchImpl ?? ((...args) => globalThis.fetch(...args));
+  const now = options.now ?? Date.now;
+  const random = options.random ?? Math.random;
+  const instanceId = options.instanceId ?? newInstanceId();
+  const timeoutMs = options.timeoutMs ?? 8e3;
+  const concurrency = Math.max(1, options.concurrency ?? 4);
+  const runDeadlineMs = options.runDeadlineMs ?? 25e3;
+  const leaseTtlMs = options.leaseTtlMs ?? 6e4;
+  const providers = options.providers ?? PROVIDERS;
+  let runCounter = 0;
+  const index = Object.fromEntries(providers.map((provider) => [provider.id, provider]));
+  const breaker = createBreaker(store, { now, random });
+  const limiter = options.limiter ?? createFleetRateLimiter(store, {
+    now,
+    quotas: env.GUARDIAN_PROBE_LIMIT ? { "guardian:probe": { ...DEFAULT_QUOTAS["guardian:probe"], limit: Number(env.GUARDIAN_PROBE_LIMIT) || 30 } } : void 0
+  });
+  async function probeOne(provider, deadline, signal) {
+    const context = {
+      fetchImpl,
+      env,
+      now,
+      timeoutMs: Math.max(500, Math.min(timeoutMs, deadline - now())),
+      signal
+    };
+    try {
+      const outcome = await provider.run(context);
+      if (!outcome || typeof outcome !== "object" || !outcome.code) {
+        return {
+          providerId: provider.id,
+          status: "down",
+          code: "PROBE_BUG",
+          latencyMs: null,
+          reason: "The probe returned no usable outcome.",
+          checkedAt: now()
+        };
+      }
+      return { ...outcome, providerId: provider.id };
+    } catch {
+      return {
+        providerId: provider.id,
+        status: "down",
+        code: "PROBE_THREW",
+        latencyMs: null,
+        reason: "The probe threw instead of returning an outcome.",
+        checkedAt: now()
+      };
+    }
+  }
+  async function runOnce(runOptions = {}) {
+    const trigger = runOptions.trigger ?? "manual";
+    const actor = runOptions.actor ?? "system";
+    const includeMetered = Boolean(runOptions.includeMetered);
+    const selected = (runOptions.only?.length ? runOptions.only : providers.map((p) => p.id)).map((id) => index[id] ?? PROVIDER_INDEX[id]).filter((provider) => Boolean(provider));
+    const lease = await withLease(
+      store,
+      { key: "lease:sweep", owner: instanceId, ttlMs: leaseTtlMs },
+      async () => {
+        const startedAt = now();
+        runCounter += 1;
+        const runId = `run-${startedAt.toString(36)}-${instanceId.slice(-6)}-${runCounter}`;
+        const record = {
+          id: runId,
+          startedAt,
+          finishedAt: null,
+          trigger,
+          instanceId,
+          summary: null
+        };
+        await store.putRun(record).catch(() => {
+        });
+        await store.prune(startedAt).catch(() => {
+        });
+        const deadline = startedAt + runDeadlineMs;
+        const controller = new AbortController();
+        const outcomes = new Array(selected.length);
+        const workers = Math.min(concurrency, selected.length);
+        let cursor = 0;
+        let previous = {};
+        try {
+          previous = await breaker.snapshotAll(selected.map((p) => p.id));
+        } catch {
+          previous = {};
+        }
+        const skip = (provider, code, reason, evidence) => {
+          const outcome = {
+            providerId: provider.id,
+            status: "skipped",
+            code,
+            latencyMs: null,
+            reason,
+            evidence,
+            checkedAt: now()
+          };
+          return outcome;
+        };
+        const work = async () => {
+          for (; ; ) {
+            const position = cursor;
+            cursor += 1;
+            if (position >= selected.length) return;
+            const provider = selected[position];
+            if (now() > deadline) {
+              outcomes[position] = skip(provider, "RUN_DEADLINE", "The sweep ran out of time before this probe.");
+              continue;
+            }
+            if (provider.cost === "metered" && !includeMetered) {
+              outcomes[position] = skip(
+                provider,
+                "METERED_SKIPPED",
+                "Metered provider: not probed by a cheap sweep. Run a deep sweep to check it."
+              );
+              continue;
+            }
+            const decision = await breaker.allow(provider.id);
+            if (!decision.allowed) {
+              outcomes[position] = skip(provider, "CIRCUIT_OPEN", "The circuit is open; the probe was not attempted.", {
+                retryAt: decision.retryAt ?? null
+              });
+              continue;
+            }
+            const budget = await limiter.check("guardian:probe");
+            if (!budget.allowed) {
+              outcomes[position] = skip(provider, "PROBE_BUDGET", "The fleet probe budget for this minute is spent.", {
+                resetAt: budget.resetAt
+              });
+              continue;
+            }
+            const outcome = await probeOne(provider, deadline, controller.signal);
+            outcomes[position] = outcome;
+            await breaker.record(provider.id, outcome).catch(() => {
+            });
+          }
+        };
+        await Promise.all(Array.from({ length: workers }, work));
+        const finishedAt = now();
+        const count = (status2) => outcomes.filter((outcome) => outcome?.status === status2).length;
+        const summary = {
+          runId,
+          startedAt,
+          finishedAt,
+          durationMs: finishedAt - startedAt,
+          trigger,
+          instanceId,
+          triggeredBy: actor,
+          total: outcomes.length,
+          ok: count("ok"),
+          degraded: count("degraded"),
+          down: count("down"),
+          skipped: count("skipped"),
+          unconfigured: count("unconfigured"),
+          incident: count("down") > 0,
+          outcomes: outcomes.filter(Boolean)
+        };
+        await store.putRun({ ...record, finishedAt, summary }).catch(() => {
+        });
+        for (const outcome of summary.outcomes) {
+          const sample = {
+            at: outcome.checkedAt,
+            providerId: outcome.providerId,
+            status: outcome.status,
+            code: outcome.code,
+            latencyMs: outcome.latencyMs,
+            httpStatus: outcome.httpStatus ?? null,
+            reason: outcome.reason ?? null,
+            runId
+          };
+          await store.appendSample(sample).catch(() => {
+          });
+        }
+        try {
+          if (summary.incident) {
+            const downIds = summary.outcomes.filter((o) => o.status === "down").map((o) => o.providerId);
+            await store.appendAudit({
+              at: finishedAt,
+              actor,
+              action: "sweep-incident",
+              target: downIds.join(",") || "unknown",
+              severity: "critical",
+              detail: { runId, trigger, down: downIds, degraded: summary.degraded, instanceId }
+            });
+          }
+          for (const outcome of summary.outcomes) {
+            const before = previous[outcome.providerId];
+            if (before && before.state !== "closed" && outcome.status === "ok") {
+              await store.appendAudit({
+                at: finishedAt,
+                actor,
+                action: "provider-recovered",
+                target: outcome.providerId,
+                severity: "info",
+                detail: { runId, previousState: before.state, instanceId }
+              });
+            }
+          }
+        } catch {
+        }
+        return summary;
+      }
+    );
+    if (!lease.acquired) {
+      return {
+        ran: false,
+        holder: lease.holder ?? null,
+        reason: "Another instance is already running a sweep; this request did not double the spend."
+      };
+    }
+    return { ran: true, summary: lease.value };
+  }
+  async function verifyProvider(providerId, verifyOptions = {}) {
+    const provider = index[providerId] ?? PROVIDER_INDEX[providerId];
+    if (!provider) return { error: "unknown-provider" };
+    const budget = await limiter.check("guardian:probe");
+    if (!budget.allowed) return { error: "probe-budget-exhausted" };
+    const controller = new AbortController();
+    const outcome = await probeOne(provider, now() + timeoutMs, controller.signal);
+    if (outcome.status === "down") {
+      await breaker.trip(provider.id, outcome.code).catch(() => {
+      });
+    } else {
+      await breaker.record(provider.id, outcome).catch(() => {
+      });
+    }
+    await store.appendSample({
+      at: outcome.checkedAt,
+      providerId: provider.id,
+      status: outcome.status,
+      code: outcome.code,
+      latencyMs: outcome.latencyMs,
+      httpStatus: outcome.httpStatus ?? null,
+      reason: outcome.reason ?? null,
+      runId: null
+    }).catch(() => {
+    });
+    await store.appendAudit({
+      at: now(),
+      actor: verifyOptions.actor ?? "system",
+      action: "recovery-verify",
+      target: provider.id,
+      severity: outcome.status === "ok" ? "info" : "warning",
+      detail: { status: outcome.status, code: outcome.code, instanceId }
+    }).catch(() => {
+    });
+    return { outcome, verified: outcome.status === "ok" };
+  }
+  async function analytics(window2 = {}) {
+    const windowMs = Math.max(6e4, window2.windowMs ?? 24 * 60 * 60 * 1e3);
+    const to = now();
+    const from = to - windowMs;
+    const [samples, runs] = await Promise.all([
+      store.listSamples({ since: from, limit: 5e3 }).catch(() => []),
+      store.listRuns({ since: from, limit: 200 }).catch(() => [])
+    ]);
+    const byProvider = /* @__PURE__ */ new Map();
+    for (const sample of samples) {
+      const list = byProvider.get(sample.providerId) ?? [];
+      list.push(sample);
+      byProvider.set(sample.providerId, list);
+    }
+    const reports = providers.map((provider) => {
+      const list = byProvider.get(provider.id) ?? [];
+      const ok = list.filter((s) => s.status === "ok").length;
+      const degraded = list.filter((s) => s.status === "degraded").length;
+      const down = list.filter((s) => s.status === "down").length;
+      const answered = ok + degraded + down;
+      const latencies = list.map((s) => s.latencyMs).filter((value) => typeof value === "number");
+      const codes = {};
+      for (const sample of list) codes[sample.code] = (codes[sample.code] ?? 0) + 1;
+      const last = list[0] ?? null;
+      return {
+        providerId: provider.id,
+        label: provider.label,
+        samples: list.length,
+        ok,
+        degraded,
+        down,
+        availability: answered === 0 ? null : ok / answered,
+        p50LatencyMs: percentile(latencies, 50),
+        p95LatencyMs: percentile(latencies, 95),
+        lastStatus: last ? last.status : null,
+        lastSeenAt: last ? last.at : null,
+        codes
+      };
+    });
+    return {
+      windowMs,
+      from,
+      to,
+      samples: samples.length,
+      runs: runs.length,
+      incidents: runs.filter((run) => run.summary?.incident).length,
+      providers: reports
+    };
+  }
+  async function status() {
+    const [runs, breakers, health] = await Promise.all([
+      store.listRuns({ limit: 1 }).catch(() => []),
+      breaker.snapshotAll(providers.map((p) => p.id)).catch(() => ({})),
+      store.health().catch(() => ({ ok: false, detail: "unreachable" }))
+    ]);
+    return {
+      instanceId,
+      storeKind: store.kind,
+      capabilities: store.capabilities,
+      storeHealth: health,
+      // Describe the catalogue this monitor actually probes, not the global one.
+      providers: providers.map((provider) => ({
+        id: provider.id,
+        label: provider.label,
+        kind: provider.kind,
+        endpoint: provider.endpoint,
+        docsUrl: provider.docsUrl ?? null,
+        requiresEnv: provider.requiresEnv,
+        cost: provider.cost
+      })),
+      breakers,
+      lastRun: runs[0] ?? null,
+      watched: providers.length,
+      metered: [...METERED_PROVIDER_IDS].filter((id) => Boolean(index[id] ?? PROVIDER_INDEX[id]))
+    };
+  }
+  return { runOnce, verifyProvider, analytics, status, breaker, limiter, instanceId };
+}
+
+// server/guardian/security.ts
+import { createHash as createHash3, timingSafeEqual } from "node:crypto";
+var SECRET_ENV_NAMES = [
+  "NASA_API_KEY",
+  "NEXT_PUBLIC_NASA_API_KEY",
+  "GEMINI_API_KEY",
+  "OPENROUTER_API_KEY",
+  "ARENA_API_KEY",
+  "SUPABASE_SERVICE_ROLE_KEY",
+  "GUARDIAN_STORE_KEY",
+  "GUARDIAN_ADMIN_TOKEN",
+  "CRON_SECRET",
+  "GNEWS_API_KEY",
+  "NEWS_API_KEY",
+  "GUARDIAN_API_KEY",
+  "YOUTUBE_API_KEY"
+];
+var WATCHED_ENV_NAMES = [
+  ...SECRET_ENV_NAMES,
+  "SUPABASE_URL",
+  "GUARDIAN_STORE_URL",
+  "GUARDIAN_NAMESPACE",
+  "NOVA_GEMINI_MODEL",
+  "NOVA_OPENROUTER_MODEL",
+  "NOVA_ARENA_MODEL"
+];
+function constantTimeEquals(a, b) {
+  if (!a || !b) return false;
+  const left = createHash3("sha256").update(a).digest();
+  const right = createHash3("sha256").update(b).digest();
+  return timingSafeEqual(left, right) && a.length === b.length;
+}
+function bearer(headers) {
+  const raw = headers.authorization ?? headers.Authorization;
+  if (typeof raw !== "string") return "";
+  const match = /^Bearer\s+(.+)$/i.exec(raw.trim());
+  return match ? match[1].trim() : "";
+}
+function headerValue(headers, name) {
+  const value = headers[name] ?? headers[name.toLowerCase()] ?? headers[name.toUpperCase()];
+  return typeof value === "string" ? value.trim() : "";
+}
+function authorizeAdmin(headers, env) {
+  const expected = (env.GUARDIAN_ADMIN_TOKEN || "").trim();
+  if (!expected) {
+    return {
+      ok: false,
+      status: 403,
+      code: "GUARDIAN_LOCKED",
+      message: "GUARDIAN_ADMIN_TOKEN is not configured, so administrative actions are disabled."
+    };
+  }
+  const presented = bearer(headers) || headerValue(headers, "x-guardian-token");
+  if (!presented) {
+    return { ok: false, status: 401, code: "GUARDIAN_UNAUTHORIZED", message: "An administrator token is required." };
+  }
+  if (!constantTimeEquals(presented, expected)) {
+    return { ok: false, status: 401, code: "GUARDIAN_UNAUTHORIZED", message: "The administrator token was rejected." };
+  }
+  return { ok: true, actor: `admin:${createHash3("sha256").update(expected).digest("hex").slice(0, 8)}` };
+}
+function authorizeCron(headers, env) {
+  const expected = (env.CRON_SECRET || "").trim();
+  if (!expected) {
+    return {
+      ok: false,
+      status: 503,
+      code: "SCHEDULE_SECRET_MISSING",
+      message: "CRON_SECRET is not configured, so the scheduled sweep endpoint is disabled."
+    };
+  }
+  const presented = bearer(headers) || headerValue(headers, "x-cron-secret");
+  if (!presented || !constantTimeEquals(presented, expected)) {
+    return { ok: false, status: 401, code: "CRON_UNAUTHORIZED", message: "The schedule secret was rejected." };
+  }
+  return { ok: true, actor: "cron" };
+}
+function scrubSecrets(text2, env) {
+  if (!text2) return text2;
+  let output = text2;
+  for (const name of SECRET_ENV_NAMES) {
+    const value = (env[name] || "").trim();
+    if (value.length < 8) continue;
+    output = output.split(value).join("[redacted]");
+  }
+  output = output.replace(/api_key=[^&\s"']+/gi, "api_key=[redacted]").replace(/Bearer\s+[A-Za-z0-9._-]{12,}/g, "Bearer [redacted]").replace(/\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{5,}/g, "[redacted-jwt]").replace(/\bsb_(secret|publishable)_[A-Za-z0-9_-]{6,}/g, "[redacted-key]");
+  return output.slice(0, 2e3);
+}
+function envReadiness(env) {
+  const set = [];
+  const missing = [];
+  for (const name of WATCHED_ENV_NAMES) {
+    if ((env[name] || "").trim()) set.push(name);
+    else missing.push(name);
+  }
+  return { set, missing, total: WATCHED_ENV_NAMES.length };
+}
+function callerKey(headers, fallback) {
+  const forwarded = headerValue(headers, "x-forwarded-for").split(",")[0]?.trim();
+  const address = forwarded || headerValue(headers, "x-real-ip") || fallback || "unknown";
+  return createHash3("sha256").update(address).digest("hex").slice(0, 16);
+}
+
+// server/guardian/recovery.ts
+var RECOVERY_ACTIONS = [
+  {
+    id: "reset-breaker",
+    label: "Reset one circuit breaker",
+    description: "Closes the circuit for one provider and immediately probes it to verify.",
+    needsProvider: true,
+    destructive: false
+  },
+  {
+    id: "reset-all-breakers",
+    label: "Reset every circuit breaker",
+    description: "Closes all circuits. Use after a provider-wide outage has been confirmed resolved.",
+    needsProvider: false,
+    destructive: true
+  },
+  {
+    id: "probe-now",
+    label: "Probe one provider now",
+    description: "Runs the provider probe once, outside the schedule, and records the result.",
+    needsProvider: true,
+    destructive: false
+  },
+  {
+    id: "clear-connector-cache",
+    label: "Clear the connector cache",
+    description: "Drops cached connector responses so the next call fetches fresh data.",
+    needsProvider: false,
+    destructive: false
+  },
+  {
+    id: "prune-state",
+    label: "Prune expired guardian state",
+    description: "Removes expired keys, counters and leases. Retention rules then apply.",
+    needsProvider: false,
+    destructive: false,
+    requiresHuman: "Rotating an API key or changing a provider model id is always a human action."
+  }
+];
+var RECOVERY_ACTION_INDEX = Object.fromEntries(
+  RECOVERY_ACTIONS.map((action) => [action.id, action])
+);
+function createRecovery(options) {
+  const { store, monitor } = options;
+  const env = options.env ?? (typeof process !== "undefined" ? process.env : {});
+  const now = options.now ?? Date.now;
+  const clearers = options.cacheClearers ?? {};
+  async function audit(actor, action, target, severity, detail) {
+    await store.appendAudit({
+      at: now(),
+      actor,
+      action,
+      target,
+      severity,
+      detail: JSON.parse(scrubSecrets(JSON.stringify(detail), env))
+    }).catch(() => {
+    });
+  }
+  async function execute(actionId, request) {
+    const spec = RECOVERY_ACTION_INDEX[actionId];
+    const actor = request.actor || "system";
+    if (!spec) {
+      return {
+        ok: false,
+        action: actionId,
+        code: "UNKNOWN_ACTION",
+        message: `Unknown recovery action. Known actions: ${RECOVERY_ACTIONS.map((a) => a.id).join(", ")}.`
+      };
+    }
+    if (spec.needsProvider && !request.providerId) {
+      return { ok: false, action: actionId, code: "PROVIDER_REQUIRED", message: "This action needs a providerId." };
+    }
+    const providerId = request.providerId;
+    switch (spec.id) {
+      case "reset-breaker": {
+        const before = await monitor.breaker.snapshot(providerId);
+        await monitor.breaker.reset(providerId);
+        const verification = await monitor.verifyProvider(providerId, { actor });
+        const after = await monitor.breaker.snapshot(providerId);
+        const verified = "verified" in verification ? verification.verified : false;
+        await audit(actor, "recovery", providerId, verified ? "info" : "warning", {
+          action: spec.id,
+          before: before?.state ?? null,
+          after: after?.state ?? null,
+          verified
+        });
+        return {
+          ok: true,
+          action: spec.id,
+          providerId,
+          before: before?.state ?? null,
+          after: after?.state ?? null,
+          verified,
+          message: verified ? "The circuit was reset and the provider answered a fresh probe." : "The circuit was reset, but the provider still failed its probe \u2014 the circuit has been re-opened."
+        };
+      }
+      case "reset-all-breakers": {
+        const snapshot = await monitor.status();
+        const breakers = snapshot.breakers ?? {};
+        const ids = Object.keys(breakers);
+        const before = {};
+        for (const id of ids) before[id] = breakers[id]?.state;
+        await Promise.all(ids.map((id) => monitor.breaker.reset(id)));
+        await audit(actor, "recovery", "all-providers", "warning", { action: spec.id, before });
+        return {
+          ok: true,
+          action: spec.id,
+          target: "all-providers",
+          before,
+          after: "closed",
+          verified: null,
+          message: `Reset ${ids.length} circuits. Verification happens on the next sweep.`
+        };
+      }
+      case "probe-now": {
+        const verification = await monitor.verifyProvider(providerId, { actor });
+        if ("error" in verification) {
+          await audit(actor, "recovery", providerId, "warning", { action: spec.id, error: verification.error });
+          return {
+            ok: false,
+            action: spec.id,
+            providerId,
+            code: verification.error,
+            message: verification.error === "unknown-provider" ? "That provider is not in the Guardian catalogue." : "The fleet probe budget is exhausted; try again in a minute."
+          };
+        }
+        return {
+          ok: true,
+          action: spec.id,
+          providerId,
+          before: null,
+          after: verification.outcome.status,
+          verified: verification.verified,
+          message: `Probe finished: ${verification.outcome.status} (${verification.outcome.code}).`
+        };
+      }
+      case "clear-connector-cache": {
+        const names = Object.keys(clearers);
+        if (names.length === 0) {
+          return {
+            ok: false,
+            action: spec.id,
+            code: "NO_CLEARERS",
+            message: "No cache clearer is registered with the Guardian in this deployment."
+          };
+        }
+        const results = {};
+        for (const name of names) {
+          try {
+            await clearers[name]();
+            results[name] = "cleared";
+          } catch {
+            results[name] = "failed";
+          }
+        }
+        const failed = Object.values(results).filter((value) => value === "failed").length;
+        await audit(actor, "recovery", "caches", failed ? "warning" : "info", { action: spec.id, results });
+        return {
+          ok: failed === 0,
+          action: spec.id,
+          target: "caches",
+          before: null,
+          after: results,
+          verified: null,
+          message: failed === 0 ? "Caches cleared." : `${failed} cache clearer(s) failed.`
+        };
+      }
+      case "prune-state": {
+        const removed = await store.prune(now());
+        await audit(actor, "recovery", "store", "info", { action: spec.id, removed });
+        return {
+          ok: true,
+          action: spec.id,
+          target: "store",
+          before: null,
+          after: { removed },
+          verified: null,
+          message: `Pruned ${removed} expired record(s).`
+        };
+      }
+      default:
+        return { ok: false, action: actionId, code: "UNKNOWN_ACTION", message: "Unhandled action." };
+    }
+  }
+  return { execute, actions: RECOVERY_ACTIONS };
+}
+var HUMAN_ONLY_OPERATIONS = [
+  "Rotating or replacing a provider API key.",
+  "Changing a provider model id (NOVA_GEMINI_MODEL, NOVA_OPENROUTER_MODEL, NOVA_ARENA_MODEL).",
+  "Raising a fleet rate limit above the provider quota.",
+  "Restoring a database backup or editing the audit log.",
+  "Deleting Guardian state beyond the documented retention window."
+];
+
+// server/forge/scienceConnectors.ts
+var CONNECTORS = {
+  "nasa-exoplanet-tap": {
+    id: "nasa-exoplanet-tap",
+    label: "NASA Exoplanet Archive (TAP)",
+    host: "exoplanetarchive.ipac.caltech.edu",
+    docsUrl: "https://exoplanetarchive.ipac.caltech.edu/docs/TAP/usingTAP.html",
+    attribution: "This research has made use of the NASA Exoplanet Archive, which is operated by the California Institute of Technology, under contract with the National Aeronautics and Space Administration under the Exoplanet Exploration Program.",
+    rateLimitPerMinute: 20,
+    cacheTtlMs: 6 * 60 * 6e4,
+    keyEnvVar: null,
+    scope: "Confirmed and candidate exoplanets, with the columns and status flags of each table."
+  },
+  "jpl-small-body-db": {
+    id: "jpl-small-body-db",
+    label: "JPL Small-Body Database (SBDB)",
+    host: "ssd-api.jpl.nasa.gov",
+    docsUrl: "https://ssd-api.jpl.nasa.gov/doc/sbdb.html",
+    attribution: "Data provided by the JPL Solar System Dynamics group, NASA/JPL-Caltech.",
+    rateLimitPerMinute: 30,
+    cacheTtlMs: 3 * 60 * 6e4,
+    keyEnvVar: null,
+    scope: "Orbital elements and physical parameters for small bodies, as published by JPL."
+  },
+  "nasa-osdr": {
+    id: "nasa-osdr",
+    label: "NASA Open Science Data Repository (OSDR)",
+    host: "osdr.nasa.gov",
+    docsUrl: "https://osdr.nasa.gov/bio/api/",
+    attribution: "Data from the NASA Open Science Data Repository (OSDR), NASA Biological and Physical Sciences.",
+    rateLimitPerMinute: 10,
+    cacheTtlMs: 12 * 60 * 6e4,
+    keyEnvVar: null,
+    scope: "Space biology and organism response studies; metadata and study-level measurements."
+  },
+  "nasa-open-api": {
+    id: "nasa-open-api",
+    label: "NASA Open APIs",
+    host: "api.nasa.gov",
+    docsUrl: "https://api.nasa.gov/",
+    attribution: "Data courtesy of NASA Open APIs.",
+    rateLimitPerMinute: 30,
+    cacheTtlMs: 60 * 6e4,
+    keyEnvVar: "NASA_API_KEY",
+    scope: "Agency imagery and catalogue endpoints; DEMO_KEY is heavily rate limited."
+  }
+};
+var cache3 = /* @__PURE__ */ new Map();
+function clearConnectorCache() {
+  cache3.clear();
+}
+
+// server/guardian/routes.ts
+function createGuardianRuntime(overrides = {}) {
+  const env = overrides.env ?? (typeof process !== "undefined" ? process.env : {});
+  const now = overrides.now ?? Date.now;
+  const selection = overrides.store ? { store: overrides.store, reason: "Injected store (test or custom wiring).", missing: [] } : createGuardianStore(env, {
+    fetchImpl: overrides.fetchImpl,
+    now,
+    namespace: overrides.namespace
+  });
+  const limiter = createFleetRateLimiter(selection.store, { now });
+  const monitor = createGuardianMonitor({
+    store: selection.store,
+    env,
+    fetchImpl: overrides.fetchImpl,
+    now,
+    random: overrides.random,
+    instanceId: overrides.instanceId,
+    timeoutMs: overrides.timeoutMs,
+    concurrency: overrides.concurrency,
+    limiter,
+    providers: overrides.providers
+  });
+  const recovery = createRecovery({
+    store: selection.store,
+    monitor,
+    env,
+    now,
+    cacheClearers: {
+      "forge:science-connectors": () => clearConnectorCache()
+    }
+  });
+  return { env, now, selection, store: selection.store, monitor, recovery, limiter };
+}
+var WINDOWS = {
+  "15m": 15 * 6e4,
+  "1h": 60 * 6e4,
+  "6h": 6 * 60 * 6e4,
+  "24h": 24 * 60 * 6e4,
+  "7d": 7 * 24 * 60 * 6e4
+};
+function failure(res, status, code, message) {
+  res.status(status).json({ ok: false, code, error: message });
+}
+function createGuardianRouter(runtime) {
+  const router = Router5();
+  const { store, monitor, recovery, env, now } = runtime;
+  router.use((_req, res, next) => {
+    res.setHeader("Cache-Control", "no-store");
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    next();
+  });
+  async function gate(req, res, bucket, limit, windowMs) {
+    const key2 = callerKey(req.headers, req.ip || "unknown");
+    const decision = await runtime.limiter.check(`${bucket}:${key2}`, { limit, windowMs });
+    if (decision.allowed) return true;
+    res.setHeader("Retry-After", String(Math.max(1, Math.ceil((decision.resetAt - now()) / 1e3))));
+    failure(res, 429, "RATE_LIMITED", "Too many Guardian requests from this caller.");
+    return false;
+  }
+  const readOK = (req, res) => gate(req, res, "guardian:read", 120, 6e4);
+  async function requireAdmin(req, res) {
+    const auth = authorizeAdmin(req.headers, env);
+    if (auth.ok) return auth.actor;
+    await store.appendAudit({
+      at: now(),
+      actor: "anonymous",
+      action: "auth-failure",
+      target: `${req.method} ${req.path}`,
+      severity: "warning",
+      detail: { code: auth.code, ip: callerKey(req.headers, "unknown") }
+    }).catch(() => {
+    });
+    failure(res.status(auth.status), auth.status, auth.code, auth.message);
+    return null;
+  }
+  router.get("/health", async (req, res) => {
+    if (!await readOK(req, res)) return;
+    try {
+      const status = await monitor.status();
+      const lastSummary = status.lastRun?.summary ?? null;
+      const down = status.providers.length ? Object.values(status.breakers).filter((breaker) => breaker?.state === "open").length : 0;
+      res.json({
+        ok: true,
+        distributed: status.capabilities.distributed,
+        storeKind: status.storeKind,
+        storeHealth: status.storeHealth,
+        watched: status.watched,
+        circuitsOpen: down,
+        incident: Boolean(lastSummary?.incident),
+        lastRunAt: status.lastRun?.startedAt ?? null,
+        lastRunTrigger: status.lastRun?.trigger ?? null,
+        checkedAt: now()
+      });
+    } catch {
+      failure(res, 503, "GUARDIAN_UNAVAILABLE", "The Guardian could not read its own state.");
+    }
+  });
+  router.get("/status", async (req, res) => {
+    if (!await readOK(req, res)) return;
+    try {
+      const [status, analytics] = await Promise.all([
+        monitor.status(),
+        monitor.analytics({ windowMs: WINDOWS["24h"] })
+      ]);
+      const running = res.locals?.guardianRun ?? null;
+      res.json({
+        ok: true,
+        instanceId: status.instanceId,
+        store: {
+          kind: status.storeKind,
+          capabilities: status.capabilities,
+          reason: runtime.selection.reason,
+          missing: runtime.selection.missing,
+          health: status.storeHealth,
+          describe: store.describe()
+        },
+        providers: status.providers,
+        breakers: status.breakers,
+        lastRun: status.lastRun,
+        running,
+        analytics: {
+          windowMs: analytics.windowMs,
+          samples: analytics.samples,
+          runs: analytics.runs,
+          incidents: analytics.incidents,
+          providers: analytics.providers.map((entry) => ({
+            providerId: entry.providerId,
+            availability: entry.availability,
+            p95LatencyMs: entry.p95LatencyMs,
+            lastStatus: entry.lastStatus,
+            lastSeenAt: entry.lastSeenAt
+          }))
+        },
+        generatedAt: now()
+      });
+    } catch {
+      failure(res, 503, "GUARDIAN_UNAVAILABLE", "The Guardian could not assemble its status.");
+    }
+  });
+  router.get("/providers", async (req, res) => {
+    if (!await readOK(req, res)) return;
+    try {
+      const status = await monitor.status();
+      res.json({ ok: true, providers: status.providers, breakers: status.breakers, metered: status.metered });
+    } catch {
+      failure(res, 503, "GUARDIAN_UNAVAILABLE", "The provider catalogue could not be read.");
+    }
+  });
+  router.get("/analytics", async (req, res) => {
+    if (!await readOK(req, res)) return;
+    const requested = String(req.query.window ?? "24h");
+    const windowMs = WINDOWS[requested] ?? (Number.parseInt(requested, 10) || WINDOWS["24h"]);
+    try {
+      const analytics = await monitor.analytics({ windowMs });
+      res.json({ ok: true, ...analytics });
+    } catch {
+      failure(res, 503, "GUARDIAN_UNAVAILABLE", "Analytics could not be computed.");
+    }
+  });
+  router.get("/runs", async (req, res) => {
+    if (!await requireAdmin(req, res)) return;
+    const limit = Math.max(1, Math.min(Number.parseInt(String(req.query.limit ?? "20"), 10) || 20, 100));
+    try {
+      res.json({ ok: true, runs: await store.listRuns({ limit }) });
+    } catch {
+      failure(res, 503, "GUARDIAN_UNAVAILABLE", "Run history could not be read.");
+    }
+  });
+  router.get("/audit", async (req, res) => {
+    if (!await requireAdmin(req, res)) return;
+    const limit = Math.max(1, Math.min(Number.parseInt(String(req.query.limit ?? "50"), 10) || 50, 200));
+    const severity = ["info", "warning", "critical"].includes(String(req.query.severity)) ? String(req.query.severity) : void 0;
+    try {
+      res.json({
+        ok: true,
+        entries: await store.listAudit({
+          limit,
+          severity,
+          action: req.query.action ? String(req.query.action) : void 0,
+          target: req.query.target ? String(req.query.target) : void 0
+        })
+      });
+    } catch {
+      failure(res, 503, "GUARDIAN_UNAVAILABLE", "The audit log could not be read.");
+    }
+  });
+  async function performRun(req, res, trigger, actor) {
+    const inbound = await runtime.limiter.check(`guardian:run:${actor}`, { limit: trigger === "schedule" ? 6 : 12, windowMs: 6e4 });
+    if (!inbound.allowed) {
+      failure(res, 429, "RATE_LIMITED", "Too many sweeps requested; the fleet budget protects provider quotas.");
+      return;
+    }
+    const body = req.body ?? {};
+    const includeMetered = body.includeMetered === true;
+    const only = Array.isArray(body.only) ? body.only.filter((id) => typeof id === "string") : void 0;
+    try {
+      const result2 = await monitor.runOnce({ trigger, actor, includeMetered, only });
+      if (!result2.ran) {
+        res.status(200).json({
+          ok: true,
+          ran: false,
+          reason: result2.reason,
+          holder: result2.holder,
+          distributed: store.capabilities.distributed
+        });
+        return;
+      }
+      res.json({ ok: true, ran: true, summary: result2.summary });
+    } catch (error) {
+      const message = scrubSecrets(error instanceof Error ? error.message : "unknown", env);
+      failure(res, 500, "RUN_FAILED", `The sweep failed: ${message}`);
+    }
+  }
+  router.post("/run", async (req, res) => {
+    const actor = await requireAdmin(req, res);
+    if (!actor) return;
+    await performRun(req, res, "manual", actor);
+  });
+  router.get("/cron", async (req, res) => {
+    const auth = authorizeCron(req.headers, env);
+    if (!auth.ok) {
+      failure(res, auth.status, auth.code, auth.message);
+      return;
+    }
+    await performRun(req, res, "schedule", auth.actor);
+  });
+  router.post("/recovery", async (req, res) => {
+    const actor = await requireAdmin(req, res);
+    if (!actor) return;
+    const budget = await runtime.limiter.check(`guardian:recovery:${actor}`, { limit: 5, windowMs: 6e4 });
+    if (!budget.allowed) {
+      failure(res, 429, "RATE_LIMITED", "Too many recovery actions; wait a minute before retrying.");
+      return;
+    }
+    const body = req.body ?? {};
+    const action = typeof body.action === "string" ? body.action : "";
+    const providerId = typeof body.providerId === "string" ? body.providerId : void 0;
+    if (!action) {
+      failure(res, 400, "ACTION_REQUIRED", "A recovery action id is required.");
+      return;
+    }
+    try {
+      const result2 = await recovery.execute(action, { providerId, actor });
+      res.status(result2.ok ? 200 : 400).json(result2);
+    } catch (error) {
+      failure(res, 500, "RECOVERY_FAILED", scrubSecrets(error instanceof Error ? error.message : "unknown", env));
+    }
+  });
+  router.get("/verify", async (req, res) => {
+    const actor = await requireAdmin(req, res);
+    if (!actor) return;
+    const providerId = String(req.query.provider ?? "");
+    if (!providerId) {
+      failure(res, 400, "PROVIDER_REQUIRED", "A provider id is required.");
+      return;
+    }
+    try {
+      const result2 = await monitor.verifyProvider(providerId, { actor });
+      if ("error" in result2) {
+        failure(res, result2.error === "unknown-provider" ? 404 : 429, result2.error.toUpperCase(), result2.error);
+        return;
+      }
+      res.json({ ok: true, verified: result2.verified, outcome: result2.outcome });
+    } catch {
+      failure(res, 500, "VERIFY_FAILED", "The verification probe could not run.");
+    }
+  });
+  router.get("/config", async (req, res) => {
+    if (!await requireAdmin(req, res)) return;
+    res.json({
+      ok: true,
+      env: envReadiness(env),
+      store: {
+        kind: store.kind,
+        capabilities: store.capabilities,
+        reason: runtime.selection.reason,
+        missing: runtime.selection.missing,
+        describe: store.describe()
+      },
+      schedule: {
+        endpoint: "/api/guardian/cron",
+        requiresSecret: "CRON_SECRET",
+        configured: Boolean((env.CRON_SECRET || "").trim()),
+        recommended: "every 10 minutes; cheap sweep unless ?deep=1"
+      },
+      adminConfigured: Boolean((env.GUARDIAN_ADMIN_TOKEN || "").trim()),
+      recoveryActions: RECOVERY_ACTIONS,
+      humanOnlyOperations: HUMAN_ONLY_OPERATIONS,
+      deployment: {
+        environment: env.NODE_ENV || "development",
+        commit: env.VERCEL_GIT_COMMIT_SHA ? String(env.VERCEL_GIT_COMMIT_SHA).slice(0, 7) : null,
+        region: env.VERCEL_REGION || null
+      }
+    });
+  });
+  return router;
+}
+function mountGuardian(app2, runtime) {
+  const resolved = runtime ?? createGuardianRuntime();
+  app2.use("/api/guardian", createGuardianRouter(resolved));
+  return resolved;
+}
+
 // server.ts
 dotenv.config();
 process.on("uncaughtException", (err) => {
@@ -15939,8 +18038,8 @@ async function fetchYoutubeDuration(videoId) {
         signal: controller.signal,
         headers: { "Accept-Language": "en-US,en;q=0.9", "Accept": "text/html" }
       });
-    } catch (failure) {
-      const aborted = failure instanceof Error && failure.name === "AbortError";
+    } catch (failure2) {
+      const aborted = failure2 instanceof Error && failure2.name === "AbortError";
       throw new Error(aborted ? "youtube-timeout" : "youtube-unreachable");
     }
     if (response.status === 404 || response.status === 410) throw new Error("video-not-found");
@@ -16000,8 +18099,8 @@ app.get("/api/youtube/meta", async (req, res) => {
   try {
     const durationSeconds2 = await fetchYoutubeDuration(videoId);
     res.json({ videoId, durationSeconds: durationSeconds2 });
-  } catch (failure) {
-    const reason = failure instanceof Error ? failure.message : "";
+  } catch (failure2) {
+    const reason = failure2 instanceof Error ? failure2.message : "";
     if (reason === "video-not-found") {
       res.status(404).json({ videoId, error: "video-unavailable", code: "VIDEO_NOT_FOUND" });
       return;
@@ -16019,6 +18118,7 @@ app.use("/api/community", communityVideosRouter);
 app.use("/api/workspace", workspaceConfigRouter);
 app.use("/api/news", spaceNewsRouter);
 app.use("/api/forge", forgeRouter);
+mountGuardian(app);
 app.use(
   "/api/nova/life",
   rateLimit3({ windowMs: 6e4, max: 120, keyPrefix: "nova-life" }),
