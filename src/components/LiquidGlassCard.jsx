@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { motion } from 'framer-motion';
+import { activateOnKey } from '../app/hooks';
 
 /**
  * Solid Cosmic Dark Card Component
@@ -48,6 +49,11 @@ export function LiquidGlassCard({
       className={containerClasses}
       onClick={onClick}
       layout={layout}
+      // A card that takes a click handler must also take the keyboard: the same
+      // action, the same focus ring, and no announcement when it is pure layout.
+      role={onClick ? 'button' : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onKeyDown={onClick ? activateOnKey(onClick) : undefined}
       {...props}
     >
       <div className={`w-full h-full ${padding}`}>

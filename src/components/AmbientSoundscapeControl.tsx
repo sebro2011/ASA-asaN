@@ -206,7 +206,12 @@ export const AmbientSoundscapeControl: React.FC<AmbientSoundscapeControlProps> =
       </div>
 
       {/* Text Info & Controls */}
-      <div className="text-left cursor-pointer" onClick={handleTogglePlay}>
+      <button
+        type="button"
+        className="text-left cursor-pointer bg-transparent border-0 p-0 text-inherit font-inherit"
+        onClick={handleTogglePlay}
+        aria-pressed={isPlaying}
+      >
         <div className="flex items-center gap-1.5 text-xs font-bold font-display tracking-wide">
           <span>{text.title}</span>
           {isPlaying && (
@@ -216,11 +221,20 @@ export const AmbientSoundscapeControl: React.FC<AmbientSoundscapeControlProps> =
         <div className="text-[10px] font-mono text-ink-3 flex items-center gap-1 mt-0.5">
           <span>{isPlaying ? `${text.active} • ${Math.round(volume * 100)}%` : text.inactive}</span>
         </div>
-      </div>
+      </button>
 
       {/* Animated Sound Wave Equalizer Bars when playing */}
+      {/* Mouse-only duplicate of the toggle above: kept clickable, but out of the
+          tab order and hidden from screen readers so the control is announced
+          once. */}
       {isPlaying && (
-        <div className="flex items-end gap-0.5 h-4 ml-1 pr-1 cursor-pointer" onClick={handleTogglePlay}>
+        <button
+          type="button"
+          tabIndex={-1}
+          aria-hidden="true"
+          className="flex items-end gap-0.5 h-4 ml-1 pr-1 cursor-pointer bg-transparent border-0 p-0"
+          onClick={handleTogglePlay}
+        >
           {[0.4, 0.9, 0.5, 1, 0.6].map((scale, i) =>
             reduceMotion ? (
               <div
@@ -242,7 +256,7 @@ export const AmbientSoundscapeControl: React.FC<AmbientSoundscapeControlProps> =
               />
             )
           )}
-        </div>
+        </button>
       )}
     </div>
   );

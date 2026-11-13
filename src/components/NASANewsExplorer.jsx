@@ -446,7 +446,11 @@ export default function NASANewsExplorer({ className = '' }) {
                 className="group flex flex-col justify-between rounded-3xl bg-surface/60 hover:bg-surface/60/95 backdrop-blur-xl border border-line/90 hover:border-cyan-500/50 shadow-xl hover:shadow-cyan-950/30 transition-all duration-300 overflow-hidden relative"
               >
                 {/* Image Container with HD Badge */}
-                <div 
+                {/* The heading and "Read more" below are the keyboard path to
+                    this action; the thumbnail stays clickable for pointers but
+                    is not announced twice. */}
+                <div
+                  aria-hidden="true"
                   className="relative aspect-[16/10] overflow-hidden bg-abyss cursor-pointer"
                   onClick={() => setSelectedDetailItem(item)}
                 >
@@ -484,11 +488,14 @@ export default function NASANewsExplorer({ className = '' }) {
                     </div>
 
                     {/* Title */}
-                    <h3 
-                      onClick={() => setSelectedDetailItem(item)}
-                      className="text-sm font-bold text-white hover:text-cyan-300 transition-colors line-clamp-2 leading-snug cursor-pointer font-sans"
-                    >
-                      {title}
+                    <h3 className="text-sm font-bold text-white font-sans">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedDetailItem(item)}
+                        className="text-left line-clamp-2 leading-snug hover:text-cyan-300 transition-colors cursor-pointer bg-transparent border-0 p-0 text-inherit font-inherit"
+                      >
+                        {title}
+                      </button>
                     </h3>
 
                     {/* Excerpt */}

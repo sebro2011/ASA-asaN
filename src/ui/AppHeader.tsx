@@ -29,6 +29,7 @@ import {
 import type { SupportedLanguage } from '../i18n/translations';
 import { NAV_ENTRIES, NAV_GROUPS, type TabId } from './navigation';
 import { cx } from './primitives';
+import { useEscape } from '../app/hooks';
 
 const LANGUAGES: Array<{ code: SupportedLanguage; native: string; english: string; script: string }> = [
   { code: 'en', native: 'English', english: 'English', script: 'EN' },
@@ -90,6 +91,9 @@ export default function AppHeader({
   const [openGroup, setOpenGroup] = useState<string | null>(null);
   const [langOpen, setLangOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  // The backdrop was the only way to dismiss the drawer with a pointer; a
+  // keyboard user had no exit other than tabbing to the close button.
+  useEscape(mobileOpen, () => setMobileOpen(false));
   const headerRef = useOutsideClose(() => {
     setOpenGroup(null);
     setLangOpen(false);
@@ -346,7 +350,7 @@ export default function AppHeader({
             aria-modal="true"
             aria-label="Navigation"
           >
-            <div className="absolute inset-0 bg-void/80 backdrop-blur-sm" onClick={() => setMobileOpen(false)} />
+            <div aria-hidden="true" className="absolute inset-0 bg-void/80 backdrop-blur-sm" onClick={() => setMobileOpen(false)} />
             <motion.div
               initial={{ y: -16, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}

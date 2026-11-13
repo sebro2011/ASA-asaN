@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import { activateOnKey } from '../app/hooks';
 
 export type LogoSize = 'xs' | 'sm' | 'md' | 'lg' | 'xl' | '2xl' | number;
 
@@ -39,7 +40,13 @@ export const Logo: React.FC<LogoProps> = ({
   const glowClass = withGlow ? 'drop-shadow-[0_0_12px_rgba(34,211,238,0.3)]' : '';
 
   return (
-    <div className={`inline-flex items-center gap-3 select-none ${onClick ? 'cursor-pointer' : ''} ${className}`} onClick={onClick} role={onClick ? 'button' : undefined} tabIndex={onClick ? 0 : undefined}>
+    <div
+      className={`inline-flex items-center gap-3 select-none ${onClick ? 'cursor-pointer' : ''} ${className}`}
+      onClick={onClick}
+      role={onClick ? 'button' : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onKeyDown={onClick ? activateOnKey(onClick as () => void) : undefined}
+    >
       <div className={`relative flex items-center justify-center shrink-0 ${glowClass}`} style={{ width: customDimension, height: customDimension }}>
         {!hasError ? (
           <img src="/logo.png" alt={alt} width={customDimension} height={customDimension} loading={priority ? 'eager' : 'lazy'} decoding="async" onError={() => setHasError(true)} className={`w-full h-full object-contain filter ${glowClass} rounded-[10px]`} />

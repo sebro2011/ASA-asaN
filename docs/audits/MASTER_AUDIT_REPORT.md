@@ -230,13 +230,13 @@ deployment resolves its function, so it needs approval.
 | --- | --- | --- | --- |
 | m1 | Four near-identical NOVA chat handlers | `server.ts` — `/api/nova/chat`, `/api/chat`, `/api/openrouter/chat`, `/api/nasa-ai` repeat the same 8 lines | extract one adapter; **S** |
 | m2 | `uncaughtException` is logged and swallowed, so the process keeps serving with possibly-corrupt state | `server.ts:23` | log, then exit and let the platform restart; **S**, but a behaviour change |
-| m3 | Clickable `<div>`s with no role/tabIndex; the logo control has `role="button"` and `tabIndex` but no key handler | `AmbientSoundscapeControl.tsx:209,223`; `Logo.tsx:42` | real buttons; **S** |
+| m3 | ~~Clickable `<div>`s with no role/tabIndex; the logo control has `role="button"` and `tabIndex` but no key handler~~ **fixed 2026-11-13** (`9219200` + a11y commit) | `AmbientSoundscapeControl.tsx`, `Logo.tsx:42` | all 12 clickable containers fixed; `scripts/test-a11y-controls.mjs` now fails the build on a regression |
 | m4 | Icon-only buttons: only 3 `aria-label`s across 331 `<button>`s | spot check only — most buttons carry visible text, so this is **not** a claim that 328 are broken | audit the icon-only subset in Phase 5; **S–M** |
 | m5 | `GUARDIAN_API_KEY` (Guardian news Open Platform) reads as the COSMORA Guardian secret | `.env.example` | rename would break existing deployments; document the distinction instead; **S** |
 | m6 | Duplicate root-level reports | `PHASE1_AUDIT_REPORT.md`, `PHASE7_VALIDATION_REPORT.md` shadow `docs/` | move under `docs/audits/` with a redirect note; **S** |
 | m7 | Two lockfiles | `bun.lock` + `package-lock.json` | pick one (npm, since scripts and CI use it); **S** |
 | m8 | Package identity is boilerplate | `"name": "react-example", "version": "0.1.0"` | rename; **S** |
-| m9 | Two client fetches have no timeout, so a hung request leaves a permanent loading state | `lib/nasaApi.js:370` (`/api/satellites`), `:489` (`/api/news`) | add `AbortSignal.timeout`; **S** |
+| m9 | ~~Two client fetches have no timeout~~ **fixed 2026-11-13** (`9219200`) | `lib/nasaApi.js:372` (`/api/satellites`), `:491` (`/api/news`) | `AbortSignal.timeout(15s)`; tested |
 | m10 | Production CSP allows `'unsafe-inline'` scripts | `server.ts` CSP array | nonce or hash pipeline; **M** |
 | m11 | Build-chain advisories | `npm audit`: deepmerge prototype poisoning, glob/minimatch DoS, via `vite-plugin-pwa` → `workbox-build` | no runtime exposure; fixing requires downgrading `vite-plugin-pwa`, which was previously rejected | 
 | m13 | A test proved the environment, not the product: `test-apod-media.mjs` expected a live `api.nasa.gov` call to fail. True here (egress blocked), false on a CI runner, where the route legitimately recovered an official NASA Science record and answered 200. | CI run 43417395210; fixed by stubbing **both** upstreams | fixed; **S** |

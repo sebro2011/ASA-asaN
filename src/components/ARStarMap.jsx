@@ -37,6 +37,7 @@ import {
   Radio,
   Sliders
 } from 'lucide-react';
+import { activateOnKey } from '../app/hooks';
 
 // Celestial bodies with real celestial coordinates (Azimuth 0-360°, Altitude 10-85°)
 const CELESTIAL_BODIES = [
@@ -1089,6 +1090,13 @@ function ARStarMap({ lang = 'en', onSelectTarget = null }) {
             return (
               <div
                 key={body.id}
+                role="button"
+                tabIndex={0}
+                aria-label={body.name[lang] || body.name.en}
+                onKeyDown={activateOnKey(() => {
+                  setSelectedBodyId(body.id);
+                  if (onSelectTarget) onSelectTarget(body);
+                })}
                 onClick={() => {
                   setSelectedBodyId(body.id);
                   if (onSelectTarget) onSelectTarget(body);
@@ -1140,6 +1148,9 @@ function ARStarMap({ lang = 'en', onSelectTarget = null }) {
             return (
               <div
                 key={`guide-${body.id}`}
+                role="button"
+                tabIndex={0}
+                onKeyDown={activateOnKey(() => handleSnapToTarget(body))}
                 onClick={() => handleSnapToTarget(body)}
                 style={{ left: `${clampedX}px`, top: `${clampedY}px` }}
                 className="absolute -translate-x-1/2 -translate-y-1/2 z-30 cursor-pointer animate-bounce"

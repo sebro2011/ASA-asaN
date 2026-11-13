@@ -3,6 +3,45 @@
 Newest first. Every entry states what changed, which files, and how it was verified.
 Nothing here is a plan; if it was not executed it is not listed.
 
+## 2026-11-13 — Keyboard reachability and one focus ring (branch `arena/8a962084-asa-asan`)
+
+Audit **m3** (Phase 5). Twelve clickable containers were pointer-only.
+
+### Fixed
+- **Real buttons**: the soundscape label (the toggle is now announced once, with
+  `aria-pressed`; the equaliser bars stay clickable but are a hidden mouse-only
+  duplicate), the news headline inside its `<h3>`, and the title inside the news
+  card.
+- **`role="button"` + `tabIndex` + Enter/Space** (via the new `activateOnKey` in
+  `src/app/hooks.ts`): AR markers, AR edge guides, asteroid blips, the asteroid
+  list cards, the planet globe (`aria-pressed` reflects rotation), the logo, and
+  `LiquidGlassCard` when it is given an `onClick`.
+- **Overlays**: Escape now closes the header drawer, the mobile tab sheet and the
+  APOD lightbox (`useEscape`). Their backdrops are `aria-hidden` — they were
+  clickable but not announced, and they are not controls.
+- **One focus ring** for the whole app in `src/globals.css`, on `:focus-visible`
+  with an `outline` (so it survives dark glass) and a `forced-colors` variant for
+  Windows high-contrast mode. Nothing global existed before.
+
+### Added
+- `scripts/test-a11y-controls.mjs` (7 cases) encodes the rule rather than the
+  patches: an element with an `onClick` must be a real control, carry
+  role+tabIndex+key handler, or be explicitly `aria-hidden`. It also includes a
+  "guard against the guard" case, checks `activateOnKey` behaviour, and asserts
+  the focus-ring CSS and the Escape wiring.
+
+### Not done (recorded, not hidden)
+- The custom components the scanner cannot see through (`IconButton`, `Section`,
+  `ErrorBoundary`, …) are skipped by name; their internals are not verified.
+- The two drawers close on Escape but do not trap focus; `MobileDrawer` and
+  `CommandPalette` already do, so this is a known gap in `AppHeader`/`MobileTabBar`.
+- Contrast was not measured; the light theme's `text-ink-3` on glass still needs a
+  real contrast check in a browser.
+- A few `aria-label`s are English-only in otherwise localised components.
+
+### Verification
+`npm test` → **844 pass / 0 fail** (was 837) · `tsc --noEmit` clean · `npm run build` ok.
+
 ## 2026-11-13 — NASA proxy caching and client request timeouts (branch `arena/8a962084-asa-asan`)
 
 ### Added

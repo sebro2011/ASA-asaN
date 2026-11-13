@@ -14,6 +14,7 @@ import { Clapperboard, Grid2x2, House, Leaf, MoreHorizontal, X } from 'lucide-re
 import { NAV_ENTRIES, NAV_GROUPS, type TabId } from './navigation';
 import type { SupportedLanguage } from '../i18n/translations';
 import { cx } from './primitives';
+import { useEscape } from '../app/hooks';
 
 const ITEMS: Array<{
   id: TabId | 'menu';
@@ -37,6 +38,7 @@ export default function MobileTabBar({
   lang: SupportedLanguage;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  useEscape(menuOpen, () => setMenuOpen(false));
 
   const select = (tab: TabId) => {
     onTabChange(tab);
@@ -96,7 +98,7 @@ export default function MobileTabBar({
             aria-modal="true"
             aria-label="All destinations"
           >
-            <div className="absolute inset-0 bg-void/85 backdrop-blur-sm" onClick={() => setMenuOpen(false)} />
+            <div aria-hidden="true" className="absolute inset-0 bg-void/85 backdrop-blur-sm" onClick={() => setMenuOpen(false)} />
             <motion.div
               initial={{ y: 28, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}

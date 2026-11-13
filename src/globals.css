@@ -111,3 +111,27 @@ input[type="number"],
 select {
   color-scheme: dark;
 }
+
+/* -----------------------------------------------------------------------------
+   One focus ring for the whole app.
+
+   Nothing global existed: the shell relied on each browser's default outline,
+   which Tailwind's preflight leaves inconsistent across the dark glass surfaces
+   and near-invisible on the light theme. Controls that are now real buttons
+   become visible to keyboard users only if the ring is actually visible.
+
+   `:focus-visible` keeps the ring off for pointer clicks, so this changes nothing
+   for mouse or touch users.
+   -------------------------------------------------------------------------- */
+:where(a, button, [role="button"], summary, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--color-atmo, #5ed3f2);
+  outline-offset: 2px;
+  border-radius: inherit;
+}
+
+/* Windows high-contrast mode drops box-shadows; an outline survives. */
+@media (forced-colors: active) {
+  :where(a, button, [role="button"], summary):focus-visible {
+    outline: 2px solid Highlight;
+  }
+}

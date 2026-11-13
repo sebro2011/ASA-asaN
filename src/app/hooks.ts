@@ -3,7 +3,7 @@
  * and the sidebar. Kept together so focus and scroll behaviour is implemented
  * once and behaves identically in every overlay.
  */
-import { useEffect, useRef, useState, type RefObject } from 'react';
+import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type RefObject } from 'react';
 
 const FOCUSABLE =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
@@ -122,6 +122,29 @@ export function useEscape(active: boolean, onEscape: () => void) {
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
   }, [active, onEscape]);
+}
+
+/**
+ * Enter/Space activation for an element that is not a real `<button>`.
+ *
+ * A `role="button"` on a div gets the screen-reader semantics but none of the
+ * behaviour: the browser will not synthesise a click from the keyboard. Every
+ * such element is either converted to a real button or given this handler, and
+ * `scripts/test-a11y-controls.mjs` fails the build for anything that has
+ * neither.
+ */
+export function activateOnKey(handler: () => void) {
+  return (event: ReactKeyboardEvent<HTMLElement>) => {
+    if (event.key === 'Enter') {
+      handler();
+      return;
+    }
+    if (event.key === ' ' || event.key === 'Spacebar') {
+      // Space would otherwise scroll the page under the control.
+      event.preventDefault();
+      handler();
+    }
+  };
 }
 
 /** Media query as state (SSR-safe). */
