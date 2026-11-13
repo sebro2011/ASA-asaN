@@ -57,6 +57,7 @@ import {
   type ChatTurn,
 } from './chatClient';
 import { useConversations, useThread } from './useChatData';
+import { isChatLocalOnly } from './chatStorage';
 import { takePrompt, takeThinking } from './pendingPrompt';
 import MessageBody from './MessageBody';
 import ThinkingMenu from './ThinkingMenu';
@@ -178,6 +179,9 @@ export default function ChatSurface() {
   const [showList, setShowList] = useState(false);
   const [renaming, setRenaming] = useState<string | null>(null);
   const [renameDraft, setRenameDraft] = useState('');
+  // Read once per mount: the rail says where threads live, and it must not
+  // claim they sync when the reader has asked for device-only.
+  const [localOnly] = useState(isChatLocalOnly);
   const [provider, setProvider] = useState<ChatProvider>(
     (profile?.preferred_provider as ChatProvider | undefined) ?? 'auto',
   );
@@ -505,13 +509,21 @@ export default function ChatSurface() {
           </button>
         </div>
 
-        {authStatus !== 'signed-in' ? (
+        {authStatus !== 'signed-in' || localOnly ? (
           <div className="nova-chat-guest">
             <p className="nova-chat-guest__title">{t('wsChatGuestTitle')}</p>
-            <p className="nova-chat-guest__body">{t('wsChatGuestBody')}</p>
-            <Link to="/profile" className="nova-chat-guest__cta">
-              {t('wsChatGuestCta')}
-            </Link>
+            <p className="nova-chat-guest__body">
+              {authStatus === 'signed-in' ? t('wsChatLocalOnlyChipBody') : t('wsChatGuestBody')}
+            </p>
+            {authStatus === 'signed-in' ? (
+              <Link to="/settings" className="nova-chat-guest__cta">
+                {t('wsSettings')}
+              </Link>
+            ) : (
+              <Link to="/profile" className="nova-chat-guest__cta">
+                {t('wsChatGuestCta')}
+              </Link>
+            )}
           </div>
         ) : null}
 

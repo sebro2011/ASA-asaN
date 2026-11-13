@@ -499,3 +499,32 @@ test('an invalid model id is shown as a configuration problem, not an outage', a
     dom.window.close();
   }
 });
+
+test('"keep chats on this device" is offered as a real switch and persists', async () => {
+  const dom = installDom();
+  try {
+    const { client } = createFakeClient();
+    const app = await mountSettings({ client });
+
+    const toggle = [...document.querySelectorAll('[role="switch"]')].find(
+      (node) => (node.getAttribute('aria-label') || '') === 'Keep chats on this device',
+    );
+    assert.ok(toggle, 'the setting is present');
+    assert.equal(toggle.getAttribute('aria-checked'), 'false', 'sync is the default');
+
+    await app.act(async () => {
+      toggle.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+    });
+
+    assert.equal(window.localStorage.getItem('nova_chat_local_only'), '1', 'the choice is stored');
+    const after = [...document.querySelectorAll('[role="switch"]')].find(
+      (node) => (node.getAttribute('aria-label') || '') === 'Keep chats on this device',
+    );
+    assert.equal(after.getAttribute('aria-checked'), 'true');
+
+    await app.unmount();
+  } finally {
+    window.localStorage.removeItem('nova_chat_local_only');
+    dom.window.close();
+  }
+});

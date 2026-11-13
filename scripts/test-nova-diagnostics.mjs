@@ -449,3 +449,89 @@ test('mixed Gemini probe failures do not assert one cause or key validity', asyn
   assert.match(gemini.hint, /different causes/);
   assert.doesNotMatch(gemini.hint, /same way|key is valid|not a model-id problem/);
 });
+
+/* --------------------------------------------------------------------------
+ * Evidence before explanation: the model list decides what the hint may claim.
+ * ------------------------------------------------------------------------ */
+
+function modelListStub(models, postStatusFor) {
+  const calls = [];
+  const impl = async (url, init) => {
+    const target = String(url);
+    calls.push({ url: target, method: init?.method || 'GET' });
+    if ((init?.method || 'GET') === 'GET' && target.includes('/v1beta/models?')) {
+      return {
+        status: 200,
+        ok: true,
+        json: async () => ({
+          models: models.map((name) => ({ name: `models/${name}`, supportedGenerationMethods: ['generateContent'] })),
+        }),
+        text: async () => '{}',
+      };
+    }
+    const status = postStatusFor(target);
+    return { status, ok: false, text: async () => `{"error":{"code":${status}}}`, json: async () => ({}) };
+  };
+  return { impl, calls };
+}
+
+test('a model the key lists but cannot call blames access, not the model id', async () => {
+  // Production saw exactly this shape: 48 models listed for the key, yet the
+  // calls failed. The report must stop implying the id is wrong.
+  const { impl } = modelListStub(['gemini-3.8-flash', 'gemini-2.5-flash'], () => 404);
+  const report = await createDiagnosticsHandler({ fetchImpl: impl, env: envWith() })({ probe: true });
+  const gemini = report.providers.gemini;
+
+  assert.equal(gemini.modelListed, true, 'the report records that the id is listed');
+  assert.match(gemini.hint, /listed for this key/);
+  assert.match(gemini.hint, /access or API-version restrictions/);
+  assert.doesNotMatch(gemini.hint, /quota|billing/i, 'the cause is not guessed');
+  assert.match(gemini.hint, /No alternative model probe succeeded/);
+});
+
+test('a model absent from the key list names the variable and the list', async () => {
+  const { impl } = modelListStub(['gemini-2.5-flash'], () => 404);
+  const report = await createDiagnosticsHandler({
+    fetchImpl: impl,
+    env: envWith({ NOVA_GEMINI_MODEL: 'gemini-9.9-ultra' }),
+  })({ probe: true });
+  const gemini = report.providers.gemini;
+
+  assert.equal(gemini.modelListed, false);
+  assert.match(gemini.hint, /not among this key's 1 generateContent models/);
+  assert.match(gemini.hint, /availableModels/);
+  assert.doesNotMatch(gemini.hint, /quota|billing/i);
+});
+
+test('the ids the key can actually call are probed first', async () => {
+  const { impl, calls } = modelListStub(['gemini-2.5-flash'], () => 503);
+  await createDiagnosticsHandler({ fetchImpl: impl, env: envWith() })({ probe: true });
+
+  // OpenRouter is probed concurrently and also POSTs, so scope to Gemini.
+  const posts = calls
+    .filter((call) => call.method === 'POST' && call.url.includes('generativelanguage'))
+    .map((call) => call.url);
+  assert.ok(posts.length > 1, 'the fallbacks were probed');
+  assert.match(posts[1], /gemini-2\.5-flash/, 'the listed model is tried before unlisted aliases');
+  assert.equal(
+    posts.filter((url) => url.includes('gemini-3.8-flash')).length,
+    1,
+    'the configured id is never probed twice',
+  );
+});
+
+test('an unreadable model list leaves the hint hedged, with no new certainty', async () => {
+  const impl = async (url, init) => {
+    if ((init?.method || 'GET') === 'GET') {
+      return { status: 403, ok: false, json: async () => ({}), text: async () => '{"error":{}}' };
+    }
+    return { status: 404, ok: false, text: async () => '{}', json: async () => ({}) };
+  };
+  const report = await createDiagnosticsHandler({ fetchImpl: impl, env: envWith() })({ probe: true });
+  const gemini = report.providers.gemini;
+
+  assert.equal(gemini.modelListed, undefined, 'no list, no claim about the list');
+  assert.equal(gemini.availableModels, undefined);
+  assert.match(gemini.hint, /check NOVA_GEMINI_MODEL/);
+  assert.match(gemini.hint, /different causes/);
+});

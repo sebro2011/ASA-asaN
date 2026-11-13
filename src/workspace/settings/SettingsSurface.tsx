@@ -13,6 +13,7 @@ import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Check, UserRound } from 'lucide-react';
 import { useTheme } from '../../app/theme';
+import { isChatLocalOnly, setChatLocalOnly } from '../chat/chatStorage';
 import ThemeOptions from '../../app/ThemeOptions';
 import { useLanguage } from '../../app/LanguageMenu';
 import { Link } from '../../app/router';
@@ -97,6 +98,9 @@ export default function SettingsSurface() {
   const { status, profile, updateProfile } = useAuth();
   const { providers } = useProviderConfig();
   const [saved, setSaved] = useState(false);
+  // Device-only conversations: a preference, not a deletion. Turning it off
+  // leaves the device copy alone and returns to syncing when signed in.
+  const [localChatOnly, setLocalChatOnly] = useState(isChatLocalOnly);
 
   const signedIn = status === 'signed-in';
   const provider = (profile?.preferred_provider as ChatProvider | undefined) ?? 'auto';
@@ -147,6 +151,15 @@ export default function SettingsSurface() {
             onChange={setReducedMotion}
             label={t('wsSettingsMotion')}
             description={t('wsSettingsMotionBody')}
+          />
+          <Toggle
+            checked={localChatOnly}
+            onChange={(next) => {
+              setLocalChatOnly(next);
+              setChatLocalOnly(next);
+            }}
+            label={t('wsChatLocalOnly')}
+            description={t('wsChatLocalOnlyBody')}
           />
         </div>
       </section>

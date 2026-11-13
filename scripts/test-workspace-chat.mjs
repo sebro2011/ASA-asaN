@@ -961,3 +961,45 @@ test('a retired or missing model gets its own sentence, not "try again"', async 
   assert.equal(normaliseErrorCode('FREE_MODEL_UNAVAILABLE'), 'MODEL_UNAVAILABLE');
   assert.equal(chatErrorKey('MODEL_UNAVAILABLE'), 'wsChatErrModel');
 });
+
+test('"keep chats on this device" wins over the cloud, and the rail says so', async () => {
+  const dom = installDom();
+  try {
+    // A signed-in reader with a cloud conversation, who has asked for device-only
+    // storage. The cloud row must not appear, and the surface must not imply sync.
+    const { client } = createFakeClient({ conversations: [conversation('c9', 'Cloud thread')] });
+    window.localStorage.setItem('nova_chat_local_only', '1');
+    window.localStorage.setItem(
+      'nova_local_chat_v1',
+      JSON.stringify({
+        version: 1,
+        conversations: [
+          {
+            id: 'local-1',
+            user_id: 'local-guest',
+            title: 'Device thread',
+            pinned: false,
+            archived: false,
+            created_at: '2026-01-01T00:00:00.000Z',
+            updated_at: '2026-01-01T00:00:00.000Z',
+            deleted_at: null,
+          },
+        ],
+        messages: [],
+      }),
+    );
+
+    const app = await mountChat({ client });
+    const text = app.text();
+
+    assert.match(text, /Device thread/, 'the device store is what the rail lists');
+    assert.doesNotMatch(text, /Cloud thread/, 'a synced conversation is not shown while device-only is on');
+    assert.match(text, /This device only/, 'the rail states where threads live');
+    assert.match(text, /not saved to your account/, 'and it no longer implies sync');
+
+    await app.unmount();
+  } finally {
+    window.localStorage.removeItem('nova_chat_local_only');
+    dom.window.close();
+  }
+});

@@ -372,6 +372,7 @@ export const workspaceCopySi: Copy = {
   wsChatComposerHint: 'යැවීමට Enter · නව පේළියකට Shift+Enter',
   wsChatErrThinking: 'එම සිතුම් මට්ටම වලංගු නොවේ. ස්වයංක්‍රීය හෝ වෙනත් මට්ටමක් තෝරන්න.',
   wsChatGuestTitle: 'මෙම උපාංගයේ පමණි',
+  wsChatLocalOnlyChipBody: 'කතාබහ මෙම බ්‍රව්සරයේම රැඳේ; ඒවා ඔබේ ගිණුමට සුරැකෙන්නේ නැත. සමමුහුර්ත කිරීමට සැකසුම් තුළ මෙය අක්‍රිය කරන්න.',
   wsChatGuestBody:
     'ඔබ පිවිසී නැති නිසා සංවාද මෙම බ්‍රව්සරයේ රැඳේ. උපාංග අතර සමමුහුර්ත කිරීමට ඕනෑම වේලාවක පිවිසෙන්න.',
   wsChatGuestCta: 'සමමුහුර්ත කිරීමට පිවිසෙන්න',
@@ -417,6 +418,8 @@ export const workspaceCopySi: Copy = {
   wsSettingsContrastBody: 'දැන් තියෙන වර්ණ පටිපාටියට උඩින් පෙළ සහ මායිම් වඩා පැහැදිලි කරයි.',
   wsSettingsMotion: 'චලනය අඩු කරන්න',
   wsSettingsMotionBody: 'අත්‍යවශ්‍ය නොවන සජීවිකරණ නවත්වයි. පද්ධති මනාපය ස්වයංක්‍රීයව ගරු කෙරේ.',
+  wsChatLocalOnly: 'කතාබහ මෙම උපාංගයේම තබන්න',
+  wsChatLocalOnlyBody: 'ඔබ පිවිසී සිටියත් සංවාද මෙම බ්‍රව්සරයේම රැඳේ. ඔබේ ගිණුමට කිසිවක් උඩුගත නොවේ; මෙය අක්‍රිය කිරීම දැනටමත් මෙහි ඇති දේ මකා නොදමයි.',
   wsSettingsLanguage: 'භාෂාව',
   wsSettingsChat: 'Chat පෙරනිමි',
   wsSettingsProvider: 'කැමති සැපයුම්කරු',

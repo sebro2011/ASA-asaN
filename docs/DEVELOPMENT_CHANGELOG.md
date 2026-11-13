@@ -3,6 +3,37 @@
 Newest first. Every entry states what changed, which files, and how it was verified.
 Nothing here is a plan; if it was not executed it is not listed.
 
+## 2026-11-13 — NOVA diagnostics: evidence before explanation; device-only chats (branch `arena/8a962084-asa-asan`)
+
+### Changed
+- **The Gemini diagnostic hint no longer guesses.** It asked what the key can
+  actually call *before* deciding what to say, and reports `modelListed`:
+  - model listed for the key but the call 404s → "access or API-version
+    restrictions on this key or project", which is what production's 48-listed-
+    models-yet-404 shape actually means;
+  - model absent from the key's list → names `NOVA_GEMINI_MODEL` and points at
+    `availableModels`;
+  - list unreadable → stays hedged ("failures may have different causes").
+  No path claims quota or billing any more.
+- **Fallbacks are ordered by what the key can see.** An id the key does not list is
+  tried after the ones it does, so a wasted round trip no longer comes first. The
+  configured id is still tried exactly once.
+
+### Added
+- **"Keep chats on this device"** (`src/workspace/chat/chatStorage.ts`): a real
+  switch in Settings. When on, chat reads and writes the device store even while
+  signed in, an open surface switches immediately, and the rail says
+  "Chats stay in this browser and are not saved to your account". Turning it off
+  returns to syncing; nothing is deleted either way.
+- Chat rail: a signed-in reader with device-only enabled now gets the same honest
+  banner a signed-out reader sees, instead of no banner at all.
+
+### Verification
+`npm test` → **825 pass / 0 fail** (was 819; +4 diagnostics, +1 chat, +1 settings) ·
+`tsc --noEmit` clean. New cases: listed-but-404 blames access (and never quota),
+absent-from-list names the variable, listed ids are probed first, unreadable list
+stays hedged, device-only beats a cloud session, the settings switch persists.
+
 ## 2026-11-13 — Lazy locale bundles, CI verification (branch `arena/8a962084-asa-asan`)
 
 ### Changed

@@ -4638,13 +4638,33 @@ function createDiagnosticsHandler({
         if (outcome.reason) entry.reason = outcome.reason;
         if (provider === "gemini" && !outcome.ok) {
           const modelMissing = outcome.status === 404 || outcome.status === 422;
+          const configuredModel = String(models.gemini || "");
+          const available = await listGeminiModels({
+            fetchImpl,
+            key: keys.gemini,
+            secrets,
+            timeoutMs: keyCheckTimeoutMs,
+            now
+          });
+          const listed = new Set(available);
+          const modelListed = available.length ? listed.has(configuredModel) : void 0;
           if (modelMissing) {
             entry.modelInvalid = true;
-            entry.hint = `The requested model returned HTTP ${outcome.status}; check NOVA_GEMINI_MODEL and whether this key can access that model.`;
+            if (modelListed) {
+              entry.hint = `The configured model is listed for this key, but the generateContent call returned HTTP ${outcome.status}. That points to access or API-version restrictions on this key or project, not to a missing model id.`;
+            } else if (available.length) {
+              entry.hint = `NOVA_GEMINI_MODEL is not among this key's ${available.length} generateContent models; set it to one of availableModels.`;
+            } else {
+              entry.hint = `The requested model returned HTTP ${outcome.status}; check NOVA_GEMINI_MODEL and whether this key can access that model.`;
+            }
           }
-          const alternatives2 = [...GEMINI_MODEL_FALLBACKS, DEFAULT_GEMINI_MODEL].filter((candidate) => candidate !== models.gemini);
+          const alternatives2 = [...GEMINI_MODEL_FALLBACKS, DEFAULT_GEMINI_MODEL].filter((candidate) => candidate !== configuredModel);
+          const ordered = [
+            ...alternatives2.filter((candidate) => listed.has(candidate)),
+            ...alternatives2.filter((candidate) => !listed.has(candidate))
+          ];
           const tried = [];
-          for (const candidate of alternatives2) {
+          for (const candidate of ordered) {
             const retry = await probe({ fetchImpl, provider, keys, models: { ...models, gemini: candidate }, secrets, timeoutMs, now });
             const attempt = { model: candidate, ok: retry.ok, httpStatus: retry.status, code: retry.code, ms: retry.ms };
             tried.push(attempt);
@@ -4654,16 +4674,16 @@ function createDiagnosticsHandler({
             }
           }
           if (!entry.fallbackModel && tried.length) entry.fallbackModel = tried[tried.length - 1];
-          entry.modelsTried = [models.gemini, ...tried.map((attempt) => attempt.model)];
+          entry.modelsTried = [configuredModel, ...tried.map((attempt) => attempt.model)];
           if (entry.fallbackModel?.ok) {
             entry.hint = `${entry.hint ? `${entry.hint} ` : ""}${entry.fallbackModel.model} answered with the same key; the original model request failed. Review model availability and configuration.`;
           } else {
             entry.hint = `${entry.hint ? `${entry.hint} ` : ""}No alternative model probe succeeded. Failures may have different causes; inspect the statuses and provider configuration before drawing a conclusion.`;
           }
-          const available = await listGeminiModels({ fetchImpl, key: keys.gemini, secrets, timeoutMs: keyCheckTimeoutMs, now });
           if (available.length) {
             entry.availableModelCount = available.length;
             entry.availableModels = available.slice(0, 12);
+            if (modelListed !== void 0) entry.modelListed = modelListed;
           }
         }
         if (outcome.code === "AI_TIMEOUT" || outcome.code === "UPSTREAM_NETWORK_ERROR" || outcome.code === "PROVIDER_UNAVAILABLE") {

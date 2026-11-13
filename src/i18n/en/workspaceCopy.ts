@@ -372,6 +372,7 @@ export const workspaceCopyEn: Copy = {
   wsChatComposerHint: 'Enter to send · Shift+Enter for a new line',
   wsChatErrThinking: 'That thinking level is not valid. Choose Auto or another level.',
   wsChatGuestTitle: 'This device only',
+  wsChatLocalOnlyChipBody: 'Chats stay in this browser and are not saved to your account. Turn this off in Settings to sync them.',
   wsChatGuestBody:
     'You are signed out, so conversations stay in this browser. Sign in any time to keep them across devices.',
   wsChatGuestCta: 'Sign in to sync',
@@ -417,6 +418,8 @@ export const workspaceCopyEn: Copy = {
   wsSettingsContrastBody: 'Stronger text and border contrast, on top of the current palette.',
   wsSettingsMotion: 'Reduce motion',
   wsSettingsMotionBody: 'Turns off non-essential animation. The system preference is honoured automatically.',
+  wsChatLocalOnly: 'Keep chats on this device',
+  wsChatLocalOnlyBody: 'Conversations stay in this browser even while signed in: nothing is uploaded to your account, and turning this off does not delete what is already here.',
   wsSettingsLanguage: 'Language',
   wsSettingsChat: 'Chat defaults',
   wsSettingsProvider: 'Preferred provider',
