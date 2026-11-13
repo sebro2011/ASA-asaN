@@ -1,4 +1,4 @@
-import type { Request, Response, NextFunction } from 'express';
+import type { Application as ExpressApplication, Request, Response, NextFunction } from 'express';
 import { GoogleGenAI, Type } from '@google/genai';
 import { DEFAULT_GEMINI_MODEL } from './novaChat.js';
 import { createHash } from 'node:crypto';
@@ -71,8 +71,9 @@ export type ApodFailureKind = 'network' | 'rate-limited' | 'upstream' | 'shape' 
  * that as the astronomy picture of the day is worse than showing nothing, and
  * the URL is a perfectly valid image, so no `onError` in the browser can catch it.
  */
-export function isDegradedApodRecord(record: any): boolean {
-  if (!record || typeof record !== 'object') return false;
+export function isDegradedApodRecord(input: unknown): boolean {
+  if (!input || typeof input !== 'object') return false;
+  const record = input as { url?: unknown; hdurl?: unknown; title?: unknown };
   const url = String(record.url || '');
   const hdurl = String(record.hdurl || '');
   const logoLike = (value: string) =>
@@ -505,7 +506,7 @@ function isValidApodDate(value: unknown): value is string {
   return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value;
 }
 
-export function setupNasaRoutes(app: any, ai: GoogleGenAI) {
+export function setupNasaRoutes(app: ExpressApplication, ai: GoogleGenAI) {
   // ====================================================
   // NASA APOD API route with high-resilience cache & graceful timeout
   // ====================================================
@@ -528,7 +529,7 @@ export function setupNasaRoutes(app: any, ai: GoogleGenAI) {
       ? `https://api.nasa.gov/planetary/apod?api_key=${nasaApiKey}&date=${date}`
       : `https://api.nasa.gov/planetary/apod?api_key=${nasaApiKey}`;
 
-    let timeout: any;
+    let timeout: ReturnType<typeof setTimeout> | undefined;
     let upstreamStatus = 0;
     let degradeReason: ApodFailureKind | null = null;
     let failureKind: ApodFailureKind = 'network';
@@ -563,7 +564,7 @@ export function setupNasaRoutes(app: any, ai: GoogleGenAI) {
         // reporting a generic outage.
         failureKind = nasaRes.status === 429 || nasaRes.status === 403 ? 'rate-limited' : 'upstream';
       }
-    } catch (err: any) {
+    } catch {
       // Gracefully handle network timeouts or DEMO_KEY rate limits without noisy warnings
       failureKind = 'network';
     } finally {
@@ -611,7 +612,7 @@ export function setupNasaRoutes(app: any, ai: GoogleGenAI) {
       ? `https://api.nasa.gov/neo/rest/v1/feed?start_date=${encodeURIComponent(startDate)}&end_date=${encodeURIComponent(endDate)}&api_key=${nasaApiKey}`
       : `https://api.nasa.gov/neo/rest/v1/feed?start_date=${encodeURIComponent(startDate)}&api_key=${nasaApiKey}`;
 
-    let timeout: any;
+    let timeout: ReturnType<typeof setTimeout> | undefined;
     let upstreamStatus = 0;
     let failureKind: 'network' | 'rate-limited' | 'upstream' | 'shape' = 'network';
     try {
@@ -628,7 +629,7 @@ export function setupNasaRoutes(app: any, ai: GoogleGenAI) {
           return sendFresh(res, { success: true, data }, neowsCache.ttlMs, storedAt);
         }
       }
-    } catch (err: any) {
+    } catch {
       // Gracefully handle network timeouts or DEMO_KEY rate limits
     } finally {
       if (timeout) clearTimeout(timeout);
@@ -648,7 +649,7 @@ export function setupNasaRoutes(app: any, ai: GoogleGenAI) {
     if (cachedEpic) return sendCached(res, { success: true, frames: cachedEpic.value }, cachedEpic);
     const url = `https://api.nasa.gov/EPIC/api/natural?api_key=${nasaApiKey}`;
 
-    let timeout: any;
+    let timeout: ReturnType<typeof setTimeout> | undefined;
     let upstreamStatus = 0;
     let failureKind: 'network' | 'rate-limited' | 'upstream' | 'shape' = 'network';
     try {
@@ -688,7 +689,7 @@ export function setupNasaRoutes(app: any, ai: GoogleGenAI) {
           }
         }
       }
-    } catch (err: any) {
+    } catch {
       // Gracefully fallback to high-quality DSCOVR EPIC Earth imagery sequence
     } finally {
       if (timeout) clearTimeout(timeout);
@@ -707,7 +708,7 @@ export function setupNasaRoutes(app: any, ai: GoogleGenAI) {
     const query = `select pl_name,hostname,pl_rade,pl_masse,pl_orbper,pl_eqt,sy_dist,disc_year,disc_facility from ps where default_flag=1 and pl_rade is not null order by sy_dist asc`;
     const tapUrl = `https://exoplanetarchive.ipac.caltech.edu/TAP/sync?query=${encodeURIComponent(query)}&format=json`;
 
-    let timeout: any;
+    let timeout: ReturnType<typeof setTimeout> | undefined;
     let upstreamStatus = 0;
     let failureKind: 'network' | 'rate-limited' | 'upstream' | 'shape' = 'network';
     try {
@@ -728,7 +729,7 @@ export function setupNasaRoutes(app: any, ai: GoogleGenAI) {
           }
         }
       }
-    } catch (err: any) {
+    } catch {
       // Gracefully handle network timeouts or TAP service latency
     } finally {
       if (timeout) clearTimeout(timeout);
@@ -872,7 +873,7 @@ export function setupNasaRoutes(app: any, ai: GoogleGenAI) {
     const params = new URLSearchParams({ api_key: nasaApiKey, start_date: startDate, end_date: endDate });
     const url = `https://api.nasa.gov/planetary/apod?${params}`;
 
-    let timeout: any;
+    let timeout: ReturnType<typeof setTimeout> | undefined;
     let upstreamStatus = 0;
     let failureKind: 'network' | 'rate-limited' | 'upstream' | 'shape' = 'network';
     try {
@@ -891,7 +892,7 @@ export function setupNasaRoutes(app: any, ai: GoogleGenAI) {
             normalised.date >= startDate && normalised.date <= endDate && !isDegradedApodRecord(normalised);
         })) return res.json({ success: true, data: data.map(normaliseApodMedia) });
       }
-    } catch (err: any) {
+    } catch {
       // Upstream failure is reported below.
     } finally {
       if (timeout) clearTimeout(timeout);

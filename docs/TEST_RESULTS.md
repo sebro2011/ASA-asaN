@@ -6,11 +6,12 @@ Latest full run: **2026-11-13**, branch `arena/8a962084-asa-asan`.
 | --- | --- |
 | `npm run lint` (`tsc --noEmit`) | clean |
 | `npm run build` | exit 0 · 89 JS chunks · entry **543.90 kB raw / 170.25 kB gzip** (was 920.85 / 245.83 before the locale split) · `si` 173.34 kB / 37.30 kB gzip on demand · `ta` 202.58 kB / 37.76 kB gzip on demand · CSS 63.65 kB gzip |
-| `npm test` | **887 pass / 0 fail** across **77** test scripts |
+| `npm test` | **889 pass / 0 fail** across **78** test scripts |
 | `npm run test:guardian` | 56 pass / 0 fail (core 28 · monitor/routes 22 · dashboard 6) |
 | `npm run test:rate-limit` | 9 pass / 0 fail |
 | `npm run test:nova-diagnostics` | 23 pass / 0 fail (4 new: model-list evidence) |
 | `npm run test:a11y` | 7 + 5 pass / 0 fail (keyboard reachability; no nameless icon button; label scripts) |
+| `npm run test:any-budget` | 2 pass / 0 fail (explicit `any` ≤ 52, strict mode on) |
 | `npm run test:docs-links` | 3 pass / 0 fail (every internal link resolves; no orphan documents) |
 | `npm run test:security-headers` | 11 pass / 0 fail (prod CSP has no inline script; dev keeps Vite's; proxy trust bounded; live response header matches the policy) |
 | `npm run test:process-guards` | 4 pass / 0 fail (log once → exit 1; rejections non-fatal) |
@@ -19,6 +20,7 @@ Latest full run: **2026-11-13**, branch `arena/8a962084-asa-asan`.
 | `npm run test:focus-trap` | 3 pass / 0 fail (Tab wrap, focus restore, wiring of all 4 overlays) |
 | `npm run test:contrast` | 7 pass / 0 fail (WCAG ratios computed from `tokens.css` + `nova-tokens.css`; documented numbers re-verified) |
 | `npm run test:a11y` | 7 pass / 0 fail (no pointer-only control; `activateOnKey`; Escape wiring; focus ring CSS) |
+| `npm run check:pwa` | post-build: 165 precached entries, external registration, no inline scripts |
 | `npm run test:nasa-cache` | 12 pass / 0 fail (TTL cache, honest `cached`/`fetchedAt`, outages never served from cache, client timeouts) |
 | `npm run test:workspace-chat` · `test:workspace-settings` | 21 and 11 pass (device-only chat) |
 | `npm run test:forge` | 224 pass / 0 fail |

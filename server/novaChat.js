@@ -381,10 +381,42 @@ export function providerError(status, provider, model) {
   // The status the *provider* returned, kept separate from ours: a 401 upstream
   // becomes a 503 for the browser, and the number is what makes a failure
   // diagnosable ("Arena AI said 401") without ever exposing the key.
+  //
+  // The model id travels too. Without it a 404 is a dead end: audit M4 found a
+  // key that listed 48 models while the configured one 404'd, and the response
+  // said only "the selected model is unavailable" — no way to tell which model,
+  // or that the list and the call disagreed. Model ids are configuration, not
+  // secrets; they are returned on every success already.
   return withProvider(
-    { ...response, body: { ...response.body, upstreamStatus: status } },
+    {
+      ...response,
+      body: {
+        ...response.body,
+        upstreamStatus: status,
+        model: model || null,
+        hint: modelFailureHint(status),
+      },
+    },
     provider,
   );
+}
+
+/**
+ * What a 404/422 from a provider actually means here — and what it does not.
+ * A model can be listed for a key and still 404 when the key lacks access to it
+ * or the API version differs, so this points at evidence rather than guessing.
+ */
+function modelFailureHint(status) {
+  if (status === 404 || status === 422) {
+    return 'This model id may be listed for the key yet restricted by access or API version. /api/nova/diagnostics lists the ids this key can call.';
+  }
+  if (status === 401 || status === 403) {
+    return 'The provider rejected this deployment\'s key. It is configured but not authorised for this request.';
+  }
+  if (status === 429) {
+    return 'The provider is rate-limiting this key. The request was not retried against another model.';
+  }
+  return undefined;
 }
 
 function withProvider(response, provider) {

@@ -22,6 +22,18 @@ These are current, measured limits. Each names the command or file behind it.
 | **TypeScript is not strict** | 72 `any`s remain; enabling `strict` is a separate, large migration. |
 
 
+## Dependencies
+
+1. **Four low-severity advisories remain, and one cannot be fixed by upgrading.**
+   `deepmerge` (reached through `vite-plugin-pwa → workbox-build →
+   @rollup/plugin-node-resolve`) is covered by its advisory from `>=4.2.0`, so no
+   released version is exempt; the other three are the packages that pull it and
+   are the same story. All are **build-time**: none is reachable from a request
+   handler, and none ships in `api/index.js`.
+2. **The `glob`/`minimatch` overrides deliberately exceed workbox's declared
+   ranges.** `npm run check:pwa` verifies the resulting service worker, which is
+   the only way to notice if a future bump makes the matcher return nothing.
+
 ## Deployment configuration
 
 1. **The proxy hop count is a default, not a measurement.** `TRUST_PROXY` unset

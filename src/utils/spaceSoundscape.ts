@@ -17,7 +17,7 @@ class DeepSpaceSoundscape {
   private delayLeft: DelayNode | null = null;
   private delayRight: DelayNode | null = null;
   private feedbackGain: GainNode | null = null;
-  private chordInterval: any = null;
+  private chordInterval: ReturnType<typeof setInterval> | null = null;
   private activeVoices: ChordVoices[] = [];
   private currentChordIndex: number = 0;
 

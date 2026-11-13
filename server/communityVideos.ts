@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, type Request, type Response } from 'express';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { youtubeIdFromUrl } from '../src/features/space-shorts/youtubeUrl';
 import type { SpaceVideo, SpaceVideoCategory } from '../src/features/space-shorts/types';
@@ -188,18 +188,18 @@ export function createCommunityRouter(options: { runtime?: () => CommunityRuntim
     return res.json(config ? { enabled: true, url: config.url, publicKey: config.publicKey } : { enabled: false });
   });
 
-  async function authenticate(req: any, res: any, store: CommunityStore): Promise<string | null> {
+  async function authenticate(req: Request, res: Response, store: CommunityStore): Promise<string | null> {
     const match = /^Bearer ([\x21-\x7e]{20,8192})$/.exec(req.get('Authorization') || '');
     const userId = match ? await store.verifyUser(match[1]) : null;
     if (!userId) { res.status(401).json({ error: 'authentication-required' }); return null; }
     return userId;
   }
-  function getRuntime(res: any): CommunityRuntime | null {
+  function getRuntime(res: Response): CommunityRuntime | null {
     const config = runtime();
     if (!config) { res.status(503).json({ error: 'community-unavailable' }); return null; }
     return config;
   }
-  function fail(res: any) { return res.status(503).json({ error: 'community-unavailable' }); }
+  function fail(res: Response) { return res.status(503).json({ error: 'community-unavailable' }); }
 
   router.get('/videos', async (req, res) => {
     const category = req.query.category ?? 'all';

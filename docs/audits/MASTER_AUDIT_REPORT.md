@@ -180,7 +180,7 @@ path. If it is not 1, set `TRUST_PROXY`. A regression test asserts the value sta
 bounded (`scripts/test-security-performance.mjs`, which previously pinned
 `trust proxy === false` — i.e. it asserted the bug).
 
-### M4 — Gemini generation is unavailable in production, and the hint is a guess — **OPEN, external**
+### M4 — Gemini generation is unavailable in production — **improved 2026-11-13, still external**
 
 Live production diagnostics (2026-11-12T10:32Z, re-read from
 `docs/API_STATUS_REPORT.md`): primary `gemini-3.8-flash` → **503**
@@ -190,10 +190,24 @@ Live production diagnostics (2026-11-12T10:32Z, re-read from
 A model that is *listed* for the key yet 404s when called points at access or
 region, not at the model id — but the diagnostics copy blamed quota/billing. That
 is a guess presented as a finding, which is exactly what this project forbids.
-Rewriting the hint to cross-check "model is in the key's model list" against the
-404 belongs to Phase 2 (NOVA), and needs either a working key or a documented
-"cannot distinguish" answer. OpenRouter answered 200 in 1,754 ms, so NOVA is
-**not** down — it is running on OpenRouter and the local engine.
+OpenRouter answered 200 in 1,754 ms, so NOVA is **not** down — it is running on
+OpenRouter and the local engine.
+
+What changed on 2026-11-13, all verifiable without a key:
+
+- **Diagnostics** (`ef3d0a3`): the model list is read *before* the hint is written,
+  so a listed-but-404 model is described as an access/API-version restriction and
+  the hint names `NOVA_GEMINI_MODEL` plus the ids the key can actually call. An
+  unreadable list produces a hedged hint instead of a confident one. 23 tests.
+- **Chat errors** (`51e304e` follow-up): a provider failure now returns the
+  **model id**, the upstream status and a hint that points at
+  `/api/nova/diagnostics`. Before this, a 404 said only "the selected model is
+  unavailable" — with no way to tell *which* model, or that the list and the call
+  disagreed. A test asserts the words "quota" and "billing" never appear.
+
+Still open, and only a working key can close it: why this key gets 503/404 for
+models it lists. Everything above makes that failure diagnosable; none of it
+proves the cause.
 
 ### M5 — 67 test suites, none executed automatically — **OPEN, proposal**
 
@@ -249,7 +263,7 @@ deployment resolves its function, so it needs approval.
 | m8 | ~~Package identity is boilerplate~~ **fixed 2026-11-13** — `asa-asan`, plus `description` and `license`; version stays `0.1.0` because no stable release exists to claim | `package.json` | `scripts/test-hygiene.mjs` |
 | m9 | ~~Two client fetches have no timeout~~ **fixed 2026-11-13** (`9219200`) | `lib/nasaApi.js:372` (`/api/satellites`), `:491` (`/api/news`) | `AbortSignal.timeout(15s)`; tested |
 | m10 | ~~Production CSP allows `'unsafe-inline'` scripts~~ **fixed 2026-11-13** — both inline scripts moved to files (`public/theme-boot.js`, `/registerSW.js`); prod is now `script-src 'self'`. `style-src` keeps `unsafe-inline` (style values cannot execute) | `server/securityHeaders.ts` | `scripts/test-security-headers.mjs` |
-| m11 | Build-chain advisories | `npm audit`: deepmerge prototype poisoning, glob/minimatch DoS, via `vite-plugin-pwa` → `workbox-build` | no runtime exposure; fixing requires downgrading `vite-plugin-pwa`, which was previously rejected | 
+| m11 | **Partly fixed 2026-11-13** — 6 advisories → **4 lows**. `glob` and `minimatch` (both moderate) cleared with npm `overrides` to their patched releases; the remaining four are `deepmerge` (**no patched release exists**: the advisory covers `>=4.2.0`) plus the chain that pulls it, all build-time | `package.json` overrides; `npm run check:pwa` now verifies the service worker still precaches after the override | 
 | m13 | A test proved the environment, not the product: `test-apod-media.mjs` expected a live `api.nasa.gov` call to fail. True here (egress blocked), false on a CI runner, where the route legitimately recovered an official NASA Science record and answered 200. | CI run 43417395210; fixed by stubbing **both** upstreams | fixed; **S** |
 | m12 | ~~`tsconfig` without `strict`~~ **done 2026-11-13** — `strict: true`; the code already passed, so the flag cost nothing. **72 explicit `any`s remain** and are now the whole of this item | `tsconfig.json` | remove `any`s incrementally; `strict` is already enforcing the rest |
 

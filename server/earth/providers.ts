@@ -122,8 +122,18 @@ export const EARTH_ANALYST_PERSONA: Persona = {
   responseSchema: ANALYST_RESPONSE_SCHEMA,
 };
 
-function statusFromError(error: any): number | undefined {
-  const candidates = [error?.status, error?.code, error?.error?.code, error?.response?.status];
+interface ErrorLike {
+  status?: unknown;
+  code?: unknown;
+  error?: { code?: unknown };
+  response?: { status?: unknown; headers?: Record<string, unknown> };
+  headers?: Record<string, unknown>;
+}
+
+/** Reads a status off whatever an SDK threw, without trusting its shape. */
+function statusFromError(input: unknown): number | undefined {
+  const error = (input ?? {}) as ErrorLike;
+  const candidates = [error.status, error.code, error.error?.code, error.response?.status];
   for (const candidate of candidates) {
     const value = typeof candidate === 'string' ? Number(candidate) : candidate;
     if (typeof value === 'number' && Number.isFinite(value) && value >= 100 && value <= 599) return value;
@@ -131,8 +141,9 @@ function statusFromError(error: any): number | undefined {
   return undefined;
 }
 
-function retryAfterFromError(error: any): number | undefined {
-  const header = error?.response?.headers?.['retry-after'] || error?.headers?.['retry-after'];
+function retryAfterFromError(input: unknown): number | undefined {
+  const error = (input ?? {}) as ErrorLike;
+  const header = error.response?.headers?.['retry-after'] || error.headers?.['retry-after'];
   const seconds = Number(header);
   return Number.isFinite(seconds) && seconds > 0 ? seconds * 1_000 : undefined;
 }

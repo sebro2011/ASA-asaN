@@ -1353,16 +1353,18 @@ var EARTH_ANALYST_PERSONA = {
   buildPrompt: ({ question, context, languageName }) => analystPrompt(question, context, languageName),
   responseSchema: ANALYST_RESPONSE_SCHEMA
 };
-function statusFromError(error) {
-  const candidates = [error?.status, error?.code, error?.error?.code, error?.response?.status];
+function statusFromError(input) {
+  const error = input ?? {};
+  const candidates = [error.status, error.code, error.error?.code, error.response?.status];
   for (const candidate of candidates) {
     const value = typeof candidate === "string" ? Number(candidate) : candidate;
     if (typeof value === "number" && Number.isFinite(value) && value >= 100 && value <= 599) return value;
   }
   return void 0;
 }
-function retryAfterFromError(error) {
-  const header = error?.response?.headers?.["retry-after"] || error?.headers?.["retry-after"];
+function retryAfterFromError(input) {
+  const error = input ?? {};
+  const header = error.response?.headers?.["retry-after"] || error.headers?.["retry-after"];
   const seconds = Number(header);
   return Number.isFinite(seconds) && seconds > 0 ? seconds * 1e3 : void 0;
 }
@@ -3992,9 +3994,29 @@ function providerError(status, provider, model) {
     response = errorResult(502, "PROVIDER_ERROR", "The AI provider could not complete this request. Please retry.");
   }
   return withProvider(
-    { ...response, body: { ...response.body, upstreamStatus: status } },
+    {
+      ...response,
+      body: {
+        ...response.body,
+        upstreamStatus: status,
+        model: model || null,
+        hint: modelFailureHint(status)
+      }
+    },
     provider
   );
+}
+function modelFailureHint(status) {
+  if (status === 404 || status === 422) {
+    return "This model id may be listed for the key yet restricted by access or API version. /api/nova/diagnostics lists the ids this key can call.";
+  }
+  if (status === 401 || status === 403) {
+    return "The provider rejected this deployment's key. It is configured but not authorised for this request.";
+  }
+  if (status === 429) {
+    return "The provider is rate-limiting this key. The request was not retried against another model.";
+  }
+  return void 0;
 }
 function withProvider(response, provider) {
   return {
@@ -5052,8 +5074,9 @@ function normaliseApodMedia(record) {
   }
   return upgraded;
 }
-function isDegradedApodRecord(record) {
-  if (!record || typeof record !== "object") return false;
+function isDegradedApodRecord(input) {
+  if (!input || typeof input !== "object") return false;
+  const record = input;
   const url = String(record.url || "");
   const hdurl = String(record.hdurl || "");
   const logoLike = (value) => /^https?:\/\/science\.nasa\.gov\/wp-content\/themes\//i.test(value) || /\/nasa-logo(@2x)?\.(png|jpe?g|svg|webp)$/i.test(value);
@@ -5372,7 +5395,7 @@ function setupNasaRoutes(app2, ai2) {
       } else {
         failureKind = nasaRes.status === 429 || nasaRes.status === 403 ? "rate-limited" : "upstream";
       }
-    } catch (err) {
+    } catch {
       failureKind = "network";
     } finally {
       if (timeout) clearTimeout(timeout);
@@ -5427,7 +5450,7 @@ function setupNasaRoutes(app2, ai2) {
           return sendFresh(res, { success: true, data }, neowsCache.ttlMs, storedAt);
         }
       }
-    } catch (err) {
+    } catch {
     } finally {
       if (timeout) clearTimeout(timeout);
     }
@@ -5477,7 +5500,7 @@ function setupNasaRoutes(app2, ai2) {
           }
         }
       }
-    } catch (err) {
+    } catch {
     } finally {
       if (timeout) clearTimeout(timeout);
     }
@@ -5511,7 +5534,7 @@ function setupNasaRoutes(app2, ai2) {
           }
         }
       }
-    } catch (err) {
+    } catch {
     } finally {
       if (timeout) clearTimeout(timeout);
     }
@@ -5639,7 +5662,7 @@ ${JSON.stringify({ title, explanation })}`;
           return normalised && typeof normalised.title === "string" && normalised.title.trim() && typeof normalised.url === "string" && isValidApodDate(normalised.date) && normalised.date >= startDate && normalised.date <= endDate && !isDegradedApodRecord(normalised);
         })) return res.json({ success: true, data: data.map(normaliseApodMedia) });
       }
-    } catch (err) {
+    } catch {
     } finally {
       if (timeout) clearTimeout(timeout);
     }

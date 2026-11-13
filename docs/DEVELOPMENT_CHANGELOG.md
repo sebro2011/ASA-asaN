@@ -3,6 +3,47 @@
 Newest first. Every entry states what changed, which files, and how it was verified.
 Nothing here is a plan; if it was not executed it is not listed.
 
+## 2026-11-13 — Advisories halved, diagnosable provider errors, `any` ratchet (branch `arena/8a962084-asa-asan`)
+
+Audits **m11**, **M4**, **m12** (the `any` half).
+
+### m11 — 6 advisories → 4, and the remaining four have no fix to take
+`glob` and `minimatch` (both **moderate**, both reached through
+`vite-plugin-pwa → workbox-build`) are cleared with npm `overrides` to their
+patched releases (`glob@^14.0.6`, `minimatch@^11.0.8`).
+
+The four that remain are **low**, and `deepmerge` is unfixable by upgrade: the
+advisory covers `>=4.2.0`, so no released version is exempt. All four are
+build-time only.
+
+Overrides bypass the range workbox declared, so the risk they create is silent:
+a broken matcher still produces a service worker — with an **empty precache** —
+and the app looks fine online while being broken offline. `npm run build` now ends
+with `check:pwa`, which fails the build unless the worker precaches ≥100 entries,
+registration is external, and the built HTML contains no inline `<script>`
+(the CSP is `script-src 'self'` now, so one would be fatal in production only).
+Current build: **165 precached entries, 0 inline scripts**.
+
+### M4 — a provider failure now names the model
+`providerError` returns the model id, the upstream status and a hint that points at
+`/api/nova/diagnostics`, plus a status-specific sentence for 404/422, 401/403 and
+429. Previously a 404 said only "the selected model is unavailable", which is the
+exact failure the audit could not diagnose. Tests assert the words *quota* and
+*billing* never appear — the cause is still unknown here, and pretending otherwise
+is the one thing this project does not do.
+
+### m12 — 72 explicit `any`s → 52, with a budget that can only fall
+Converted: Express handler params in `server/communityVideos.ts`, error shapes in
+`server/earth/providers.ts` (now `unknown` + a named `ErrorLike`), every
+`catch (err: any)` and `let timeout: any` in `server/nasaRoutes.ts`,
+`isDegradedApodRecord` and `setupNasaRoutes` signatures, and four `src/utils`
+sites. `scripts/test-any-budget.mjs` fails above 52 and prints the per-file counts
+so the next pass can pick a file instead of a number.
+
+### Verification
+`npm test` → **889 pass / 0 fail** (was 887) · `tsc --noEmit` clean · `npm run build` ok
+(including `check:pwa`) · `npm audit` → 4 low (from 6).
+
 ## 2026-11-13 — Icon-only labels, strict mode, documentation index (branch `arena/8a962084-asa-asan`)
 
 Audits **m4**, **m12**, **T6**.

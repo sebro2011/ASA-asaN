@@ -84,7 +84,7 @@ export async function safeFetchNASA<T>(
   fallbackData: T,
   timeoutMs: number = 4000
 ): Promise<{ data: T; isFallback: boolean; error?: string }> {
-  let timeout: any;
+  let timeout: ReturnType<typeof setTimeout> | undefined;
   try {
     const controller = new AbortController();
     timeout = setTimeout(() => {
