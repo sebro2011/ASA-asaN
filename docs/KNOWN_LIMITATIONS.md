@@ -22,6 +22,22 @@ These are current, measured limits. Each names the command or file behind it.
 | **TypeScript is not strict** | 72 `any`s remain; enabling `strict` is a separate, large migration. |
 
 
+## Accessibility
+
+1. **Contrast is computed, not rendered.** `scripts/test-contrast-tokens.mjs`
+   proves every text token clears AA on its own surfaces, but the app draws on
+   translucent glass over gradients. The effective backdrop is not modelled, and
+   no browser was available to check rendering, anti-aliasing or `forced-colors`.
+2. **Focus is not trapped in the header drawer or the mobile tab sheet.** Escape
+   closes both, and their backdrops are `aria-hidden`, but Tab can leave the
+   panel. `MobileDrawer` and `CommandPalette` do trap focus — the pattern exists,
+   it just was not applied here.
+3. **Icon-only buttons are partially labelled.** Audit m4 counted 3 `aria-label`s
+   across 331 `<button>`s; most buttons carry visible text, so this is not a claim
+   that the rest are broken, but the icon-only subset was not audited.
+4. **Some `aria-label`s are English-only** inside otherwise localised components
+   (the planet globe, a few AR controls).
+
 ## Data integrity
 
 1. **Gemini generation is unavailable in production.** Diagnostics record 503 on

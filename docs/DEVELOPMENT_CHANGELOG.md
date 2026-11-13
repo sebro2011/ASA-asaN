@@ -3,6 +3,54 @@
 Newest first. Every entry states what changed, which files, and how it was verified.
 Nothing here is a plan; if it was not executed it is not listed.
 
+## 2026-11-13 — Contrast computed from the tokens, not estimated (branch `arena/8a962084-asa-asan`)
+
+### Added
+- `scripts/test-contrast-tokens.mjs` (7 cases). It parses the **real** token files
+  rather than a copy of them, so it fails when the palette drifts, and enforces:
+  every ink token ≥ 4.5:1 on every surface of its palette; every accent used as
+  text ≥ 4.5:1; white on `--color-ws-accent-solid` ≥ 4.5:1 in both workspace
+  themes. It also re-computes the numbers printed in the `nova-tokens.css` header
+  and fails if that comment and its tokens disagree.
+
+### Measured (WCAG 2.1, `(L1+0.05)/(L2+0.05)`)
+
+| Palette | Token | Worst surface | Ratio |
+| --- | --- | --- | --- |
+| science | `--color-ink` | surface-3 | 14.03 |
+| science | `--color-ink-2` | surface-3 | 9.05 |
+| science | `--color-ink-3` | surface-3 | 5.05 |
+| science | `--color-ink-4` | surface-3 | 5.07 |
+| science | tightest accent used as text (`--color-azure`) | surface-3 | 4.90 |
+| workspace dark | `--color-ws-text-3` | elev-2 | 4.93 |
+| workspace light | `--color-ws-text-3` | elev-2 | 4.68 |
+| workspace both | white on `--color-ws-accent-solid` | — | 4.88 / 5.41 |
+
+`--color-azure-deep` (3.53 → 2.72) is the one token below AA — it is a **fill**,
+never a text colour, and the test enforces that by scanning the sources for
+`text-blue-600`. White on it is 5.36:1.
+
+### Corrected in this pass
+- **The science palette has no light theme.** Only the workspace (`data-nova-theme`)
+  is themed light; Explore surfaces are dark-only. The earlier changelog entry
+  implied a light-theme contrast problem on science surfaces — that surface does
+  not exist.
+- **A focus ring already existed** in `src/styles/tokens.css` (`--focus`, an
+  `outline` on `:focus-visible`). The previous commit added a second, competing
+  rule in `globals.css`. It now only adds what was genuinely missing —
+  `[role="button"]` and a `forced-colors` variant — and a test forbids a
+  competing base rule.
+
+### Not covered (recorded)
+- Glass surfaces are translucent (`--glass-fill` is `rgba`, panels sit on
+  gradients), so the effective backdrop is lighter than the token. Ratios here are
+  the **token-on-token** case, which is the worst case only if the glass darkens
+  the backdrop; light glass could reduce them.
+- No browser: rendering, anti-aliasing and forced-colors behaviour are unverified.
+
+### Verification
+`npm test` → **851 pass / 0 fail** (was 844) · `tsc --noEmit` clean · `npm run build` ok.
+
 ## 2026-11-13 — Keyboard reachability and one focus ring (branch `arena/8a962084-asa-asan`)
 
 Audit **m3** (Phase 5). Twelve clickable containers were pointer-only.

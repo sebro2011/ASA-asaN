@@ -6,10 +6,11 @@ Latest full run: **2026-11-13**, branch `arena/8a962084-asa-asan`.
 | --- | --- |
 | `npm run lint` (`tsc --noEmit`) | clean |
 | `npm run build` | exit 0 · 89 JS chunks · entry **543.90 kB raw / 170.25 kB gzip** (was 920.85 / 245.83 before the locale split) · `si` 173.34 kB / 37.30 kB gzip on demand · `ta` 202.58 kB / 37.76 kB gzip on demand · CSS 63.65 kB gzip |
-| `npm test` | **844 pass / 0 fail** across **69** test scripts |
+| `npm test` | **851 pass / 0 fail** across **70** test scripts |
 | `npm run test:guardian` | 56 pass / 0 fail (core 28 · monitor/routes 22 · dashboard 6) |
 | `npm run test:rate-limit` | 9 pass / 0 fail |
 | `npm run test:nova-diagnostics` | 23 pass / 0 fail (4 new: model-list evidence) |
+| `npm run test:contrast` | 7 pass / 0 fail (WCAG ratios computed from `tokens.css` + `nova-tokens.css`; documented numbers re-verified) |
 | `npm run test:a11y` | 7 pass / 0 fail (no pointer-only control; `activateOnKey`; Escape wiring; focus ring CSS) |
 | `npm run test:nasa-cache` | 12 pass / 0 fail (TTL cache, honest `cached`/`fetchedAt`, outages never served from cache, client timeouts) |
 | `npm run test:workspace-chat` · `test:workspace-settings` | 21 and 11 pass (device-only chat) |

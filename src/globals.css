@@ -113,20 +113,21 @@ select {
 }
 
 /* -----------------------------------------------------------------------------
-   One focus ring for the whole app.
+   Focus ring.
 
-   Nothing global existed: the shell relied on each browser's default outline,
-   which Tailwind's preflight leaves inconsistent across the dark glass surfaces
-   and near-invisible on the light theme. Controls that are now real buttons
-   become visible to keyboard users only if the ring is actually visible.
+   The ring itself already exists — `src/styles/tokens.css` styles
+   `:where(a, button, input, select, textarea, summary, [tabindex]):focus-visible`
+   with `--focus`. This file must NOT define a second one: two rules diverge the
+   moment someone edits one of them.
 
-   `:focus-visible` keeps the ring off for pointer clicks, so this changes nothing
-   for mouse or touch users.
+   What was missing is `[role="button"]` in that selector list (the role has no
+   native focus ring) and a high-contrast fallback. Both live here, and
+   `scripts/test-a11y-controls.mjs` asserts the two rules together.
    -------------------------------------------------------------------------- */
-:where(a, button, [role="button"], summary, input, select, textarea, [tabindex]):focus-visible {
-  outline: 2px solid var(--color-atmo, #5ed3f2);
+:where([role="button"]):focus-visible {
+  outline: 2px solid var(--focus);
   outline-offset: 2px;
-  border-radius: inherit;
+  border-radius: var(--radius-sm);
 }
 
 /* Windows high-contrast mode drops box-shadows; an outline survives. */

@@ -176,11 +176,26 @@ test('the overlays can be dismissed from the keyboard', () => {
   }
 });
 
-test('there is one visible focus ring, defined on :focus-visible', () => {
-  const css = readFileSync('src/globals.css', 'utf8');
-  assert.match(css, /:focus-visible/, 'a focus style must exist');
-  assert.match(css, /outline:\s*2px solid/, 'and it must be an outline, not only a shadow');
-  assert.match(css, /forced-colors/, 'high-contrast mode needs its own rule');
+test('there is exactly one base focus ring, and role=button is covered', () => {
+  const tokens = readFileSync('src/styles/tokens.css', 'utf8');
+  const globals = readFileSync('src/globals.css', 'utf8');
+
+  // The ring: an outline, not a shadow, from the `--focus` token.
+  assert.match(tokens, /:focus-visible\s*\{[^}]*outline:\s*2px solid/, 'the base ring lives in tokens.css');
+  // A second *base* rule (text inputs, [tabindex], bare buttons) would drift from
+  // the first. A supplementary rule for role="button" is fine — it has no native
+  // ring to inherit.
+  const competing = [];
+  for (const match of globals.matchAll(/([^}]*):focus-visible\s*\{/g)) {
+    const selector = match[1];
+    if (/\b(input|select|textarea|summary)\b|\[tabindex\]/.test(selector) && !/role="button"/.test(selector)) {
+      competing.push(selector.trim());
+    }
+  }
+  assert.deepEqual(competing, [], `globals.css must not redefine the base ring:\n${competing.join('\n')}`);
+  // role="button" has no native ring, so it needs to be in the selector list.
+  assert.match(globals, /\[role="button"\][^{]*:focus-visible/, 'role=button must get the ring too');
+  assert.match(globals, /forced-colors/, 'high-contrast mode needs its own rule');
 });
 
 test('converted controls are real buttons', () => {
