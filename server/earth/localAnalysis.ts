@@ -76,7 +76,7 @@ export interface SeriesAnalysis {
 export interface EarthAnalystContext {
   area?: { label?: string; latitude?: number; longitude?: number };
   dates?: string[];
-  layers?: Array<Record<string, any>>;
+  layers?: Array<Record<string, unknown>>;
   power?: {
     place?: string;
     latitude?: number;
@@ -88,7 +88,7 @@ export interface EarthAnalystContext {
     unavailable?: string[];
     sourceUrl?: string;
     retrievedAt?: string;
-    stats?: Array<Record<string, any>>;
+    stats?: Array<Record<string, unknown>>;
     series?: MonthlySeries[];
   } | null;
   dataGaps?: string[];

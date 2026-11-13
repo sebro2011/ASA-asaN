@@ -3,6 +3,61 @@
 Newest first. Every entry states what changed, which files, and how it was verified.
 Nothing here is a plan; if it was not executed it is not listed.
 
+## 2026-11-13 — `any` reaches zero, and the ratchet that could not fail (branch `arena/8a962084-asa-asan`)
+
+Audits **m12** (finished) and **M4** (cause identified).
+
+### m12 — 72 explicit `any`s → **0**
+The audit counted the words; each one hid a shape. All of them now have a name,
+and nothing in `server/` or `src/` writes `any`:
+
+| Area | Was | Now |
+| --- | --- | --- |
+| YouTube (search + videos) | `Promise<any>`, `(entry: any)` | `YouTubeSearchResponse`/`YouTubeVideoResponse`, every field optional and re-checked |
+| Space news (4 providers) | `getJson(): Promise<any>` | one response interface per provider; `getJson<T>` with the cast documented as a boundary |
+| Mars photos, APOD science | `normalizePhoto(item: any)`, `post: any` | a validating guard (`asPhotoRecord`, `isRenderableFrame`) and `WpPost`/`WpMedia` |
+| NeoWs / EPIC / exoplanets | `createTtlCache<any>`, `Record<string, any>` | `JsonRecord`, `EpicFrame`, and route-local narrowing |
+| Supabase (community) | `checked(error: any)`, `toVideo(row: any)` | row interfaces mirroring `supabase/cosmovision.sql` (NOT NULL stays non-optional) |
+| Recharts tooltips | `({ active, payload, label }: any)` | `ChartTooltipProps` + a `DrawableTooltipRow` predicate, so `parameterMeta(entry.dataKey)` type-checks |
+| Web Speech API | `useRef<any>`, `(window as any)` | the 9 members the component touches (`SpeechRecognitionLike`) |
+| Express error middleware | `(error: any, req: any, res: any, next: any)` | `unknown` + `ExpressRequest`/`ExpressResponse`/`NextFunction` |
+
+Two literal datasets (`FALLBACK_APODS`, `GROUNDED_DISCOVERY_ARCHIVE`) lost their
+`Record<string, any>` annotation instead of gaining one: the literal is the type,
+and a typo in a fixture is now a compile error.
+
+### The ratchet measured 3 while claiming 52
+`scripts/test-any-budget.mjs` used `(^|[^A-Za-z0-9_$]):\s*any\b`. The prefix class
+excludes identifiers — but an identifier is exactly what precedes a type
+annotation (`data: any`), so the pattern matched almost nothing and the budget
+never bound. It reported a count of 3 and passed a budget of 52.
+
+A guard that cannot fail is worse than none, so the rewrite fixes both halves:
+the pattern now covers `: any`, `as any`, `<any>`, `any[]` and `, any>`;
+`BUDGET` is **0**; and a **test of the detector** pins 9 lines that must match and
+6 that must not (a comment, a JSDoc `*`, `const company: string`, `items.any(fn)` …).
+Verified by appending `const __ratchet_probe: any = 1;` to a source file, watching
+the test fail with the per-file summary, then removing it.
+
+### M4 — the 404 on a listed model is the vendor's retirement notice
+`docs/nova/INTELLIGENCE_LEVELS_MAPPING.md` §9 already recorded the body of that
+404: `models/gemini-2.5-flash is no longer available to new users … use
+models/gemini-3.8-flash`. `GET /v1beta/models` is a catalogue, not an entitlement,
+so "listed yet 404s" is consistent with "withdrawn for new projects".
+
+`server/novaDiagnostics.js` now acts on it: when the configured id 404s **and**
+another id answers with the same key, the report sets `suggestedModel` and appends
+`set NOVA_GEMINI_MODEL=<id> … a listing in /v1beta/models is not an entitlement to
+call the model`. Two assertions added to `scripts/test-nova-diagnostics.mjs`
+(23 pass, no new test blocks). Whether *this* key generates **now** still needs
+`/api/nova/diagnostics?probe=1` from a machine with the key and egress; that stays
+open in the audit rather than being claimed.
+
+### Verification
+`npm test` **890 pass / 0 fail** across 78 scripts (`tsc --noEmit` clean, `strict`
+on, `any` 0); `npm run build` exit 0 including `check:pwa` (165 precached entries,
+0 inline scripts); `api/index.js` rebuilt and in sync.
+
 ## 2026-11-13 — Advisories halved, diagnosable provider errors, `any` ratchet (branch `arena/8a962084-asa-asan`)
 
 Audits **m11**, **M4**, **m12** (the `any` half).

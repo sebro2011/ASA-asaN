@@ -180,7 +180,7 @@ path. If it is not 1, set `TRUST_PROXY`. A regression test asserts the value sta
 bounded (`scripts/test-security-performance.mjs`, which previously pinned
 `trust proxy === false` — i.e. it asserted the bug).
 
-### M4 — Gemini generation is unavailable in production — **improved 2026-11-13, still external**
+### M4 — Gemini generation is unavailable in production — **cause identified 2026-11-13; last step still external**
 
 Live production diagnostics (2026-11-12T10:32Z, re-read from
 `docs/API_STATUS_REPORT.md`): primary `gemini-3.8-flash` → **503**
@@ -205,9 +205,39 @@ What changed on 2026-11-13, all verifiable without a key:
   unavailable" — with no way to tell *which* model, or that the list and the call
   disagreed. A test asserts the words "quota" and "billing" never appear.
 
-Still open, and only a working key can close it: why this key gets 503/404 for
-models it lists. Everything above makes that failure diagnosable; none of it
-proves the cause.
+### The 404 on a listed model is explained by the vendor's own message
+
+`docs/nova/INTELLIGENCE_LEVELS_MAPPING.md` §9 records the body of that 404, read
+off the live API:
+
+> `models/gemini-2.5-flash is no longer available to new users … use
+> models/gemini-3.8-flash`
+
+That resolves what this report called "unexplained". `GET /v1beta/models` is a
+*catalogue*, not an entitlement: it still lists ids that the project may not call,
+and a retired id answers `404 NOT_FOUND` naming its successor. So the two
+observations are consistent rather than contradictory —
+
+| Observation | Cause, as stated by the API |
+| --- | --- |
+| `gemini-3.8-flash` → **503** | the model exists and was overloaded at that moment |
+| `gemini-2.5-flash` → **404** while listed | the model is withdrawn for new projects; the 404 named `gemini-3.8-flash` as the replacement |
+
+The report now acts on that: when the configured id 404s **and**
+another id answers with the same key, `novaDiagnostics` sets `suggestedModel` and
+says `set NOVA_GEMINI_MODEL=<that id> … a listing in /v1beta/models is not an
+entitlement to call the model` (asserted in `scripts/test-nova-diagnostics.mjs`).
+The operator no longer has to compare two lists by hand to reach the vendor's own
+conclusion.
+
+Still open, and only a working key plus egress can close it: whether *this* key
+generates from `gemini-3.8-flash` **now**, i.e. whether the 503 was transient
+capacity or a sustained restriction. The single command that answers it, with the
+key already in the environment, is
+`GET /api/nova/diagnostics?probe=1` (documented in
+`docs/nova/AI_PROVIDER_DIAGNOSTICS.md`, including the code table). Nothing in this
+repository can run it: the sandbox cannot reach `generativelanguage.googleapis.com`
+and holds no key.
 
 ### M5 — 67 test suites, none executed automatically — **OPEN, proposal**
 
@@ -265,7 +295,7 @@ deployment resolves its function, so it needs approval.
 | m10 | ~~Production CSP allows `'unsafe-inline'` scripts~~ **fixed 2026-11-13** — both inline scripts moved to files (`public/theme-boot.js`, `/registerSW.js`); prod is now `script-src 'self'`. `style-src` keeps `unsafe-inline` (style values cannot execute) | `server/securityHeaders.ts` | `scripts/test-security-headers.mjs` |
 | m11 | **Partly fixed 2026-11-13** — 6 advisories → **4 lows**. `glob` and `minimatch` (both moderate) cleared with npm `overrides` to their patched releases; the remaining four are `deepmerge` (**no patched release exists**: the advisory covers `>=4.2.0`) plus the chain that pulls it, all build-time | `package.json` overrides; `npm run check:pwa` now verifies the service worker still precaches after the override | 
 | m13 | A test proved the environment, not the product: `test-apod-media.mjs` expected a live `api.nasa.gov` call to fail. True here (egress blocked), false on a CI runner, where the route legitimately recovered an official NASA Science record and answered 200. | CI run 43417395210; fixed by stubbing **both** upstreams | fixed; **S** |
-| m12 | ~~`tsconfig` without `strict`~~ **done 2026-11-13** — `strict: true`; the code already passed, so the flag cost nothing. **72 explicit `any`s remain** and are now the whole of this item | `tsconfig.json` | remove `any`s incrementally; `strict` is already enforcing the rest |
+| m12 | ~~`tsconfig` without `strict`, and 72 explicit `any`s~~ **fixed 2026-11-13** — `strict: true`, and the `any` count is now **0** in every `.ts`/`.tsx` file. Each one hid a shape that now has a name (YouTube/NeoWs/EPIC/POWER/Supabase payloads, `Recharts` tooltip payloads, the Web Speech API, Express error middleware). **Disclosure:** the first ratchet (`9ca5228`) used `(^\|[^A-Za-z0-9_$]):\s*any\b`, whose prefix class excluded every character that can precede a type annotation, so it measured **3** while reporting a budget of 52 — it could never fail. `scripts/test-any-budget.mjs` now has a **test of the detector** (9 must-match, 6 must-not-match fixtures) and a budget of **0**; verified by inserting a probe `any`, watching the test fail, and removing it | `tsconfig.json`; `scripts/test-any-budget.mjs` | the self-test is the guard against a vacuous guard |
 
 ---
 

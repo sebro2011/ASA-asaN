@@ -405,7 +405,15 @@ export function createDiagnosticsHandler({
           entry.modelsTried = [configuredModel, ...tried.map((attempt) => attempt.model)];
 
           if (entry.fallbackModel?.ok) {
-            entry.hint = `${entry.hint ? `${entry.hint} ` : ''}${entry.fallbackModel.model} answered with the same key; the original model request failed. Review model availability and configuration.`;
+            // A model that answered is the only actionable evidence here: this key
+            // *can* generate, it just cannot call the configured id. When that id
+            // 404s while `models.list` still shows it, the usual reason is that the
+            // model was retired for new projects — so name the working id instead
+            // of leaving the operator to compare lists by hand.
+            const pinned = modelMissing ? entry.fallbackModel.model : null;
+            entry.hint = `${entry.hint ? `${entry.hint} ` : ''}${entry.fallbackModel.model} answered with the same key; the original model request failed. Review model availability and configuration.`
+              + (pinned ? ` This key can generate: set NOVA_GEMINI_MODEL=${pinned} (or unset it to accept the default) so NOVA stops asking for an id this key cannot call. A listing in /v1beta/models is not an entitlement to call the model.` : '');
+            if (pinned) entry.suggestedModel = pinned;
           } else {
             entry.hint = `${entry.hint ? `${entry.hint} ` : ''}No alternative model probe succeeded. Failures may have different causes; inspect the statuses and provider configuration before drawing a conclusion.`;
           }

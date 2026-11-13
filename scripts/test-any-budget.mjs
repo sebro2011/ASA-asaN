@@ -2,12 +2,19 @@
  * A ratchet on `any`.
  *
  * Audit m12 counted 72 explicit `any`s (plus `tsconfig` without `strict`). The
- * strict flag is on now; the `any`s are a separate, slower job, because each one
- * hides a shape that has to be described before it can be typed. Deleting them
- * all in one commit would be a large, unreviewable change to code that works.
+ * strict flag is on, and the `any`s are gone: every one hid a shape that now has
+ * a name. This test keeps them gone.
  *
- * So the number is a budget: it may go down, never up. The list is printed so the
- * next person can pick a file rather than a number.
+ * Two things went wrong the first time this test was written, and both are fixed
+ * here, because a ratchet that cannot fail is worse than no ratchet:
+ *
+ *   1. the pattern was `(^|[^A-Za-z0-9_$]):\s*any\b`, whose prefix class also
+ *      excluded every character that can legitimately precede a type annotation
+ *      (`data: any` has an identifier before the colon). It matched almost
+ *      nothing, so the budget never bound;
+ *   2. nothing tested the detector itself, so the first problem stayed invisible.
+ *
+ * `test('the detector actually detects any')` is the guard for the guard.
  *
  * Run: node --import tsx --test --test-force-exit scripts/test-any-budget.mjs
  */
@@ -16,8 +23,17 @@ import assert from 'node:assert/strict';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
-/** 72 at the audit → 52 after the first pass. Lower this when you remove more. */
-const BUDGET = 52;
+/** 72 at the audit → 52 after a first pass → 0 once every shape had a name. */
+const BUDGET = 0;
+
+/** Every written form of an explicit `any` this repository has used. */
+const ANY_PATTERNS = [
+  /:\s*any\b/, // x: any
+  /\bas\s+any\b/, // x as any
+  /<any>/, // Array<any>
+  /any\[\]/, // any[]
+  /,\s*any>/, // Map<string, any>, Record<string, any>, Promise<any>
+];
 
 function sourceFiles(dir = '.') {
   const out = [];
@@ -30,19 +46,55 @@ function sourceFiles(dir = '.') {
   return out;
 }
 
+/** A line with its trailing comment removed, so a comment cannot trip the count. */
+function codeOf(line) {
+  return line.replace(/\s+\/\/.*$/, '');
+}
+
+function anySitesInLine(line) {
+  const code = codeOf(line);
+  if (!code.trim() || /^\s*(\/\/|\*|\/\*)/.test(line)) return false;
+  return ANY_PATTERNS.some((pattern) => pattern.test(code));
+}
+
 function anySites() {
   const sites = [];
   for (const file of sourceFiles()) {
-    const source = readFileSync(file, 'utf8');
-    source.split('\n').forEach((line, index) => {
-      // `: any` as a type annotation; ignores the word inside strings/comments.
-      if (/(^|[^A-Za-z0-9_$]):\s*any\b/.test(line) && !/^\s*(\/\/|\*|\/\*)/.test(line)) {
-        sites.push({ file, line: index + 1, text: line.trim().slice(0, 100) });
-      }
+    readFileSync(file, 'utf8').split('\n').forEach((line, index) => {
+      if (anySitesInLine(line)) sites.push({ file, line: index + 1, text: line.trim().slice(0, 100) });
     });
   }
   return sites;
 }
+
+test('the detector actually detects any', () => {
+  const mustMatch = [
+    'const data: any = { };',
+    'function f(item: any) { }',
+    'let payload = body as any;',
+    'const items: any[] = [];',
+    'const list = [] as Array<any>;',
+    'type Cache = Map<string, any>;',
+    'type Row = Record<string, any>;',
+    'function g(): Promise<any> { }',
+    'const x: any = 1; // the only field',
+  ];
+  for (const line of mustMatch) {
+    assert.ok(anySitesInLine(line), `detector missed: ${line}`);
+  }
+
+  const mustNotMatch = [
+    '// x: any is what we removed',
+    ' * @param item any value',
+    'const company: string = "any";',
+    'const everything: unknown = null;',
+    'const always = true;',
+    'return items.any(fn);',
+  ];
+  for (const line of mustNotMatch) {
+    assert.ok(!anySitesInLine(line), `detector false-positive: ${line}`);
+  }
+});
 
 test(`explicit any stays within budget (${BUDGET})`, () => {
   const sites = anySites();

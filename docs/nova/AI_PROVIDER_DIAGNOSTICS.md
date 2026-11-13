@@ -52,7 +52,14 @@ unexplained for so long. They mean different things:
 
 When the model is the problem, the probe tries the other known ids and reports
 `fallbackModel` (the first that answered) plus `modelsTried`, so one report
-answers both questions: *is the key good?* and *is the model good?* It also lists
+answers both questions: *is the key good?* and *is the model good?* When the
+configured id 404s but another id answers, the report also sets
+**`suggestedModel`** and spells out the fix (`set NOVA_GEMINI_MODEL=<that id>`) —
+because a listing in `/v1beta/models` is a catalogue entry, not an entitlement to
+call the model. That is how the earlier "listed for the key, yet 404" puzzle
+resolves: Google's own 404 body named the replacement
+(`models/gemini-2.5-flash is no longer available to new users … use
+models/gemini-3.8-flash`). It also lists
 the models the key may actually call (`availableModels`, `availableModelCount`,
 read from `GET /v1beta/models` and filtered to `generateContent`). In the app,
 **Settings → AI providers** shows the model problem and that list on their own

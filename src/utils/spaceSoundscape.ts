@@ -68,7 +68,9 @@ class DeepSpaceSoundscape {
     if (this.isPlaying) return;
 
     try {
-      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      // Safari < 14.1 exposes the prefixed constructor only.
+      const AudioCtx = window.AudioContext
+        || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
       if (!AudioCtx) return;
 
       this.ctx = new AudioCtx();

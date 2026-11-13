@@ -37,6 +37,8 @@ function publishedDate(date: string | undefined, language: string) {
 type FeedTab = 'all' | 'shorts' | 'nasa' | 'community';
 type FeedResponse = SpaceVideoResponse & { communityUnavailable?: boolean };
 type AllCursor = { youtube: string | null; community: string | null; source: 'youtube' | 'curated' };
+/** Both feeds answer with this envelope; every field is re-checked before use. */
+type VideoFeedPayload = { items?: unknown; source?: unknown; error?: unknown; nextPageToken?: unknown };
 
 async function fetchSingle(tab: Exclude<FeedTab, 'all'> | 'youtube', category: SpaceVideoCategory, query: string, token: string, signal: AbortSignal): Promise<SpaceVideoResponse> {
   const community = tab === 'community';
@@ -54,21 +56,31 @@ async function fetchSingle(tab: Exclude<FeedTab, 'all'> | 'youtube', category: S
   try {
     const endpoint = community ? '/api/community/videos' : '/api/space-videos';
     const response = await fetch(`${endpoint}?${params}`, { signal: controller.signal });
-    let data: any;
-    try { data = await response.json(); } catch { throw new Error('upstream'); }
-    if (!response.ok) throw new Error(typeof data?.error === 'string' ? data.error : 'upstream');
-    if (!Array.isArray(data?.items) || !(community ? data.source === 'community' : ['youtube', 'curated'].includes(data.source))) throw new Error('upstream');
+    let data: VideoFeedPayload = {};
+    try { data = await response.json() as VideoFeedPayload; } catch { throw new Error('upstream'); }
+    if (!response.ok) throw new Error(typeof data.error === 'string' ? data.error : 'upstream');
+    if (!Array.isArray(data.items) || !(community ? data.source === 'community' : typeof data.source === 'string' && ['youtube', 'curated'].includes(data.source))) throw new Error('upstream');
     // Only a validated ID can reach the player or thumbnail URL.
-    const items: SpaceVideo[] = data.items.filter((video: any) => video && typeof video.id === 'string'
-      && ID_PATTERN.test(video.id) && typeof video.title === 'string' && typeof video.channelTitle === 'string')
-      .map((video: SpaceVideo) => ({
+    const items: SpaceVideo[] = data.items.filter((video): video is SpaceVideo => {
+      if (!video || typeof video !== 'object') return false;
+      const candidate = video as { id?: unknown; title?: unknown; channelTitle?: unknown };
+      return typeof candidate.id === 'string' && ID_PATTERN.test(candidate.id)
+        && typeof candidate.title === 'string' && typeof candidate.channelTitle === 'string';
+    })
+      .map((video) => ({
         ...video,
         description: typeof video.description === 'string' ? video.description : '',
         communityId: typeof video.communityId === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(video.communityId) ? video.communityId : undefined,
         categories: Array.isArray(video.categories) ? video.categories.filter((value) => CATEGORIES.some((item) => item.id === value && value !== 'all')) : [],
         thumbnailUrl: `https://i.ytimg.com/vi/${video.id}/hqdefault.jpg`
       }));
-    return { ...data, items, nextPageToken: typeof data.nextPageToken === 'string' ? data.nextPageToken : null };
+    return {
+      ...data,
+      // The guard above already rejected anything but the expected source per tab.
+      source: data.source as SpaceVideoResponse['source'],
+      items,
+      nextPageToken: typeof data.nextPageToken === 'string' ? data.nextPageToken : null
+    };
   } catch (failure) {
     if (controller.signal.aborted && !signal.aborted) throw new Error('network');
     throw failure;

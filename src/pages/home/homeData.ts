@@ -142,11 +142,32 @@ function isoDate(date: Date): string {
   return date.toISOString().slice(0, 10);
 }
 
+/**
+ * The NeoWs feed as this module reads it: the fields are `unknown` because the
+ * values are coerced with `Number(...)` / `String(...)` and every coercion is
+ * guarded — a missing field becomes `null`, never a made-up number.
+ */
+interface NeoWsObject {
+  id?: unknown;
+  name?: unknown;
+  is_potentially_hazardous_asteroid?: unknown;
+  estimated_diameter?: { meters?: { estimated_diameter_min?: unknown; estimated_diameter_max?: unknown } };
+  close_approach_data?: Array<{
+    miss_distance?: { kilometers?: unknown; lunar?: unknown };
+    relative_velocity?: { kilometers_per_second?: unknown };
+    close_approach_date?: unknown;
+  }>;
+}
+interface NeoWsFeed {
+  element_count?: unknown;
+  near_earth_objects?: Record<string, unknown>;
+}
+
 export async function loadNeo(signal: AbortSignal): Promise<Sourced<NeoOverview>> {
   const start = new Date();
   const end = new Date(start.getTime() + 6 * 86400000);
   const window = { start: isoDate(start), end: isoDate(end) };
-  const payload = await getJson<{ success?: boolean; data?: Record<string, any>; isFallback?: boolean }>(
+  const payload = await getJson<{ success?: boolean; data?: NeoWsFeed; isFallback?: boolean }>(
     `/api/asteroids/neows?start_date=${window.start}&end_date=${window.end}`,
     signal,
     15000
@@ -156,27 +177,29 @@ export async function loadNeo(signal: AbortSignal): Promise<Sourced<NeoOverview>
   if (!grouped || typeof grouped !== 'object') throw new Error('NeoWs returned no object feed');
 
   const objects: NeoSummary[] = [];
-  Object.values(grouped as Record<string, any[]>).forEach((dayList) => {
-    (dayList || []).forEach((item) => {
+  Object.values(grouped).forEach((dayList) => {
+    (Array.isArray(dayList) ? (dayList as NeoWsObject[]) : []).forEach((item) => {
       const approach = item?.close_approach_data?.[0];
       objects.push({
         id: String(item?.id ?? item?.name),
         name: String(item?.name ?? 'Unnamed object'),
         hazardous: Boolean(item?.is_potentially_hazardous_asteroid),
+        // `Number(undefined)` is NaN, so each `Number.isFinite` guard already
+        // implies the path exists; the optional chain only states that.
         diameterMinM: Number.isFinite(Number(item?.estimated_diameter?.meters?.estimated_diameter_min))
-          ? Number(item.estimated_diameter.meters.estimated_diameter_min)
+          ? Number(item?.estimated_diameter?.meters?.estimated_diameter_min)
           : null,
         diameterMaxM: Number.isFinite(Number(item?.estimated_diameter?.meters?.estimated_diameter_max))
-          ? Number(item.estimated_diameter.meters.estimated_diameter_max)
+          ? Number(item?.estimated_diameter?.meters?.estimated_diameter_max)
           : null,
         missDistanceKm: Number.isFinite(Number(approach?.miss_distance?.kilometers))
-          ? Number(approach.miss_distance.kilometers)
+          ? Number(approach?.miss_distance?.kilometers)
           : null,
         missDistanceLunar: Number.isFinite(Number(approach?.miss_distance?.lunar))
-          ? Number(approach.miss_distance.lunar)
+          ? Number(approach?.miss_distance?.lunar)
           : null,
         velocityKps: Number.isFinite(Number(approach?.relative_velocity?.kilometers_per_second))
-          ? Number(approach.relative_velocity.kilometers_per_second)
+          ? Number(approach?.relative_velocity?.kilometers_per_second)
           : null,
         approachDate: approach?.close_approach_date ? String(approach.close_approach_date) : null
       });

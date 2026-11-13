@@ -4,6 +4,34 @@ import { Mic, MicOff, Search, X, Volume2, AlertCircle } from 'lucide-react';
 import { SupportedLanguage } from '../i18n/translations';
 import { a11yLabel } from '../lib/a11yLabels';
 
+/**
+ * The Web Speech API is vendor-prefixed and still missing from TypeScript's DOM
+ * library, so only the members this component touches are described here.
+ */
+interface SpeechAlternative { transcript: string }
+interface SpeechResult { isFinal: boolean; length: number; [index: number]: SpeechAlternative }
+interface SpeechResultList { length: number; [index: number]: SpeechResult }
+interface SpeechRecognitionEventLike { resultIndex: number; results: SpeechResultList }
+interface SpeechRecognitionErrorLike { error?: string }
+interface SpeechRecognitionLike {
+  continuous: boolean;
+  interimResults: boolean;
+  maxAlternatives: number;
+  lang: string;
+  onstart: (() => void) | null;
+  onresult: ((event: SpeechRecognitionEventLike) => void) | null;
+  onerror: ((event: SpeechRecognitionErrorLike) => void) | null;
+  onend: (() => void) | null;
+  start: () => void;
+  stop: () => void;
+  abort: () => void;
+}
+type SpeechRecognitionConstructor = new () => SpeechRecognitionLike;
+type SpeechWindow = Window & {
+  SpeechRecognition?: SpeechRecognitionConstructor;
+  webkitSpeechRecognition?: SpeechRecognitionConstructor;
+};
+
 interface VoiceSearchInputProps {
   value: string;
   onChange: (val: string) => void;
@@ -26,7 +54,7 @@ export const VoiceSearchInput: React.FC<VoiceSearchInputProps> = ({
   const [interimTranscript, setInterimTranscript] = useState<string>('');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const recognitionRef = useRef<any>(null);
+  const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
 
   // Map app language to BCP 47 language tags for Web Speech API
   const getSpeechLangCode = (l: SupportedLanguage) => {
@@ -55,8 +83,8 @@ export const VoiceSearchInput: React.FC<VoiceSearchInputProps> = ({
 
   // Initialize SpeechRecognition
   useEffect(() => {
-    const SpeechRecognition =
-      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    const speech = window as SpeechWindow;
+    const SpeechRecognition = speech.SpeechRecognition || speech.webkitSpeechRecognition;
 
     if (!SpeechRecognition) {
       setSpeechSupported(false);
@@ -75,7 +103,7 @@ export const VoiceSearchInput: React.FC<VoiceSearchInputProps> = ({
         setInterimTranscript('');
       };
 
-      recognition.onresult = (event: any) => {
+      recognition.onresult = (event) => {
         let currentInterim = '';
         let finalTranscript = '';
 
@@ -99,7 +127,7 @@ export const VoiceSearchInput: React.FC<VoiceSearchInputProps> = ({
         }
       };
 
-      recognition.onerror = (event: any) => {
+      recognition.onerror = (event) => {
         setIsListening(false);
         setInterimTranscript('');
         if (event.error === 'not-allowed') {

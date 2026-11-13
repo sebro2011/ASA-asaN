@@ -69,6 +69,27 @@ interface NewsSource {
   fetch: (topic: NewsTopic, query: string, limit: number) => Promise<NewsItem[]>;
 }
 
+/**
+ * One record per provider, listing only the fields this module reads. Every
+ * field is optional and every value is re-checked (`httpUrl`, `capped`,
+ * `isoDate` all take unvalidated input), so a provider changing its payload
+ * degrades to a dropped article rather than a malformed one.
+ */
+interface SpaceflightArticleResponse {
+  results?: { url?: string; title?: string; summary?: string; image_url?: string; news_site?: string; published_at?: string }[];
+}
+interface GNewsArticleResponse {
+  articles?: { url?: string; title?: string; description?: string; image?: string; publishedAt?: string; source?: { name?: string } }[];
+}
+interface NewsApiArticleResponse {
+  articles?: { url?: string; title?: string; description?: string; urlToImage?: string; publishedAt?: string; source?: { name?: string } }[];
+}
+interface GuardianArticleResponse {
+  response?: {
+    results?: { webUrl?: string; webTitle?: string; sectionName?: string; webPublicationDate?: string; fields?: { trailText?: string; thumbnail?: string } }[];
+  };
+}
+
 export const NEWS_API_VERSION = 1;
 
 const TOPICS: Record<NewsTopic, string> = {
@@ -147,9 +168,15 @@ async function getText(url: string, headers: Record<string, string> = {}): Promi
   }
 }
 
-async function getJson(url: string, headers: Record<string, string> = {}): Promise<any> {
+/**
+ * The single boundary where upstream JSON becomes a typed shape. The cast is a
+ * description of what the caller validates below, not a guarantee: a provider
+ * is free to answer with anything, and `Array.isArray` plus the field helpers
+ * decide what survives.
+ */
+async function getJson<T>(url: string, headers: Record<string, string> = {}): Promise<T> {
   const text = await getText(url, headers);
-  return JSON.parse(text);
+  return JSON.parse(text) as T;
 }
 
 /* ------------------------------------------------------------- providers */
@@ -158,9 +185,9 @@ async function fetchSpaceflight(topic: NewsTopic, query: string, limit: number):
   const search = new URLSearchParams({ limit: String(limit), ordering: '-published_at' });
   const term = query || TOPICS[topic];
   if (term) search.set('search', term);
-  const data = await getJson(`https://api.spaceflightnewsapi.net/v4/articles/?${search.toString()}`);
+  const data = await getJson<SpaceflightArticleResponse>(`https://api.spaceflightnewsapi.net/v4/articles/?${search.toString()}`);
   const results = Array.isArray(data?.results) ? data.results : [];
-  return results.flatMap((entry: any): NewsItem[] => {
+  return results.flatMap((entry): NewsItem[] => {
     const url = httpUrl(entry?.url);
     const title = capped(stripHtml(entry?.title ?? ''), 300);
     if (!url || !title) return [];
@@ -187,9 +214,9 @@ async function fetchGNews(topic: NewsTopic, query: string, limit: number): Promi
     max: String(limit),
     apikey: token,
   });
-  const data = await getJson(`https://gnews.io/api/v4/search?${search.toString()}`);
+  const data = await getJson<GNewsArticleResponse>(`https://gnews.io/api/v4/search?${search.toString()}`);
   const articles = Array.isArray(data?.articles) ? data.articles : [];
-  return articles.flatMap((entry: any): NewsItem[] => {
+  return articles.flatMap((entry): NewsItem[] => {
     const url = httpUrl(entry?.url);
     const title = capped(stripHtml(entry?.title ?? ''), 300);
     if (!url || !title) return [];
@@ -217,11 +244,11 @@ async function fetchNewsApi(topic: NewsTopic, query: string, limit: number): Pro
     pageSize: String(limit),
   });
   // The key travels in a header so it cannot end up in an upstream URL log.
-  const data = await getJson(`https://newsapi.org/v2/everything?${search.toString()}`, {
+  const data = await getJson<NewsApiArticleResponse>(`https://newsapi.org/v2/everything?${search.toString()}`, {
     'X-Api-Key': token,
   });
   const articles = Array.isArray(data?.articles) ? data.articles : [];
-  return articles.flatMap((entry: any): NewsItem[] => {
+  return articles.flatMap((entry): NewsItem[] => {
     const url = httpUrl(entry?.url);
     const title = capped(stripHtml(entry?.title ?? ''), 300);
     if (!url || !title) return [];
@@ -250,9 +277,9 @@ async function fetchGuardian(topic: NewsTopic, query: string, limit: number): Pr
     'order-by': 'newest',
     'api-key': token,
   });
-  const data = await getJson(`https://content.guardianapis.com/search?${search.toString()}`);
+  const data = await getJson<GuardianArticleResponse>(`https://content.guardianapis.com/search?${search.toString()}`);
   const results = Array.isArray(data?.response?.results) ? data.response.results : [];
-  return results.flatMap((entry: any): NewsItem[] => {
+  return results.flatMap((entry): NewsItem[] => {
     const url = httpUrl(entry?.webUrl);
     const title = capped(stripHtml(entry?.webTitle ?? ''), 300);
     if (!url || !title) return [];

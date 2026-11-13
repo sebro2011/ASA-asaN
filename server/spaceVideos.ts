@@ -32,6 +32,42 @@ class UpstreamFailure extends Error {
   constructor(public code: SpaceVideoFailure) { super(code); }
 }
 
+/**
+ * YouTube Data API payloads, narrowed to the fields this module actually reads.
+ *
+ * Every field is optional because the API is unvalidated input: a proxy, a
+ * version bump or an error body can return a shape we did not expect. Nothing
+ * here is trusted — each field is re-checked (`typeof`, `=== true`, the ID
+ * regex) before it reaches a response. The cast inside `youtubeJson` is the one
+ * boundary where untyped JSON becomes these shapes; it is a description, not a
+ * guarantee.
+ */
+interface YouTubeSnippet {
+  title?: string;
+  description?: string;
+  channelTitle?: string;
+  channelId?: string;
+  publishedAt?: string;
+  liveBroadcastContent?: string;
+}
+interface YouTubeStatus { embeddable?: boolean; privacyStatus?: string; uploadStatus?: string }
+interface YouTubeVideoItem {
+  id?: string;
+  snippet?: YouTubeSnippet;
+  status?: YouTubeStatus;
+  contentDetails?: { duration?: string };
+}
+interface YouTubeSearchItem { id?: { videoId?: string } }
+interface YouTubeSearchResponse { items?: YouTubeSearchItem[]; nextPageToken?: string }
+interface YouTubeVideoResponse { items?: YouTubeVideoItem[] }
+interface YouTubeErrorResponse { error?: { errors?: { reason?: string }[] } }
+
+/** Reasons arrive as opaque strings; only the regexes above decide meaning. */
+function errorReasons(body: YouTubeErrorResponse): string[] {
+  const errors = Array.isArray(body.error?.errors) ? body.error.errors : [];
+  return errors.map((entry) => entry?.reason).filter((reason): reason is string => typeof reason === 'string');
+}
+
 function wrapYouTubeToken(value: unknown): string | null {
   if (value === undefined || value === null || value === '') return null;
   if (typeof value !== 'string' || Buffer.byteLength(value, 'utf8') > MAX_UPSTREAM_TOKEN_BYTES) throw new UpstreamFailure('upstream');
@@ -70,7 +106,7 @@ function decodeEntities(value: string): string {
   });
 }
 
-async function youtubeJson(endpoint: 'search' | 'videos', params: URLSearchParams, key: string): Promise<any> {
+async function youtubeJson<T>(endpoint: 'search' | 'videos', params: URLSearchParams, key: string): Promise<T> {
   const url = new URL(`https://www.googleapis.com/youtube/v3/${endpoint}`);
   url.search = params.toString();
   let response: Response;
@@ -79,21 +115,21 @@ async function youtubeJson(endpoint: 'search' | 'videos', params: URLSearchParam
   } catch {
     throw new UpstreamFailure('network');
   }
-  let data: any;
+  let data: unknown;
   try { data = await response.json(); } catch {
     // Some proxies return an empty or non-JSON 429 body. Preserve the quota
     // classification without forwarding the upstream text (which may be unsafe).
     if (response.status === 429) throw new UpstreamFailure('quota');
     throw new UpstreamFailure('upstream');
   }
+  const body = (data && typeof data === 'object' ? data : {}) as T & YouTubeErrorResponse;
   if (!response.ok) {
-    const errors = Array.isArray(data?.error?.errors) ? data.error.errors : [];
-    const reasons = errors.map((entry: any) => entry?.reason);
-    if (response.status === 429 || reasons.some((reason: string) => /quota|rateLimit|dailyLimit/i.test(reason))) throw new UpstreamFailure('quota');
-    if (response.status === 401 || response.status === 403 || reasons.some((reason: string) => /keyInvalid|accessNotConfigured/i.test(reason))) throw new UpstreamFailure('configuration');
+    const reasons = errorReasons(body);
+    if (response.status === 429 || reasons.some((reason) => /quota|rateLimit|dailyLimit/i.test(reason))) throw new UpstreamFailure('quota');
+    if (response.status === 401 || response.status === 403 || reasons.some((reason) => /keyInvalid|accessNotConfigured/i.test(reason))) throw new UpstreamFailure('configuration');
     throw new UpstreamFailure('upstream');
   }
-  return data;
+  return body;
 }
 
 /** Check a submitted ID against official metadata before accepting it for review. */
@@ -101,12 +137,13 @@ export async function verifyCommunityYouTube(id: string): Promise<Pick<SpaceVide
   if (!VIDEO_ID.test(id)) return null;
   const key = process.env.YOUTUBE_API_KEY?.trim();
   if (!key) throw new Error('youtube-unavailable');
-  let data: any;
+  let data: YouTubeVideoResponse;
   try {
-    data = await youtubeJson('videos', new URLSearchParams({ part: 'snippet,contentDetails,status', id }), key);
+    data = await youtubeJson<YouTubeVideoResponse>('videos', new URLSearchParams({ part: 'snippet,contentDetails,status', id }), key);
   } catch { throw new Error('youtube-unavailable'); }
-  if (!Array.isArray(data?.items)) throw new Error('youtube-unavailable');
-  const entry = data.items.find((item: any) => item?.id === id);
+  const videos = data.items;
+  if (!Array.isArray(videos)) throw new Error('youtube-unavailable');
+  const entry = videos.find((item) => item?.id === id);
   const snippet = entry?.snippet;
   const status = entry?.status;
   if (!snippet || status?.embeddable !== true || status?.privacyStatus !== 'public' || status?.uploadStatus !== 'processed'
@@ -115,7 +152,8 @@ export async function verifyCommunityYouTube(id: string): Promise<Pick<SpaceVide
   return {
     channelTitle: decodeEntities(snippet.channelTitle).slice(0, 150),
     channelId: typeof snippet.channelId === 'string' ? snippet.channelId.slice(0, 80) : undefined,
-    officialAgency: NASA_CHANNELS.has(snippet.channelId),
+    // `has(undefined)` is already false; this states the type rather than changing behaviour.
+    officialAgency: typeof snippet.channelId === 'string' && NASA_CHANNELS.has(snippet.channelId),
     publishedAt: typeof snippet.publishedAt === 'string' && !Number.isNaN(Date.parse(snippet.publishedAt)) ? snippet.publishedAt : undefined,
     durationSeconds: durationSeconds(entry?.contentDetails?.duration)
   };
@@ -133,15 +171,19 @@ async function searchYouTube(mode: SpaceVideoMode, category: SpaceVideoCategory,
   // main verified @NASA channel; the curated fallback can include other
   // individually verified NASA channels.
   if (scope === 'nasa') search.set('channelId', NASA_MAIN_CHANNEL);
-  const results = await youtubeJson('search', search, key);
-  if (!Array.isArray(results?.items)) throw new UpstreamFailure('upstream');
-  const ids: string[] = [...new Set<string>(results.items.map((entry: any) => entry?.id?.videoId).filter((id: unknown): id is string => typeof id === 'string' && VIDEO_ID.test(id)))];
+  const results = await youtubeJson<YouTubeSearchResponse>('search', search, key);
+  const found = results.items;
+  if (!Array.isArray(found)) throw new UpstreamFailure('upstream');
+  const ids: string[] = [...new Set<string>(found.map((entry) => entry?.id?.videoId).filter((id: unknown): id is string => typeof id === 'string' && VIDEO_ID.test(id)))];
   const nextPageToken = wrapYouTubeToken(results.nextPageToken);
   if (!ids.length) return { items: [], nextPageToken, source: 'youtube' };
 
-  const details = await youtubeJson('videos', new URLSearchParams({ part: 'snippet,contentDetails,status', id: ids.join(',') }), key);
-  if (!Array.isArray(details?.items)) throw new UpstreamFailure('upstream');
-  const byId = new Map<string, any>(details.items.map((entry: any) => [entry?.id, entry]));
+  const details = await youtubeJson<YouTubeVideoResponse>('videos', new URLSearchParams({ part: 'snippet,contentDetails,status', id: ids.join(',') }), key);
+  const detailItems = details.items;
+  if (!Array.isArray(detailItems)) throw new UpstreamFailure('upstream');
+  const byId = new Map<string, YouTubeVideoItem>(
+    detailItems.flatMap((entry) => (typeof entry?.id === 'string' ? [[entry.id, entry] as const] : []))
+  );
   const items = ids.flatMap((id): SpaceVideo[] => {
     const entry = byId.get(id);
     const snippet = entry?.snippet;
@@ -162,7 +204,7 @@ async function searchYouTube(mode: SpaceVideoMode, category: SpaceVideoCategory,
       thumbnailUrl: `https://i.ytimg.com/vi/${id}/hqdefault.jpg`,
       publishedAt: typeof snippet.publishedAt === 'string' && !Number.isNaN(Date.parse(snippet.publishedAt)) ? snippet.publishedAt : undefined,
       durationSeconds: duration,
-      officialAgency: NASA_CHANNELS.has(snippet.channelId),
+      officialAgency: typeof snippet.channelId === 'string' && NASA_CHANNELS.has(snippet.channelId),
       categories: category === 'all' ? [] : [category]
     };
     return isAstronomyRelated(video) && matchesQuery(video, query) ? [video] : [];

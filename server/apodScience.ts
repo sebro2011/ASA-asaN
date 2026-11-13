@@ -23,14 +23,33 @@ function validUrl(value: unknown, host: string): string | null {
   } catch { return null; }
 }
 
-async function readJson(url: string, fetchImpl: typeof fetch): Promise<any> {
+/**
+ * WordPress payloads, narrowed to the fields read below. Every one is optional
+ * and re-validated (`validUrl`, `typeof`, `Number.isSafeInteger`) before use, so
+ * the cast in `readJson` describes the intent rather than trusting the source.
+ */
+interface WpPost {
+  title?: { rendered?: string };
+  link?: string;
+  content?: { rendered?: string };
+  featured_media?: number;
+}
+interface WpMedia {
+  id?: number;
+  source_url?: string;
+  media_type?: string;
+  mime_type?: string;
+}
+
+/** The one place untyped JSON becomes typed; `?type=media` matters: this is NASA's CMS. */
+async function readJson<T>(url: string, fetchImpl: typeof fetch): Promise<T> {
   const response = await fetchImpl(url, { signal: AbortSignal.timeout(3000), redirect: 'error', headers: { Accept: 'application/json' } });
   if (!response.ok) throw new Error('NASA Science unavailable');
   const size = Number(response.headers.get('content-length'));
   if (size > 1_500_000) throw new Error('NASA Science response too large');
   const raw = await response.text();
   if (raw.length > 1_500_000) throw new Error('NASA Science response too large');
-  return JSON.parse(raw);
+  return JSON.parse(raw) as T;
 }
 
 export async function fetchScienceApod(date: string, fetchImpl: typeof fetch = globalThis.fetch): Promise<Record<string, unknown> | null> {
@@ -42,10 +61,10 @@ export async function fetchScienceApod(date: string, fetchImpl: typeof fetch = g
     // Search can match body text or neighboring dates; compare the full title
     // date, never the WordPress publication timestamp (which can be an import date).
     const params = new URLSearchParams({ search: `APOD ${year} ${MONTHS[month - 1]} ${day}`, per_page: '20', _fields: 'id,link,title,content,featured_media' });
-    const posts = await readJson(`${BASE}/image-article?${params}`, fetchImpl);
+    const posts = await readJson<WpPost[]>(`${BASE}/image-article?${params}`, fetchImpl);
     if (!Array.isArray(posts)) return null;
     const expected = new RegExp(`^APOD:\\s*${year}\\s+${MONTHS[month - 1]}\\s+0?${day}\\s*[–—-]\\s*(.+)$`, 'i');
-    const candidates = posts.flatMap((post: any) => {
+    const candidates = posts.flatMap((post) => {
       if (typeof post?.title?.rendered !== 'string') return [];
       const title = expected.exec(plain(post.title.rendered));
       return title ? [{ post, title: title[1] }] : [];
@@ -54,16 +73,19 @@ export async function fetchScienceApod(date: string, fetchImpl: typeof fetch = g
     const { post, title } = candidates[0];
     const articleUrl = validUrl(post.link, 'science.nasa.gov');
     const html = post.content?.rendered;
-    if (!articleUrl || !new URL(articleUrl).pathname.startsWith('/image-article/apod-') || !Number.isSafeInteger(post.featured_media) || post.featured_media <= 0 || typeof html !== 'string' || html.length > 500_000) return null;
+    const mediaId = post.featured_media;
+    // `Number.isSafeInteger(undefined)` is false, so the guard is the same check
+    // as before — it just has to be on a local for the type to follow it.
+    if (!articleUrl || !new URL(articleUrl).pathname.startsWith('/image-article/apod-') || typeof mediaId !== 'number' || !Number.isSafeInteger(mediaId) || mediaId <= 0 || typeof html !== 'string' || html.length > 500_000) return null;
     // Featured images can be thumbnails for videos. Do not treat an embedded
     // video as the actual APOD image; leave unsupported records unavailable.
     if (/<(?:iframe|video|object|embed)\b|(?:youtube\.com|youtu\.be|vimeo\.com)/i.test(html)) return null;
     const explanationMatch = /Explanation:\s*(?:<\/(?:strong|b)>\s*)?([\s\S]*?)<\/p\s*>/i.exec(html);
     const explanation = explanationMatch ? plain(explanationMatch[1]) : '';
     if (!title || title.length > 500 || explanation.length < 20 || explanation.length > 15000) return null;
-    const media = await readJson(`${BASE}/media/${post.featured_media}?_fields=id,source_url,media_type,mime_type`, fetchImpl);
+    const media = await readJson<WpMedia>(`${BASE}/media/${mediaId}?_fields=id,source_url,media_type,mime_type`, fetchImpl);
     const image = validUrl(media?.source_url, 'assets.science.nasa.gov');
-    if (media?.id !== post.featured_media || media.media_type !== 'image' || typeof media.mime_type !== 'string' || !/^image\/(jpeg|png|gif|webp)$/i.test(media.mime_type) || !image || !new URL(image).pathname.toLowerCase().includes('/apod/')) return null;
+    if (media?.id !== mediaId || media.media_type !== 'image' || typeof media.mime_type !== 'string' || !/^image\/(jpeg|png|gif|webp)$/i.test(media.mime_type) || !image || !new URL(image).pathname.toLowerCase().includes('/apod/')) return null;
     return { date, title, explanation, media_type: 'image', url: image, source: SOURCE, source_url: articleUrl, media_note: 'NASA Science featured image; check the original record for media and credits.' };
   } catch { return null; }
 }

@@ -335,6 +335,10 @@ test('a bogus NOVA_GEMINI_MODEL is named, and the default is probed instead', as
   assert.match(gemini.fallbackModel.model, /^gemini-/);
   assert.equal(gemini.fallbackModel.ok, true, 'the retry proves another model works with this key');
   assert.match(gemini.hint, /answered with the same key/);
+  // The report has to end in an action, not in "review your configuration".
+  assert.equal(gemini.suggestedModel, gemini.fallbackModel.model, 'the id that answered is offered as a fix');
+  assert.match(gemini.hint, new RegExp(`set NOVA_GEMINI_MODEL=${gemini.fallbackModel.model}`));
+  assert.match(gemini.hint, /not an entitlement/, 'being listed is not being callable');
   assert.equal(calls.filter((url) => url.includes('gemini-9.9-ultra')).length, 1, 'the bad id is tried once, not looped');
 });
 

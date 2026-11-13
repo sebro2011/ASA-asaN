@@ -25,20 +25,49 @@ function validDate(value: unknown): value is string {
   return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value;
 }
 
-function normalizePhoto(item: any, sol: number, rover: string): MarsPhoto | null {
-  if (!item || !Number.isSafeInteger(item.id) || item.id < 0 || item.sol !== sol ||
-      !validDate(item.earth_date) || typeof item.rover?.name !== 'string' ||
-      item.rover.name.toLowerCase() !== rover || typeof item.camera?.full_name !== 'string' ||
-      !item.camera.full_name.trim() || typeof item.img_src !== 'string') return null;
+/**
+ * A photo record as far as this module can trust it: every field is a string or
+ * number *because the guard below checked it*, not because NASA promised it.
+ */
+interface MarsPhotoRecord {
+  id: number;
+  sol: number;
+  earth_date: string;
+  rover: { name: string };
+  camera: { full_name: string };
+  img_src: string;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function asPhotoRecord(item: unknown): MarsPhotoRecord | null {
+  if (!isRecord(item)) return null;
+  const { id, sol, earth_date, rover, camera, img_src } = item;
+  if (typeof id !== 'number' || typeof sol !== 'number' || typeof earth_date !== 'string') return null;
+  if (!isRecord(rover) || typeof rover.name !== 'string') return null;
+  if (!isRecord(camera) || typeof camera.full_name !== 'string') return null;
+  if (typeof img_src !== 'string') return null;
+  return { id, sol, earth_date, rover: { name: rover.name }, camera: { full_name: camera.full_name }, img_src };
+}
+
+function normalizePhoto(item: unknown, sol: number, rover: string): MarsPhoto | null {
+  const photo = asPhotoRecord(item);
+  if (!photo) return null;
+  if (!Number.isSafeInteger(photo.id) || photo.id < 0 || photo.sol !== sol ||
+      !validDate(photo.earth_date) ||
+      photo.rover.name.toLowerCase() !== rover ||
+      !photo.camera.full_name.trim()) return null;
   try {
-    const url = new URL(item.img_src);
+    const url = new URL(photo.img_src);
     if (url.protocol !== 'https:' && url.protocol !== 'http:') return null;
     if (url.username || url.password || (url.hostname !== 'nasa.gov' && !url.hostname.endsWith('.nasa.gov'))) return null;
     url.protocol = 'https:';
     for (const key of [...url.searchParams.keys()]) {
       if (key.toLowerCase() === 'api_key') url.searchParams.delete(key);
     }
-    return { id: item.id, sol, earthDate: item.earth_date, rover: item.rover.name, camera: item.camera.full_name, imageUrl: url.toString() };
+    return { id: photo.id, sol, earthDate: photo.earth_date, rover: photo.rover.name, camera: photo.camera.full_name, imageUrl: url.toString() };
   } catch {
     return null;
   }
@@ -67,8 +96,8 @@ export function createMarsPhotosRouter({ fetchImpl = globalThis.fetch, getKey = 
         return res.status(502).json({ ok: false, code: 'MARS_UPSTREAM_ERROR', message: 'NASA Mars Rover Photos could not complete the request.' });
       }
       const body: unknown = await upstream.json();
-      const raw = (body as any)?.photos;
-      if (!Array.isArray(raw) || raw.length > 1000) return res.status(502).json({ ok: false, code: 'MARS_INVALID_RESPONSE', message: 'NASA returned an unexpected photo response.' });
+      const raw = isRecord(body) && Array.isArray(body.photos) ? body.photos : null;
+      if (!raw || raw.length > 1000) return res.status(502).json({ ok: false, code: 'MARS_INVALID_RESPONSE', message: 'NASA returned an unexpected photo response.' });
       const photos = raw.map(item => normalizePhoto(item, sol, rover)).filter((item): item is MarsPhoto => item !== null);
       // NASA's documented pagination uses pages of 25; this indicates that a
       // following page may exist, not that it definitely contains images.

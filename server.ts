@@ -1,4 +1,4 @@
-import express, { type RequestHandler } from 'express';
+import express, { type NextFunction, type Request as ExpressRequest, type RequestHandler, type Response as ExpressResponse } from 'express';
 import dotenv from 'dotenv';
 import path from 'path';
 import fs from 'fs';
@@ -369,11 +369,14 @@ app.use('/api', (_req, res) => {
 
 // Last line of defence for the API: any thrown error (bad JSON, oversized body,
 // a handler bug) becomes a typed JSON response instead of a stack trace.
-app.use((error: any, req: any, res: any, next: any) => {
+app.use((error: unknown, req: ExpressRequest, res: ExpressResponse, next: NextFunction) => {
   if (res.headersSent) return next(error);
   if (!String(req.path || '').startsWith('/api')) return next(error);
 
-  const status = Number(error?.status || error?.statusCode) || 500;
+  // Express attaches the status to the thrown object (body-parser does), so it is
+  // read structurally — nothing else from the error is used or echoed.
+  const failure = (error ?? {}) as { status?: unknown; statusCode?: unknown };
+  const status = Number(failure.status || failure.statusCode) || 500;
   const code =
     status === 413
       ? 'PAYLOAD_TOO_LARGE'

@@ -20,7 +20,7 @@ export function Panel({
 }: {
   children: React.ReactNode;
   className?: string;
-  as?: any;
+  as?: React.ElementType;
 } & React.HTMLAttributes<HTMLElement>) {
   return (
     <Tag className={cx('surface surface-highlight p-4 sm:p-5', className)} {...rest}>

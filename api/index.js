@@ -1289,6 +1289,16 @@ function createOrchestrator(options) {
 
 // server/earth/providers.ts
 import { GoogleGenAI, Type } from "@google/genai";
+function readResponseText(response) {
+  if (!response || typeof response !== "object") return "";
+  const text2 = response.text;
+  if (typeof text2 === "string") return text2;
+  if (typeof text2 === "function") {
+    const value = text2.call(response);
+    return typeof value === "string" ? value : "";
+  }
+  return "";
+}
 var ANALYST_MODEL = process.env.NOVA_ANALYST_MODEL || "gemini-3.8-flash";
 var OPENROUTER_MODEL = process.env.EARTH_ANALYST_OPENROUTER_MODEL || "google/gemini-2.0-flash-001";
 var ARENA_MODEL = process.env.EARTH_ANALYST_ARENA_MODEL || "gemini-2.5-flash";
@@ -1400,7 +1410,7 @@ function createGeminiPersonaProvider(options) {
       });
       try {
         const response = await Promise.race([call, guard]);
-        const text2 = typeof response?.text === "string" ? response.text : typeof response?.text === "function" ? response.text() : "";
+        const text2 = readResponseText(response);
         if (!text2) throw new ProviderError("Gemini returned an empty response", { code: "EMPTY_RESPONSE", retryable: true });
         return text2;
       } catch (error) {
@@ -1460,7 +1470,7 @@ function createChatCompletionsProvider(id, label, options) {
           retryAfterMs: Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter * 1e3 : void 0
         });
       }
-      let payload;
+      let payload = null;
       try {
         payload = await response.json();
       } catch {
@@ -1520,20 +1530,23 @@ function extractJson(text2) {
 }
 var SECTION_KINDS = ["verified", "derived", "interpretation", "limitations", "gaps"];
 function normaliseAnswer(parsed, context, limit = 6) {
-  const sections = Array.isArray(parsed?.sections) ? parsed.sections : [];
+  const answer = parsed && typeof parsed === "object" ? parsed : {};
+  const sections = Array.isArray(answer.sections) ? answer.sections : [];
   if (!sections.length) throw new ProviderError("Model returned no sections", { code: "EMPTY_RESPONSE", retryable: false });
   const allowed = /* @__PURE__ */ new Set();
   JSON.stringify(context).replace(/"(https?:\/\/[^"]+)"/g, (match, url) => {
     allowed.add(url);
     return match;
   });
-  const normalisedSections = sections.filter((section) => section && typeof section === "object").map((section) => ({
-    kind: SECTION_KINDS.includes(section.kind) ? section.kind : "interpretation",
+  const normalisedSections = sections.filter((section) => Boolean(section) && typeof section === "object").map((section) => ({
+    // Enum-check before the `includes`, so a non-string kind can never be coerced into a match.
+    kind: typeof section.kind === "string" && SECTION_KINDS.includes(section.kind) ? section.kind : "interpretation",
     title: String(section.title || "Interpretation"),
     bullets: Array.isArray(section.bullets) ? section.bullets.map((bullet) => String(bullet)).slice(0, limit) : []
   })).filter((section) => section.bullets.length > 0);
   if (!normalisedSections.length) throw new ProviderError("Model sections contained no bullets", { code: "EMPTY_RESPONSE", retryable: false });
-  const sources = (Array.isArray(parsed?.sources) ? parsed.sources : []).filter((source) => source && typeof source.url === "string").map((source) => ({
+  const sourceList = Array.isArray(answer.sources) ? answer.sources : [];
+  const sources = sourceList.filter((source) => Boolean(source) && typeof source === "object" && typeof source.url === "string").map((source) => ({
     label: String(source.label || source.url),
     url: String(source.url),
     detail: source.detail ? String(source.detail) : void 0,
@@ -2034,9 +2047,10 @@ earthRouter.post("/analyst", rateLimit("analyst", 20, 5 * 6e4), async (req, res)
   }
   const languageName = analystLanguageName(String(lang));
   const requestId = `an-${startedAt.toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
-  const analysis = analyseBundle(context);
-  const local = buildLocalAnalystAnswer(String(question), context, { analysis });
-  const providerContext = buildProviderContext(context, analysis);
+  const bundle = context;
+  const analysis = analyseBundle(bundle);
+  const local = buildLocalAnalystAnswer(String(question), bundle, { analysis });
+  const providerContext = buildProviderContext(bundle, analysis);
   const controller = new AbortController();
   let clientGone = false;
   res.on("close", () => {
@@ -2465,6 +2479,10 @@ var UpstreamFailure = class extends Error {
     this.code = code;
   }
 };
+function errorReasons(body) {
+  const errors = Array.isArray(body.error?.errors) ? body.error.errors : [];
+  return errors.map((entry) => entry?.reason).filter((reason) => typeof reason === "string");
+}
 function wrapYouTubeToken(value) {
   if (value === void 0 || value === null || value === "") return null;
   if (typeof value !== "string" || Buffer.byteLength(value, "utf8") > MAX_UPSTREAM_TOKEN_BYTES) throw new UpstreamFailure("upstream");
@@ -2513,14 +2531,14 @@ async function youtubeJson(endpoint, params, key2) {
     if (response.status === 429) throw new UpstreamFailure("quota");
     throw new UpstreamFailure("upstream");
   }
+  const body = data && typeof data === "object" ? data : {};
   if (!response.ok) {
-    const errors = Array.isArray(data?.error?.errors) ? data.error.errors : [];
-    const reasons = errors.map((entry) => entry?.reason);
+    const reasons = errorReasons(body);
     if (response.status === 429 || reasons.some((reason) => /quota|rateLimit|dailyLimit/i.test(reason))) throw new UpstreamFailure("quota");
     if (response.status === 401 || response.status === 403 || reasons.some((reason) => /keyInvalid|accessNotConfigured/i.test(reason))) throw new UpstreamFailure("configuration");
     throw new UpstreamFailure("upstream");
   }
-  return data;
+  return body;
 }
 async function verifyCommunityYouTube(id) {
   if (!VIDEO_ID.test(id)) return null;
@@ -2532,15 +2550,17 @@ async function verifyCommunityYouTube(id) {
   } catch {
     throw new Error("youtube-unavailable");
   }
-  if (!Array.isArray(data?.items)) throw new Error("youtube-unavailable");
-  const entry = data.items.find((item) => item?.id === id);
+  const videos = data.items;
+  if (!Array.isArray(videos)) throw new Error("youtube-unavailable");
+  const entry = videos.find((item) => item?.id === id);
   const snippet = entry?.snippet;
   const status = entry?.status;
   if (!snippet || status?.embeddable !== true || status?.privacyStatus !== "public" || status?.uploadStatus !== "processed" || snippet.liveBroadcastContent === "live" || snippet.liveBroadcastContent === "upcoming" || typeof snippet.channelTitle !== "string" || !snippet.channelTitle.trim()) return null;
   return {
     channelTitle: decodeEntities(snippet.channelTitle).slice(0, 150),
     channelId: typeof snippet.channelId === "string" ? snippet.channelId.slice(0, 80) : void 0,
-    officialAgency: NASA_CHANNELS.has(snippet.channelId),
+    // `has(undefined)` is already false; this states the type rather than changing behaviour.
+    officialAgency: typeof snippet.channelId === "string" && NASA_CHANNELS.has(snippet.channelId),
     publishedAt: typeof snippet.publishedAt === "string" && !Number.isNaN(Date.parse(snippet.publishedAt)) ? snippet.publishedAt : void 0,
     durationSeconds: durationSeconds(entry?.contentDetails?.duration)
   };
@@ -2560,13 +2580,17 @@ async function searchYouTube(mode, category, query, token, key2, scope) {
   if (token) search.set("pageToken", token);
   if (scope === "nasa") search.set("channelId", NASA_MAIN_CHANNEL);
   const results = await youtubeJson("search", search, key2);
-  if (!Array.isArray(results?.items)) throw new UpstreamFailure("upstream");
-  const ids = [...new Set(results.items.map((entry) => entry?.id?.videoId).filter((id) => typeof id === "string" && VIDEO_ID.test(id)))];
+  const found = results.items;
+  if (!Array.isArray(found)) throw new UpstreamFailure("upstream");
+  const ids = [...new Set(found.map((entry) => entry?.id?.videoId).filter((id) => typeof id === "string" && VIDEO_ID.test(id)))];
   const nextPageToken = wrapYouTubeToken(results.nextPageToken);
   if (!ids.length) return { items: [], nextPageToken, source: "youtube" };
   const details = await youtubeJson("videos", new URLSearchParams({ part: "snippet,contentDetails,status", id: ids.join(",") }), key2);
-  if (!Array.isArray(details?.items)) throw new UpstreamFailure("upstream");
-  const byId = new Map(details.items.map((entry) => [entry?.id, entry]));
+  const detailItems = details.items;
+  if (!Array.isArray(detailItems)) throw new UpstreamFailure("upstream");
+  const byId = new Map(
+    detailItems.flatMap((entry) => typeof entry?.id === "string" ? [[entry.id, entry]] : [])
+  );
   const items = ids.flatMap((id) => {
     const entry = byId.get(id);
     const snippet = entry?.snippet;
@@ -2585,7 +2609,7 @@ async function searchYouTube(mode, category, query, token, key2, scope) {
       thumbnailUrl: `https://i.ytimg.com/vi/${id}/hqdefault.jpg`,
       publishedAt: typeof snippet.publishedAt === "string" && !Number.isNaN(Date.parse(snippet.publishedAt)) ? snippet.publishedAt : void 0,
       durationSeconds: duration,
-      officialAgency: NASA_CHANNELS.has(snippet.channelId),
+      officialAgency: typeof snippet.channelId === "string" && NASA_CHANNELS.has(snippet.channelId),
       categories: category === "all" ? [] : [category]
     };
     return isAstronomyRelated(video) && matchesQuery(video, query) ? [video] : [];
@@ -4698,7 +4722,9 @@ function createDiagnosticsHandler({
           if (!entry.fallbackModel && tried.length) entry.fallbackModel = tried[tried.length - 1];
           entry.modelsTried = [configuredModel, ...tried.map((attempt) => attempt.model)];
           if (entry.fallbackModel?.ok) {
-            entry.hint = `${entry.hint ? `${entry.hint} ` : ""}${entry.fallbackModel.model} answered with the same key; the original model request failed. Review model availability and configuration.`;
+            const pinned = modelMissing ? entry.fallbackModel.model : null;
+            entry.hint = `${entry.hint ? `${entry.hint} ` : ""}${entry.fallbackModel.model} answered with the same key; the original model request failed. Review model availability and configuration.` + (pinned ? ` This key can generate: set NOVA_GEMINI_MODEL=${pinned} (or unset it to accept the default) so NOVA stops asking for an id this key cannot call. A listing in /v1beta/models is not an entitlement to call the model.` : "");
+            if (pinned) entry.suggestedModel = pinned;
           } else {
             entry.hint = `${entry.hint ? `${entry.hint} ` : ""}No alternative model probe succeeded. Failures may have different causes; inspect the statuses and provider configuration before drawing a conclusion.`;
           }
@@ -4978,14 +5004,15 @@ async function fetchScienceApod(date, fetchImpl = globalThis.fetch) {
     const { post, title } = candidates[0];
     const articleUrl = validUrl(post.link, "science.nasa.gov");
     const html = post.content?.rendered;
-    if (!articleUrl || !new URL(articleUrl).pathname.startsWith("/image-article/apod-") || !Number.isSafeInteger(post.featured_media) || post.featured_media <= 0 || typeof html !== "string" || html.length > 5e5) return null;
+    const mediaId = post.featured_media;
+    if (!articleUrl || !new URL(articleUrl).pathname.startsWith("/image-article/apod-") || typeof mediaId !== "number" || !Number.isSafeInteger(mediaId) || mediaId <= 0 || typeof html !== "string" || html.length > 5e5) return null;
     if (/<(?:iframe|video|object|embed)\b|(?:youtube\.com|youtu\.be|vimeo\.com)/i.test(html)) return null;
     const explanationMatch = /Explanation:\s*(?:<\/(?:strong|b)>\s*)?([\s\S]*?)<\/p\s*>/i.exec(html);
     const explanation = explanationMatch ? plain(explanationMatch[1]) : "";
     if (!title || title.length > 500 || explanation.length < 20 || explanation.length > 15e3) return null;
-    const media = await readJson(`${BASE}/media/${post.featured_media}?_fields=id,source_url,media_type,mime_type`, fetchImpl);
+    const media = await readJson(`${BASE}/media/${mediaId}?_fields=id,source_url,media_type,mime_type`, fetchImpl);
     const image = validUrl(media?.source_url, "assets.science.nasa.gov");
-    if (media?.id !== post.featured_media || media.media_type !== "image" || typeof media.mime_type !== "string" || !/^image\/(jpeg|png|gif|webp)$/i.test(media.mime_type) || !image || !new URL(image).pathname.toLowerCase().includes("/apod/")) return null;
+    if (media?.id !== mediaId || media.media_type !== "image" || typeof media.mime_type !== "string" || !/^image\/(jpeg|png|gif|webp)$/i.test(media.mime_type) || !image || !new URL(image).pathname.toLowerCase().includes("/apod/")) return null;
     return { date, title, explanation, media_type: "image", url: image, source: SOURCE, source_url: articleUrl, media_note: "NASA Science featured image; check the original record for media and credits." };
   } catch {
     return null;
@@ -5102,6 +5129,11 @@ function apodFallbackHint({ failureKind, upstreamStatus, usingDemoKey }) {
   return "api.nasa.gov could not be reached or did not answer in time.";
 }
 var neowsCache = createTtlCache({ ttlMs: 10 * 6e4, maxEntries: 40 });
+function isRenderableFrame(value) {
+  if (!value || typeof value !== "object") return false;
+  const frame = value;
+  return typeof frame.image === "string" && /^epic_1b_[a-z0-9_]+$/i.test(frame.image) && typeof frame.date === "string" && /^\d{4}-\d{2}-\d{2} /.test(frame.date);
+}
 var epicCache = createTtlCache({ ttlMs: 15 * 6e4, maxEntries: 4 });
 var exoplanetsCache = createTtlCache({ ttlMs: 24 * 60 * 6e4, maxEntries: 2 });
 function sendCached(res, body, hit) {
@@ -5445,9 +5477,11 @@ function setupNasaRoutes(app2, ai2) {
       const nasaRes = await fetch(url, { signal: controller.signal });
       if (nasaRes.ok) {
         const data = redactApiKeys(await nasaRes.json());
-        if (data && typeof data.near_earth_objects === "object" && data.near_earth_objects !== null && !Array.isArray(data.near_earth_objects)) {
-          const storedAt = neowsCache.set(cacheKey2, data);
-          return sendFresh(res, { success: true, data }, neowsCache.ttlMs, storedAt);
+        const record = data && typeof data === "object" ? data : null;
+        const neos = record?.near_earth_objects;
+        if (record && neos && typeof neos === "object" && !Array.isArray(neos)) {
+          const storedAt = neowsCache.set(cacheKey2, record);
+          return sendFresh(res, { success: true, data: record }, neowsCache.ttlMs, storedAt);
         }
       }
     } catch {
@@ -5476,9 +5510,7 @@ function setupNasaRoutes(app2, ai2) {
       if (nasaRes.ok) {
         const data = redactApiKeys(await nasaRes.json());
         if (Array.isArray(data) && data.length > 0) {
-          const formattedFrames = data.filter(
-            (item) => item && typeof item.image === "string" && /^epic_1b_[a-z0-9_]+$/i.test(item.image) && typeof item.date === "string" && /^\d{4}-\d{2}-\d{2} /.test(item.date)
-          ).slice(0, 12).map((item) => {
+          const formattedFrames = data.filter(isRenderableFrame).slice(0, 12).map((item) => {
             const dateStr = item.date.split(" ")[0];
             const [year, month, day] = dateStr.split("-");
             const imageUrl = `https://epic.gsfc.nasa.gov/archive/natural/${year}/${month}/${day}/png/${item.image}.png`;
@@ -5526,7 +5558,7 @@ function setupNasaRoutes(app2, ai2) {
       if (tapRes.ok) {
         const data = redactApiKeys(await tapRes.json());
         if (Array.isArray(data)) {
-          const entries = data.filter((row) => row && typeof row.pl_name === "string" && row.pl_name.trim());
+          const entries = data.filter((row) => Boolean(row) && typeof row === "object" && typeof row.pl_name === "string" && String(row.pl_name).trim().length > 0);
           if (!data.length || entries.length) {
             const trimmed = entries.slice(0, 30);
             const storedAt = exoplanetsCache.set("default", trimmed);
@@ -5574,11 +5606,13 @@ ${JSON.stringify({ title, explanation })}`;
           timer = setTimeout(() => reject(new Error("Translation timeout")), 2500);
         })
       ]);
-      const parsed = JSON.parse(typeof response?.text === "string" ? response.text : "{}");
-      if (typeof parsed.title !== "string" || !parsed.title.trim() || parsed.title.length > 2e3 || typeof parsed.explanation !== "string" || !parsed.explanation.trim() || parsed.explanation.length > 24e3) {
+      const responseText = response && typeof response === "object" && typeof response.text === "string" ? response.text : "{}";
+      const parsed = JSON.parse(responseText);
+      const translated = parsed && typeof parsed === "object" ? parsed : {};
+      if (typeof translated.title !== "string" || !translated.title.trim() || translated.title.length > 2e3 || typeof translated.explanation !== "string" || !translated.explanation.trim() || translated.explanation.length > 24e3) {
         throw new Error("Invalid translation");
       }
-      const result2 = { title: parsed.title, explanation: parsed.explanation };
+      const result2 = { title: translated.title, explanation: translated.explanation };
       if (translationCache.size >= 200) translationCache.delete(translationCache.keys().next().value);
       translationCache.set(cacheKey2, result2);
       return res.json({ success: true, data: result2, provider: "gemini", cached: false });
@@ -5784,17 +5818,31 @@ function validDate(value) {
   const date = /* @__PURE__ */ new Date(`${value}T00:00:00Z`);
   return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value;
 }
+function isRecord(value) {
+  return typeof value === "object" && value !== null;
+}
+function asPhotoRecord(item) {
+  if (!isRecord(item)) return null;
+  const { id, sol, earth_date, rover, camera, img_src } = item;
+  if (typeof id !== "number" || typeof sol !== "number" || typeof earth_date !== "string") return null;
+  if (!isRecord(rover) || typeof rover.name !== "string") return null;
+  if (!isRecord(camera) || typeof camera.full_name !== "string") return null;
+  if (typeof img_src !== "string") return null;
+  return { id, sol, earth_date, rover: { name: rover.name }, camera: { full_name: camera.full_name }, img_src };
+}
 function normalizePhoto(item, sol, rover) {
-  if (!item || !Number.isSafeInteger(item.id) || item.id < 0 || item.sol !== sol || !validDate(item.earth_date) || typeof item.rover?.name !== "string" || item.rover.name.toLowerCase() !== rover || typeof item.camera?.full_name !== "string" || !item.camera.full_name.trim() || typeof item.img_src !== "string") return null;
+  const photo = asPhotoRecord(item);
+  if (!photo) return null;
+  if (!Number.isSafeInteger(photo.id) || photo.id < 0 || photo.sol !== sol || !validDate(photo.earth_date) || photo.rover.name.toLowerCase() !== rover || !photo.camera.full_name.trim()) return null;
   try {
-    const url = new URL(item.img_src);
+    const url = new URL(photo.img_src);
     if (url.protocol !== "https:" && url.protocol !== "http:") return null;
     if (url.username || url.password || url.hostname !== "nasa.gov" && !url.hostname.endsWith(".nasa.gov")) return null;
     url.protocol = "https:";
     for (const key2 of [...url.searchParams.keys()]) {
       if (key2.toLowerCase() === "api_key") url.searchParams.delete(key2);
     }
-    return { id: item.id, sol, earthDate: item.earth_date, rover: item.rover.name, camera: item.camera.full_name, imageUrl: url.toString() };
+    return { id: photo.id, sol, earthDate: photo.earth_date, rover: photo.rover.name, camera: photo.camera.full_name, imageUrl: url.toString() };
   } catch {
     return null;
   }
@@ -5822,8 +5870,8 @@ function createMarsPhotosRouter({ fetchImpl = globalThis.fetch, getKey = () => p
         return res.status(502).json({ ok: false, code: "MARS_UPSTREAM_ERROR", message: "NASA Mars Rover Photos could not complete the request." });
       }
       const body = await upstream.json();
-      const raw = body?.photos;
-      if (!Array.isArray(raw) || raw.length > 1e3) return res.status(502).json({ ok: false, code: "MARS_INVALID_RESPONSE", message: "NASA returned an unexpected photo response." });
+      const raw = isRecord(body) && Array.isArray(body.photos) ? body.photos : null;
+      if (!raw || raw.length > 1e3) return res.status(502).json({ ok: false, code: "MARS_INVALID_RESPONSE", message: "NASA returned an unexpected photo response." });
       const photos = raw.map((item) => normalizePhoto(item, sol, rover)).filter((item) => item !== null);
       const entry = { retrievedAt: (/* @__PURE__ */ new Date()).toISOString(), expiresAt: Date.now() + TTL_MS, photos, hasMore: raw.length >= 25 && page < 100, omitted: raw.length - photos.length };
       if (cache4.size >= MAX_CACHE_ENTRIES) cache4.delete(cache4.keys().next().value);
@@ -16717,7 +16765,7 @@ async function getJson2(context, providerId, url, validate) {
     context.signal.removeEventListener("abort", onAbort);
   }
 }
-var isRecord = (value) => typeof value === "object" && value !== null && !Array.isArray(value);
+var isRecord2 = (value) => typeof value === "object" && value !== null && !Array.isArray(value);
 var nasaKey = (env) => (env.NASA_API_KEY || env.NEXT_PUBLIC_NASA_API_KEY || "").trim();
 var nasaApod = {
   id: "nasa:apod",
@@ -16743,7 +16791,7 @@ var nasaApod = {
       context,
       "nasa:apod",
       `https://api.nasa.gov/planetary/apod?api_key=${encodeURIComponent(key2)}`,
-      (body) => isRecord(body) && typeof body.date === "string" && typeof body.title === "string" ? null : "APOD payload is missing date/title."
+      (body) => isRecord2(body) && typeof body.date === "string" && typeof body.title === "string" ? null : "APOD payload is missing date/title."
     );
   }
 };
@@ -16772,7 +16820,7 @@ var nasaNeows = {
       context,
       "nasa:neows",
       `https://api.nasa.gov/neo/rest/v1/feed?start_date=${today}&end_date=${today}&api_key=${encodeURIComponent(key2)}`,
-      (body) => isRecord(body) && isRecord(body.near_earth_objects) ? null : "NeoWs payload has no near_earth_objects."
+      (body) => isRecord2(body) && isRecord2(body.near_earth_objects) ? null : "NeoWs payload has no near_earth_objects."
     );
   }
 };
@@ -16816,7 +16864,7 @@ var nasaImages = {
     context,
     "nasa:images",
     "https://images-api.nasa.gov/search?q=apollo&media_type=image&page_size=1",
-    (body) => isRecord(body) && isRecord(body.collection) ? null : "The image library returned no collection."
+    (body) => isRecord2(body) && isRecord2(body.collection) ? null : "The image library returned no collection."
   )
 };
 var power = {
@@ -16831,7 +16879,7 @@ var power = {
     context,
     "earth:power",
     "https://power.larc.nasa.gov/api/temporal/monthly/point?parameters=T2M&community=AG&longitude=79.86&latitude=6.93&start=2020&end=2020&format=JSON",
-    (body) => isRecord(body) && isRecord(body.properties) && isRecord(body.properties.parameter) ? null : "POWER returned no properties.parameter block."
+    (body) => isRecord2(body) && isRecord2(body.properties) && isRecord2(body.properties.parameter) ? null : "POWER returned no properties.parameter block."
   )
 };
 var gibs = {
@@ -16907,7 +16955,7 @@ var jplSbdb = {
     context,
     "nasa:jpl-sbdb",
     "https://ssd-api.jpl.nasa.gov/sbdb.api?sstr=433",
-    (body) => isRecord(body) && (body.object !== void 0 || body.moreInfo !== void 0 || body.orbit !== void 0) ? null : "SBDB returned no object block."
+    (body) => isRecord2(body) && (body.object !== void 0 || body.moreInfo !== void 0 || body.orbit !== void 0) ? null : "SBDB returned no object block."
   )
 };
 var osdr = {
@@ -16922,7 +16970,7 @@ var osdr = {
     context,
     "nasa:osdr",
     "https://osdr.nasa.gov/bio/api/search?term=radiation&type=study&size=1",
-    (body) => isRecord(body) || Array.isArray(body) ? null : "OSDR returned an unexpected payload."
+    (body) => isRecord2(body) || Array.isArray(body) ? null : "OSDR returned an unexpected payload."
   )
 };
 function aiProbe(id, label) {
@@ -18318,7 +18366,8 @@ app.use("/api", (_req, res) => {
 app.use((error, req, res, next) => {
   if (res.headersSent) return next(error);
   if (!String(req.path || "").startsWith("/api")) return next(error);
-  const status = Number(error?.status || error?.statusCode) || 500;
+  const failure2 = error ?? {};
+  const status = Number(failure2.status || failure2.statusCode) || 500;
   const code = status === 413 ? "PAYLOAD_TOO_LARGE" : status === 400 ? "INVALID_JSON" : status === 429 ? "UPSTREAM_RATE_LIMITED" : "INTERNAL_ERROR";
   const message = status === 413 ? "The request body is too large." : status === 400 ? "The request body is not valid JSON." : "NOVA could not process this request. Please retry.";
   if (status >= 500) {

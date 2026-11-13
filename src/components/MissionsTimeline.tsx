@@ -252,7 +252,7 @@ export const MissionsTimeline: React.FC<MissionsTimelineProps> = React.memo(({ l
           sources: []
         });
       }
-    } catch (err: any) {
+    } catch {
       setGroundedResult({
         query: queryTerm,
         answer: lang === 'si'

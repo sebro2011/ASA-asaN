@@ -34,6 +34,24 @@ import {
   Info
 } from 'lucide-react';
 
+/**
+ * Recharts' own `TooltipProps` describes the <Tooltip> element, not the object
+ * its `content` renderer receives, so the payload is described here: only the
+ * fields this tooltip draws, with values as whatever the data key held.
+ */
+interface ChartTooltipEntry {
+  name?: string;
+  value?: string | number;
+  color?: string;
+  fill?: string;
+  unit?: string;
+}
+interface ChartTooltipProps {
+  active?: boolean;
+  payload?: ChartTooltipEntry[];
+  label?: string | number;
+}
+
 interface MissionsAnalyticsProps {
   lang: SupportedLanguage;
 }
@@ -304,7 +322,7 @@ export const MissionsAnalytics: React.FC<MissionsAnalyticsProps> = ({ lang }) =>
   const [durationUnit, setDurationUnit] = useState<'years' | 'days'>('years');
 
   // Custom styled Tooltip for dark glassmorphic Recharts
-  const CustomTooltip = ({ active, payload, label }: any) => {
+  const CustomTooltip = ({ active, payload, label }: ChartTooltipProps) => {
     if (active && payload && payload.length) {
       return (
         <div className="bg-abyss/95 border border-cyan-500/40 rounded-[10px] p-3 shadow-2xl backdrop-blur-xl font-mono text-xs space-y-1.5 z-50">
@@ -312,15 +330,15 @@ export const MissionsAnalytics: React.FC<MissionsAnalyticsProps> = ({ lang }) =>
             <span className="w-2 h-2 rounded-full bg-cyan-400" />
             <span>{label}</span>
           </div>
-          {payload.map((entry: any, index: number) => (
+          {payload.map((entry, index: number) => (
             <div key={`item-${index}`} className="flex items-center justify-between gap-4 text-ink-2">
               <span className="flex items-center gap-1" style={{ color: entry.color || entry.fill }}>
                 <span>{entry.name}:</span>
               </span>
               <span className="font-bold text-white">
-                {typeof entry.value === 'number' && entry.name.toLowerCase().includes('rate')
+                {typeof entry.value === 'number' && (entry.name ?? '').toLowerCase().includes('rate')
                   ? `${entry.value.toFixed(1)}%`
-                  : entry.value.toLocaleString()}
+                  : entry.value != null ? entry.value.toLocaleString() : ''}
                 {entry.unit ? ` ${entry.unit}` : ''}
               </span>
             </div>

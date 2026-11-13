@@ -11,6 +11,27 @@
 import { GoogleGenAI, Type } from '@google/genai';
 import { ProviderError, type ProviderAdapter, type ProviderGenerateArgs } from './providerOrchestrator';
 
+/**
+ * `@google/genai` exposes the answer as a string in current versions and as a
+ * getter in older ones. Both are read here, and anything else is treated as an
+ * empty answer so the orchestrator's `EMPTY_RESPONSE` path still applies.
+ */
+function readResponseText(response: unknown): string {
+  if (!response || typeof response !== 'object') return '';
+  const text = (response as { text?: unknown }).text;
+  if (typeof text === 'string') return text;
+  if (typeof text === 'function') {
+    const value: unknown = (text as () => unknown).call(response);
+    return typeof value === 'string' ? value : '';
+  }
+  return '';
+}
+
+/** Only the two fields of an OpenAI-compatible chat completion that are read. */
+interface ChatCompletionResponse {
+  choices?: { message?: { content?: unknown } }[];
+}
+
 export const ANALYST_MODEL = process.env.NOVA_ANALYST_MODEL || 'gemini-3.8-flash';
 export const OPENROUTER_MODEL = process.env.EARTH_ANALYST_OPENROUTER_MODEL || 'google/gemini-2.0-flash-001';
 export const ARENA_MODEL = process.env.EARTH_ANALYST_ARENA_MODEL || 'gemini-2.5-flash';
@@ -178,7 +199,7 @@ export function createGeminiPersonaProvider(options: {
           // The SDK forwards this when it supports it; the orchestrator's own
           // timeout still bounds the attempt either way.
           abortSignal: signal,
-        } as any,
+        },
       });
 
       let timer: ReturnType<typeof setTimeout> | undefined;
@@ -187,8 +208,8 @@ export function createGeminiPersonaProvider(options: {
       });
 
       try {
-        const response = (await Promise.race([call, guard])) as any;
-        const text = typeof response?.text === 'string' ? response.text : typeof response?.text === 'function' ? response.text() : '';
+        const response = await Promise.race([call, guard]);
+        const text = readResponseText(response);
         if (!text) throw new ProviderError('Gemini returned an empty response', { code: 'EMPTY_RESPONSE', retryable: true });
         return text;
       } catch (error) {
@@ -266,9 +287,9 @@ export function createChatCompletionsProvider(
         });
       }
 
-      let payload: any;
+      let payload: ChatCompletionResponse | null = null;
       try {
-        payload = await response.json();
+        payload = await response.json() as ChatCompletionResponse | null;
       } catch {
         throw new ProviderError(`${label} returned a non-JSON body`, { code: 'UNPARSABLE_RESPONSE', retryable: true });
       }
@@ -346,8 +367,9 @@ const SECTION_KINDS = ['verified', 'derived', 'interpretation', 'limitations', '
  * Validates a model answer: enum-checks the section kinds and keeps only source
  * URLs that actually appear in the context we sent.
  */
-export function normaliseAnswer(parsed: any, context: unknown, limit = 6): NormalisedAnswer {
-  const sections = Array.isArray(parsed?.sections) ? parsed.sections : [];
+export function normaliseAnswer(parsed: unknown, context: unknown, limit = 6): NormalisedAnswer {
+  const answer = (parsed && typeof parsed === 'object' ? parsed : {}) as { sections?: unknown; sources?: unknown };
+  const sections = Array.isArray(answer.sections) ? answer.sections : [];
   if (!sections.length) throw new ProviderError('Model returned no sections', { code: 'EMPTY_RESPONSE', retryable: false });
 
   const allowed = new Set<string>();
@@ -357,21 +379,23 @@ export function normaliseAnswer(parsed: any, context: unknown, limit = 6): Norma
   });
 
   const normalisedSections = sections
-    .filter((section: any) => section && typeof section === 'object')
-    .map((section: any) => ({
-      kind: SECTION_KINDS.includes(section.kind) ? section.kind : 'interpretation',
+    .filter((section): section is Record<string, unknown> => Boolean(section) && typeof section === 'object')
+    .map((section) => ({
+      // Enum-check before the `includes`, so a non-string kind can never be coerced into a match.
+      kind: typeof section.kind === 'string' && SECTION_KINDS.includes(section.kind) ? section.kind : 'interpretation',
       title: String(section.title || 'Interpretation'),
       bullets: Array.isArray(section.bullets)
         ? section.bullets.map((bullet: unknown) => String(bullet)).slice(0, limit)
         : [],
     }))
-    .filter((section: any) => section.bullets.length > 0);
+    .filter((section) => section.bullets.length > 0);
 
   if (!normalisedSections.length) throw new ProviderError('Model sections contained no bullets', { code: 'EMPTY_RESPONSE', retryable: false });
 
-  const sources = (Array.isArray(parsed?.sources) ? parsed.sources : [])
-    .filter((source: any) => source && typeof source.url === 'string')
-    .map((source: any) => ({
+  const sourceList = Array.isArray(answer.sources) ? answer.sources : [];
+  const sources = sourceList
+    .filter((source): source is Record<string, unknown> => Boolean(source) && typeof source === 'object' && typeof source.url === 'string')
+    .map((source) => ({
       label: String(source.label || source.url),
       url: String(source.url),
       detail: source.detail ? String(source.detail) : undefined,

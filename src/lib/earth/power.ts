@@ -191,7 +191,13 @@ export interface ParsedPowerResponse {
 
 /** Convert a POWER JSON payload into rows plus availability information. */
 export function parsePowerResponse(payload: unknown, requested: string[]): ParsedPowerResponse {
-  const root = (payload || {}) as Record<string, any>;
+  // POWER's envelope, described only as far as this parser reads it; every value
+  // below is coerced (`Number`, `String`, `Array.isArray`) and never trusted.
+  const root = (payload || {}) as {
+    properties?: { parameter?: Record<string, unknown> };
+    header?: { title?: unknown; version?: unknown };
+    geometry?: { coordinates?: unknown };
+  };
   const parameterBlock: Record<string, unknown> = root?.properties?.parameter || {};
   const header = root?.header || {};
 

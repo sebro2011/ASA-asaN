@@ -96,9 +96,9 @@ export async function safeFetchNASA<T>(
       const json = await response.json();
       return { data: json, isFallback: false };
     }
-  } catch (err: any) {
+  } catch (err) {
     // Gracefully catch any network rejection, timeout, or rate-limit
-    return { data: fallbackData, isFallback: true, error: err?.message || 'Network error' };
+    return { data: fallbackData, isFallback: true, error: err instanceof Error && err.message ? err.message : 'Network error' };
   } finally {
     if (timeout) clearTimeout(timeout);
   }
