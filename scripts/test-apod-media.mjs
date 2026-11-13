@@ -118,9 +118,14 @@ test('a bundled fixture is never served as cached NASA data', async () => {
   // pass only where the network was blocked: on a CI runner with internet the
   // request could succeed. The outage is stubbed so the test proves the
   // behaviour rather than the environment.
+  //
+  // Both upstreams must be stubbed. When the legacy APOD API fails the route
+  // legitimately tries the official NASA Science record, so a runner with
+  // internet answers 200 from that source and the outage never happens.
   const realFetch = globalThis.fetch;
   globalThis.fetch = async (url, init) => {
-    if (String(url).includes('api.nasa.gov')) {
+    const href = String(url);
+    if (href.includes('api.nasa.gov') || href.includes('science.nasa.gov')) {
       throw new TypeError('fetch failed: stubbed NASA outage');
     }
     return realFetch(url, init);
