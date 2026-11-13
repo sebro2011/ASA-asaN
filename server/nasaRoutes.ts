@@ -4,6 +4,7 @@ import { DEFAULT_GEMINI_MODEL } from './novaChat.js';
 import { createHash } from 'node:crypto';
 import { searchNasaImages } from './nasaImageLibrary.js';
 import { fetchScienceApod } from './apodScience.js';
+import { createTtlCache, maxAgeSeconds } from './ttlCache.ts';
 
 // ====================================================
 // NASA API Routes Module
@@ -105,6 +106,29 @@ export function apodFallbackHint({ failureKind, upstreamStatus, usingDemoKey }: 
     return 'api.nasa.gov returned a site logo instead of the entry image. Please retry later.';
   }
   return 'api.nasa.gov could not be reached or did not answer in time.';
+}
+
+// Bounded TTL caches for the proxies that used to re-hit their upstream on every
+// request. TTLs follow how often the upstream actually changes; sizes are small
+// because the key space is small (a date range, a fixed query).
+//
+// NeoWs is the one that costs most: the shared DEMO_KEY allows 25 requests/hour,
+// and the same feed was being fetched per page load.
+export const neowsCache = createTtlCache<any>({ ttlMs: 10 * 60_000, maxEntries: 40 });
+export const epicCache = createTtlCache<any>({ ttlMs: 15 * 60_000, maxEntries: 4 });
+// The Exoplanet Archive query is fixed and its contents change on the order of
+// months; a day of caching removes almost all of its cost.
+export const exoplanetsCache = createTtlCache<any>({ ttlMs: 24 * 60 * 60_000, maxEntries: 2 });
+
+/** Marks a cached response so the client can say "this is from N minutes ago". */
+function sendCached(res: Response, body: Record<string, any>, hit: { storedAt: number; remainingMs: number }) {
+  res.setHeader('Cache-Control', `public, max-age=${maxAgeSeconds(hit.remainingMs)}, stale-while-revalidate=60`);
+  return res.json({ ...body, cached: true, fetchedAt: new Date(hit.storedAt).toISOString() });
+}
+
+function sendFresh(res: Response, body: Record<string, any>, ttlMs: number, storedAt: number) {
+  res.setHeader('Cache-Control', `public, max-age=${maxAgeSeconds(ttlMs)}, stale-while-revalidate=60`);
+  return res.json({ ...body, cached: false, fetchedAt: new Date(storedAt).toISOString() });
 }
 
 // In-memory translation cache: `${targetLang}_${hash}` -> { title, explanation }
@@ -578,6 +602,11 @@ export function setupNasaRoutes(app: any, ai: GoogleGenAI) {
     const todayStr = new Date().toISOString().split('T')[0];
     const startDate = (req.query.start_date as string) || todayStr;
     const endDate = (req.query.end_date as string) || '';
+
+    const cacheKey = `${startDate}..${endDate}`;
+    const hit = neowsCache.get(cacheKey);
+    if (hit) return sendCached(res, { success: true, data: hit.value }, hit);
+
     const url = endDate
       ? `https://api.nasa.gov/neo/rest/v1/feed?start_date=${encodeURIComponent(startDate)}&end_date=${encodeURIComponent(endDate)}&api_key=${nasaApiKey}`
       : `https://api.nasa.gov/neo/rest/v1/feed?start_date=${encodeURIComponent(startDate)}&api_key=${nasaApiKey}`;
@@ -595,7 +624,8 @@ export function setupNasaRoutes(app: any, ai: GoogleGenAI) {
       if (nasaRes.ok) {
         const data = redactApiKeys(await nasaRes.json());
         if (data && typeof data.near_earth_objects === 'object' && data.near_earth_objects !== null && !Array.isArray(data.near_earth_objects)) {
-          return res.json({ success: true, data });
+          const storedAt = neowsCache.set(cacheKey, data);
+          return sendFresh(res, { success: true, data }, neowsCache.ttlMs, storedAt);
         }
       }
     } catch (err: any) {
@@ -614,6 +644,8 @@ export function setupNasaRoutes(app: any, ai: GoogleGenAI) {
   // ====================================================
   app.get('/api/epic', async (req: Request, res: Response) => {
     const nasaApiKey = process.env.NEXT_PUBLIC_NASA_API_KEY || process.env.NASA_API_KEY || 'DEMO_KEY';
+    const cachedEpic = epicCache.get('natural');
+    if (cachedEpic) return sendCached(res, { success: true, frames: cachedEpic.value }, cachedEpic);
     const url = `https://api.nasa.gov/EPIC/api/natural?api_key=${nasaApiKey}`;
 
     let timeout: any;
@@ -650,7 +682,10 @@ export function setupNasaRoutes(app: any, ai: GoogleGenAI) {
             };
           });
 
-          if (formattedFrames.length) return res.json({ success: true, frames: formattedFrames });
+          if (formattedFrames.length) {
+            const storedAt = epicCache.set('natural', formattedFrames);
+            return sendFresh(res, { success: true, frames: formattedFrames }, epicCache.ttlMs, storedAt);
+          }
         }
       }
     } catch (err: any) {
@@ -666,6 +701,9 @@ export function setupNasaRoutes(app: any, ai: GoogleGenAI) {
   // NASA Exoplanet TAP API Endpoint
   // ====================================================
   app.get('/api/exoplanets', async (req: Request, res: Response) => {
+    const cachedExoplanets = exoplanetsCache.get('default');
+    if (cachedExoplanets) return sendCached(res, { success: true, exoplanets: cachedExoplanets.value }, cachedExoplanets);
+
     const query = `select pl_name,hostname,pl_rade,pl_masse,pl_orbper,pl_eqt,sy_dist,disc_year,disc_facility from ps where default_flag=1 and pl_rade is not null order by sy_dist asc`;
     const tapUrl = `https://exoplanetarchive.ipac.caltech.edu/TAP/sync?query=${encodeURIComponent(query)}&format=json`;
 
@@ -683,7 +721,11 @@ export function setupNasaRoutes(app: any, ai: GoogleGenAI) {
         const data = redactApiKeys(await tapRes.json());
         if (Array.isArray(data)) {
           const entries = data.filter((row: any) => row && typeof row.pl_name === 'string' && row.pl_name.trim());
-          if (!data.length || entries.length) return res.json({ success: true, exoplanets: entries.slice(0, 30) });
+          if (!data.length || entries.length) {
+            const trimmed = entries.slice(0, 30);
+            const storedAt = exoplanetsCache.set('default', trimmed);
+            return sendFresh(res, { success: true, exoplanets: trimmed }, exoplanetsCache.ttlMs, storedAt);
+          }
         }
       }
     } catch (err: any) {

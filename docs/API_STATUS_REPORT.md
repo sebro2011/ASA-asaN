@@ -38,9 +38,9 @@ key to diagnose (audit finding M1).
 | --- | --- | --- | --- | --- |
 | `GET /api/apod` | api.nasa.gov/planetary/apod | in-memory + SW | `cached` flag, source line in UI | tested |
 | `GET /api/apod-range` | api.nasa.gov | — | — | tested |
-| `GET /api/asteroids/neows` | api.nasa.gov/neo | **none** | **none** | live-unverified · audit M2 |
-| `GET /api/epic` | api.nasa.gov/EPIC | **none** | **none** | live-unverified · audit M2 |
-| `GET /api/exoplanets` | NASA Exoplanet Archive TAP | **none** | **none** | live-unverified · audit M2 |
+| `GET /api/asteroids/neows` | api.nasa.gov/neo | **10 min** (keyed by date range) · `cached` + `fetchedAt` | `fetchedAt` | live-unverified upstream · cache tested |
+| `GET /api/epic` | api.nasa.gov/EPIC | **15 min** · `cached` + `fetchedAt` | `fetchedAt` | live-unverified upstream · cache tested |
+| `GET /api/exoplanets` | NASA Exoplanet Archive TAP | **24 h** · `cached` + `fetchedAt` | `fetchedAt` | live-unverified upstream · cache tested |
 | `GET /api/nasa-archive` | **images-api.nasa.gov** (new) | 5 min TTL, 100 entries | `fetchedAt`, `cached` | tested · **live-verified** 2026-11-12T10:52:30Z |
 | `GET /api/solar-weather` | services.swpc.noaa.gov | last measured sample only | `fetchedAt`, `stale` | tested · **live-verified** 2026-11-12T11:02:48Z |
 | `GET /api/iss` | api.wheretheiss.at | last known | `timestamp`, `isFallback` | tested |
@@ -109,6 +109,25 @@ against a live Supabase project.
 | `POST /api/guardian/verify` | admin | one provider | — | probe timeout → typed failure, never "ok" | tested |
 | `POST /api/guardian/recovery` | admin, 5/min | recovery actions | — | verification failure re-opens the circuit; human-only actions refused | tested |
 | `GET /api/guardian/cron` | `CRON_SECRET` | monitor | — | 503 `SCHEDULE_SECRET_MISSING` when unset; 200 `ran:false` when a sweep is held | tested + mounted-app smoke (503) |
+
+## Proxy caching (2026-11-13)
+
+`/api/asteroids/neows`, `/api/epic` and `/api/exoplanets` used to call their
+upstream on every request, spending the shared `DEMO_KEY` quota on identical
+answers. They now use a bounded TTL cache (`server/ttlCache.ts`):
+
+| Route | TTL | Entries | Why that TTL |
+| --- | --- | --- | --- |
+| `/api/asteroids/neows` | 10 min | 40 (one per date range) | the feed changes daily; 10 min covers a browsing session |
+| `/api/epic` | 15 min | 4 | a handful of frames per day |
+| `/api/exoplanets` | 24 h | 2 | a fixed query over a catalogue that changes on the order of months |
+
+Every response carries `cached: true|false` and `fetchedAt` (the time the value was
+actually fetched, not the time of this request), and sets
+`Cache-Control: public, max-age=<remaining>`. An **expired entry is deleted, not
+served** — when the upstream then fails the answer is a 503 with no data, never
+yesterday's numbers presented as today's. Tested in `scripts/test-nasa-cache.mjs`
+(12 cases).
 
 ## Environment variables (names only)
 

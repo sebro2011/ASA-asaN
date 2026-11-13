@@ -26,7 +26,7 @@
     "test:earth-analyst-ui": "node --import tsx --test --test-force-exit scripts/test-earth-analyst-ui.mjs",
     "test:earth-server": "node --import tsx --test scripts/test-earth-server.mjs",
     "test:earth-smoke": "node --import tsx scripts/smoke-render.mjs",
-    "test:nasa": "node --import tsx --test --test-force-exit scripts/test-solar-weather.mjs && node --import tsx --test --test-force-exit scripts/test-solar-weather-dom.mjs && node --import tsx --test --test-force-exit scripts/test-nasa-archive.mjs && node --import tsx --test --test-force-exit scripts/test-nasa-archive-client.mjs && node --import tsx --test --test-force-exit scripts/test-mars-archive-dom.mjs",
+    "test:nasa": "node --import tsx --test --test-force-exit scripts/test-nasa-cache.mjs && node --import tsx --test --test-force-exit scripts/test-solar-weather.mjs && node --import tsx --test --test-force-exit scripts/test-solar-weather-dom.mjs && node --import tsx --test --test-force-exit scripts/test-nasa-archive.mjs && node --import tsx --test --test-force-exit scripts/test-nasa-archive-client.mjs && node --import tsx --test --test-force-exit scripts/test-mars-archive-dom.mjs",
     "test:nova-chat": "node --test scripts/test-nova-chat.mjs",
     "test:nova-diagnostics": "node --import tsx --test scripts/test-nova-diagnostics.mjs",
     "test:security-performance": "node --import tsx --test scripts/test-security-performance.mjs",

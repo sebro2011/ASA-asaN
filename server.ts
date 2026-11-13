@@ -174,7 +174,9 @@ app.use((req, res, next) => {
   res.send = function (body) {
     if (req.method === 'GET' && CACHEABLE_GET.has(req.path)) {
       res.setHeader('Cache-Control', 'public, max-age=60, stale-while-revalidate=120');
-    } else if (req.method === 'GET' && req.path.startsWith('/api/')) {
+    } else if (req.method === 'GET' && req.path.startsWith('/api/') && !res.getHeader('Cache-Control')) {
+      // A route that knows its own freshness sets the header itself (the cached
+      // NASA proxies do); this default must not overwrite it.
       res.setHeader('Cache-Control', 'no-store');
     }
     return originalSend.call(this, body);

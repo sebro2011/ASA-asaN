@@ -3,6 +3,34 @@
 Newest first. Every entry states what changed, which files, and how it was verified.
 Nothing here is a plan; if it was not executed it is not listed.
 
+## 2026-11-13 — NASA proxy caching and client request timeouts (branch `arena/8a962084-asa-asan`)
+
+### Added
+- `server/ttlCache.ts` — a bounded TTL cache with an injectable clock, no timers,
+  and no stale-while-error: an expired entry is deleted, so a later upstream
+  failure is still reported as a failure.
+- `/api/asteroids/neows` (10 min, keyed by date range, 40 entries),
+  `/api/epic` (15 min, 4) and `/api/exoplanets` (24 h, 2) now answer from that
+  cache. Every response carries `cached` and `fetchedAt` — the time the value was
+  really fetched — plus `Cache-Control: public, max-age=<remaining>`.
+- `scripts/test-nasa-cache.mjs` (12 cases): TTL boundary, eviction, overwrite,
+  explicit timestamps, honest fresh/cached labelling, per-date-range keys, an
+  outage never served from cache, EPIC caching, and the two client helpers.
+
+### Fixed
+- **The `/api/*` `no-store` default overwrote a route's own `Cache-Control`.** The
+  middleware now only applies `no-store` when the route has not set the header.
+- **Two client helpers had no timeout** (`lib/nasaApi.js` → `/api/satellites`,
+  `/api/news`). A stalled request left a spinner up forever; both now carry
+  `AbortSignal.timeout(15s)` and resolve to an empty list / clearly labelled
+  sample items.
+
+### Verification
+`npm test` → **837 pass / 0 fail** (was 825) · `tsc --noEmit` clean.
+
+Limitation recorded rather than hidden: the cache is **per instance**, so N
+serverless instances still fetch once per TTL each.
+
 ## 2026-11-13 — NOVA diagnostics: evidence before explanation; device-only chats (branch `arena/8a962084-asa-asan`)
 
 ### Changed

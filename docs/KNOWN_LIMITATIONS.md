@@ -28,9 +28,13 @@ These are current, measured limits. Each names the command or file behind it.
    `gemini-3.8-flash` and 404 on the `gemini-2.5-flash` fallback while the same key
    lists 48 models. Chat therefore runs on OpenRouter and the local engine. The
    provider is reported as *configured*, never as *healthy*. (M1)
-2. **Three NASA proxies have no cache** (`/api/asteroids/neows`, `/api/epic`,
-   `/api/exoplanets`), so repeated visits spend the `DEMO_KEY` quota (30/hour) and
-   can fail intermittently. (M2)
+2. ~~Three NASA proxies have no cache~~ — **fixed 2026-11-13**: NeoWs (10 min,
+   keyed by date range), EPIC (15 min) and the Exoplanet Archive (24 h) use a
+   bounded TTL cache with `cached`/`fetchedAt` and `Cache-Control`. An expired
+   entry is deleted rather than served, so an outage still reports as an outage.
+   Remaining: the cache is **per instance**, so several serverless instances each
+   fetch once per TTL. Shared caching would need a store (the Guardian's Postgres
+   adapter is the natural place).
 3. **`DEMO_KEY` fallback is silent.** If `NASA_API_KEY` is missing, the server uses
    the demo tier without logging or exposing it. (M4)
 4. **Mars Rover Photos is not integrated.** The Forge dataset descriptor exists;
