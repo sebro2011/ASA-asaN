@@ -121,7 +121,8 @@ export async function loadIss(signal: AbortSignal): Promise<Sourced<IssPosition>
 export interface NeoSummary {
   id: string;
   name: string;
-  hazardous: boolean;
+  /** `null` when the source does not publish hazard flags (see `hazardKnown`). */
+  hazardous: boolean | null;
   diameterMinM: number | null;
   diameterMaxM: number | null;
   missDistanceKm: number | null;
@@ -135,6 +136,8 @@ export interface NeoOverview {
   objects: NeoSummary[];
   closest: NeoSummary | null;
   hazardousCount: number;
+  /** False when the source has no PHA flags, so the count is unknown, not zero. */
+  hazardKnown: boolean;
   window: { start: string; end: string };
 }
 
@@ -161,13 +164,22 @@ interface NeoWsObject {
 interface NeoWsFeed {
   element_count?: unknown;
   near_earth_objects?: Record<string, unknown>;
+  /** Set by the server when the feed came from the JPL fallback. */
+  source?: unknown;
+  hazardFlags?: unknown;
+  maxDistanceAu?: unknown;
 }
 
 export async function loadNeo(signal: AbortSignal): Promise<Sourced<NeoOverview>> {
   const start = new Date();
   const end = new Date(start.getTime() + 6 * 86400000);
   const window = { start: isoDate(start), end: isoDate(end) };
-  const payload = await getJson<{ success?: boolean; data?: NeoWsFeed; isFallback?: boolean }>(
+  const payload = await getJson<{
+    success?: boolean;
+    data?: NeoWsFeed;
+    isFallback?: boolean;
+    fallbackSource?: string;
+  }>(
     `/api/asteroids/neows?start_date=${window.start}&end_date=${window.end}`,
     signal,
     15000
@@ -183,7 +195,11 @@ export async function loadNeo(signal: AbortSignal): Promise<Sourced<NeoOverview>
       objects.push({
         id: String(item?.id ?? item?.name),
         name: String(item?.name ?? 'Unnamed object'),
-        hazardous: Boolean(item?.is_potentially_hazardous_asteroid),
+        // `null` stays `null`: an absent flag is unknown, and `Boolean(undefined)`
+        // would quietly turn "unknown" into "not hazardous".
+        hazardous: typeof item?.is_potentially_hazardous_asteroid === 'boolean'
+          ? item.is_potentially_hazardous_asteroid
+          : null,
         // `Number(undefined)` is NaN, so each `Number.isFinite` guard already
         // implies the path exists; the optional chain only states that.
         diameterMinM: Number.isFinite(Number(item?.estimated_diameter?.meters?.estimated_diameter_min))
@@ -210,18 +226,26 @@ export async function loadNeo(signal: AbortSignal): Promise<Sourced<NeoOverview>
     .filter((object) => object.missDistanceKm !== null)
     .sort((a, b) => (a.missDistanceKm as number) - (b.missDistanceKm as number))[0] || null;
 
+  // A source without PHA flags (JPL CAD) has an *unknown* hazardous count, which is
+  // not the same as zero and must not be rendered as one.
+  const hazardKnown = objects.some((object) => object.hazardous !== null);
+  const derived = payload.isFallback === true && payload.fallbackSource === 'jpl-cad';
+
   return {
     data: {
       count: Number(feed?.element_count ?? objects.length),
       objects,
       closest,
-      hazardousCount: objects.filter((object) => object.hazardous).length,
+      hazardousCount: objects.filter((object) => object.hazardous === true).length,
+      hazardKnown,
       window
     },
-    state: payload.isFallback ? 'static' : 'live',
-    note: payload.isFallback
-      ? 'The live NeoWs feed did not answer. Reference objects from the NASA catalogue are listed; their approach values are withheld because they are not current observations.'
-      : undefined,
+    state: derived ? 'derived' : payload.isFallback ? 'static' : 'live',
+    note: derived
+      ? `NASA NeoWs did not answer, so these close approaches come from JPL's Close Approach Data (within ${String(feed?.maxDistanceAu ?? 0.2)} AU of Earth). Distances are converted from AU and velocities are JPL's own; hazard flags and diameters are not published by that source, so they are shown as unknown.`
+      : payload.isFallback
+        ? 'The live NeoWs feed did not answer. Reference objects from the NASA catalogue are listed; their approach values are withheld because they are not current observations.'
+        : undefined,
     retrievedAt: new Date().toISOString()
   };
 }

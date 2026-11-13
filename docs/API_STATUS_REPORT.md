@@ -74,7 +74,7 @@ will fall into too.
 | --- | --- | --- | --- | --- |
 | `GET /api/apod` | api.nasa.gov/planetary/apod | in-memory + SW | `cached` flag, source line in UI | tested |
 | `GET /api/apod-range` | api.nasa.gov | — | — | tested |
-| `GET /api/asteroids/neows` | api.nasa.gov/neo | **10 min** (keyed by date range) · `cached` + `fetchedAt` | `fetchedAt` | live-unverified upstream · cache tested |
+| `GET /api/asteroids/neows` | api.nasa.gov/neo → **JPL CAD fallback** | **10 min** (keyed by date range; derived answers 5 min, separate key) · `cached` + `fetchedAt` | `fetchedAt` | `isFallback` + `fallbackSource` + `degraded` when NeoWs fails; 503 carries `fallbackReason`/`upstreamStatus` |
 | `GET /api/epic` | api.nasa.gov/EPIC | **15 min** · `cached` + `fetchedAt` | `fetchedAt` | live-unverified upstream · cache tested |
 | `GET /api/exoplanets` | NASA Exoplanet Archive TAP | **24 h** · `cached` + `fetchedAt` | `fetchedAt` | live-unverified upstream · cache tested |
 | `GET /api/nasa-archive` | **images-api.nasa.gov** (new) | 5 min TTL, 100 entries | `fetchedAt`, `cached` | tested · **live-verified** 2026-11-12T10:52:30Z |
@@ -192,6 +192,42 @@ keeps upstream retrieval times and identifies omitted fallback parameters. Earth
 analyst capability now reports whether any supported remote key is configured;
 this is configuration only, not proof of provider health. All were tested with
 stubs, not live upstreams.
+
+### NeoWs: why the tile said "UNAVAILABLE", and what changed (2026-11-13)
+
+Measured against production, before any change:
+
+| Observation | Result |
+| --- | --- |
+| `GET /api/asteroids/neows` | **503 `NEOWS_UNAVAILABLE`**, body with no reason at all |
+| `GET /api/epic` (same key, same host) | **200, `cached: false`, `fetchedAt` 18:13Z** — key valid, Vercel→api.nasa.gov works |
+| `GET api.nasa.gov/neo/rest/v1/feed` for the same 7-day window, from outside | **200**, 38 objects over 6 chunks |
+| `GET ssd-api.jpl.nasa.gov/cad.api` for the same window | **200**, 51 Earth approaches within 0.2 AU |
+
+So the upstream was healthy and the key was healthy; the failure was specific to
+this handler, and the handler threw away the only evidence that could say why (it
+computed an upstream status and a failure kind, then discarded both). Three
+changes follow from that, in the order they matter:
+
+1. **The route now reports why.** A 503 carries `fallbackReason`
+   (`timeout` | `network` | `rate-limited` | `upstream` | `shape`),
+   `upstreamStatus`, `upstreamMs`, and the fallback's own outcome. A tile that says
+   "unavailable" without a reason cost this audit an hour; it cannot do so again.
+2. **The budget is honest.** The page asks for a 7-day window whose payload is
+   ~400 KB, under a 4 s timeout — the function has 30 s and the client waits 15 s.
+   The NeoWs call now gets 12 s. Fast answers are unaffected.
+3. **A dead tile became a derived one.** If NeoWs still fails, the route asks
+   JPL's Close Approach Data API (official NASA data, no key) and converts it into
+   the NeoWs shape: AU → km and lunar distances, `v_rel` in km/s. Hazard flags and
+   diameters are **`null`, never `false`/zero**, and the payload says
+   `hazardFlags: "unavailable"`, so the panel shows `—` instead of a green
+   "Not flagged". The UI badge reads **DERIVED** and names JPL.
+
+The timeout was never observed directly — the sandbox cannot reach
+`api.nasa.gov`, so the measurement above is the upstream's own behaviour, not this
+route's latency. That is exactly why (1) exists: the next live 503 will carry
+`upstreamMs` and `fallbackReason` and settle it. Until then, the fallback means the
+panel shows real numbers either way.
 
 ### NeoWs and EPIC follow-up
 

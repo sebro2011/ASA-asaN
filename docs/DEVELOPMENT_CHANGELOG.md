@@ -3,6 +3,42 @@
 Newest first. Every entry states what changed, which files, and how it was verified.
 Nothing here is a plan; if it was not executed it is not listed.
 
+## 2026-11-13 — The Near-Earth objects tile stops saying "UNAVAILABLE" (branch `arena/3b059f6d-asa-asan`)
+
+The home strip showed **Near-Earth objects: UNAVAILABLE** next to three working
+services. Measured first:
+
+| Observation | Result |
+| --- | --- |
+| `GET /api/asteroids/neows` | 503 `NEOWS_UNAVAILABLE`, **body with no reason** |
+| `GET /api/epic` — same key, same host | 200, `cached: false`, `fetchedAt` 18:13Z |
+| `api.nasa.gov/neo/rest/v1/feed`, same 7-day window, from outside | 200 — 38 objects |
+| `ssd-api.jpl.nasa.gov/cad.api`, same window | 200 — 51 approaches within 0.2 AU |
+
+Upstream healthy, key healthy, failure local to the handler — and the handler
+discarded the evidence that would have said why (it computed `upstreamStatus` and
+`failureKind`, then never used them).
+
+- **It reports why now.** The 503 carries `fallbackReason`
+  (`timeout`/`network`/`rate-limited`/`upstream`/`shape`), `upstreamStatus`,
+  `upstreamMs` and the fallback's outcome.
+- **The budget is honest.** The 7-day feed is ~400 KB and the route allowed 4 s
+  while the function has 30 s and the client waits 15 s: NeoWs now gets 12 s.
+  Fast answers are unchanged.
+- **A dead tile became a derived one.** If NeoWs still fails, JPL's Close Approach
+  Data (official NASA, no key) is converted into the NeoWs shape — AU → km and
+  lunar distances, `v_rel` in km/s, dates parsed from JPL's `2026-Nov-13 01:22`
+  format. Hazard flags and diameters stay **`null`**, so the panel prints `—`
+  instead of a green "Not flagged", and the badge reads **DERIVED**.
+- The derived payload lives in its own 5-minute cache, so a NeoWs recovery is never
+  hidden behind it and nothing derived ever enters the live 10-minute cache.
+
+Tests: `test-nasa-cache` 12 → **16** (fallback shape, conversion maths, JPL date
+parsing incl. rejections, cache separation, reason-carrying 503). Suite 891 → **895**.
+
+Not claimed: the timeout was never observed directly — the sandbox cannot reach
+`api.nasa.gov`. The reason fields are what will settle it on the next real failure.
+
 ## 2026-11-13 — M4 measured live: the refusal is upstream (`modelAttempts`) (branch `arena/8a962084-asa-asan`)
 
 Audit **M4**, last step: it needed a working key *and* egress. This workspace has

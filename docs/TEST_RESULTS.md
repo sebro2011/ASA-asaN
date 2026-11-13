@@ -23,7 +23,7 @@ Latest full run: **2026-11-13**, branch `arena/8a962084-asa-asan`.
 | `npm run test:contrast` | 7 pass / 0 fail (WCAG ratios computed from `tokens.css` + `nova-tokens.css`; documented numbers re-verified) |
 | `npm run test:a11y` | 7 pass / 0 fail (no pointer-only control; `activateOnKey`; Escape wiring; focus ring CSS) |
 | `npm run check:pwa` | post-build: 165 precached entries, external registration, no inline scripts |
-| `npm run test:nasa-cache` | 12 pass / 0 fail (TTL cache, honest `cached`/`fetchedAt`, outages never served from cache, client timeouts) |
+| `npm run test:nasa-cache` | 16 pass / 0 fail (TTL cache, honest `cached`/`fetchedAt`, outages never served from cache, client timeouts, JPL fallback shape + AU→km/lunar conversion, JPL date parsing, derived answers never stored under the live key, 503 carries its reason) |
 | `npm run test:workspace-chat` · `test:workspace-settings` | 21 and 11 pass (device-only chat) |
 | `npm run test:forge` | 224 pass / 0 fail |
 | `npm audit` | 6 advisories (2 low, 4 moderate), all in the build chain |

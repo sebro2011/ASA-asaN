@@ -5130,6 +5130,12 @@ function apodFallbackHint({ failureKind, upstreamStatus, usingDemoKey }) {
   return "api.nasa.gov could not be reached or did not answer in time.";
 }
 var neowsCache = createTtlCache({ ttlMs: 10 * 6e4, maxEntries: 40 });
+var neowsCadCache = createTtlCache({ ttlMs: 5 * 6e4, maxEntries: 20 });
+var NEOWS_TIMEOUT_MS = 12e3;
+var CAD_TIMEOUT_MS = 8e3;
+var CAD_MAX_DIST_AU = 0.2;
+var AU_IN_KM = 1495978707e-1;
+var AU_IN_LUNAR_DISTANCES = AU_IN_KM / 384400;
 function isRenderableFrame(value) {
   if (!value || typeof value !== "object") return false;
   const frame = value;
@@ -5140,6 +5146,99 @@ var exoplanetsCache = createTtlCache({ ttlMs: 24 * 60 * 6e4, maxEntries: 2 });
 function sendCached(res, body, hit) {
   res.setHeader("Cache-Control", `public, max-age=${maxAgeSeconds(hit.remainingMs)}, stale-while-revalidate=60`);
   return res.json({ ...body, cached: true, fetchedAt: new Date(hit.storedAt).toISOString() });
+}
+async function fetchJsonWithBudget(url, timeoutMs) {
+  const started = Date.now();
+  const controller = new AbortController();
+  const timer = setTimeout(() => {
+    try {
+      controller.abort(new DOMException("Request timeout", "AbortError"));
+    } catch (_) {
+    }
+  }, timeoutMs);
+  try {
+    const upstream = await fetch(url, { signal: controller.signal });
+    const ms = Date.now() - started;
+    if (!upstream.ok) {
+      return {
+        ok: false,
+        status: upstream.status,
+        // 429/403 are what a shared DEMO_KEY hits first; say so instead of
+        // reporting a generic outage.
+        failureKind: upstream.status === 429 || upstream.status === 403 ? "rate-limited" : "upstream",
+        ms,
+        body: null
+      };
+    }
+    return { ok: true, status: upstream.status, failureKind: "network", ms, body: redactApiKeys(await upstream.json()) };
+  } catch (error) {
+    const ms = Date.now() - started;
+    const name = error instanceof Error ? error.name : "";
+    return { ok: false, status: 0, failureKind: name === "AbortError" || ms >= timeoutMs ? "timeout" : "network", ms, body: null };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+var CAD_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+function cadDateToIso(value) {
+  const match = /^(\d{4})-([A-Za-z]{3})-(\d{1,2})/.exec(String(value ?? "").trim());
+  if (!match) return null;
+  const month = CAD_MONTHS.indexOf(match[2][0].toUpperCase() + match[2].slice(1).toLowerCase()) + 1;
+  if (!month) return null;
+  const day = Number(match[3]);
+  if (!Number.isInteger(day) || day < 1 || day > 31) return null;
+  return `${match[1]}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+function neoWsShapeFromCad(record, window2) {
+  const fields = Array.isArray(record?.fields) ? (record?.fields).map(String) : [];
+  const rows = Array.isArray(record?.data) ? record?.data : [];
+  const at = (name) => fields.indexOf(name);
+  const iDesignation = at("des");
+  const iFullName = at("fullname");
+  const iDate = at("cd");
+  const iDistance = at("dist");
+  const iVelocity = at("v_rel");
+  const byDate = {};
+  let counted = 0;
+  for (const row of rows) {
+    if (!Array.isArray(row)) continue;
+    const date = cadDateToIso(iDate >= 0 ? row[iDate] : "");
+    if (!date) continue;
+    const designation = iDesignation >= 0 ? String(row[iDesignation] ?? "").trim() : "";
+    const fullName = iFullName >= 0 ? String(row[iFullName] ?? "").trim() : "";
+    if (!designation && !fullName) continue;
+    const au = iDistance >= 0 ? Number(row[iDistance]) : Number.NaN;
+    const kps = iVelocity >= 0 ? Number(row[iVelocity]) : Number.NaN;
+    counted += 1;
+    (byDate[date] ||= []).push({
+      id: designation || fullName,
+      name: fullName || designation,
+      is_potentially_hazardous_asteroid: null,
+      estimated_diameter: null,
+      close_approach_data: [
+        {
+          close_approach_date: date,
+          miss_distance: {
+            kilometers: Number.isFinite(au) ? String(au * AU_IN_KM) : null,
+            lunar: Number.isFinite(au) ? String(au * AU_IN_LUNAR_DISTANCES) : null
+          },
+          relative_velocity: {
+            kilometers_per_second: Number.isFinite(kps) ? String(kps) : null,
+            kilometers_per_hour: Number.isFinite(kps) ? String(kps * 3600) : null
+          }
+        }
+      ]
+    });
+  }
+  return {
+    near_earth_objects: byDate,
+    element_count: counted,
+    window: window2,
+    source: "jpl-cad",
+    hazardFlags: "unavailable",
+    diameters: "unavailable",
+    maxDistanceAu: CAD_MAX_DIST_AU
+  };
 }
 function sendFresh(res, body, ttlMs, storedAt) {
   res.setHeader("Cache-Control", `public, max-age=${maxAgeSeconds(ttlMs)}, stale-while-revalidate=60`);
@@ -5460,36 +5559,58 @@ function setupNasaRoutes(app2, ai2) {
     const todayStr = (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
     const startDate = req.query.start_date || todayStr;
     const endDate = req.query.end_date || "";
+    const window2 = { start: startDate, end: endDate || startDate };
     const cacheKey2 = `${startDate}..${endDate}`;
     const hit = neowsCache.get(cacheKey2);
     if (hit) return sendCached(res, { success: true, data: hit.value }, hit);
     const url = endDate ? `https://api.nasa.gov/neo/rest/v1/feed?start_date=${encodeURIComponent(startDate)}&end_date=${encodeURIComponent(endDate)}&api_key=${nasaApiKey}` : `https://api.nasa.gov/neo/rest/v1/feed?start_date=${encodeURIComponent(startDate)}&api_key=${nasaApiKey}`;
-    let timeout;
-    let upstreamStatus = 0;
-    let failureKind = "network";
-    try {
-      const controller = new AbortController();
-      timeout = setTimeout(() => {
-        try {
-          controller.abort(new DOMException("Request timeout", "AbortError"));
-        } catch (_) {
-        }
-      }, 4e3);
-      const nasaRes = await fetch(url, { signal: controller.signal });
-      if (nasaRes.ok) {
-        const data = redactApiKeys(await nasaRes.json());
-        const record = data && typeof data === "object" ? data : null;
-        const neos = record?.near_earth_objects;
-        if (record && neos && typeof neos === "object" && !Array.isArray(neos)) {
-          const storedAt = neowsCache.set(cacheKey2, record);
-          return sendFresh(res, { success: true, data: record }, neowsCache.ttlMs, storedAt);
-        }
+    const primary = await fetchJsonWithBudget(url, NEOWS_TIMEOUT_MS);
+    if (primary.ok) {
+      const record = primary.body && typeof primary.body === "object" ? primary.body : null;
+      const neos = record?.near_earth_objects;
+      if (record && neos && typeof neos === "object" && !Array.isArray(neos)) {
+        const storedAt = neowsCache.set(cacheKey2, record);
+        return sendFresh(res, { success: true, data: record }, neowsCache.ttlMs, storedAt);
       }
-    } catch {
-    } finally {
-      if (timeout) clearTimeout(timeout);
+      primary.failureKind = "shape";
     }
-    return res.status(503).json({ success: false, data: null, code: "NEOWS_UNAVAILABLE", message: "NASA NeoWs data is temporarily unavailable." });
+    const degraded = {
+      primary: "nasa-neows",
+      reason: primary.failureKind,
+      upstreamStatus: primary.status || void 0,
+      // `ms` is a measurement: 0 is a real value, so it is not coerced to undefined.
+      ms: primary.ms
+    };
+    const cadKey = `cad..${startDate}..${endDate}`;
+    const cadHit = neowsCadCache.get(cadKey);
+    if (cadHit) {
+      return sendCached(res, { success: true, data: cadHit.value, isFallback: true, fallbackSource: "jpl-cad", degraded }, cadHit);
+    }
+    const cadUrl = `https://ssd-api.jpl.nasa.gov/cad.api?date-min=${encodeURIComponent(window2.start)}&date-max=${encodeURIComponent(window2.end)}&dist-max=${CAD_MAX_DIST_AU}&body=Earth&sort=date&fullname=true`;
+    const cad = await fetchJsonWithBudget(cadUrl, CAD_TIMEOUT_MS);
+    if (cad.ok) {
+      const shaped = neoWsShapeFromCad(cad.body, window2);
+      if (shaped.element_count > 0) {
+        const storedAt = neowsCadCache.set(cadKey, shaped);
+        return sendFresh(res, { success: true, data: shaped, isFallback: true, fallbackSource: "jpl-cad", degraded }, neowsCadCache.ttlMs, storedAt);
+      }
+    }
+    return res.status(503).json({
+      success: false,
+      data: null,
+      code: "NEOWS_UNAVAILABLE",
+      message: "NASA NeoWs data is temporarily unavailable.",
+      fallbackReason: primary.failureKind,
+      upstreamStatus: primary.status || void 0,
+      upstreamMs: primary.ms,
+      fallback: {
+        source: "jpl-cad",
+        ok: cad.ok,
+        reason: cad.failureKind,
+        upstreamStatus: cad.status || void 0,
+        ms: cad.ms
+      }
+    });
   });
   app2.get("/api/epic", async (req, res) => {
     const nasaApiKey = process.env.NEXT_PUBLIC_NASA_API_KEY || process.env.NASA_API_KEY || "DEMO_KEY";
