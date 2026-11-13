@@ -641,6 +641,7 @@ export const workspaceCopySi: Copy = {
   gdConfigHint: 'පරිසර විචල්‍ය නමින් පමණක් ලැයිස්තුගත වේ — අගයෙන් කිසිදා නොවේ.',
   gdSchedule: 'කාලසටහන්ගත නිරීක්ෂණය',
   gdEnv: 'පරිසර සූදානම',
+  gdNewsKey: 'Guardian පුවත්පතේ පුවත් යතුර — මෙම උපකරණ පුවරුවට නොවේ',
   gdDeployment: 'යෙදවීම',
   gdSet: 'සකසා ඇත',
   gdMissing: 'නැත',

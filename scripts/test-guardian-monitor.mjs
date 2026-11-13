@@ -371,6 +371,28 @@ test('security: secrets are scrubbed from free text and never listed by value', 
   assert.ok(readiness.set.includes('GEMINI_API_KEY'));
   assert.ok(readiness.missing.includes('OPENROUTER_API_KEY'));
   assert.doesNotMatch(JSON.stringify(readiness), /AIzaSyD|nasa-secret/, 'readiness reports names only');
+
+  // Audit m5: a news key whose name starts with GUARDIAN_ is not this Guardian's
+  // credential. It must not sit in `missing` (which reads as "Guardian not
+  // configured"), and both names must be scrubbed like any other secret.
+  const withNews = security.envReadiness({ ...env, GUARDIAN_API_KEY: 'news-key-value-1234' });
+  assert.equal(withNews.set.includes('GUARDIAN_API_KEY'), false);
+  assert.equal(withNews.missing.includes('GUARDIAN_API_KEY'), false);
+  assert.equal(withNews.missing.includes('GUARDIAN_NEWS_API_KEY'), false);
+  assert.deepEqual(withNews.newsOnly.set, ['GUARDIAN_API_KEY']);
+  assert.deepEqual(withNews.newsOnly.missing, ['GUARDIAN_NEWS_API_KEY']);
+  assert.match(withNews.newsOnly.note, /never authorises \/api\/guardian/);
+  assert.match(withNews.newsOnly.note, /GUARDIAN_ADMIN_TOKEN/);
+  assert.doesNotMatch(JSON.stringify(withNews), /news-key-value-1234/, 'the bucket reports names, never values');
+
+  const canonical = security.envReadiness({ ...env, GUARDIAN_NEWS_API_KEY: 'canonical-news-value-9876' });
+  assert.deepEqual(canonical.newsOnly.set, ['GUARDIAN_NEWS_API_KEY']);
+  assert.deepEqual(canonical.newsOnly.missing, ['GUARDIAN_API_KEY']);
+
+  const scrubbedNews = security.scrubSecrets('feed https://content.guardianapis.com/search?api-key=canonical-news-value-9876', {
+    GUARDIAN_NEWS_API_KEY: 'canonical-news-value-9876',
+  });
+  assert.doesNotMatch(scrubbedNews, /canonical-news-value-9876/, 'the canonical name is scrubbed too');
   assert.equal(security.callerKey({}, '1.2.3.4'), security.callerKey({}, '1.2.3.4'));
   assert.notEqual(security.callerKey({}, '1.2.3.4'), security.callerKey({}, '1.2.3.5'));
 });

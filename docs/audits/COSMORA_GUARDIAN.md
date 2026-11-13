@@ -177,6 +177,12 @@ translated, not re-derived.
 | `GUARDIAN_ADMIN_TOKEN` | authorises `/run`, `/recovery`, `/audit`, `/config`, `/runs`, `/verify` |
 | `CRON_SECRET` | authorises `/cron` (Vercel sends it automatically when set) |
 
+### Not this Guardian
+`GUARDIAN_NEWS_API_KEY` (alias: `GUARDIAN_API_KEY`) is **The Guardian newspaper's
+Open Platform key**. It configures `/api/news` and authorises no `/api/guardian/*`
+route. It is reported in the dashboard's readiness panel under its own heading so
+that a missing news key never reads as "the Guardian is not configured" (audit m5).
+
 ### Applying the migration
 ```bash
 supabase db push            # or: psql "$DATABASE_URL" -f supabase/migrations/20261112000000_guardian.sql

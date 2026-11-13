@@ -641,6 +641,7 @@ export const workspaceCopyEn: Copy = {
   gdConfigHint: 'Environment variables are listed by name only — never by value.',
   gdSchedule: 'Scheduled monitoring',
   gdEnv: 'Environment readiness',
+  gdNewsKey: 'The Guardian newspaper news key — not this dashboard',
   gdDeployment: 'Deployment',
   gdSet: 'set',
   gdMissing: 'missing',

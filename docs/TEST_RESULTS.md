@@ -17,6 +17,8 @@ Latest full run: **2026-11-13**, branch `arena/8a962084-asa-asan`.
 | `npm run test:process-guards` | 4 pass / 0 fail (log once → exit 1; rejections non-fatal) |
 | `npm run test:hygiene` | 6 pass / 0 fail (one lockfile, name/version agreement, no hardcoded versions, CI uses npm ci) |
 | `npm run test:nova-routes` | 4 pass / 0 fail (4 paths routed and identical; `/api/nasa-ai` no longer 404s) |
+| `npm run test:space-news` | 13 pass / 0 fail (incl. the Guardian news key: canonical name, deprecated alias, canonical-wins precedence, neither configured) |
+| `npm run audit:env` | exit 0 · 31 variables · 0 undocumented · no secret reachable from browser code (was failing on a string literal, and blind to names reached through a constant) |
 | `npm run test:focus-trap` | 3 pass / 0 fail (Tab wrap, focus restore, wiring of all 4 overlays) |
 | `npm run test:contrast` | 7 pass / 0 fail (WCAG ratios computed from `tokens.css` + `nova-tokens.css`; documented numbers re-verified) |
 | `npm run test:a11y` | 7 pass / 0 fail (no pointer-only control; `activateOnKey`; Escape wiring; focus ring CSS) |
@@ -33,7 +35,7 @@ Latest full run: **2026-11-13**, branch `arena/8a962084-asa-asan`.
 | Suite | Tests | What it pins |
 | --- | --- | --- |
 | `scripts/test-guardian-core.mjs` | 28 | store CAS/TTL/counters/leases, breaker races across two coordinators, fleet budgets, Postgres adapter (no key in a URL, typed timeouts), factory key validation |
-| `scripts/test-guardian-monitor.mjs` | 22 | sweep results, incident audit, metered skip vs deep sweep, circuit-open skip, deadline skips, analytics with `null` availability, recovery verification re-opening a breaker, admin/cron auth failing closed, scrubbing |
+| `scripts/test-guardian-monitor.mjs` | 22 | sweep results, incident audit, metered skip vs deep sweep, circuit-open skip, deadline skips, analytics with `null` availability, recovery verification re-opening a breaker, admin/cron auth failing closed, scrubbing (incl. the news key, kept out of the Guardian's own readiness bucket) |
 | `scripts/test-guardian-ui.mjs` | 6 | incident rendering, unprobed provider is "no data", instance-local store labelled, token never in a URL, outage shows its code, metered labels |
 | `scripts/test-request-rate-limit.mjs` | 9 | exact `max` boundary, 429 + `Retry-After`, window reset, per-client isolation, per-limiter stores, `skip()`, prune, **bounded growth under 5,200 clients**, `req.ip` over headers |
 

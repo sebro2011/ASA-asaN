@@ -287,7 +287,7 @@ deployment resolves its function, so it needs approval.
 | m2 | ~~`uncaughtException` logged and swallowed~~ **fixed 2026-11-13** — `server/processGuards.ts`: log once, flush, exit 1 (unhandled *rejections* stay non-fatal, deliberately) | `server.ts` | `scripts/test-process-guards.mjs` |
 | m3 | ~~Clickable `<div>`s with no role/tabIndex; the logo control has `role="button"` and `tabIndex` but no key handler~~ **fixed 2026-11-13** (`9219200` + a11y commit) | `AmbientSoundscapeControl.tsx`, `Logo.tsx:42` | all 12 clickable containers fixed; `scripts/test-a11y-controls.mjs` now fails the build on a regression |
 | m4 | ~~Icon-only buttons unlabelled~~ **fixed 2026-11-13** — a conservative scan over 465 buttons found **12** genuinely icon-only controls (close/dismiss, month arrows); all now carry a translated `aria-label`, and the scan is a test | `scripts/test-a11y-icon-buttons.mjs` | guard + script check |
-| m5 | `GUARDIAN_API_KEY` (Guardian news Open Platform) reads as the COSMORA Guardian secret | `.env.example` | rename would break existing deployments; document the distinction instead; **S** |
+| m5 | ~~`GUARDIAN_API_KEY` (The Guardian newspaper's news API) reads as the COSMORA Guardian secret~~ **fixed 2026-11-13** — the news key is now `GUARDIAN_NEWS_API_KEY`, with `GUARDIAN_API_KEY` kept as a **deprecated alias** (canonical wins when both are set), so no deployment has to rotate a key because of a rename. The Guardian's own credential is `GUARDIAN_ADMIN_TOKEN` and nothing else. The dashboard's readiness report no longer lists a news key among the Guardian's own variables — `envReadiness` returns it in a separate `newsOnly` bucket with the reason it is separate. The alias means the two names still exist; `.env.example` and every doc state which is which (that is the cost of not breaking deployments) | `server/spaceNews.ts`, `server/guardian/security.ts`, `.env.example` | `scripts/test-space-news.mjs` (canonical, alias, canonical-wins, neither), `scripts/test-guardian-monitor.mjs` (bucket + redaction) |
 | m6 | ~~Duplicate root-level reports~~ **fixed 2026-11-13** — both moved to `docs/audits/` with a "Moved" notice; the repository root now holds only `README.md` | `PHASE1_AUDIT_REPORT.md`, `PHASE7_VALIDATION_REPORT.md` | `scripts/test-hygiene.mjs` fails if a report reappears at the root |
 | m7 | ~~Two lockfiles~~ **fixed 2026-11-13** — `bun.lock` removed; npm is the one graph CI installs | `bun.lock` + `package-lock.json` | `scripts/test-hygiene.mjs` fails if a second lockfile returns |
 | m8 | ~~Package identity is boilerplate~~ **fixed 2026-11-13** — `asa-asan`, plus `description` and `license`; version stays `0.1.0` because no stable release exists to claim | `package.json` | `scripts/test-hygiene.mjs` |
@@ -401,7 +401,7 @@ build exit 0.
 `NOVA_ANALYST_MODEL` · `EARTH_ANALYST_{OPENROUTER,ARENA}_MODEL` ·
 `FORGE_ASSISTANT_{OPENROUTER,ARENA}_MODEL` · `NASA_API_KEY` ·
 `NEXT_PUBLIC_NASA_API_KEY` · `FIRMS_MAP_KEY` · `GNEWS_API_KEY` · `NEWSAPI_KEY` ·
-`GUARDIAN_API_KEY` (news, *not* COSMORA) · `YOUTUBE_API_KEY` · `SUPABASE_URL` ·
+`GUARDIAN_NEWS_API_KEY` (news; `GUARDIAN_API_KEY` is its deprecated alias — neither is COSMORA's) · `YOUTUBE_API_KEY` · `SUPABASE_URL` ·
 `SUPABASE_PUBLISHABLE_KEY` / `SUPABASE_ANON_KEY` · `SUPABASE_SERVICE_ROLE_KEY` ·
 `GUARDIAN_ADMIN_TOKEN` · `CRON_SECRET` · `GUARDIAN_STORE_URL` ·
 `GUARDIAN_STORE_KEY` · `GUARDIAN_NAMESPACE` · `GUARDIAN_PROBE_LIMIT` ·

@@ -125,7 +125,7 @@ mobile bar). It reads two server routes and nothing else:
 | `/api/news` | Spaceflight News API v4 | none | free; always available |
 | `/api/news` | GNews | `GNEWS_API_KEY` | broad astronomy search |
 | `/api/news` | NewsAPI.org | `NEWSAPI_KEY` | sent as `X-Api-Key`, never in a URL |
-| `/api/news` | The Guardian | `GUARDIAN_API_KEY` | science desk, trail text + thumbnail |
+| `/api/news` | The Guardian | `GUARDIAN_NEWS_API_KEY` (alias `GUARDIAN_API_KEY`) | science desk, trail text + thumbnail |
 | `/api/news/papers` | arXiv astro-ph | none | Atom feed, newest first |
 
 **How keys behave.** All four are read server-side only. `GET /api/news/sources`
@@ -149,7 +149,7 @@ the DOM.
 ```bash
 GNEWS_API_KEY=""        # https://gnews.io/
 NEWSAPI_KEY=""          # https://newsapi.org/register
-GUARDIAN_API_KEY=""     # https://open-platform.theguardian.com/access/
+GUARDIAN_NEWS_API_KEY=""  # https://open-platform.theguardian.com/access/ (alias: GUARDIAN_API_KEY)
 ```
 
 Server responses are cached for 10 minutes (30 for papers) with a 30/min per-IP

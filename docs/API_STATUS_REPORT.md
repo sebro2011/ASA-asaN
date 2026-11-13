@@ -135,7 +135,8 @@ yesterday's numbers presented as today's. Tested in `scripts/test-nasa-cache.mjs
 `OPENROUTER_API_KEY`, `ARENA_API_KEY`, `NOVA_GEMINI_MODEL`, `NOVA_ANALYST_MODEL`,
 `EARTH_ANALYST_OPENROUTER_MODEL`, `EARTH_ANALYST_ARENA_MODEL`, `CORS_ORIGINS`,
 `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `NEWS_API_KEY`, `GNEWS_API_KEY`,
-`GUARDIAN_API_KEY`, `YOUTUBE_API_KEY`, `PORT`.
+`GUARDIAN_NEWS_API_KEY` (newspaper news key; `GUARDIAN_API_KEY` is its deprecated
+alias), `YOUTUBE_API_KEY`, `PORT`.
 
 No values are recorded here or anywhere else in the repository.
 

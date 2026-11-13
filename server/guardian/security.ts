@@ -30,12 +30,25 @@ export const SECRET_ENV_NAMES = [
   'GNEWS_API_KEY',
   'NEWS_API_KEY',
   'GUARDIAN_API_KEY',
+  'GUARDIAN_NEWS_API_KEY',
   'YOUTUBE_API_KEY',
 ] as const;
 
+/**
+ * News-feed credentials whose names start with `GUARDIAN_` but have nothing to do
+ * with this Guardian (audit m5). They are still *secrets* — their values are
+ * scrubbed like any other — but they belong to The Guardian newspaper's Open
+ * Platform API, they configure `/api/news`, and they authorise no `/api/guardian/*`
+ * route. `GUARDIAN_API_KEY` is the deprecated alias of `GUARDIAN_NEWS_API_KEY`.
+ *
+ * They are reported separately by `envReadiness` so that a dashboard missing one
+ * of them does not read as "this Guardian is not configured".
+ */
+export const NEWS_ONLY_ENV_NAMES = ['GUARDIAN_NEWS_API_KEY', 'GUARDIAN_API_KEY'] as const;
+
 /** Env var names the Guardian reads for *readiness reporting* (never values). */
 export const WATCHED_ENV_NAMES = [
-  ...SECRET_ENV_NAMES,
+  ...SECRET_ENV_NAMES.filter((name) => !(NEWS_ONLY_ENV_NAMES as readonly string[]).includes(name)),
   'SUPABASE_URL',
   'GUARDIAN_STORE_URL',
   'GUARDIAN_NAMESPACE',
@@ -139,7 +152,14 @@ export function scrubSecrets(text: string, env: Record<string, string | undefine
   return output.slice(0, 2_000);
 }
 
-/** Env readiness by name only: `{ set: ['NASA_API_KEY'], missing: [...] }`. */
+/**
+ * Env readiness by name only: `{ set: ['NASA_API_KEY'], missing: [...] }`.
+ *
+ * News-feed keys are split out of `set`/`missing` into `newsOnly` — same
+ * names-only discipline, different bucket — so `missing` answers exactly one
+ * question: *can this Guardian act?* (`GUARDIAN_ADMIN_TOKEN` is what decides that,
+ * and `adminConfigured` says so separately.)
+ */
 export function envReadiness(env: Record<string, string | undefined>) {
   const set: string[] = [];
   const missing: string[] = [];
@@ -147,7 +167,12 @@ export function envReadiness(env: Record<string, string | undefined>) {
     if ((env[name] || '').trim()) set.push(name);
     else missing.push(name);
   }
-  return { set, missing, total: WATCHED_ENV_NAMES.length };
+  const newsOnly = {
+    set: NEWS_ONLY_ENV_NAMES.filter((name) => (env[name] || '').trim()),
+    missing: NEWS_ONLY_ENV_NAMES.filter((name) => !(env[name] || '').trim()),
+    note: 'GUARDIAN_NEWS_API_KEY (alias: GUARDIAN_API_KEY) is The Guardian newspaper\'s news API key. It configures /api/news and never authorises /api/guardian/*; that is GUARDIAN_ADMIN_TOKEN.',
+  };
+  return { set, missing, total: WATCHED_ENV_NAMES.length, newsOnly };
 }
 
 /** Stable, non-reversible key for per-caller rate limiting. */

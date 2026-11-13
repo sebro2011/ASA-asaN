@@ -5925,6 +5925,8 @@ workspaceConfigRouter.get("/config", (_req, res) => {
 
 // server/spaceNews.ts
 import { Router as Router4 } from "express";
+var GUARDIAN_NEWS_KEY_ENV = "GUARDIAN_NEWS_API_KEY";
+var GUARDIAN_NEWS_KEY_LEGACY_ENV = "GUARDIAN_API_KEY";
 var NEWS_API_VERSION = 1;
 var TOPICS = {
   all: "astronomy telescope space science",
@@ -6083,7 +6085,7 @@ async function fetchNewsApi(topic, query, limit) {
   });
 }
 async function fetchGuardian(topic, query, limit) {
-  const token = key("GUARDIAN_API_KEY");
+  const token = key(GUARDIAN_NEWS_KEY_ENV) || key(GUARDIAN_NEWS_KEY_LEGACY_ENV);
   if (!token) return [];
   const search = new URLSearchParams({
     q: query || TOPICS[topic],
@@ -6137,13 +6139,15 @@ var NEWS_SOURCES = [
   {
     id: "guardian",
     label: "The Guardian",
-    envVar: "GUARDIAN_API_KEY",
+    envVar: GUARDIAN_NEWS_KEY_ENV,
+    envNames: [GUARDIAN_NEWS_KEY_ENV, GUARDIAN_NEWS_KEY_LEGACY_ENV],
     docs: "https://open-platform.theguardian.com/documentation/",
     fetch: fetchGuardian
   }
 ];
-function isConfigured(envVar) {
-  return envVar === null || Boolean(key(envVar));
+function isConfigured(envVar, envNames) {
+  if (envVar === null) return true;
+  return (envNames ?? [envVar]).some((name) => Boolean(key(name)));
 }
 function newsSourceInventory() {
   return [
@@ -6153,7 +6157,9 @@ function newsSourceInventory() {
       kind: "news",
       envVar: source.envVar,
       docs: source.docs,
-      configured: isConfigured(source.envVar)
+      configured: isConfigured(source.envVar, source.envNames),
+      // Named so an operator can migrate off the alias without a surprise.
+      ...source.envNames ? { envAliases: source.envNames.slice(1) } : {}
     })),
     {
       id: "arxiv",
@@ -6306,7 +6312,7 @@ function createSpaceNewsRouter() {
     const cached2 = readCache(cacheKey2, now);
     if (cached2) return res.json({ ...cached2, cached: true });
     const attempts = NEWS_SOURCES.map(async (source) => {
-      if (!isConfigured(source.envVar)) {
+      if (!isConfigured(source.envVar, source.envNames)) {
         return { source, state: "unconfigured", items: [] };
       }
       try {
@@ -6323,8 +6329,9 @@ function createSpaceNewsRouter() {
       label: result2.source.label,
       kind: "news",
       envVar: result2.source.envVar,
+      ...result2.source.envNames ? { envAliases: result2.source.envNames.slice(1) } : {},
       docs: result2.source.docs,
-      configured: isConfigured(result2.source.envVar),
+      configured: isConfigured(result2.source.envVar, result2.source.envNames),
       state: result2.state,
       count: result2.items.length
     }));
@@ -17387,10 +17394,12 @@ var SECRET_ENV_NAMES = [
   "GNEWS_API_KEY",
   "NEWS_API_KEY",
   "GUARDIAN_API_KEY",
+  "GUARDIAN_NEWS_API_KEY",
   "YOUTUBE_API_KEY"
 ];
+var NEWS_ONLY_ENV_NAMES = ["GUARDIAN_NEWS_API_KEY", "GUARDIAN_API_KEY"];
 var WATCHED_ENV_NAMES = [
-  ...SECRET_ENV_NAMES,
+  ...SECRET_ENV_NAMES.filter((name) => !NEWS_ONLY_ENV_NAMES.includes(name)),
   "SUPABASE_URL",
   "GUARDIAN_STORE_URL",
   "GUARDIAN_NAMESPACE",
@@ -17467,7 +17476,12 @@ function envReadiness(env) {
     if ((env[name] || "").trim()) set.push(name);
     else missing.push(name);
   }
-  return { set, missing, total: WATCHED_ENV_NAMES.length };
+  const newsOnly = {
+    set: NEWS_ONLY_ENV_NAMES.filter((name) => (env[name] || "").trim()),
+    missing: NEWS_ONLY_ENV_NAMES.filter((name) => !(env[name] || "").trim()),
+    note: "GUARDIAN_NEWS_API_KEY (alias: GUARDIAN_API_KEY) is The Guardian newspaper's news API key. It configures /api/news and never authorises /api/guardian/*; that is GUARDIAN_ADMIN_TOKEN."
+  };
+  return { set, missing, total: WATCHED_ENV_NAMES.length, newsOnly };
 }
 function callerKey(headers, fallback) {
   const forwarded = headerValue(headers, "x-forwarded-for").split(",")[0]?.trim();

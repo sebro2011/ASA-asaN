@@ -98,7 +98,13 @@ interface AuditEntry {
 
 interface ConfigResponse {
   ok: boolean;
-  env: { set: string[]; missing: string[]; total: number };
+  env: {
+    set: string[];
+    missing: string[];
+    total: number;
+    /** News-feed keys, kept out of `set`/`missing`: they configure /api/news, not this dashboard. */
+    newsOnly?: { set: string[]; missing: string[]; note: string };
+  };
   store: { kind: string; capabilities: Record<string, boolean>; reason: string; missing: string[] };
   schedule: { endpoint: string; requiresSecret: string; configured: boolean; recommended: string };
   adminConfigured: boolean;
@@ -596,6 +602,14 @@ export function GuardianSurface() {
               <h3>{t('gdEnv')}</h3>
               <p className="gd-fineprint">{config.env.set.length}/{config.env.total} {t('gdSet')}</p>
               <p className="gd-mono gd-muted">{config.env.missing.join(', ') || '—'}</p>
+              {config.env.newsOnly && (
+                // The name starts with GUARDIAN_ and is still not this Guardian's
+                // credential; saying so here is cheaper than a rename (audit m5).
+                <p className="gd-fineprint" title={config.env.newsOnly.note}>
+                  {t('gdNewsKey')}:{' '}
+                  {[...config.env.newsOnly.set, ...config.env.newsOnly.missing].join(', ') || '—'}
+                </p>
+              )}
             </div>
             <div>
               <h3>{t('gdDeployment')}</h3>

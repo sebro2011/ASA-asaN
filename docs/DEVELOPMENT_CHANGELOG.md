@@ -3,6 +3,58 @@
 Newest first. Every entry states what changed, which files, and how it was verified.
 Nothing here is a plan; if it was not executed it is not listed.
 
+## 2026-11-13 — The Guardian's news key stops impersonating the Guardian (branch `arena/8a962084-asa-asan`)
+
+Audit **m5**.
+
+### The collision
+`GUARDIAN_API_KEY` is The Guardian *newspaper's* Open Platform key: it reads one
+news feed. `GUARDIAN_ADMIN_TOKEN` is the COSMORA API Guardian's own credential, and
+it is the only thing that authorises `/api/guardian/*`. Two purposes, one prefix —
+and the Guardian's own readiness panel listed the news key among its variables, so
+a missing news key read as "this Guardian is not configured".
+
+### What changed, without breaking a deployment
+- **Canonical name.** `GUARDIAN_NEWS_API_KEY` (`GUARDIAN_NEWS_KEY_ENV` in
+  `server/spaceNews.ts`). `GUARDIAN_API_KEY` is read second as a **deprecated
+  alias** — a rename must never force a key rotation — and the canonical name wins
+  when both are set. A source now carries `envNames` so the alias is a data
+  property, not a special case in `isConfigured`.
+- **The report teaches the right name.** `/api/news` and `/api/news/sources` show
+  `envVar: "GUARDIAN_NEWS_API_KEY"` with `envAliases: ["GUARDIAN_API_KEY"]`.
+- **Readiness split.** `envReadiness` returns a separate `newsOnly` bucket
+  (`{ set, missing, note }`) and no longer mixes news keys into the Guardian's own
+  `set`/`missing`; the note states which variable *does* authorise the Guardian.
+  `GUARDIAN_NEWS_API_KEY` was added to `SECRET_ENV_NAMES`, so its value is scrubbed
+  from provider reasons exactly like the alias.
+- **Dashboard.** The environment-readiness panel gained one translated line
+  (`gdNewsKey`, en/si/ta) naming the news keys and why they are separate.
+- **`.env.example`** carries both names, with the alias marked deprecated, plus a
+  one-line pointer on `GUARDIAN_ADMIN_TOKEN`.
+
+### Tests
+`scripts/test-space-news.mjs` +1 test (4 cases): canonical alone configures and is
+never echoed, the alias alone still works while the report recommends the canonical
+name, canonical wins when both are set, and neither → `unconfigured` (no invented
+items). `scripts/test-guardian-monitor.mjs` gained assertions on the `newsOnly`
+bucket, its note, and scrubbing of the canonical name.
+
+### Two defects found in the repo's own env audit (`npm run audit:env`)
+- it **failed** on a *string literal* — the APOD notice legitimately tells an
+  operator that `NASA_API_KEY` exists, and the scanner counted that as browser code
+  referencing a secret. Strings are now blanked before the name check; the
+  `process.env.X` / `import.meta.env.X` checks still run on the raw source, so the
+  change can only remove false positives. Verified by adding
+  `process.env.GEMINI_API_KEY` to a browser file: still caught.
+- it was **blind to a name reached through a constant** (`key(GUARDIAN_NEWS_KEY_ENV)`),
+  which is exactly the shape this change introduces. The scanner now also reads
+  `key('NAME')` and `export const X_KEY_ENV = 'NAME'`. Coverage went 27 → **31**
+  variables, `GUARDIAN_NEWS_API_KEY`/`GUARDIAN_API_KEY` included, 0 undocumented.
+
+### Verification
+`npm run audit:env` exit 0 · `npm test` 891 pass / 0 fail · `tsc --noEmit` clean ·
+`npm run build` exit 0 (`check:pwa` 165 entries) · `api/index.js` rebuilt.
+
 ## 2026-11-13 — `any` reaches zero, and the ratchet that could not fail (branch `arena/8a962084-asa-asan`)
 
 Audits **m12** (finished) and **M4** (cause identified).
