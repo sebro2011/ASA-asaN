@@ -42,6 +42,8 @@ const OrbitLabSurface = lazy(() => import('./workspace/modules/OrbitLabSurface')
 const StarLibrarySurface = lazy(() => import('./workspace/modules/StarLibrarySurface'));
 // The L.I.F.E. engine surface (memory, skills, verification, security, benchmarks).
 const IntelligenceSurface = lazy(() => import('./workspace/intelligence/IntelligenceSurface'));
+// COSMORA API Guardian: operational dashboard for dependency diagnostics.
+const GuardianSurface = lazy(() => import('./workspace/guardian/GuardianSurface'));
 
 const MODULE_SURFACES: Partial<Record<AppRoute['name'], LazyExoticComponent<() => ReactElement>>> = {
   projects: MissionsSurface,
@@ -52,6 +54,7 @@ const MODULE_SURFACES: Partial<Record<AppRoute['name'], LazyExoticComponent<() =
   knowledge: StarLibrarySurface,
   tasks: ObservingPlanSurface,
   intelligence: IntelligenceSurface,
+  guardian: GuardianSurface,
 };
 
 /** Branded loading state for the Explore chunk (kept dark: Explore is dark). */
