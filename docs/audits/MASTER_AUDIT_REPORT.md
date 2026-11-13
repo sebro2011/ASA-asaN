@@ -228,7 +228,7 @@ deployment resolves its function, so it needs approval.
 
 | # | Finding | Evidence | Fix / complexity |
 | --- | --- | --- | --- |
-| m1 | Four near-identical NOVA chat handlers | `server.ts` — `/api/nova/chat`, `/api/chat`, `/api/openrouter/chat`, `/api/nasa-ai` repeat the same 8 lines | extract one adapter; **S** |
+| m1 | ~~Four near-identical NOVA chat handlers~~ **fixed 2026-11-13** — one handler registered from `NOVA_CHAT_PATHS`; the copies had also left `/api/nasa-ai` rate-limited but **unrouted**, so the client paid a 404 on every ask | `server.ts` | `scripts/test-nova-routes.mjs` |
 | m2 | `uncaughtException` is logged and swallowed, so the process keeps serving with possibly-corrupt state | `server.ts:23` | log, then exit and let the platform restart; **S**, but a behaviour change |
 | m3 | ~~Clickable `<div>`s with no role/tabIndex; the logo control has `role="button"` and `tabIndex` but no key handler~~ **fixed 2026-11-13** (`9219200` + a11y commit) | `AmbientSoundscapeControl.tsx`, `Logo.tsx:42` | all 12 clickable containers fixed; `scripts/test-a11y-controls.mjs` now fails the build on a regression |
 | m4 | Icon-only buttons: only 3 `aria-label`s across 331 `<button>`s | spot check only — most buttons carry visible text, so this is **not** a claim that 328 are broken | audit the icon-only subset in Phase 5; **S–M** |

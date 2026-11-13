@@ -1,4 +1,4 @@
-import express from 'express';
+import express, { type RequestHandler } from 'express';
 import dotenv from 'dotenv';
 import path from 'path';
 import fs from 'fs';
@@ -224,8 +224,16 @@ app.get('/api/nova/diagnostics', async (req, res) => {
   }
 });
 
-// Additive local/Express adapter for the same isolated Vercel Nova chat handler.
-app.post('/api/nova/chat', async (req, res) => {
+// Local/Express adapter for the same isolated Vercel NOVA chat handler.
+//
+// This used to be three byte-identical copies (`/api/nova/chat`,
+// `/api/openrouter/chat`, `/api/chat`), which is how the fourth path in
+// `NOVA_CHAT_PATHS` — `/api/nasa-ai` — came to be rate-limited but never routed:
+// the limiter and the routes were maintained separately. The client
+// (`lib/nasaApi.js` askNasaAi) calls `/api/nasa-ai` first, so every ask spent one
+// 404 before falling back to `/api/chat`. One handler, registered from the same
+// set the limiter uses, removes both the duplication and the drift.
+const novaChatHandler: RequestHandler = async (req, res) => {
   try {
     const response = await handleNovaChatRequest({
       body: req.body,
@@ -242,45 +250,9 @@ app.post('/api/nova/chat', async (req, res) => {
       code: 'INTERNAL_ERROR',
     });
   }
-});
+};
 
-app.post('/api/openrouter/chat', async (req, res) => {
-  try {
-    const response = await handleNovaChatRequest({
-      body: req.body,
-      ip: req.ip || req.socket.remoteAddress || 'unknown',
-      contentLength: req.headers['content-length'],
-    });
-    for (const [name, value] of Object.entries(response.headers)) {
-      res.setHeader(name, String(value));
-    }
-    return res.status(response.status).json(response.body);
-  } catch {
-    return res.status(500).json({
-      error: 'NOVA could not process this request. Please retry.',
-      code: 'INTERNAL_ERROR',
-    });
-  }
-});
-app.post('/api/chat', async (req, res) => {
-  try {
-    const response = await handleNovaChatRequest({
-      body: req.body,
-      ip: req.ip || req.socket.remoteAddress || 'unknown',
-      contentLength: req.headers['content-length'],
-    });
-    for (const [name, value] of Object.entries(response.headers)) {
-      res.setHeader(name, String(value));
-    }
-    return res.status(response.status).json(response.body);
-  } catch {
-    return res.status(500).json({
-      error: 'NOVA could not process this request. Please retry.',
-      code: 'INTERNAL_ERROR',
-    });
-  }
-});
-
+for (const path of NOVA_CHAT_PATHS) app.post(path, novaChatHandler);
 
 // ====================================================
 // YouTube video meta proxy (CosmoVision submissions).

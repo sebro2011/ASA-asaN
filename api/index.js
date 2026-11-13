@@ -18095,7 +18095,7 @@ app.get("/api/nova/diagnostics", async (req, res) => {
     return res.status(500).json({ error: "Diagnostics could not run.", code: "INTERNAL_ERROR" });
   }
 });
-app.post("/api/nova/chat", async (req, res) => {
+var novaChatHandler = async (req, res) => {
   try {
     const response = await handleNovaChatRequest({
       body: req.body,
@@ -18112,43 +18112,8 @@ app.post("/api/nova/chat", async (req, res) => {
       code: "INTERNAL_ERROR"
     });
   }
-});
-app.post("/api/openrouter/chat", async (req, res) => {
-  try {
-    const response = await handleNovaChatRequest({
-      body: req.body,
-      ip: req.ip || req.socket.remoteAddress || "unknown",
-      contentLength: req.headers["content-length"]
-    });
-    for (const [name, value] of Object.entries(response.headers)) {
-      res.setHeader(name, String(value));
-    }
-    return res.status(response.status).json(response.body);
-  } catch {
-    return res.status(500).json({
-      error: "NOVA could not process this request. Please retry.",
-      code: "INTERNAL_ERROR"
-    });
-  }
-});
-app.post("/api/chat", async (req, res) => {
-  try {
-    const response = await handleNovaChatRequest({
-      body: req.body,
-      ip: req.ip || req.socket.remoteAddress || "unknown",
-      contentLength: req.headers["content-length"]
-    });
-    for (const [name, value] of Object.entries(response.headers)) {
-      res.setHeader(name, String(value));
-    }
-    return res.status(response.status).json(response.body);
-  } catch {
-    return res.status(500).json({
-      error: "NOVA could not process this request. Please retry.",
-      code: "INTERNAL_ERROR"
-    });
-  }
-});
+};
+for (const path2 of NOVA_CHAT_PATHS) app.post(path2, novaChatHandler);
 var YOUTUBE_ID_RE = /(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|shorts\/|watch\?(?:.*&)?v=|.*v=))([A-Za-z0-9_-]{11})/;
 function extractYouTubeId(url) {
   const match = YOUTUBE_ID_RE.exec(url.trim());

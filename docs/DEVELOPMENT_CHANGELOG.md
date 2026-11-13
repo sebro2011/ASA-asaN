@@ -3,6 +3,29 @@
 Newest first. Every entry states what changed, which files, and how it was verified.
 Nothing here is a plan; if it was not executed it is not listed.
 
+## 2026-11-13 — One NOVA chat route instead of three copies (branch `arena/8a962084-asa-asan`)
+
+Audit **m1**. `server.ts` carried three byte-identical Express handlers for
+`/api/nova/chat`, `/api/openrouter/chat` and `/api/chat`.
+
+### Fixed
+- One `novaChatHandler` registered with
+  `for (const path of NOVA_CHAT_PATHS) app.post(path, novaChatHandler)` — the same
+  set the rate limiter already used, so the limit and the routes cannot drift.
+- **The copies had already drifted.** `NOVA_CHAT_PATHS` contained a fourth path,
+  `/api/nasa-ai`, that the limiter counted but nothing routed — and
+  `lib/nasaApi.js#askNasaAi` calls it **first**, so every AI ask from that helper
+  spent a 404 before falling back to `/api/chat`. It now answers.
+
+### Added
+- `scripts/test-nova-routes.mjs` (4 cases): all four paths are routed, answer
+  identically to the same input (400 `INVALID_MESSAGES`), answer a `provider:
+  'local'` request without any key or network, exactly one place calls the chat
+  handler, and the limiter's list equals the tested paths.
+
+### Verification
+`npm test` → **858 pass / 0 fail** (was 854) · `tsc --noEmit` clean · `npm run build` ok · `api/index.js` rebuilt and in sync.
+
 ## 2026-11-13 — Focus trap in both mobile sheets, and a withdrawn audit finding (branch `arena/8a962084-asa-asan`)
 
 ### Fixed
