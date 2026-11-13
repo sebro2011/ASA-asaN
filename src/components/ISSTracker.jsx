@@ -34,6 +34,7 @@ import L from 'leaflet';
 import { propagateTLE } from '../utils/satelliteTracker.js';
 import { LiquidGlassCard } from './LiquidGlassCard.jsx';
 import { fetchIssLocation } from '@/lib/nasaApi';
+import { a11yLabel } from '../lib/a11yLabels';
 
 // Pre-seeded satellite definitions with authentic NORAD TLE data
 const INITIAL_SATELLITES = [
@@ -1064,6 +1065,7 @@ function ISSTracker({ className = '' }) {
             >
               <button
                 type="button"
+                aria-label={a11yLabel('close', currentLang)}
                 onClick={() => setModalSat(null)}
                 className="absolute top-5 right-5 p-2 rounded-[10px] bg-surface/60 hover:bg-surface-2 text-ink-3 hover:text-ink transition-colors cursor-pointer"
               >

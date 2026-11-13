@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Mic, MicOff, Search, X, Volume2, AlertCircle } from 'lucide-react';
 import { SupportedLanguage } from '../i18n/translations';
+import { a11yLabel } from '../lib/a11yLabels';
 
 interface VoiceSearchInputProps {
   value: string;
@@ -280,6 +281,8 @@ export const VoiceSearchInput: React.FC<VoiceSearchInputProps> = ({
           <AlertCircle className="w-3.5 h-3.5 shrink-0" />
           <span>{errorMessage}</span>
           <button
+            type="button"
+            aria-label={a11yLabel('dismiss', lang)}
             onClick={() => setErrorMessage(null)}
             className="ml-auto text-critical hover:text-ink"
           >

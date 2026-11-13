@@ -6,10 +6,12 @@ Latest full run: **2026-11-13**, branch `arena/8a962084-asa-asan`.
 | --- | --- |
 | `npm run lint` (`tsc --noEmit`) | clean |
 | `npm run build` | exit 0 · 89 JS chunks · entry **543.90 kB raw / 170.25 kB gzip** (was 920.85 / 245.83 before the locale split) · `si` 173.34 kB / 37.30 kB gzip on demand · `ta` 202.58 kB / 37.76 kB gzip on demand · CSS 63.65 kB gzip |
-| `npm test` | **878 pass / 0 fail** across **75** test scripts |
+| `npm test` | **887 pass / 0 fail** across **77** test scripts |
 | `npm run test:guardian` | 56 pass / 0 fail (core 28 · monitor/routes 22 · dashboard 6) |
 | `npm run test:rate-limit` | 9 pass / 0 fail |
 | `npm run test:nova-diagnostics` | 23 pass / 0 fail (4 new: model-list evidence) |
+| `npm run test:a11y` | 7 + 5 pass / 0 fail (keyboard reachability; no nameless icon button; label scripts) |
+| `npm run test:docs-links` | 3 pass / 0 fail (every internal link resolves; no orphan documents) |
 | `npm run test:security-headers` | 11 pass / 0 fail (prod CSP has no inline script; dev keeps Vite's; proxy trust bounded; live response header matches the policy) |
 | `npm run test:process-guards` | 4 pass / 0 fail (log once → exit 1; rejections non-fatal) |
 | `npm run test:hygiene` | 6 pass / 0 fail (one lockfile, name/version agreement, no hardcoded versions, CI uses npm ci) |

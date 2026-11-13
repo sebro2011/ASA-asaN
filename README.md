@@ -76,6 +76,7 @@ URL, or written to a log; upstream bodies are scrubbed before they leave the ser
 
 | Document | Contents |
 | --- | --- |
+| [`docs/README.md`](docs/README.md) | **Documentation index — start here** |
 | [`docs/audits/MASTER_AUDIT_REPORT.md`](docs/audits/MASTER_AUDIT_REPORT.md) | Current audit: 2 critical + 8 major findings, what was fixed, what needs a decision |
 | [`docs/TECHNICAL_ARCHITECTURE.md`](docs/TECHNICAL_ARCHITECTURE.md) | System architecture |
 | [`docs/API_STATUS_REPORT.md`](docs/API_STATUS_REPORT.md) | Every route: source, cache, failure mode, live status |

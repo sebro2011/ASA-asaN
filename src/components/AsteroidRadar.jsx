@@ -33,6 +33,7 @@ import {
   WifiOff
 } from 'lucide-react';
 import { activateOnKey } from '../app/hooks';
+import { a11yLabel } from '../lib/a11yLabels';
 
 // App-specific screening thresholds; these are not NASA PHA criteria.
 export const THREAT_THRESHOLDS = {
@@ -1206,6 +1207,7 @@ function AsteroidRadar({ lang = 'en' }) {
 
                 <button
                   type="button"
+                  aria-label={a11yLabel('close', lang)}
                   onClick={() => setSelectedAsteroid(null)}
                   className="p-2 rounded-[10px] apple-liquid-glass text-ink-3 hover:text-ink transition cursor-pointer"
                 >

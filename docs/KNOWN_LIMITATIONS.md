@@ -43,9 +43,10 @@ These are current, measured limits. Each names the command or file behind it.
    `scripts/test-focus-trap.mjs`. Remaining: focus is trapped but the sheets are
    rendered with `lg:hidden`, so a desktop viewport never shows them — untested at
    those breakpoints in a real browser.
-3. **Icon-only buttons are partially labelled.** Audit m4 counted 3 `aria-label`s
-   across 331 `<button>`s; most buttons carry visible text, so this is not a claim
-   that the rest are broken, but the icon-only subset was not audited.
+3. ~~Icon-only buttons are partially labelled.~~ **Audited 2026-11-13**: 12 of 465
+   buttons were genuinely icon-only and all now have translated labels. A test keeps
+   it that way. What remains unverified is whether each label *reads well* to a
+   screen reader in Sinhala and Tamil — that needs a person with the reader.
 4. **Some `aria-label`s are English-only** inside otherwise localised components
    (the planet globe, a few AR controls).
 

@@ -3,6 +3,45 @@
 Newest first. Every entry states what changed, which files, and how it was verified.
 Nothing here is a plan; if it was not executed it is not listed.
 
+## 2026-11-13 — Icon-only labels, strict mode, documentation index (branch `arena/8a962084-asa-asan`)
+
+Audits **m4**, **m12**, **T6**.
+
+### m4 — the icon-only buttons, actually audited
+`tsc` and a hand count cannot tell you which buttons have no accessible name, so
+the scan was written to be **conservative**: a button is flagged only when its
+entire subtree holds no literal text and no `{…}` expression. That found **12**
+real cases out of 465 buttons — all close/dismiss controls and the date picker's
+month arrows. All now have `aria-label` via `src/lib/a11yLabels.ts`, translated
+into en/si/ta. The scan lives in `scripts/test-a11y-icon-buttons.mjs` and fails
+the build if a new nameless icon button appears.
+
+### m12 — `strict: true`
+The codebase already type-checked cleanly under `--strict` (0 errors), so the flag
+was free: the guarantee had been living in a one-off command line instead of the
+compiler everyone runs. 72 explicit `any`s remain — enabling `strict` does not
+remove them, and pretending otherwise would be the same mistake as the audit's
+"3 aria-labels" arithmetic.
+
+### T6 — a documentation index, and links that are checked
+`docs/README.md` now indexes all 56 documents (including a section for the ten
+Forge documents, which nothing had linked to). `scripts/test-docs-links.mjs`
+checks that every internal link resolves, that the index still covers the files
+in `docs/`, and — the direction nobody checks — that no document is orphaned.
+It immediately found one genuinely broken link (`docs/nova/API_INVENTORY.md`
+pointed at `../scripts/` from inside `docs/nova/`).
+
+### Near miss worth recording
+While writing `a11yLabels.ts` I typed the Tamil for "previous month" in **Sinhala
+characters**. It type-checked, it rendered, and it was wrong. The label tests now
+assert each string is written in its own script, and the same check runs across
+both translation dictionaries (with the four legitimate exceptions, where a value
+names the other language).
+
+### Verification
+`npm test` → **887 pass / 0 fail** (was 878) · `tsc --noEmit` clean with `strict` on ·
+`npm run build` ok.
+
 ## 2026-11-13 — Fatal-error policy, tightened CSP, proxy trust, report consolidation (branch `arena/8a962084-asa-asan`)
 
 Four audit items in one pass: **m2**, **m6**, **m10**, **M3**.

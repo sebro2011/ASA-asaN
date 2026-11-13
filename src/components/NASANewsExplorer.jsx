@@ -28,6 +28,7 @@ import {
 } from 'lucide-react';
 import { useFavorites } from '../utils/favorites';
 import { fetchNasaArchive } from '@/lib/nasaApi';
+import { a11yLabel } from '../lib/a11yLabels';
 
 // Available historical filter years
 const AVAILABLE_YEARS = [
@@ -591,6 +592,7 @@ export default function NASANewsExplorer({ className = '' }) {
               {/* Close Button */}
               <button
                 type="button"
+                aria-label={a11yLabel('close', lang)}
                 onClick={() => setSelectedDetailItem(null)}
                 className="absolute top-5 right-5 p-2 rounded-[10px] bg-surface/60 hover:bg-surface-2 text-ink-3 hover:text-ink transition-colors cursor-pointer"
               >

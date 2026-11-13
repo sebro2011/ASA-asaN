@@ -38,6 +38,7 @@ import {
   Sliders
 } from 'lucide-react';
 import { activateOnKey } from '../app/hooks';
+import { a11yLabel } from '../lib/a11yLabels';
 
 // Celestial bodies with real celestial coordinates (Azimuth 0-360°, Altitude 10-85°)
 const CELESTIAL_BODIES = [
@@ -1373,6 +1374,7 @@ function ARStarMap({ lang = 'en', onSelectTarget = null }) {
                 </div>
                 <button
                   type="button"
+                  aria-label={a11yLabel('close', lang)}
                   onClick={() => setSnapshotDataUrl(null)}
                   className="text-ink-3 hover:text-ink"
                 >
@@ -1434,6 +1436,7 @@ function ARStarMap({ lang = 'en', onSelectTarget = null }) {
 
                 <button
                   type="button"
+                  aria-label={a11yLabel('close', lang)}
                   onClick={() => setShowDossierModal(false)}
                   className="text-ink-3 hover:text-ink"
                 >

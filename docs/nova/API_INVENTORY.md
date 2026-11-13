@@ -1,7 +1,7 @@
 # API inventory and contract
 
 Every route this app serves, what it needs, and how it is allowed to fail.
-The machine-readable version is [`scripts/api-routes.mjs`](../scripts/api-routes.mjs);
+The machine-readable version is [`scripts/api-routes.mjs`](../../scripts/api-routes.mjs);
 this page explains the rules it enforces.
 
 ## The four rules

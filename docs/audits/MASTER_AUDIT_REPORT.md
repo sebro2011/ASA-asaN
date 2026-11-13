@@ -242,7 +242,7 @@ deployment resolves its function, so it needs approval.
 | m1 | ~~Four near-identical NOVA chat handlers~~ **fixed 2026-11-13** — one handler registered from `NOVA_CHAT_PATHS`; the copies had also left `/api/nasa-ai` rate-limited but **unrouted**, so the client paid a 404 on every ask | `server.ts` | `scripts/test-nova-routes.mjs` |
 | m2 | ~~`uncaughtException` logged and swallowed~~ **fixed 2026-11-13** — `server/processGuards.ts`: log once, flush, exit 1 (unhandled *rejections* stay non-fatal, deliberately) | `server.ts` | `scripts/test-process-guards.mjs` |
 | m3 | ~~Clickable `<div>`s with no role/tabIndex; the logo control has `role="button"` and `tabIndex` but no key handler~~ **fixed 2026-11-13** (`9219200` + a11y commit) | `AmbientSoundscapeControl.tsx`, `Logo.tsx:42` | all 12 clickable containers fixed; `scripts/test-a11y-controls.mjs` now fails the build on a regression |
-| m4 | Icon-only buttons: only 3 `aria-label`s across 331 `<button>`s | spot check only — most buttons carry visible text, so this is **not** a claim that 328 are broken | audit the icon-only subset in Phase 5; **S–M** |
+| m4 | ~~Icon-only buttons unlabelled~~ **fixed 2026-11-13** — a conservative scan over 465 buttons found **12** genuinely icon-only controls (close/dismiss, month arrows); all now carry a translated `aria-label`, and the scan is a test | `scripts/test-a11y-icon-buttons.mjs` | guard + script check |
 | m5 | `GUARDIAN_API_KEY` (Guardian news Open Platform) reads as the COSMORA Guardian secret | `.env.example` | rename would break existing deployments; document the distinction instead; **S** |
 | m6 | ~~Duplicate root-level reports~~ **fixed 2026-11-13** — both moved to `docs/audits/` with a "Moved" notice; the repository root now holds only `README.md` | `PHASE1_AUDIT_REPORT.md`, `PHASE7_VALIDATION_REPORT.md` | `scripts/test-hygiene.mjs` fails if a report reappears at the root |
 | m7 | ~~Two lockfiles~~ **fixed 2026-11-13** — `bun.lock` removed; npm is the one graph CI installs | `bun.lock` + `package-lock.json` | `scripts/test-hygiene.mjs` fails if a second lockfile returns |
@@ -251,7 +251,7 @@ deployment resolves its function, so it needs approval.
 | m10 | ~~Production CSP allows `'unsafe-inline'` scripts~~ **fixed 2026-11-13** — both inline scripts moved to files (`public/theme-boot.js`, `/registerSW.js`); prod is now `script-src 'self'`. `style-src` keeps `unsafe-inline` (style values cannot execute) | `server/securityHeaders.ts` | `scripts/test-security-headers.mjs` |
 | m11 | Build-chain advisories | `npm audit`: deepmerge prototype poisoning, glob/minimatch DoS, via `vite-plugin-pwa` → `workbox-build` | no runtime exposure; fixing requires downgrading `vite-plugin-pwa`, which was previously rejected | 
 | m13 | A test proved the environment, not the product: `test-apod-media.mjs` expected a live `api.nasa.gov` call to fail. True here (egress blocked), false on a CI runner, where the route legitimately recovered an official NASA Science record and answered 200. | CI run 43417395210; fixed by stubbing **both** upstreams | fixed; **S** |
-| m12 | 72 `any`s and `tsconfig` without `strict` | `grep -rn ": any\b"`; `tsconfig.json` | documented before (M3 of the 2026-11-12 audit); enabling strict is a large, separate change |
+| m12 | ~~`tsconfig` without `strict`~~ **done 2026-11-13** — `strict: true`; the code already passed, so the flag cost nothing. **72 explicit `any`s remain** and are now the whole of this item | `tsconfig.json` | remove `any`s incrementally; `strict` is already enforcing the rest |
 
 ---
 

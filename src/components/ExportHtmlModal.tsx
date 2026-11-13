@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { SupportedLanguage, translations } from '../i18n/translations';
 import { Copy, Check, Download, ExternalLink, X, Code2, Eye, FileCode } from 'lucide-react';
+import { a11yLabel } from '../lib/a11yLabels';
 
 interface ExportHtmlModalProps {
   isOpen: boolean;
@@ -63,6 +64,8 @@ export const ExportHtmlModal: React.FC<ExportHtmlModalProps> = ({ isOpen, onClos
           </div>
 
           <button
+            type="button"
+            aria-label={a11yLabel('close', lang)}
             onClick={onClose}
             className="p-2 rounded-[8px] text-ink-3 hover:text-ink hover:bg-surface-2 transition"
           >
