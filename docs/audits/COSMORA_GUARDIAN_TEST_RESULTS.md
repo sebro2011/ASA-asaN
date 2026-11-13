@@ -82,6 +82,22 @@ real Supabase project.
 - Browser-level rendering (no Playwright): the dashboard is verified in jsdom
   against fixtures, so no pixel-level claim is made.
 
+## Attempts to verify on a deployed URL (both blocked)
+
+The PR builds two previews. Neither could be used to verify the Guardian
+endpoints from here, for reasons that are infrastructure, not code:
+
+| Preview | Result |
+| --- | --- |
+| Vercel branch preview `nasa-space-explorer-git-arena-8a962084-…` | `/api/guardian/health` returns the **Vercel login wall** (deployment protection). Anonymous requests cannot reach the function. |
+| Netlify `deploy-preview-54--nasaspacexplorer` | `/api/guardian/health` is a **404**: that target serves the static build only, with no Express API. |
+
+So the health of the mounted router is proven by the in-process smoke test
+above (real Express app, real mount, real responses: 13 providers, memory store
+with its reason, `503 SCHEDULE_SECRET_MISSING`, `403 GUARDIAN_LOCKED`) and by a
+production environment with the preview protection disabled or an admin token —
+which is a deployment decision, not a code one.
+
 ## Regression statement
 
 The suite that existed before this branch (754 tests across 40 scripts — API
