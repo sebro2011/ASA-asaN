@@ -403,6 +403,11 @@ export function createDiagnosticsHandler({
           }
           if (!entry.fallbackModel && tried.length) entry.fallbackModel = tried[tried.length - 1];
           entry.modelsTried = [configuredModel, ...tried.map((attempt) => attempt.model)];
+          // `modelsTried` is a list of names; a name cannot say *why* an id failed.
+          // Keeping each attempt's status is what separates "this id is retired"
+          // (404) from "this id is merely busy" (429/503) when every attempt fails
+          // — the case a live probe on 2026-11-13 ran into.
+          entry.modelAttempts = tried;
 
           if (entry.fallbackModel?.ok) {
             // A model that answered is the only actionable evidence here: this key

@@ -417,6 +417,20 @@ test('when every Gemini model id is busy, the report says so and lists what the 
   assert.equal(gemini.fallbackModel.ok, false, 'the alternatives were tried and also refused');
   assert.ok(gemini.modelsTried.length > 1, 'more than one id was attempted');
   assert.match(gemini.hint, /No alternative model probe succeeded/);
+  // Every failed attempt keeps its own status: names alone cannot tell a retired
+  // id (404) from a busy one (503), which is exactly what a live probe needed.
+  assert.equal(gemini.modelAttempts.length, gemini.modelsTried.length - 1, 'one row per alternative id');
+  for (const attempt of gemini.modelAttempts) {
+    assert.equal(typeof attempt.model, 'string');
+    assert.equal(attempt.ok, false);
+    assert.equal(attempt.httpStatus, 503, 'the stub refuses everything with 503');
+    assert.equal(attempt.code, 'PROVIDER_UNAVAILABLE');
+  }
+  assert.deepEqual(
+    gemini.modelAttempts.map((attempt) => attempt.model),
+    gemini.modelsTried.slice(1),
+    'the attempts line up with the names, in order',
+  );
   // Only generateContent models, and no `models/` prefix.
   assert.deepEqual(gemini.availableModels, ['gemini-2.5-flash', 'gemini-3.8-flash']);
   assert.equal(gemini.availableModelCount, 2);

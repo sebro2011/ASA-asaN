@@ -9,7 +9,7 @@ Latest full run: **2026-11-13**, branch `arena/8a962084-asa-asan`.
 | `npm test` | **890 pass / 0 fail** across **78** test scripts |
 | `npm run test:guardian` | 56 pass / 0 fail (core 28 · monitor/routes 22 · dashboard 6) |
 | `npm run test:rate-limit` | 9 pass / 0 fail |
-| `npm run test:nova-diagnostics` | 23 pass / 0 fail (model-list evidence; a 404 on a listed id now yields `suggestedModel` + a pin instruction) |
+| `npm run test:nova-diagnostics` | 23 pass / 0 fail (model-list evidence; a 404 on a listed id yields `suggestedModel` + a pin instruction; `modelAttempts` keeps each alternative id's status) |
 | `npm run test:a11y` | 7 + 5 pass / 0 fail (keyboard reachability; no nameless icon button; label scripts) |
 | `npm run test:any-budget` | 3 pass / 0 fail (explicit `any` = **0**; strict mode on; **the detector is itself tested** against 9 positive and 6 negative fixtures) |
 | `npm run test:docs-links` | 3 pass / 0 fail (every internal link resolves; no orphan documents) |

@@ -1,8 +1,8 @@
 # API status report
 
 Status of every server route as of **2026-11-13** (Guardian routes added; the AI
-provider evidence block below is still the 2026-11-12 observation and is labelled
-with its timestamp). "Live" means a response was
+provider evidence block below was re-measured on 2026-11-13 and is labelled with
+its timestamps). "Live" means a response was
 actually observed; "tested" means covered by injected-fetch tests; "unverified"
 means neither was possible from this environment.
 
@@ -16,21 +16,57 @@ means neither was possible from this environment.
 | `GET /api/workspace/config` | env | — | — | 200 with booleans only |
 | `GET /api/news/sources` | env | — | — | booleans only |
 
-## AI providers — production evidence (2026-11-12T10:32:23Z)
+## AI providers — production evidence, re-measured (2026-11-13T15:57–15:59Z)
 
-`GET /api/nova/diagnostics?probe=1` on commit `7251652`:
+`GET /api/nova/diagnostics?probe=1` against the live deployment of **`aeb601e`**
+(`main`), three probes inside two minutes. Each is a real upstream call made from
+Vercel — this sandbox has no egress to `generativelanguage.googleapis.com`, which
+is why the measurement had to come from the deployment:
 
-| Provider | Configured | Status | Detail |
+| Provider | Configured | Status | Detail (probe 1 / 2 / 3) |
 | --- | --- | --- | --- |
 | Local engine | yes | **ok** | in-process `nasa-local-engine` |
-| OpenRouter | yes | **ok** | `openrouter/free`, HTTP 200, 1 754 ms |
-| Gemini | yes | **error** | `gemini-3.8-flash` → 503 `UNAVAILABLE`; fallback `gemini-2.5-flash` → 404; `GET /v1beta/models` → 200 (48 models, key valid) |
+| OpenRouter | yes | **ok** | `openrouter/free`, HTTP 200 — 499 ms / 10 253 ms / 509 ms |
+| Gemini | yes | **error** | `gemini-3.8-flash` → **503 `PROVIDER_UNAVAILABLE`** every time (499 / 6 425 / 246 ms); last fallback `gemini-2.5-flash` → **404 `PROVIDER_MODEL_NOT_FOUND`** (143 / 149 / 150 ms); `GET /v1beta/models` → **200** (76 / 69 ms), **49** models listed |
 | Arena | no | not configured | correctly reported as unavailable |
+
+The provider's own body, returned by all three probes:
+
+```
+{ "error": { "code": 503, "message": "This model is currently experiencing high
+  demand. Spikes in demand are usually temporary. Please try again later.",
+  "status": "UNAVAILABLE" } }
+```
+
+What that settles:
+
+1. **The key is valid.** `keyValid: true`, `GET /v1beta/models` → 200 in 69–76 ms.
+   No 401, no 403, no 402.
+2. **The primary model id is not the problem.** `gemini-3.8-flash` answers 503 —
+   the model exists and is refusing work, in the vendor's words.
+3. **A listing is not an entitlement.** `gemini-2.5-flash` appears in the key's own
+   49-model `generateContent` list, and answers 404 when called. That is the
+   "listed yet 404" case, and it is the vendor's retirement notice, not a bug in
+   the probe (`docs/nova/INTELLIGENCE_LEVELS_MAPPING.md` §9 records the body:
+   *"no longer available to new users … use models/gemini-3.8-flash"*).
+4. **It is not a momentary spike in this observation window.** Three probes, two
+   minutes, identical outcome — plus the probes recorded on 2026-11-09, -11-10 and
+   -11-12 in `docs/nova/AI_PROVIDER_DIAGNOSTICS.md`. The message says "usually
+   temporary"; for this project it has not been.
 
 Conclusion: **NOVA answers through OpenRouter and the local engine.** Gemini
 generation is refused by the API for this deployment and is *not* operational.
-The 404 on a model the same key lists as available is unexplained and needs a live
-key to diagnose (audit finding M1).
+What is still unknown is narrower than before: the report does not say whether any
+of the four *alternative* ids can generate, because `modelsTried` collapsed five
+attempts into five names and only the last one kept its status. `modelAttempts`
+(the next probe's payload, added on this branch) keeps each attempt's status, so
+one probe will answer it.
+
+The earlier revision of this report called the 404 "unexplained"; the vendor's own
+message above explains it (a retired id, still listed). It is kept here as a
+correction rather than a rewrite, because the first reading — "the list and the
+call disagree, so this must be an access problem" — is the trap a future reader
+will fall into too.
 
 ## NASA data
 

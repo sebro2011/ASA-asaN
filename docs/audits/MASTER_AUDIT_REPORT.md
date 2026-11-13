@@ -180,7 +180,7 @@ path. If it is not 1, set `TRUST_PROXY`. A regression test asserts the value sta
 bounded (`scripts/test-security-performance.mjs`, which previously pinned
 `trust proxy === false` — i.e. it asserted the bug).
 
-### M4 — Gemini generation is unavailable in production — **cause identified 2026-11-13; last step still external**
+### M4 — Gemini generation is unavailable in production — **cause proven live 2026-11-13; nothing left to configure**
 
 Live production diagnostics (2026-11-12T10:32Z, re-read from
 `docs/API_STATUS_REPORT.md`): primary `gemini-3.8-flash` → **503**
@@ -230,14 +230,42 @@ entitlement to call the model` (asserted in `scripts/test-nova-diagnostics.mjs`)
 The operator no longer has to compare two lists by hand to reach the vendor's own
 conclusion.
 
-Still open, and only a working key plus egress can close it: whether *this* key
-generates from `gemini-3.8-flash` **now**, i.e. whether the 503 was transient
-capacity or a sustained restriction. The single command that answers it, with the
-key already in the environment, is
-`GET /api/nova/diagnostics?probe=1` (documented in
-`docs/nova/AI_PROVIDER_DIAGNOSTICS.md`, including the code table). Nothing in this
-repository can run it: the sandbox cannot reach `generativelanguage.googleapis.com`
-and holds no key.
+### Measured, not inferred: three live probes on 2026-11-13
+
+The workspace cannot reach `generativelanguage.googleapis.com`, but the deployment
+can, so the probe was run **against the live deployment of `aeb601e` (`main`)** —
+`GET /api/nova/diagnostics?probe=1`, 15:57:37Z, 15:59:02Z and 15:59:46Z. Records:
+
+`docs/API_STATUS_REPORT.md` § *AI providers*, which now carries the table, the
+latencies and the provider's body verbatim.
+
+| Question | Live answer |
+| --- | --- |
+| Is the key valid? | **yes** — `keyValid: true`, `GET /v1beta/models` → 200 in 69–76 ms |
+| Does the primary model exist? | **yes** — it answers `503 UNAVAILABLE`, and the vendor's body says *"This model is currently experiencing high demand. Spikes in demand are usually temporary."* |
+| Was that a one-off spike? | **no, in this window** — three probes in two minutes, identical; and the same result on 2026-11-09, -11-10, -11-12 |
+| Is the 404 on `gemini-2.5-flash` a bug of ours? | **no** — the id is in the key's own 49-model list and still 404s: a catalogue entry is not an entitlement, and the recorded 404 body names its successor |
+| Does NOVA still answer? | **yes** — OpenRouter `openrouter/free` returned 200 in 499 / 10 253 / 509 ms, and the local engine is `ok` |
+
+So the cause of "Gemini does not work" is now a measured fact rather than a
+hypothesis: **the project's Gemini access is refused upstream** (503 on the primary
+id; retired-for-new-projects 404 on the alternatives), while the key itself is
+healthy. There is nothing left to configure in this repository for it.
+
+### The one thing the payload could not answer, and the fix
+`modelsTried` listed five ids and only the *last* attempt kept its status, so "which
+alternative ids are 404 and which are merely 503" was unanswerable. `novaDiagnostics`
+now returns **`modelAttempts`** — one row per alternative, with `model`, `ok`,
+`httpStatus`, `code` and `ms` — so a single probe answers it (asserted in
+`scripts/test-nova-diagnostics.mjs`, including that the rows line up with
+`modelsTried` in order).
+
+What remains, and it is a console action rather than code: if none of the
+alternatives can generate for this project, the project needs Gemini access enabled
+(billing / allowlist) or `NOVA_GEMINI_MODEL` pinned to an id that does answer —
+which `modelAttempts`, `suggestedModel` and `availableModels` now make a one-glance
+decision. NOVA does not depend on it: OpenRouter and the local engine are the
+answering providers, and both were `ok` in the same probes.
 
 ### M5 — 67 test suites, none executed automatically — **OPEN, proposal**
 
@@ -337,7 +365,7 @@ deployment resolves its function, so it needs approval.
 | P1 | M5 CI workflow | **fixed** (`.github/workflows/verify.yml`) | S |
 | P1 | M2 lazy locale loading | **fixed** (−31 % first load) | M |
 | P1 | M3 `trust proxy` policy | needs deployment facts | S once known |
-| P1 | M4 Gemini access / honest hint | external + Phase 2 | M |
+| P1 | M4 Gemini access / honest hint | **measured 2026-11-13** (upstream refuses: 503 + retired ids); hint + `modelAttempts` + `suggestedModel` shipped | M |
 | P2 | Phase 2 NOVA (hint accuracy, history search/rename/archive, streaming) | open | L |
 | P2 | Phase 3 NASA data (cache headers on proxies, freshness badges) | open | M |
 | P2 | Phase 4 Earth Lab (trend uncertainty, coverage indicators — some shipped) | open | M |
@@ -390,6 +418,8 @@ build exit 0.
    Express? Without that number the change would be a guess.
 5. **Deployment settings stay untouched** until you approve: the Guardian migration,
    `GUARDIAN_ADMIN_TOKEN`/`CRON_SECRET`, the Vercel cron entry, and PR #54's merge.
+(Gemini access is no longer on this list: it was measured on 2026-11-13 and the
+refusal is upstream — see M4.)
 
 ---
 

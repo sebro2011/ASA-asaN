@@ -15,11 +15,11 @@ These are current, measured limits. Each names the command or file behind it.
 | **Per-IP limits are per process** | `server/requestRateLimit.ts` bounds memory (prune at 5,000, cap 10,000) and prevents spoofing by using `req.ip`, but instances do not share counters. Fleet-wide budgets exist only in the Guardian, and only with a shared store configured. |
 | **`trust proxy` is unset** | Express reports the socket peer. Behind a proxy, many users can share one bucket; the change cannot be made safely without knowing the real hop count. |
 | **The committed server bundle can drift** | `api/index.js` is byte-identical to a fresh build today, but nothing enforces that. A stale commit deploys old server code while the tests pass against new source. |
-| **No CI** | 67 suites run only when a human runs `npm test`; there is no `.github/` workflow, dependency scan or required check. |
-| **Gemini generation is unavailable in production** | Primary 503 `PROVIDER_UNAVAILABLE`, fallbacks 404, while the key lists 48 models. Cause unresolved; NOVA runs on OpenRouter and the local engine. The diagnostics hint is a hypothesis, not a finding. |
+| ~~**No CI**~~ | **Fixed.** `.github/workflows/verify.yml` runs lint, the full suite, the production build and a dependency audit on every push and pull request (9 steps, green through run 43453484220). The workflow is not yet a *required* check on the default branch. |
+| **Gemini generation is unavailable in production** | **Measured 2026-11-13** (three live probes, `aeb601e`): the key is valid (`GET /v1beta/models` 200, 49 models) and the API refuses generation — 503 `UNAVAILABLE` on `gemini-3.8-flash` in the vendor's own words ("currently experiencing high demand"), 404 on the `gemini-2.5-flash` alternative even though that id is in the key's list. Not a configuration error in this repository; nothing here can enable it. NOVA answers through OpenRouter and the local engine, verified `ok` in the same probes. See `docs/API_STATUS_REPORT.md`. |
 | **No browser verification** | No Playwright in this environment; DOM behaviour is proven with jsdom, never pixels. |
-| **Build-chain advisories** | 6 (`npm audit`: 2 low, 4 moderate) inside `vite-plugin-pwa` → `workbox-build`. No runtime exposure; the fix is a downgrade that was previously rejected. |
-| **TypeScript is not strict** | 72 `any`s remain; enabling `strict` is a separate, large migration. |
+| **Build-chain advisories** | 4 low (`npm audit`) in the `deepmerge` chain pulled by `vite-plugin-pwa` → `workbox-build`. `deepmerge` is unfixable by upgrade (the advisory covers `>=4.2.0`); all four are build-time only. See *Dependencies*. |
+| ~~**TypeScript is not strict**~~ | **Fixed.** `strict: true`, and explicit `any` is **0** — enforced by `scripts/test-any-budget.mjs`, which also tests its own detector. |
 
 
 ## Dependencies
@@ -64,10 +64,13 @@ These are current, measured limits. Each names the command or file behind it.
 
 ## Data integrity
 
-1. **Gemini generation is unavailable in production.** Diagnostics record 503 on
-   `gemini-3.8-flash` and 404 on the `gemini-2.5-flash` fallback while the same key
-   lists 48 models. Chat therefore runs on OpenRouter and the local engine. The
-   provider is reported as *configured*, never as *healthy*. (M1)
+1. **Gemini generation is unavailable in production — cause measured 2026-11-13.**
+   Three live probes against `aeb601e` (15:57–15:59Z) returned 503 `UNAVAILABLE` on
+   `gemini-3.8-flash` ("This model is currently experiencing high demand…"), 404 on
+   each fallback while the same key lists 49 models including them, and 200 on
+   `GET /v1beta/models` in 69–76 ms. The key is healthy; the API refuses the
+   generation. Chat therefore runs on OpenRouter and the local engine. The provider
+   is reported as *configured*, never as *healthy*. (M1/M4)
 2. ~~Three NASA proxies have no cache~~ — **fixed 2026-11-13**: NeoWs (10 min,
    keyed by date range), EPIC (15 min) and the Exoplanet Archive (24 h) use a
    bounded TTL cache with `cached`/`fetchedAt` and `Cache-Control`. An expired

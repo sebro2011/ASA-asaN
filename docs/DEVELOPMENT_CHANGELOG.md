@@ -3,6 +3,55 @@
 Newest first. Every entry states what changed, which files, and how it was verified.
 Nothing here is a plan; if it was not executed it is not listed.
 
+## 2026-11-13 — M4 measured live: the refusal is upstream (`modelAttempts`) (branch `arena/8a962084-asa-asan`)
+
+Audit **M4**, last step: it needed a working key *and* egress. This workspace has
+neither, but the deployment has both — so the probe was run against the live
+deployment of **`aeb601e`** (`main`) instead of against a local process.
+
+### What the live probes returned (15:57:37Z, 15:59:02Z, 15:59:46Z)
+| | probe 1 | probe 2 | probe 3 |
+| --- | --- | --- | --- |
+| `gemini-3.8-flash` | **503** `UNAVAILABLE`, 499 ms | **503**, 6 425 ms | **503**, 246 ms |
+| last fallback `gemini-2.5-flash` | **404** `MODEL_NOT_FOUND`, 143 ms | **404**, 149 ms | **404**, 150 ms |
+| `GET /v1beta/models` (key check) | **200**, 90 ms | **200**, 76 ms | **200**, 69 ms |
+| models listed by the key | **49** (including `gemini-2.5-flash`) | 49 | 49 |
+| OpenRouter | **200**, 499 ms | **200**, 10 253 ms | **200**, 509 ms |
+| local engine | ok | ok | ok |
+
+The provider's body, identical in all three:
+
+> `{ "error": { "code": 503, "message": "This model is currently experiencing high
+> demand. Spikes in demand are usually temporary. Please try again later.",
+> "status": "UNAVAILABLE" } }`
+
+So: the key is valid, the primary id exists and is refusing work, and the
+alternative 404s *while the key lists it* — a catalogue entry is not an entitlement.
+Three probes in two minutes agree, as do the probes recorded on 2026-11-09/-10/-12.
+"Usually temporary" has not been temporary for this project. NOVA answers through
+OpenRouter and the local engine, both `ok` in the same probes.
+
+### The gap the probe exposed, and the fix
+`modelsTried` was five names and `fallbackModel` was only the *last* attempt, so
+"which alternative ids are retired (404) and which are merely busy (503)" could not
+be answered — the exact question the probes raised. `server/novaDiagnostics.js` now
+returns **`modelAttempts`**: `{ model, ok, httpStatus, code, ms }` per attempt, in
+the same order as `modelsTried`. Assertions added to
+`scripts/test-nova-diagnostics.mjs` (row count, statuses, ordering) without adding a
+test block.
+
+### Docs corrected while the numbers were in hand
+`docs/API_STATUS_REPORT.md` (new three-probe table, the vendor body verbatim, and
+the old "unexplained 404" kept as a labelled correction),
+`docs/audits/MASTER_AUDIT_REPORT.md` (M4 → measured; the open-approvals list no
+longer includes Gemini access), `docs/nova/AI_PROVIDER_DIAGNOSTICS.md`,
+`docs/KNOWN_LIMITATIONS.md` (the four stale rows that still described no CI, six
+advisories, non-strict TS and an unresolved Gemini cause).
+
+### Verification
+`npm test` 891 pass / 0 fail · `tsc --noEmit` clean · `npm run build` exit 0
+(`check:pwa` 165 entries) · `api/index.js` rebuilt · docs links resolve.
+
 ## 2026-11-13 — The Guardian's news key stops impersonating the Guardian (branch `arena/8a962084-asa-asan`)
 
 Audit **m5**.

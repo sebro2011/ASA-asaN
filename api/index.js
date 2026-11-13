@@ -4721,6 +4721,7 @@ function createDiagnosticsHandler({
           }
           if (!entry.fallbackModel && tried.length) entry.fallbackModel = tried[tried.length - 1];
           entry.modelsTried = [configuredModel, ...tried.map((attempt) => attempt.model)];
+          entry.modelAttempts = tried;
           if (entry.fallbackModel?.ok) {
             const pinned = modelMissing ? entry.fallbackModel.model : null;
             entry.hint = `${entry.hint ? `${entry.hint} ` : ""}${entry.fallbackModel.model} answered with the same key; the original model request failed. Review model availability and configuration.` + (pinned ? ` This key can generate: set NOVA_GEMINI_MODEL=${pinned} (or unset it to accept the default) so NOVA stops asking for an id this key cannot call. A listing in /v1beta/models is not an entitlement to call the model.` : "");
