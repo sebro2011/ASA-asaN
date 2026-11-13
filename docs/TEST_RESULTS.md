@@ -6,10 +6,11 @@ Latest full run: **2026-11-13**, branch `arena/8a962084-asa-asan`.
 | --- | --- |
 | `npm run lint` (`tsc --noEmit`) | clean |
 | `npm run build` | exit 0 · 89 JS chunks · entry **543.90 kB raw / 170.25 kB gzip** (was 920.85 / 245.83 before the locale split) · `si` 173.34 kB / 37.30 kB gzip on demand · `ta` 202.58 kB / 37.76 kB gzip on demand · CSS 63.65 kB gzip |
-| `npm test` | **858 pass / 0 fail** across **72** test scripts |
+| `npm test` | **863 pass / 0 fail** across **73** test scripts |
 | `npm run test:guardian` | 56 pass / 0 fail (core 28 · monitor/routes 22 · dashboard 6) |
 | `npm run test:rate-limit` | 9 pass / 0 fail |
 | `npm run test:nova-diagnostics` | 23 pass / 0 fail (4 new: model-list evidence) |
+| `npm run test:hygiene` | 5 pass / 0 fail (one lockfile, name/version agreement, no hardcoded versions, CI uses npm ci) |
 | `npm run test:nova-routes` | 4 pass / 0 fail (4 paths routed and identical; `/api/nasa-ai` no longer 404s) |
 | `npm run test:focus-trap` | 3 pass / 0 fail (Tab wrap, focus restore, wiring of all 4 overlays) |
 | `npm run test:contrast` | 7 pass / 0 fail (WCAG ratios computed from `tokens.css` + `nova-tokens.css`; documented numbers re-verified) |

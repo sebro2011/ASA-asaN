@@ -3,6 +3,31 @@
 Newest first. Every entry states what changed, which files, and how it was verified.
 Nothing here is a plan; if it was not executed it is not listed.
 
+## 2026-11-13 — One lockfile, real package identity (branch `arena/8a962084-asa-asan`)
+
+Audits **m7** and **m8**.
+
+### Changed
+- **`bun.lock` removed.** Two lockfiles describe two dependency graphs that drift
+  silently; CI, the scripts and the docs all use npm, so `package-lock.json` is the
+  one graph. Bun still works — it regenerates its lock on `bun install`.
+- **`package.json` renamed** `react-example` → `asa-asan`, with `description` and
+  `license: UNLICENSED`. `package-lock.json` updated to match in all three places
+  npm records the name.
+- **Version stays `0.1.0`.** Bumping to 1.0.0 would be a release claim this
+  repository cannot support (`src/lib/version.ts` reports the channel as
+  `preview` precisely because no verified release process exists).
+
+### Added
+- `scripts/test-hygiene.mjs` (5 cases): exactly one lockfile; `package.json` and the
+  lock agree on name *and* version in every place npm stores them; the name is not
+  boilerplate and the package stays private; no source file hardcodes a version
+  string (comments excluded); CI installs with `npm ci` and never with bun.
+
+### Verification
+`npm test` → **863 pass / 0 fail** (was 858) · `npm ci --dry-run` resolves the
+renamed lock cleanly · `tsc --noEmit` clean · `npm run build` ok.
+
 ## 2026-11-13 — One NOVA chat route instead of three copies (branch `arena/8a962084-asa-asan`)
 
 Audit **m1**. `server.ts` carried three byte-identical Express handlers for

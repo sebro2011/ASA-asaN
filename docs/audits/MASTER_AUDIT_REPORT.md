@@ -234,8 +234,8 @@ deployment resolves its function, so it needs approval.
 | m4 | Icon-only buttons: only 3 `aria-label`s across 331 `<button>`s | spot check only — most buttons carry visible text, so this is **not** a claim that 328 are broken | audit the icon-only subset in Phase 5; **S–M** |
 | m5 | `GUARDIAN_API_KEY` (Guardian news Open Platform) reads as the COSMORA Guardian secret | `.env.example` | rename would break existing deployments; document the distinction instead; **S** |
 | m6 | Duplicate root-level reports | `PHASE1_AUDIT_REPORT.md`, `PHASE7_VALIDATION_REPORT.md` shadow `docs/` | move under `docs/audits/` with a redirect note; **S** |
-| m7 | Two lockfiles | `bun.lock` + `package-lock.json` | pick one (npm, since scripts and CI use it); **S** |
-| m8 | Package identity is boilerplate | `"name": "react-example", "version": "0.1.0"` | rename; **S** |
+| m7 | ~~Two lockfiles~~ **fixed 2026-11-13** — `bun.lock` removed; npm is the one graph CI installs | `bun.lock` + `package-lock.json` | `scripts/test-hygiene.mjs` fails if a second lockfile returns |
+| m8 | ~~Package identity is boilerplate~~ **fixed 2026-11-13** — `asa-asan`, plus `description` and `license`; version stays `0.1.0` because no stable release exists to claim | `package.json` | `scripts/test-hygiene.mjs` |
 | m9 | ~~Two client fetches have no timeout~~ **fixed 2026-11-13** (`9219200`) | `lib/nasaApi.js:372` (`/api/satellites`), `:491` (`/api/news`) | `AbortSignal.timeout(15s)`; tested |
 | m10 | Production CSP allows `'unsafe-inline'` scripts | `server.ts` CSP array | nonce or hash pipeline; **M** |
 | m11 | Build-chain advisories | `npm audit`: deepmerge prototype poisoning, glob/minimatch DoS, via `vite-plugin-pwa` → `workbox-build` | no runtime exposure; fixing requires downgrading `vite-plugin-pwa`, which was previously rejected | 
