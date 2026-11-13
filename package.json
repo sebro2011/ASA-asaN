@@ -8,6 +8,7 @@
     "build": "npm run build:api && vite build",
     "check:apis": "node scripts/check-apis.mjs",
     "check:deployment": "node scripts/check-deployment.mjs",
+    "check:bundle": "npm run build:api && git diff --quiet -- api/index.js && echo 'api/index.js is in sync with server/' || (echo 'api/index.js is stale — run npm run build:api and commit it' >&2 && exit 1)",
     "build:api": "esbuild server/vercelEntry.ts --bundle --platform=node --format=esm --target=node22 --packages=external --outfile=api/index.js",
     "build:models": "node scripts/build-3d-models.mjs",
     "clean": "rm -rf dist",
