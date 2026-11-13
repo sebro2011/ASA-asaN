@@ -32,26 +32,10 @@
     <link rel="icon" type="image/x-icon" href="/favicon.ico" />
     <link rel="icon" type="image/png" sizes="192x192" href="/brand/icon-192.png" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
-    <script>
-      /* Theme boot: resolve the stored preference before first paint so the
-         workspace never flashes the wrong palette. Mirrors src/app/theme.ts. */
-      (function () {
-        try {
-          var stored = localStorage.getItem('nova_theme') || 'light';
-          var prefersLight = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches;
-          var theme = stored === 'system' ? (prefersLight ? 'light' : 'dark') : stored === 'dark' ? 'dark' : 'light';
-          document.documentElement.setAttribute('data-nova-theme', theme);
-          if (localStorage.getItem('nova_motion') === 'reduced') {
-            document.documentElement.setAttribute('data-nova-motion', 'reduced');
-          }
-          if (localStorage.getItem('nova_contrast') === 'high') {
-            document.documentElement.setAttribute('data-nova-contrast', 'high');
-          }
-        } catch (e) {
-          /* storage blocked: the dark default is already on <html> */
-        }
-      })();
-    </script>
+    <!-- Blocking, same-origin: runs before <body> is parsed, so the theme is
+         already resolved at first paint. No inline script means the CSP can
+         drop 'unsafe-inline' from script-src. -->
+    <script src="/theme-boot.js"></script>
   </head>
   <body class="bg-void text-ink antialiased">
     <div id="root"></div>

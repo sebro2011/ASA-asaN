@@ -3,6 +3,49 @@
 Newest first. Every entry states what changed, which files, and how it was verified.
 Nothing here is a plan; if it was not executed it is not listed.
 
+## 2026-11-13 — Fatal-error policy, tightened CSP, proxy trust, report consolidation (branch `arena/8a962084-asa-asan`)
+
+Four audit items in one pass: **m2**, **m6**, **m10**, **M3**.
+
+### m2 — an uncaught exception now ends the process
+`server/processGuards.ts`: log once, flush on the next tick, `exit(1)`. After an
+uncaught throw nothing about the state is trustworthy, and continuing turns one
+crash into an unbounded series of possibly-malformed responses while denying the
+platform the signal to replace the instance. Unhandled *rejections* stay
+non-fatal on purpose — a rejected promise usually leaves state coherent, and
+crashing there would turn one bad `await` into an outage.
+
+### m10 — production CSP no longer allows inline script
+`script-src 'self'`. Both inline scripts moved to files: the theme boot is now
+`public/theme-boot.js` (still blocking, still in `<head>`, so no palette flash) and
+vite-plugin-pwa now emits an external `/registerSW.js` (`injectRegister: 'script'`).
+The old comment justified the exception with "React inline handlers", which was
+wrong — React attaches listeners through the DOM. Verified against a real build:
+`dist/index.html` contains three `<script>` tags and **all three have `src`**.
+`style-src 'unsafe-inline'` stays: hundreds of components set `style` attributes,
+and a style value cannot execute. The header set now lives in
+`server/securityHeaders.ts` so tests can assert what production sends.
+
+### M3 — proxy trust is set, bounded, and overridable
+`server/trustProxy.ts` + `TRUST_PROXY`. Unset defaults to **1 hop** (Vercel / Cloud
+Run); `0`/`false` trusts nothing; `true`/`*` is refused because it makes `req.ip`
+forgeable; unusable input is reported at startup and replaced with the default.
+**Still needs an operator confirmation of the real hop count** — recorded in the
+audit, not assumed away.
+
+### m6 — two root reports moved under `docs/audits/`
+`PHASE1_AUDIT_REPORT.md` and `PHASE7_VALIDATION_REPORT.md`, each with a "Moved"
+notice. The repository root now holds only `README.md`.
+
+### Changed test, not deleted
+`scripts/test-security-performance.mjs` asserted `trust proxy === false` — it
+pinned the M3 bug as intended behaviour. It now asserts the property that is
+actually correct: a bounded hop count, never `true`.
+
+### Verification
+`npm test` → **878 pass / 0 fail** (was 863) · `tsc --noEmit` clean · `npm run build` ok
+· production build inspected: 3 `<script>` tags, 3 with `src` · `api/index.js` rebuilt.
+
 ## 2026-11-13 — One lockfile, real package identity (branch `arena/8a962084-asa-asan`)
 
 Audits **m7** and **m8**.

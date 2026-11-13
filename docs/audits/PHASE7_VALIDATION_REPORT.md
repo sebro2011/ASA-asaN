@@ -1,3 +1,8 @@
+> **Moved.** This report lived at the repository root until 2026-11-13, where it
+> shadowed the `docs/` set and was easy to mistake for current guidance (audit
+> item **m6**). It is kept for provenance, not as a description of the code as it
+> stands — see `docs/audits/MASTER_AUDIT_REPORT.md` for that.
+
 # Phase 7 — Final Validation Report
 
 **Branch:** `arena/6da0c144-asa-asan`

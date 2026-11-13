@@ -17953,14 +17953,114 @@ function mountGuardian(app2, runtime) {
   return resolved;
 }
 
+// server/processGuards.ts
+function createFatalErrorHandler({ log = console.error, exit = (code) => process.exit(code) } = {}) {
+  let fatal = false;
+  return {
+    get fatal() {
+      return fatal;
+    },
+    onUncaughtException(error) {
+      if (fatal) return;
+      fatal = true;
+      log(
+        "[Process] Uncaught exception \u2014 process state can no longer be trusted. Exiting so the platform restarts a clean instance.",
+        error
+      );
+      setTimeout(() => exit(1), 0);
+    },
+    onUnhandledRejection(reason, promise) {
+      log("[Process] Unhandled rejection:", reason, "at:", promise);
+    }
+  };
+}
+
+// server/securityHeaders.ts
+function buildCsp({ isSecure: isSecure2 }) {
+  return [
+    "default-src 'self'",
+    // Dev needs 'unsafe-inline' for Vite's HMR client and 'unsafe-eval' for the
+    // React refresh preamble. Production needs neither.
+    isSecure2 ? "script-src 'self'" : "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+    // Tailwind compiles to a stylesheet, but hundreds of components set inline
+    // `style` attributes (Framer Motion, SVG geometry). Style values cannot
+    // execute, so this stays — it is the one 'unsafe-inline' with no script path.
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data: https: blob:",
+    // NASA / YouTube thumbnails, GIBS tiles
+    "connect-src 'self' https:",
+    // API calls only
+    "font-src 'self' data:",
+    "media-src 'self' blob: https:",
+    // APOD video entries are YouTube watch URLs, rewritten to /embed/. Both hosts
+    // stay explicit — never `frame-src https:`.
+    "frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com https://player.vimeo.com",
+    "object-src 'none'",
+    "base-uri 'self'",
+    "form-action 'self'"
+  ].join("; ");
+}
+function securityHeaders({ isSecure: isSecure2 }) {
+  const headers = {
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "SAMEORIGIN",
+    "Referrer-Policy": "strict-origin-when-cross-origin",
+    "Permissions-Policy": "camera=(), microphone=(), geolocation=(), payment=(), usb=()",
+    "Content-Security-Policy": buildCsp({ isSecure: isSecure2 })
+  };
+  if (isSecure2) {
+    headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains";
+  }
+  return headers;
+}
+
+// server/trustProxy.ts
+var DEFAULT_HOPS = 1;
+function parseTrustProxy(raw) {
+  const trimmed = typeof raw === "string" ? raw.trim() : "";
+  if (!trimmed) {
+    return { value: DEFAULT_HOPS, source: "default" };
+  }
+  const lowered = trimmed.toLowerCase();
+  if (lowered === "false" || lowered === "none") {
+    return { value: false, source: "config" };
+  }
+  if (lowered === "true" || lowered === "*" || lowered === "all") {
+    return {
+      value: DEFAULT_HOPS,
+      source: "config",
+      warning: "TRUST_PROXY=true trusts every hop, which lets a client forge its own IP; using 1 instead."
+    };
+  }
+  if (/^\d+$/.test(trimmed)) {
+    const hops = Number(trimmed);
+    if (hops === 0) return { value: false, source: "config" };
+    if (hops > 10) {
+      return {
+        value: DEFAULT_HOPS,
+        source: "config",
+        warning: `TRUST_PROXY=${hops} is implausible for a single deployment; using ${DEFAULT_HOPS} instead.`
+      };
+    }
+    return { value: hops, source: "config" };
+  }
+  const named = trimmed.split(",").map((entry) => entry.trim()).filter(Boolean);
+  const valid = named.every((entry) => /^(loopback|linklocal|uniquelocal)$/i.test(entry) || /^[0-9a-f:./]+$/i.test(entry));
+  if (valid) {
+    return { value: named, source: "config" };
+  }
+  return {
+    value: DEFAULT_HOPS,
+    source: "config",
+    warning: `TRUST_PROXY="${trimmed}" is not a hop count, a CIDR block or a known keyword; using ${DEFAULT_HOPS} instead.`
+  };
+}
+
 // server.ts
 dotenv.config();
-process.on("uncaughtException", (err) => {
-  console.error("[Process] Uncaught Exception:", err);
-});
-process.on("unhandledRejection", (reason, promise) => {
-  console.error("[Process] Unhandled Rejection at:", promise, "reason:", reason);
-});
+var processGuards = createFatalErrorHandler();
+process.on("uncaughtException", processGuards.onUncaughtException);
+process.on("unhandledRejection", processGuards.onUnhandledRejection);
 var __filename = fileURLToPath(import.meta.url);
 var __dirname = path.dirname(__filename);
 var app = express5();
@@ -17992,39 +18092,13 @@ app.use((req, res, next) => {
   next();
 });
 var isSecure = process.env.NODE_ENV === "production";
-var csp = [
-  "default-src 'self'",
-  isSecure ? "script-src 'self' 'unsafe-inline'" : "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
-  // Vite HMR + React inline handlers (dev only)
-  "style-src 'self' 'unsafe-inline'",
-  // Tailwind + styled components
-  "img-src 'self' data: https: blob:",
-  // Unsplash/YouTube/NASA imagery
-  "connect-src 'self' https:",
-  // APIs only
-  "font-src 'self' data:",
-  "media-src 'self' blob: https:",
-  // APOD video entries are YouTube watch URLs, which are rewritten to /embed/;
-  // YouTube's player itself loads from youtube-nocookie and player.vimeo.com is
-  // used by older entries. Both stay explicit — never `frame-src https:`.
-  "frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com https://player.vimeo.com",
-  "object-src 'none'",
-  "base-uri 'self'",
-  "form-action 'self'"
-].join("; ");
+var trustProxy = parseTrustProxy(process.env.TRUST_PROXY);
+if (trustProxy.warning) console.warn(`[Startup] ${trustProxy.warning}`);
+if (trustProxy.value !== false) app.set("trust proxy", trustProxy.value);
 app.use((req, res, next) => {
-  res.header("X-Content-Type-Options", "nosniff");
-  res.header("X-Frame-Options", "SAMEORIGIN");
-  res.header("Referrer-Policy", "strict-origin-when-cross-origin");
-  res.header(
-    "Permissions-Policy",
-    "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
-  );
-  res.header("Content-Security-Policy", csp);
-  if (isSecure) {
-    res.header("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
+  for (const [name, value] of Object.entries(securityHeaders({ isSecure }))) {
+    res.header(name, value);
   }
-  res.header("X-Content-Type-Options", "nosniff");
   next();
 });
 var rateLimit3 = createRateLimiter;

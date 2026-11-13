@@ -155,19 +155,30 @@ This is an architectural decision (A changes when translations are available), s
 it waits for approval. Recommendation: **A**, in its own branch, with the key-parity
 check kept as a test.
 
-### M3 — `trust proxy` is unset, so per-IP limits may be a single global bucket — **OPEN, deployment fact required**
+### M3 — `trust proxy` — **ADDRESSED 2026-11-13 with a configurable default, still needs an operator confirmation**
 
-`server.ts` never calls `app.set('trust proxy', …)`. Express then reports the socket
-peer, which behind Vercel is not the user. Two consequences, opposite in sign:
-per-IP limits may collapse onto one bucket (everyone shares 15 NOVA requests/min —
-an outage for everyone once one client bursts), or, if a future change starts
-reading `X-Forwarded-For` directly, spoofing per request.
+`server.ts` never called `app.set('trust proxy', …)`. Express then reports the
+socket peer, which behind Vercel is not the user: every per-IP limit (15 NOVA
+requests/min, translation, community writes) becomes **one bucket shared by the
+whole deployment** — one burst throttles everyone, and one abuser is invisible.
 
-The news and Forge limiters were already moved onto `req.ip` with socket fallback
-(2026-11-12), which fixes *spoofing* but not *attribution*. Correct remediation
-needs the real proxy chain: `app.set('trust proxy', 1)` is right for one hop, wrong
-for zero or three. **Not changed** — guessing here converts a fairness bug into a
-security bug. Requires an operator statement about the deployed path.
+This was left open for operator input because guessing the hop count converts a
+fairness bug into a security bug. The implementation now makes the guess explicit
+and bounded instead of silent:
+
+- `server/trustProxy.ts` — `TRUST_PROXY` is parsed as a hop count, a CIDR/keyword
+  list, or `0`/`false` for "trust nothing".
+- **Unset defaults to 1** — one platform proxy hop, which is what Vercel and Cloud
+  Run provide. That is the deployment fact this repository can actually state.
+- `TRUST_PROXY=true`/`*` is **refused**: trusting every hop lets any client forge
+  its own `req.ip`.
+- A value that is neither a plausible count nor a valid list is reported at
+  startup and replaced with the default rather than silently accepted.
+
+**Remaining, and it needs a human:** confirm the real hop count for the production
+path. If it is not 1, set `TRUST_PROXY`. A regression test asserts the value stays
+bounded (`scripts/test-security-performance.mjs`, which previously pinned
+`trust proxy === false` — i.e. it asserted the bug).
 
 ### M4 — Gemini generation is unavailable in production, and the hint is a guess — **OPEN, external**
 
@@ -229,15 +240,15 @@ deployment resolves its function, so it needs approval.
 | # | Finding | Evidence | Fix / complexity |
 | --- | --- | --- | --- |
 | m1 | ~~Four near-identical NOVA chat handlers~~ **fixed 2026-11-13** — one handler registered from `NOVA_CHAT_PATHS`; the copies had also left `/api/nasa-ai` rate-limited but **unrouted**, so the client paid a 404 on every ask | `server.ts` | `scripts/test-nova-routes.mjs` |
-| m2 | `uncaughtException` is logged and swallowed, so the process keeps serving with possibly-corrupt state | `server.ts:23` | log, then exit and let the platform restart; **S**, but a behaviour change |
+| m2 | ~~`uncaughtException` logged and swallowed~~ **fixed 2026-11-13** — `server/processGuards.ts`: log once, flush, exit 1 (unhandled *rejections* stay non-fatal, deliberately) | `server.ts` | `scripts/test-process-guards.mjs` |
 | m3 | ~~Clickable `<div>`s with no role/tabIndex; the logo control has `role="button"` and `tabIndex` but no key handler~~ **fixed 2026-11-13** (`9219200` + a11y commit) | `AmbientSoundscapeControl.tsx`, `Logo.tsx:42` | all 12 clickable containers fixed; `scripts/test-a11y-controls.mjs` now fails the build on a regression |
 | m4 | Icon-only buttons: only 3 `aria-label`s across 331 `<button>`s | spot check only — most buttons carry visible text, so this is **not** a claim that 328 are broken | audit the icon-only subset in Phase 5; **S–M** |
 | m5 | `GUARDIAN_API_KEY` (Guardian news Open Platform) reads as the COSMORA Guardian secret | `.env.example` | rename would break existing deployments; document the distinction instead; **S** |
-| m6 | Duplicate root-level reports | `PHASE1_AUDIT_REPORT.md`, `PHASE7_VALIDATION_REPORT.md` shadow `docs/` | move under `docs/audits/` with a redirect note; **S** |
+| m6 | ~~Duplicate root-level reports~~ **fixed 2026-11-13** — both moved to `docs/audits/` with a "Moved" notice; the repository root now holds only `README.md` | `PHASE1_AUDIT_REPORT.md`, `PHASE7_VALIDATION_REPORT.md` | `scripts/test-hygiene.mjs` fails if a report reappears at the root |
 | m7 | ~~Two lockfiles~~ **fixed 2026-11-13** — `bun.lock` removed; npm is the one graph CI installs | `bun.lock` + `package-lock.json` | `scripts/test-hygiene.mjs` fails if a second lockfile returns |
 | m8 | ~~Package identity is boilerplate~~ **fixed 2026-11-13** — `asa-asan`, plus `description` and `license`; version stays `0.1.0` because no stable release exists to claim | `package.json` | `scripts/test-hygiene.mjs` |
 | m9 | ~~Two client fetches have no timeout~~ **fixed 2026-11-13** (`9219200`) | `lib/nasaApi.js:372` (`/api/satellites`), `:491` (`/api/news`) | `AbortSignal.timeout(15s)`; tested |
-| m10 | Production CSP allows `'unsafe-inline'` scripts | `server.ts` CSP array | nonce or hash pipeline; **M** |
+| m10 | ~~Production CSP allows `'unsafe-inline'` scripts~~ **fixed 2026-11-13** — both inline scripts moved to files (`public/theme-boot.js`, `/registerSW.js`); prod is now `script-src 'self'`. `style-src` keeps `unsafe-inline` (style values cannot execute) | `server/securityHeaders.ts` | `scripts/test-security-headers.mjs` |
 | m11 | Build-chain advisories | `npm audit`: deepmerge prototype poisoning, glob/minimatch DoS, via `vite-plugin-pwa` → `workbox-build` | no runtime exposure; fixing requires downgrading `vite-plugin-pwa`, which was previously rejected | 
 | m13 | A test proved the environment, not the product: `test-apod-media.mjs` expected a live `api.nasa.gov` call to fail. True here (egress blocked), false on a CI runner, where the route legitimately recovered an official NASA Science record and answered 200. | CI run 43417395210; fixed by stubbing **both** upstreams | fixed; **S** |
 | m12 | 72 `any`s and `tsconfig` without `strict` | `grep -rn ": any\b"`; `tsconfig.json` | documented before (M3 of the 2026-11-12 audit); enabling strict is a large, separate change |
@@ -746,11 +757,10 @@ must be updated whenever a connector is added.
 
 ### T6 — Documentation sprawl
 
-56 files under `docs/`, including 10 Hypothesis-Forge documents, plus
-`PHASE1_AUDIT_REPORT.md` and `PHASE7_VALIDATION_REPORT.md` at the repository root,
-and no `docs/audits/` directory (this report creates it). Some documents predate
-the current architecture (e.g. root-level phase reports reference surfaces that no
-longer exist under those names).
+56 files under `docs/`, including 10 Hypothesis-Forge documents, plus two phase
+reports at the repository root (both **moved into `docs/audits/` on 2026-11-13**,
+m6). Some documents predate the current architecture and reference surfaces that
+no longer exist under those names.
 
 **Fix.** This programme creates `docs/audits/`, `docs/TECHNICAL_ARCHITECTURE.md`,
 `docs/API_STATUS_REPORT.md`, `docs/TEST_RESULTS.md`, `docs/KNOWN_LIMITATIONS.md`,

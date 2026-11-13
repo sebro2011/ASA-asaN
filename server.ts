@@ -19,17 +19,17 @@ import { spaceNewsRouter } from './server/spaceNews.ts';
 import { forgeRouter } from './server/forgeRoutes.ts';
 import { createLifeRouter } from './server/life/router.js';
 import { mountGuardian } from './server/guardian/routes.ts';
+import { createFatalErrorHandler } from './server/processGuards.ts';
+import { securityHeaders } from './server/securityHeaders.ts';
+import { parseTrustProxy } from './server/trustProxy.ts';
 
 dotenv.config();
 
-// Global process error safety guards for Cloud Run container reliability
-process.on('uncaughtException', (err) => {
-  console.error('[Process] Uncaught Exception:', err);
-});
-
-process.on('unhandledRejection', (reason, promise) => {
-  console.error('[Process] Unhandled Rejection at:', promise, 'reason:', reason);
-});
+// Process failure policy — see server/processGuards.ts for why an uncaught
+// exception exits instead of being logged and ignored.
+const processGuards = createFatalErrorHandler();
+process.on('uncaughtException', processGuards.onUncaughtException);
+process.on('unhandledRejection', processGuards.onUnhandledRejection);
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -82,38 +82,16 @@ app.use((req, res, next) => {
 // ====================================================
 const isSecure = process.env.NODE_ENV === 'production';
 
-const csp = [
-  "default-src 'self'",
-  isSecure
-    ? "script-src 'self' 'unsafe-inline'"              // React inline handlers only (prod)
-    : "script-src 'self' 'unsafe-inline' 'unsafe-eval'", // Vite HMR + React inline handlers (dev only)
-  "style-src 'self' 'unsafe-inline'",                  // Tailwind + styled components
-  "img-src 'self' data: https: blob:",                 // Unsplash/YouTube/NASA imagery
-  "connect-src 'self' https:",               // APIs only
-  "font-src 'self' data:",
-  "media-src 'self' blob: https:",
-  // APOD video entries are YouTube watch URLs, which are rewritten to /embed/;
-  // YouTube's player itself loads from youtube-nocookie and player.vimeo.com is
-  // used by older entries. Both stay explicit — never `frame-src https:`.
-  "frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com https://player.vimeo.com",
-  "object-src 'none'",
-  "base-uri 'self'",
-  "form-action 'self'",
-].join('; ');
+// Proxy trust (audit M3). Without this, `req.ip` is the platform proxy's address,
+// so every per-IP rate limit becomes one shared bucket for the whole deployment.
+const trustProxy = parseTrustProxy(process.env.TRUST_PROXY);
+if (trustProxy.warning) console.warn(`[Startup] ${trustProxy.warning}`);
+if (trustProxy.value !== false) app.set('trust proxy', trustProxy.value);
 
 app.use((req, res, next) => {
-  res.header('X-Content-Type-Options', 'nosniff');
-  res.header('X-Frame-Options', 'SAMEORIGIN');
-  res.header('Referrer-Policy', 'strict-origin-when-cross-origin');
-  res.header(
-    'Permissions-Policy',
-    'camera=(), microphone=(), geolocation=(), payment=(), usb=()'
-  );
-  res.header('Content-Security-Policy', csp);
-  if (isSecure) {
-    res.header('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  for (const [name, value] of Object.entries(securityHeaders({ isSecure }))) {
+    res.header(name, value);
   }
-  res.header('X-Content-Type-Options', 'nosniff');
   next();
 });
 

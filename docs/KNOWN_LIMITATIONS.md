@@ -22,6 +22,16 @@ These are current, measured limits. Each names the command or file behind it.
 | **TypeScript is not strict** | 72 `any`s remain; enabling `strict` is a separate, large migration. |
 
 
+## Deployment configuration
+
+1. **The proxy hop count is a default, not a measurement.** `TRUST_PROXY` unset
+   means 1 hop (Vercel / Cloud Run). If the real path differs, every per-IP rate
+   limit is either shared across all visitors or spoofable via `X-Forwarded-For`.
+   Confirming it requires access to the deployment, which this environment does
+   not have.
+2. **`style-src 'unsafe-inline'` remains.** Inline `style` attributes cannot
+   execute script, but a nonce/hash pipeline for styles was not attempted.
+
 ## Accessibility
 
 1. **Contrast is computed, not rendered.** `scripts/test-contrast-tokens.mjs`

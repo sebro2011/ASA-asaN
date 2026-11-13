@@ -18,6 +18,10 @@ export default defineConfig(({ mode }) => {
       tailwindcss(),
       VitePWA({
         registerType: 'autoUpdate',
+        // `auto` injects an inline registration script into index.html, which is
+        // the other reason script-src needed 'unsafe-inline'. An external
+        // /registerSW.js keeps the CSP at 'self'.
+        injectRegister: 'script',
         includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'manifest.json'],
         manifest: false, // Use public/manifest.json directly
         workbox: {

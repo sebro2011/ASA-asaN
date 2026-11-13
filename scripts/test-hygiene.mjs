@@ -72,3 +72,16 @@ test('CI installs from the lockfile it shares with the docs', () => {
   assert.doesNotMatch(workflow, /\bbun (install|i)\b/, 'CI must not use the removed bun workflow');
   assert.ok(existsSync('package-lock.json'));
 });
+
+test('the repository root holds no stray reports', () => {
+  // Audit m6: two phase reports sat at the root and shadowed the docs set.
+  const rootMarkdown = readdirSync('.').filter((name) => name.endsWith('.md'));
+  assert.deepEqual(rootMarkdown, ['README.md'], `unexpected root-level documentation: ${rootMarkdown.join(', ')}`);
+
+  for (const moved of ['PHASE1_AUDIT_REPORT.md', 'PHASE7_VALIDATION_REPORT.md']) {
+    assert.ok(!existsSync(moved), `${moved} must stay under docs/audits/`);
+    const relocated = `docs/audits/${moved}`;
+    assert.ok(existsSync(relocated), `${relocated} is missing`);
+    assert.match(readFileSync(relocated, 'utf8').slice(0, 400), /Moved\./, 'a moved report must say so');
+  }
+});
