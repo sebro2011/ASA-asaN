@@ -1,9 +1,10 @@
-import express from 'express';
+import express, { type NextFunction, type Request as ExpressRequest, type RequestHandler, type Response as ExpressResponse } from 'express';
 import dotenv from 'dotenv';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { decideCors, parseAllowHosts, platformHosts } from './server/cors.ts';
+import { createRateLimiter } from './server/requestRateLimit.ts';
 
 import { GoogleGenAI } from '@google/genai';
 import { earthRouter } from './server/earthIntelligence.ts';
@@ -17,17 +18,18 @@ import { workspaceConfigRouter } from './server/workspaceConfig.ts';
 import { spaceNewsRouter } from './server/spaceNews.ts';
 import { forgeRouter } from './server/forgeRoutes.ts';
 import { createLifeRouter } from './server/life/router.js';
+import { mountGuardian } from './server/guardian/routes.ts';
+import { createFatalErrorHandler } from './server/processGuards.ts';
+import { securityHeaders } from './server/securityHeaders.ts';
+import { parseTrustProxy } from './server/trustProxy.ts';
 
 dotenv.config();
 
-// Global process error safety guards for Cloud Run container reliability
-process.on('uncaughtException', (err) => {
-  console.error('[Process] Uncaught Exception:', err);
-});
-
-process.on('unhandledRejection', (reason, promise) => {
-  console.error('[Process] Unhandled Rejection at:', promise, 'reason:', reason);
-});
+// Process failure policy — see server/processGuards.ts for why an uncaught
+// exception exits instead of being logged and ignored.
+const processGuards = createFatalErrorHandler();
+process.on('uncaughtException', processGuards.onUncaughtException);
+process.on('unhandledRejection', processGuards.onUnhandledRejection);
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -80,87 +82,26 @@ app.use((req, res, next) => {
 // ====================================================
 const isSecure = process.env.NODE_ENV === 'production';
 
-const csp = [
-  "default-src 'self'",
-  isSecure
-    ? "script-src 'self' 'unsafe-inline'"              // React inline handlers only (prod)
-    : "script-src 'self' 'unsafe-inline' 'unsafe-eval'", // Vite HMR + React inline handlers (dev only)
-  "style-src 'self' 'unsafe-inline'",                  // Tailwind + styled components
-  "img-src 'self' data: https: blob:",                 // Unsplash/YouTube/NASA imagery
-  "connect-src 'self' https:",               // APIs only
-  "font-src 'self' data:",
-  "media-src 'self' blob: https:",
-  // APOD video entries are YouTube watch URLs, which are rewritten to /embed/;
-  // YouTube's player itself loads from youtube-nocookie and player.vimeo.com is
-  // used by older entries. Both stay explicit — never `frame-src https:`.
-  "frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com https://player.vimeo.com",
-  "object-src 'none'",
-  "base-uri 'self'",
-  "form-action 'self'",
-].join('; ');
+// Proxy trust (audit M3). Without this, `req.ip` is the platform proxy's address,
+// so every per-IP rate limit becomes one shared bucket for the whole deployment.
+const trustProxy = parseTrustProxy(process.env.TRUST_PROXY);
+if (trustProxy.warning) console.warn(`[Startup] ${trustProxy.warning}`);
+if (trustProxy.value !== false) app.set('trust proxy', trustProxy.value);
 
 app.use((req, res, next) => {
-  res.header('X-Content-Type-Options', 'nosniff');
-  res.header('X-Frame-Options', 'SAMEORIGIN');
-  res.header('Referrer-Policy', 'strict-origin-when-cross-origin');
-  res.header(
-    'Permissions-Policy',
-    'camera=(), microphone=(), geolocation=(), payment=(), usb=()'
-  );
-  res.header('Content-Security-Policy', csp);
-  if (isSecure) {
-    res.header('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  for (const [name, value] of Object.entries(securityHeaders({ isSecure }))) {
+    res.header(name, value);
   }
-  res.header('X-Content-Type-Options', 'nosniff');
   next();
 });
 
 // ====================================================
-// In-memory rate limiter (defense against abuse).
-// Tracks request counts per IP+endpoint with a sliding window.
-// No client identifiers are stored — only IP + count + window start.
+// Per-instance rate limiting (defense against abuse).
+// The limiter itself lives in server/requestRateLimit.ts so its bucket
+// accounting and its memory bound can be tested without booting Express.
+// Fleet-wide budgets are a different layer: see server/guardian/rateLimit.ts.
 // ====================================================
-type RateEntry = { count: number; windowStart: number };
-const rateStore = new Map<string, RateEntry>();
-
-function rateLimit(options: {
-  windowMs: number;
-  max: number;
-  keyPrefix: string;
-  skip?: (req: import('express').Request) => boolean;
-  /** Wire code returned on 429. The NOVA chat family uses the same code its handler uses. */
-  code?: string;
-  message?: string;
-}) {
-  return (req: import('express').Request, res: import('express').Response, next: import('express').NextFunction) => {
-    if (options.skip?.(req)) { return next(); }
-    const ip = req.ip || req.socket.remoteAddress || 'unknown';
-    const key = `${options.keyPrefix}:${ip}`;
-    const now = Date.now();
-    const entry = rateStore.get(key) || { count: 0, windowStart: now };
-    if (now - entry.windowStart >= options.windowMs) {
-      entry.count = 0;
-      entry.windowStart = now;
-    }
-    entry.count += 1;
-    rateStore.set(key, entry);
-    res.setHeader('X-RateLimit-Limit', String(options.max));
-    res.setHeader('X-RateLimit-Remaining', String(Math.max(0, options.max - entry.count)));
-    res.setHeader('X-RateLimit-Reset', String(Math.ceil((entry.windowStart + options.windowMs - now) / 1000)));
-    if (entry.count > options.max) {
-      // Retry-After is what lets a client wait instead of hammering; the NOVA
-      // chat handler already sends it, and one endpoint must not answer 429 two
-      // different ways.
-      const retryAfterSeconds = Math.max(1, Math.ceil((entry.windowStart + options.windowMs - now) / 1000));
-      res.setHeader('Retry-After', String(retryAfterSeconds));
-      return res.status(429).json({
-        error: options.message || 'Too many requests. Please wait before trying again.',
-        code: options.code || 'rate-limit',
-      });
-    }
-    next();
-  };
-}
+const rateLimit = createRateLimiter;
 
 // YouTube meta proxy: modest limit — it fetches an external page per call.
 app.use('/api/youtube/meta', rateLimit({ windowMs: 60_000, max: 30, keyPrefix: 'youtube-meta' }));
@@ -180,18 +121,21 @@ app.use('/api/workspace/config', rateLimit({ windowMs: 60_000, max: 60, keyPrefi
 
 // NOVA chat family: expensive AI calls — strict limit per IP, consolidated
 // across all four chat entry points so a single IP cannot burst across paths.
-const NOVA_CHAT_PATHS = ['/api/nova/chat', '/api/chat', '/api/openrouter/chat', '/api/nasa-ai'];
+// The limiter is built ONCE: constructing it per request would hand every
+// request a fresh bucket and silently disable the limit.
+const NOVA_CHAT_PATHS = new Set(['/api/nova/chat', '/api/chat', '/api/openrouter/chat', '/api/nasa-ai']);
+const novaChatLimiter = rateLimit({
+  windowMs: 60_000,
+  max: 15,
+  keyPrefix: 'nova-chat',
+  // Same code and wording as the handler's own limiter, so a reader who
+  // bursts is told to slow down rather than told the provider is busy.
+  code: 'RATE_LIMITED',
+  message: 'Too many NOVA requests. Please wait a moment and try again.',
+});
 app.use((req, res, next) => {
-  if (NOVA_CHAT_PATHS.includes(req.path)) {
-    return rateLimit({
-      windowMs: 60_000,
-      max: 15,
-      keyPrefix: 'nova-chat',
-      // Same code and wording as the handler's own limiter, so a reader who
-      // bursts is told to slow down rather than told the provider is busy.
-      code: 'RATE_LIMITED',
-      message: 'Too many NOVA requests. Please wait a moment and try again.',
-    })(req, res, next);
+  if (NOVA_CHAT_PATHS.has(req.path)) {
+    return novaChatLimiter(req, res, next);
   }
   next();
 });
@@ -208,7 +152,9 @@ app.use((req, res, next) => {
   res.send = function (body) {
     if (req.method === 'GET' && CACHEABLE_GET.has(req.path)) {
       res.setHeader('Cache-Control', 'public, max-age=60, stale-while-revalidate=120');
-    } else if (req.method === 'GET' && req.path.startsWith('/api/')) {
+    } else if (req.method === 'GET' && req.path.startsWith('/api/') && !res.getHeader('Cache-Control')) {
+      // A route that knows its own freshness sets the header itself (the cached
+      // NASA proxies do); this default must not overwrite it.
       res.setHeader('Cache-Control', 'no-store');
     }
     return originalSend.call(this, body);
@@ -256,8 +202,16 @@ app.get('/api/nova/diagnostics', async (req, res) => {
   }
 });
 
-// Additive local/Express adapter for the same isolated Vercel Nova chat handler.
-app.post('/api/nova/chat', async (req, res) => {
+// Local/Express adapter for the same isolated Vercel NOVA chat handler.
+//
+// This used to be three byte-identical copies (`/api/nova/chat`,
+// `/api/openrouter/chat`, `/api/chat`), which is how the fourth path in
+// `NOVA_CHAT_PATHS` — `/api/nasa-ai` — came to be rate-limited but never routed:
+// the limiter and the routes were maintained separately. The client
+// (`lib/nasaApi.js` askNasaAi) calls `/api/nasa-ai` first, so every ask spent one
+// 404 before falling back to `/api/chat`. One handler, registered from the same
+// set the limiter uses, removes both the duplication and the drift.
+const novaChatHandler: RequestHandler = async (req, res) => {
   try {
     const response = await handleNovaChatRequest({
       body: req.body,
@@ -274,45 +228,9 @@ app.post('/api/nova/chat', async (req, res) => {
       code: 'INTERNAL_ERROR',
     });
   }
-});
+};
 
-app.post('/api/openrouter/chat', async (req, res) => {
-  try {
-    const response = await handleNovaChatRequest({
-      body: req.body,
-      ip: req.ip || req.socket.remoteAddress || 'unknown',
-      contentLength: req.headers['content-length'],
-    });
-    for (const [name, value] of Object.entries(response.headers)) {
-      res.setHeader(name, String(value));
-    }
-    return res.status(response.status).json(response.body);
-  } catch {
-    return res.status(500).json({
-      error: 'NOVA could not process this request. Please retry.',
-      code: 'INTERNAL_ERROR',
-    });
-  }
-});
-app.post('/api/chat', async (req, res) => {
-  try {
-    const response = await handleNovaChatRequest({
-      body: req.body,
-      ip: req.ip || req.socket.remoteAddress || 'unknown',
-      contentLength: req.headers['content-length'],
-    });
-    for (const [name, value] of Object.entries(response.headers)) {
-      res.setHeader(name, String(value));
-    }
-    return res.status(response.status).json(response.body);
-  } catch {
-    return res.status(500).json({
-      error: 'NOVA could not process this request. Please retry.',
-      code: 'INTERNAL_ERROR',
-    });
-  }
-});
-
+for (const path of NOVA_CHAT_PATHS) app.post(path, novaChatHandler);
 
 // ====================================================
 // YouTube video meta proxy (CosmoVision submissions).
@@ -428,6 +346,11 @@ app.use('/api/news', spaceNewsRouter);
 // Assistant. Data connectors, statistical analysis and evidence classification
 // are server-side; the dataset registry carries documentation only.
 app.use('/api/forge', forgeRouter);
+// COSMORA API Guardian — dependency diagnostics, fleet circuit breakers, fleet
+// rate limiting, scheduled sweeps, bounded recovery and an append-only audit.
+// Read routes are public and credential-free; every action requires an admin
+// token or the cron secret (see server/guardian/routes.ts).
+mountGuardian(app);
 
 // NOVA NEXUS / L.I.F.E. — local-first intelligence engine. It owns its own
 // SQLite file, starts read-only for anything risky, and never shells out unless
@@ -446,11 +369,14 @@ app.use('/api', (_req, res) => {
 
 // Last line of defence for the API: any thrown error (bad JSON, oversized body,
 // a handler bug) becomes a typed JSON response instead of a stack trace.
-app.use((error: any, req: any, res: any, next: any) => {
+app.use((error: unknown, req: ExpressRequest, res: ExpressResponse, next: NextFunction) => {
   if (res.headersSent) return next(error);
   if (!String(req.path || '').startsWith('/api')) return next(error);
 
-  const status = Number(error?.status || error?.statusCode) || 500;
+  // Express attaches the status to the thrown object (body-parser does), so it is
+  // read structurally — nothing else from the error is used or echoed.
+  const failure = (error ?? {}) as { status?: unknown; statusCode?: unknown };
+  const status = Number(failure.status || failure.statusCode) || 500;
   const code =
     status === 413
       ? 'PAYLOAD_TOO_LARGE'

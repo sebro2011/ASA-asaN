@@ -2,6 +2,7 @@
 
 import React, { useState, useRef, useEffect, memo } from 'react';
 import { motion } from 'framer-motion';
+import { activateOnKey } from '../app/hooks';
 import { SupportedLanguage } from '../i18n/translations';
 import { 
   Zap, 
@@ -301,6 +302,11 @@ export const LightweightEarthFallback: React.FC<LightweightEarthFallbackProps> =
               boxShadow: `0 0 50px ${target.haloColor}, inset -24px -24px 60px rgba(0,0,0,0.9), inset 12px 12px 30px rgba(255,255,255,0.2)`
             }}
             onClick={() => setIsRotating(!isRotating)}
+            onKeyDown={activateOnKey(() => setIsRotating((rotating) => !rotating))}
+            role="button"
+            tabIndex={0}
+            aria-pressed={isRotating}
+            aria-label="Toggle planetary rotation"
             title="Click to toggle planetary rotation"
           >
             {/* Photorealistic Celestial Surface Layer */}

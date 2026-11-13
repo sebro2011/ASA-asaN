@@ -24,6 +24,7 @@ import {
   CheckCircle2,
   Download
 } from 'lucide-react';
+import { a11yLabel } from '../lib/a11yLabels';
 
 /**
  * Static constants defined OUTSIDE the component render cycle
@@ -712,6 +713,7 @@ export function ArModelViewer({
           <div className="bg-surface/60 border border-cyan-500/40 rounded-3xl p-6 max-w-md w-full space-y-4 shadow-2xl relative text-center">
             <button
               type="button"
+              aria-label={a11yLabel('close', lang)}
               onClick={() => setShowQrModal(false)}
               className="absolute top-4 right-4 text-ink-3 hover:text-ink font-mono text-sm cursor-pointer"
             >

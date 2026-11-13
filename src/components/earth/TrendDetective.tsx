@@ -57,6 +57,26 @@ export interface StudyArea {
   source: 'gazetteer' | 'search' | 'map-click' | 'preset' | 'custom';
 }
 
+/**
+ * What Recharts hands a `content` renderer. Only the fields this file reads are
+ * described, and a row is narrowed to the ones it can actually draw.
+ */
+interface ChartTooltipEntry {
+  /** Recharts types these loosely (a data key may be a function), so they stay
+   * `unknown` here and the guard below decides what can be drawn. */
+  value?: unknown;
+  dataKey?: unknown;
+  name?: unknown;
+  color?: unknown;
+}
+interface ChartTooltipProps {
+  active?: boolean;
+  /** Recharts passes a readonly array; nothing here mutates it. */
+  payload?: readonly ChartTooltipEntry[];
+  label?: string | number;
+}
+type DrawableTooltipRow = ChartTooltipEntry & { value: number; dataKey: string };
+
 interface TrendDetectiveProps {
   area: StudyArea;
   onAreaChange: (area: StudyArea) => void;
@@ -618,19 +638,20 @@ export default function TrendDetective({ area, onAreaChange, onPowerResolved, re
                     />
                     <Tooltip
                       cursor={{ stroke: 'rgba(167,232,250,0.35)', strokeWidth: 1 }}
-                      content={({ active, payload, label }: any) => {
+                      content={({ active, payload, label }: ChartTooltipProps) => {
                         if (!active || !payload?.length) return null;
-                        const rows = payload.filter((entry: any) => typeof entry.value === 'number');
+                        const rows = payload.filter((entry): entry is DrawableTooltipRow =>
+                          typeof entry.value === 'number' && typeof entry.dataKey === 'string');
                         if (!rows.length) return null;
                         return (
                           <div className="rounded-[10px] border border-line bg-abyss/97 px-3 py-2 shadow-2xl backdrop-blur-md">
                             <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-atmo">{label}</p>
                             <ul className="mt-1.5 space-y-0.5">
-                              {rows.map((entry: any) => (
+                              {rows.map((entry) => (
                                 <li key={`${entry.dataKey}-${entry.value}`} className="flex items-baseline justify-between gap-4 text-[11px]">
                                   <span className="text-ink-3">{parameterMeta(entry.dataKey)?.label || entry.dataKey}</span>
                                   <span className="font-mono text-ink">
-                                    {formatNumber(entry.value as number, 2)} {parameterMeta(entry.dataKey)?.unit || ''}
+                                    {formatNumber(entry.value, 2)} {parameterMeta(entry.dataKey)?.unit || ''}
                                   </span>
                                 </li>
                               ))}

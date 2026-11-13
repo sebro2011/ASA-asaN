@@ -34,7 +34,7 @@ Production build:
 
 ```bash
 npm run build                 # esbuild api bundle + vite client build
-npm start                     # node server.ts (tsx-free, Node strips types on 22)
+npm start                     # tsx server.ts (Node 22 cannot strip TS parameter properties)
 ```
 
 The life router is part of the same Express app (`server.ts`) and of the Vercel

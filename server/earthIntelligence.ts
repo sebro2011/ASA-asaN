@@ -20,7 +20,7 @@ import express, { type Request, type Response, type NextFunction } from 'express
 import { buildDomain, describeCoverage, type DescribeDomainsError } from '../src/lib/earth/domains.ts';
 import { describeDomainsUrl, getGibsLayer, GIBS_WMTS_BASE, wmtsTileUrl } from '../src/lib/earth/gibsCatalog.ts';
 import { CORE_PARAMETER_CODES, POWER_MONTHLY_POINT_URL } from '../src/lib/earth/power.ts';
-import { analyseBundle, buildLocalAnalystAnswer } from './earth/localAnalysis.ts';
+import { analyseBundle, buildLocalAnalystAnswer, type EarthAnalystContext } from './earth/localAnalysis.ts';
 import { createOrchestrator } from './earth/providerOrchestrator.ts';
 import { createConfiguredProviders, extractJson, normaliseAnswer } from './earth/providers.ts';
 
@@ -227,7 +227,8 @@ earthRouter.get('/power', rateLimit('power', 60, 60_000), async (req, res) => {
       return res.status(502).json({ ok: false, code: 'power-unreadable', message: 'NASA POWER returned a non-JSON body.', sourceUrl: result.url });
     }
 
-    const parameterBlock = (payload as any)?.properties?.parameter;
+    // NASA POWER answers with a JSON object; only this one path is read here.
+    const parameterBlock = (payload as { properties?: { parameter?: unknown } } | null)?.properties?.parameter;
     if (!parameterBlock || typeof parameterBlock !== 'object' || Array.isArray(parameterBlock)) {
       return res.status(502).json({ ok: false, code: 'power-invalid-response', message: 'NASA POWER returned an unexpected data structure.', sourceUrl: result.url });
     }
@@ -567,7 +568,7 @@ const PROVIDER_LABELS: Record<string, string> = {
 };
 
 /** Context sent to a model: retrieved evidence + the arithmetic already done. */
-function buildProviderContext(context: any, analysis: ReturnType<typeof analyseBundle>) {
+function buildProviderContext(context: EarthAnalystContext, analysis: ReturnType<typeof analyseBundle>) {
   return {
     location: {
       label: context?.power?.place || context?.area?.label || null,
@@ -661,9 +662,13 @@ earthRouter.post('/analyst', rateLimit('analyst', 20, 5 * 60_000), async (req, r
   const requestId = `an-${startedAt.toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 
   // Deterministic pass first: it grounds the model AND is the answer of last resort.
-  const analysis = analyseBundle(context as any);
-  const local = buildLocalAnalystAnswer(String(question), context as any, { analysis });
-  const providerContext = buildProviderContext(context, analysis);
+  // The bundle is client-supplied, so this is a cast and not a validation: every
+  // reader below treats each field as optional (`context.power?.series`,
+  // `Array.isArray(context.dates)`), so a malformed body degrades to "no data".
+  const bundle = context as EarthAnalystContext;
+  const analysis = analyseBundle(bundle);
+  const local = buildLocalAnalystAnswer(String(question), bundle, { analysis });
+  const providerContext = buildProviderContext(bundle, analysis);
 
   // Cancellation: if the browser goes away, stop paying for tokens.
   const controller = new AbortController();

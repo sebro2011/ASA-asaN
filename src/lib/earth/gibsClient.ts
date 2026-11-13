@@ -34,7 +34,22 @@ function isAbort(error: unknown): boolean {
   return (error as Error)?.name === 'AbortError';
 }
 
-async function fetchJsonWithTimeout(url: string, signal: AbortSignal | undefined, timeoutMs = 12000): Promise<any> {
+/**
+ * The `/api/earth/gibs/domains` envelope. Only `ok`, `ranges` and the date
+ * bounds are ever trusted, and each is re-checked before use.
+ */
+interface DomainsPayload {
+  ok?: boolean;
+  message?: unknown;
+  ranges?: unknown;
+  minDate?: string;
+  maxDate?: string;
+  retrievedAt?: string;
+  fromCache?: boolean;
+  sourceUrl?: string;
+}
+
+async function fetchJsonWithTimeout<T>(url: string, signal: AbortSignal | undefined, timeoutMs = 12000): Promise<T> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   const onAbort = () => controller.abort();
@@ -67,7 +82,7 @@ export async function fetchLayerDomain(
 
   // 1) Server proxy (authoritative parsing + server-side cache).
   try {
-    const payload = await fetchJsonWithTimeout(
+    const payload = await fetchJsonWithTimeout<DomainsPayload>(
       `${SERVER_BASE}/gibs/domains?layer=${encodeURIComponent(layer.id)}&tileMatrixSet=${encodeURIComponent(layer.tileMatrixSet || '')}`,
       options.signal
     );
@@ -75,7 +90,7 @@ export async function fetchLayerDomain(
       const domain: GibsDomain = {
         layerId: layer.id,
         tileMatrixSet: layer.tileMatrixSet,
-        ranges: payload.ranges,
+        ranges: payload.ranges as GibsDomain['ranges'],
         minDate: payload.minDate || payload.ranges[0].start,
         maxDate: payload.maxDate || payload.ranges[payload.ranges.length - 1].end,
         retrievedAt: payload.retrievedAt || new Date().toISOString(),

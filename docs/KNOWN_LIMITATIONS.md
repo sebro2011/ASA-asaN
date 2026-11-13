@@ -1,22 +1,90 @@
 # Known limitations
 
-Honest list as of **2026-11-12** (branch `arena/ad469a17-asa-asan`). Each item says
-what a user or operator would actually see, and where the audit records it.
+Honest list as of **2026-11-13** (branch `arena/8a962084-asa-asan`).
+Each item says what a user or operator would actually see, and where it is
+recorded. Entries dated 2026-11-12 below the current table remain accurate unless
+the table supersedes them.
+
+## 2026-11-13 — Phase 1 re-audit additions
+
+These are current, measured limits. Each names the command or file behind it.
+
+| Limit | Detail |
+| --- | --- |
+| **Some trilingual copy still ships eagerly** | The nine interface dictionaries now load per language (entry **170 kB gzip**, `si`/`ta` 37 kB each on demand — a 31 % cut). What remains is the legacy `src/i18n/translations.ts` (83 keys × 3 languages, imported directly by 23 components) and per-component inline copy: roughly another 20–30 kB. Fixing that means moving those components onto i18next. |
+| **Per-IP limits are per process** | `server/requestRateLimit.ts` bounds memory (prune at 5,000, cap 10,000) and prevents spoofing by using `req.ip`, but instances do not share counters. Fleet-wide budgets exist only in the Guardian, and only with a shared store configured. |
+| **`trust proxy` is unset** | Express reports the socket peer. Behind a proxy, many users can share one bucket; the change cannot be made safely without knowing the real hop count. |
+| **The committed server bundle can drift** | `api/index.js` is byte-identical to a fresh build today, but nothing enforces that. A stale commit deploys old server code while the tests pass against new source. |
+| ~~**No CI**~~ | **Fixed.** `.github/workflows/verify.yml` runs lint, the full suite, the production build and a dependency audit on every push and pull request (9 steps, green through run 43453484220). The workflow is not yet a *required* check on the default branch. |
+| **Gemini generation is unavailable in production** | **Measured 2026-11-13** (three live probes, `aeb601e`): the key is valid (`GET /v1beta/models` 200, 49 models) and the API refuses generation — 503 `UNAVAILABLE` on `gemini-3.8-flash` in the vendor's own words ("currently experiencing high demand"), 404 on the `gemini-2.5-flash` alternative even though that id is in the key's list. Not a configuration error in this repository; nothing here can enable it. NOVA answers through OpenRouter and the local engine, verified `ok` in the same probes. See `docs/API_STATUS_REPORT.md`; the console procedure is `docs/nova/GEMINI_ACCESS_RUNBOOK.md`. |
+| **No browser verification** | No Playwright in this environment; DOM behaviour is proven with jsdom, never pixels. |
+| **Build-chain advisories** | 4 low (`npm audit`) in the `deepmerge` chain pulled by `vite-plugin-pwa` → `workbox-build`. `deepmerge` is unfixable by upgrade (the advisory covers `>=4.2.0`); all four are build-time only. See *Dependencies*. |
+| ~~**TypeScript is not strict**~~ | **Fixed.** `strict: true`, and explicit `any` is **0** — enforced by `scripts/test-any-budget.mjs`, which also tests its own detector. |
+
+
+## Dependencies
+
+1. **Four low-severity advisories remain, and one cannot be fixed by upgrading.**
+   `deepmerge` (reached through `vite-plugin-pwa → workbox-build →
+   @rollup/plugin-node-resolve`) is covered by its advisory from `>=4.2.0`, so no
+   released version is exempt; the other three are the packages that pull it and
+   are the same story. All are **build-time**: none is reachable from a request
+   handler, and none ships in `api/index.js`.
+2. **The `glob`/`minimatch` overrides deliberately exceed workbox's declared
+   ranges.** `npm run check:pwa` verifies the resulting service worker, which is
+   the only way to notice if a future bump makes the matcher return nothing.
+
+## Deployment configuration
+
+1. **The proxy hop count is a default, not a measurement.** `TRUST_PROXY` unset
+   means 1 hop (Vercel / Cloud Run). If the real path differs, every per-IP rate
+   limit is either shared across all visitors or spoofable via `X-Forwarded-For`.
+   Confirming it requires access to the deployment, which this environment does
+   not have.
+2. **`style-src 'unsafe-inline'` remains.** Inline `style` attributes cannot
+   execute script, but a nonce/hash pipeline for styles was not attempted.
+
+## Accessibility
+
+1. **Contrast is computed, not rendered.** `scripts/test-contrast-tokens.mjs`
+   proves every text token clears AA on its own surfaces, but the app draws on
+   translucent glass over gradients. The effective backdrop is not modelled, and
+   no browser was available to check rendering, anti-aliasing or `forced-colors`.
+2. ~~Focus is not trapped in the header drawer or the mobile tab sheet.~~
+   **Fixed 2026-11-13**: both use `useFocusTrap` + `useBodyScrollLock`, verified in
+   `scripts/test-focus-trap.mjs`. Remaining: focus is trapped but the sheets are
+   rendered with `lg:hidden`, so a desktop viewport never shows them — untested at
+   those breakpoints in a real browser.
+3. ~~Icon-only buttons are partially labelled.~~ **Audited 2026-11-13**: 12 of 465
+   buttons were genuinely icon-only and all now have translated labels. A test keeps
+   it that way. What remains unverified is whether each label *reads well* to a
+   screen reader in Sinhala and Tamil — that needs a person with the reader.
+4. **Some `aria-label`s are English-only** inside otherwise localised components
+   (the planet globe, a few AR controls).
 
 ## Data integrity
 
-1. **Gemini generation is unavailable in production.** Diagnostics record 503 on
-   `gemini-3.8-flash` and 404 on the `gemini-2.5-flash` fallback while the same key
-   lists 48 models. Chat therefore runs on OpenRouter and the local engine. The
-   provider is reported as *configured*, never as *healthy*. (M1)
-2. **Three NASA proxies have no cache** (`/api/asteroids/neows`, `/api/epic`,
-   `/api/exoplanets`), so repeated visits spend the `DEMO_KEY` quota (30/hour) and
-   can fail intermittently. (M2)
+1. **Gemini generation is unavailable in production — cause measured 2026-11-13.**
+   Three live probes against `aeb601e` (15:57–15:59Z) returned 503 `UNAVAILABLE` on
+   `gemini-3.8-flash` ("This model is currently experiencing high demand…"), 404 on
+   each fallback while the same key lists 49 models including them, and 200 on
+   `GET /v1beta/models` in 69–76 ms. The key is healthy; the API refuses the
+   generation. Chat therefore runs on OpenRouter and the local engine. The provider
+   is reported as *configured*, never as *healthy*. (M1/M4)
+2. ~~Three NASA proxies have no cache~~ — **fixed 2026-11-13**: NeoWs (10 min,
+   keyed by date range), EPIC (15 min) and the Exoplanet Archive (24 h) use a
+   bounded TTL cache with `cached`/`fetchedAt` and `Cache-Control`. An expired
+   entry is deleted rather than served, so an outage still reports as an outage.
+   Remaining: the cache is **per instance**, so several serverless instances each
+   fetch once per TTL. Shared caching would need a store (the Guardian's Postgres
+   adapter is the natural place).
 3. **`DEMO_KEY` fallback is silent.** If `NASA_API_KEY` is missing, the server uses
    the demo tier without logging or exposing it. (M4)
-4. **Mars Rover Photos is not integrated.** The Forge dataset descriptor exists;
-   there is no route and no gallery. The old client-side helper (hardcoded
-   `DEMO_KEY`, fabricated ids) was removed on this branch. (M5)
+4. ~~Mars Rover Photos is not integrated.~~ **Withdrawn 2026-11-13 — the finding
+   was wrong.** The route (`/api/mars/photos`, cached, validated, rate-limited) and
+   a trilingual gallery were already in the tree; the audit's `grep` used a string
+   that only appears as a rate-limit key. Real limitation: the upstream API has no
+   Perseverance images, and the UI says so.
 5. **Live connector behaviour is partly verified.** NASA Images and NOAA SWPC Kp
    are confirmed live from production (see `docs/API_STATUS_REPORT.md`). The NOAA
    *plasma* feed returned nothing in that call, so solar-wind speed shows "not

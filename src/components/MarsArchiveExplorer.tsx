@@ -4,6 +4,10 @@ import type { SupportedLanguage } from '../i18n/translations';
 type Rover = 'curiosity' | 'perseverance' | 'opportunity' | 'spirit';
 type Item = { nasaId: string; title: string; description: string; date: string; category: string; thumbnail: string; detailsUrl: string };
 type Result = { articles: Item[]; hasMore: boolean; fetchedAt: string; cached: boolean; total: number };
+/** The `/api/nasa-archive` envelope before the article list is validated. */
+type ArchiveEnvelope = { success?: boolean; articles?: unknown; hasMore?: unknown; fetchedAt?: unknown; cached?: unknown; total?: unknown };
+/** An article record with the two fields that must be present to be listed. */
+type ArchiveArticle = { nasaId: string; title: string; [field: string]: unknown };
 const COPY = {
   en: { title: 'Explore Mars in NASA Images', intro: 'Search the NASA Image and Video Library by rover name. Results can include mission photos, artwork, models and Earth-based testing—not necessarily images taken on Mars. The record date may be a publication date, not the capture date. This is separate from the sol-based rover API above.', rover: 'Search by rover', search: 'Search NASA Images', loading: 'Searching NASA Images…', error: 'NASA Images is unavailable or returned an unexpected response.', retry: 'Retry', empty: 'No records found for this search.', date: 'NASA record date', dateMissing: 'Record date unavailable', center: 'NASA center', retrieved: 'Retrieved', cached: 'Cached', page: 'Page', previous: 'Previous', next: 'Next', open: 'Open NASA record', source: 'Source: NASA Image and Video Library', missingImage: 'Preview unavailable', total: 'NASA search results' },
   si: { title: 'NASA Images තුළ අඟහරු ගවේෂණය', intro: 'රෝවරයේ නමින් NASA Image and Video Library සොයන්න. ප්‍රතිඵලවල මෙහෙයුම් ඡායාරූප, චිත්‍ර, ආකෘති සහ පෘථිවියේ පරීක්ෂණ ඇතුළත් විය හැක; ඒ සියල්ල අඟහරු මත ගත් රූප නොවේ. වාර්තා දිනය රූපය ගත් දිනය වෙනුවට ප්‍රකාශිත දිනය විය හැක. මෙය ඉහත sol API එකෙන් වෙනස් සෙවුමකි.', rover: 'රෝවරය තෝරන්න', search: 'NASA Images සොයන්න', loading: 'NASA Images සොයමින්…', error: 'NASA Images ලබාගත නොහැක හෝ ප්‍රතිචාරය හඳුනාගත නොහැක.', retry: 'නැවත උත්සාහ කරන්න', empty: 'මෙම සෙවුමට වාර්තා හමු නොවීය.', date: 'NASA වාර්තා දිනය', dateMissing: 'වාර්තා දිනය නැත', center: 'NASA මධ්‍යස්ථානය', retrieved: 'ලබාගත් වේලාව', cached: 'කැෂේ ප්‍රතිඵලය', page: 'පිටුව', previous: 'පෙර', next: 'ඊළඟ', open: 'NASA වාර්තාව විවෘත කරන්න', source: 'මූලාශ්‍රය: NASA Image and Video Library', missingImage: 'පෙරදසුන නැත', total: 'NASA සෙවුම් ප්‍රතිඵල' },
@@ -40,10 +44,14 @@ export default function MarsArchiveExplorer({ lang = 'en' }: { lang?: SupportedL
     fetch(`/api/nasa-archive?${params}`, { signal: controller.signal, headers: { Accept: 'application/json' } })
       .then(async response => {
         if (!response.ok) throw new Error('unavailable');
-        const body = await response.json();
+        const body = await response.json() as ArchiveEnvelope;
         if (body?.success !== true || !Array.isArray(body.articles) || typeof body.hasMore !== 'boolean' || typeof body.fetchedAt !== 'string' || !Number.isFinite(body.total)) throw new Error('shape');
-        const articles = body.articles.filter((item: any) => item && typeof item.nasaId === 'string' && item.nasaId && typeof item.title === 'string')
-          .map((item: any) => ({ nasaId: item.nasaId, title: item.title, description: typeof item.description === 'string' ? item.description : '', date: typeof item.date === 'string' ? item.date : '', category: typeof item.category === 'string' ? item.category : '', thumbnail: typeof item.thumbnail === 'string' ? item.thumbnail : '', detailsUrl: typeof item.detailsUrl === 'string' ? item.detailsUrl : '' }));
+        const articles = body.articles.filter((item): item is ArchiveArticle => {
+          if (!item || typeof item !== 'object') return false;
+          const candidate = item as { nasaId?: unknown; title?: unknown };
+          return typeof candidate.nasaId === 'string' && candidate.nasaId.length > 0 && typeof candidate.title === 'string';
+        })
+          .map((item) => ({ nasaId: item.nasaId, title: item.title, description: typeof item.description === 'string' ? item.description : '', date: typeof item.date === 'string' ? item.date : '', category: typeof item.category === 'string' ? item.category : '', thumbnail: typeof item.thumbnail === 'string' ? item.thumbnail : '', detailsUrl: typeof item.detailsUrl === 'string' ? item.detailsUrl : '' }));
         return { ...body, articles } as Result;
       })
       .then(body => { if (active) { setResult(body); setState('ready'); } })

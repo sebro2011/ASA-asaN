@@ -8,7 +8,7 @@
  *   spaceflight  —                       free, spaceflight/space-science news
  *   gnews        GNEWS_API_KEY           broad news search
  *   newsapi      NEWSAPI_KEY             broad news search
- *   guardian     GUARDIAN_API_KEY        Guardian science desk
+ *   guardian     GUARDIAN_NEWS_API_KEY   Guardian science desk
  *   arxiv        —                       new astro-ph preprints (papers route)
  *
  * Rules this module keeps:
@@ -55,6 +55,8 @@ export interface NewsSourceReport {
   label: string;
   kind: 'news' | 'papers';
   envVar: string | null;
+  /** Deprecated names that still configure this source (canonical first, alias last). */
+  envAliases?: string[];
   docs: string;
   configured: boolean;
   state: SourceState;
@@ -64,9 +66,47 @@ export interface NewsSourceReport {
 interface NewsSource {
   id: NewsSourceId;
   label: string;
+  /** The name shown to operators: the canonical one when a source has an alias. */
   envVar: string | null;
+  /** Every env var that satisfies this source, canonical first. */
+  envNames?: string[];
   docs: string;
   fetch: (topic: NewsTopic, query: string, limit: number) => Promise<NewsItem[]>;
+}
+
+/**
+ * The Guardian **newspaper's** Open Platform key. It reads one news feed and
+ * authenticates nothing else.
+ *
+ * It is not the COSMORA API Guardian's credential, and it never authorises a
+ * `/api/guardian/*` route — that is `GUARDIAN_ADMIN_TOKEN` only (audit m5: the
+ * two names collide, the two purposes do not). `GUARDIAN_NEWS_API_KEY` is the
+ * canonical name; `GUARDIAN_API_KEY` is kept as a deprecated alias because a
+ * deployed project already sets it, and a rename should never force a key
+ * rotation. When both are present the canonical one wins.
+ */
+export const GUARDIAN_NEWS_KEY_ENV = 'GUARDIAN_NEWS_API_KEY';
+export const GUARDIAN_NEWS_KEY_LEGACY_ENV = 'GUARDIAN_API_KEY';
+
+/**
+ * One record per provider, listing only the fields this module reads. Every
+ * field is optional and every value is re-checked (`httpUrl`, `capped`,
+ * `isoDate` all take unvalidated input), so a provider changing its payload
+ * degrades to a dropped article rather than a malformed one.
+ */
+interface SpaceflightArticleResponse {
+  results?: { url?: string; title?: string; summary?: string; image_url?: string; news_site?: string; published_at?: string }[];
+}
+interface GNewsArticleResponse {
+  articles?: { url?: string; title?: string; description?: string; image?: string; publishedAt?: string; source?: { name?: string } }[];
+}
+interface NewsApiArticleResponse {
+  articles?: { url?: string; title?: string; description?: string; urlToImage?: string; publishedAt?: string; source?: { name?: string } }[];
+}
+interface GuardianArticleResponse {
+  response?: {
+    results?: { webUrl?: string; webTitle?: string; sectionName?: string; webPublicationDate?: string; fields?: { trailText?: string; thumbnail?: string } }[];
+  };
 }
 
 export const NEWS_API_VERSION = 1;
@@ -147,9 +187,15 @@ async function getText(url: string, headers: Record<string, string> = {}): Promi
   }
 }
 
-async function getJson(url: string, headers: Record<string, string> = {}): Promise<any> {
+/**
+ * The single boundary where upstream JSON becomes a typed shape. The cast is a
+ * description of what the caller validates below, not a guarantee: a provider
+ * is free to answer with anything, and `Array.isArray` plus the field helpers
+ * decide what survives.
+ */
+async function getJson<T>(url: string, headers: Record<string, string> = {}): Promise<T> {
   const text = await getText(url, headers);
-  return JSON.parse(text);
+  return JSON.parse(text) as T;
 }
 
 /* ------------------------------------------------------------- providers */
@@ -158,9 +204,9 @@ async function fetchSpaceflight(topic: NewsTopic, query: string, limit: number):
   const search = new URLSearchParams({ limit: String(limit), ordering: '-published_at' });
   const term = query || TOPICS[topic];
   if (term) search.set('search', term);
-  const data = await getJson(`https://api.spaceflightnewsapi.net/v4/articles/?${search.toString()}`);
+  const data = await getJson<SpaceflightArticleResponse>(`https://api.spaceflightnewsapi.net/v4/articles/?${search.toString()}`);
   const results = Array.isArray(data?.results) ? data.results : [];
-  return results.flatMap((entry: any): NewsItem[] => {
+  return results.flatMap((entry): NewsItem[] => {
     const url = httpUrl(entry?.url);
     const title = capped(stripHtml(entry?.title ?? ''), 300);
     if (!url || !title) return [];
@@ -187,9 +233,9 @@ async function fetchGNews(topic: NewsTopic, query: string, limit: number): Promi
     max: String(limit),
     apikey: token,
   });
-  const data = await getJson(`https://gnews.io/api/v4/search?${search.toString()}`);
+  const data = await getJson<GNewsArticleResponse>(`https://gnews.io/api/v4/search?${search.toString()}`);
   const articles = Array.isArray(data?.articles) ? data.articles : [];
-  return articles.flatMap((entry: any): NewsItem[] => {
+  return articles.flatMap((entry): NewsItem[] => {
     const url = httpUrl(entry?.url);
     const title = capped(stripHtml(entry?.title ?? ''), 300);
     if (!url || !title) return [];
@@ -217,11 +263,11 @@ async function fetchNewsApi(topic: NewsTopic, query: string, limit: number): Pro
     pageSize: String(limit),
   });
   // The key travels in a header so it cannot end up in an upstream URL log.
-  const data = await getJson(`https://newsapi.org/v2/everything?${search.toString()}`, {
+  const data = await getJson<NewsApiArticleResponse>(`https://newsapi.org/v2/everything?${search.toString()}`, {
     'X-Api-Key': token,
   });
   const articles = Array.isArray(data?.articles) ? data.articles : [];
-  return articles.flatMap((entry: any): NewsItem[] => {
+  return articles.flatMap((entry): NewsItem[] => {
     const url = httpUrl(entry?.url);
     const title = capped(stripHtml(entry?.title ?? ''), 300);
     if (!url || !title) return [];
@@ -240,7 +286,7 @@ async function fetchNewsApi(topic: NewsTopic, query: string, limit: number): Pro
 }
 
 async function fetchGuardian(topic: NewsTopic, query: string, limit: number): Promise<NewsItem[]> {
-  const token = key('GUARDIAN_API_KEY');
+  const token = key(GUARDIAN_NEWS_KEY_ENV) || key(GUARDIAN_NEWS_KEY_LEGACY_ENV);
   if (!token) return [];
   const search = new URLSearchParams({
     q: query || TOPICS[topic],
@@ -250,9 +296,9 @@ async function fetchGuardian(topic: NewsTopic, query: string, limit: number): Pr
     'order-by': 'newest',
     'api-key': token,
   });
-  const data = await getJson(`https://content.guardianapis.com/search?${search.toString()}`);
+  const data = await getJson<GuardianArticleResponse>(`https://content.guardianapis.com/search?${search.toString()}`);
   const results = Array.isArray(data?.response?.results) ? data.response.results : [];
-  return results.flatMap((entry: any): NewsItem[] => {
+  return results.flatMap((entry): NewsItem[] => {
     const url = httpUrl(entry?.webUrl);
     const title = capped(stripHtml(entry?.webTitle ?? ''), 300);
     if (!url || !title) return [];
@@ -295,14 +341,25 @@ const NEWS_SOURCES: NewsSource[] = [
   {
     id: 'guardian',
     label: 'The Guardian',
-    envVar: 'GUARDIAN_API_KEY',
+    envVar: GUARDIAN_NEWS_KEY_ENV,
+    envNames: [GUARDIAN_NEWS_KEY_ENV, GUARDIAN_NEWS_KEY_LEGACY_ENV],
     docs: 'https://open-platform.theguardian.com/documentation/',
     fetch: fetchGuardian,
   },
 ];
 
-export function isConfigured(envVar: string | null): boolean {
-  return envVar === null || Boolean(key(envVar));
+/**
+ * `envNames` is the alias-aware form. A source with no env var at all is always
+ * "configured" — it needs no key (Spaceflight News, arXiv).
+ */
+export function isConfigured(envVar: string | null, envNames?: string[]): boolean {
+  if (envVar === null) return true;
+  return (envNames ?? [envVar]).some((name) => Boolean(key(name)));
+}
+
+/** True when this source is read with the deprecated alias rather than the canonical name. */
+export function isUsingLegacyNewsKey(sourceId: NewsSourceId): boolean {
+  return sourceId === 'guardian' && !key(GUARDIAN_NEWS_KEY_ENV) && Boolean(key(GUARDIAN_NEWS_KEY_LEGACY_ENV));
 }
 
 /** Public inventory: booleans and env-var names only, never a key value. */
@@ -314,7 +371,9 @@ export function newsSourceInventory() {
       kind: 'news' as const,
       envVar: source.envVar,
       docs: source.docs,
-      configured: isConfigured(source.envVar),
+      configured: isConfigured(source.envVar, source.envNames),
+      // Named so an operator can migrate off the alias without a surprise.
+      ...(source.envNames ? { envAliases: source.envNames.slice(1) } : {}),
     })),
     {
       id: 'arxiv',
@@ -498,7 +557,7 @@ export function createSpaceNewsRouter() {
     if (cached) return res.json({ ...(cached as object), cached: true });
 
     const attempts = NEWS_SOURCES.map(async (source) => {
-      if (!isConfigured(source.envVar)) {
+      if (!isConfigured(source.envVar, source.envNames)) {
         return { source, state: 'unconfigured' as SourceState, items: [] as NewsItem[] };
       }
       try {
@@ -516,8 +575,9 @@ export function createSpaceNewsRouter() {
       label: result.source.label,
       kind: 'news',
       envVar: result.source.envVar,
+      ...(result.source.envNames ? { envAliases: result.source.envNames.slice(1) } : {}),
       docs: result.source.docs,
-      configured: isConfigured(result.source.envVar),
+      configured: isConfigured(result.source.envVar, result.source.envNames),
       state: result.state,
       count: result.items.length,
     }));

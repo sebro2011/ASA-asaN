@@ -1,7 +1,7 @@
 # API inventory and contract
 
 Every route this app serves, what it needs, and how it is allowed to fail.
-The machine-readable version is [`scripts/api-routes.mjs`](../scripts/api-routes.mjs);
+The machine-readable version is [`scripts/api-routes.mjs`](../../scripts/api-routes.mjs);
 this page explains the rules it enforces.
 
 ## The four rules
@@ -52,8 +52,8 @@ missing, crash, HTML, wrong status). It exits non-zero only when something faile
 
 **News & papers** `GET /api/news` (Spaceflight News + GNews + NewsAPI + Guardian, aggregated and
 deduped) · `/api/news/sources` (which keys are configured — booleans only) · `/api/news/papers`
-(arXiv astro-ph). Keys: `GNEWS_API_KEY`, `NEWSAPI_KEY`, `GUARDIAN_API_KEY`; the first and arXiv
-need none. The old hard-coded `/api/news` list was deleted.
+(arXiv astro-ph). Keys: `GNEWS_API_KEY`, `NEWSAPI_KEY`, `GUARDIAN_NEWS_API_KEY` (alias:
+`GUARDIAN_API_KEY`); the first and arXiv need none. The old hard-coded `/api/news` list was deleted.
 
 **Earth** `GET /api/earth/health` · `/api/earth/power` · `/api/earth/gibs/domains` · `/api/earth/gibs/probe` ·
 `/api/earth/firms/hotspots` · `POST /api/earth/analyst`

@@ -32,6 +32,8 @@ import {
   Database,
   WifiOff
 } from 'lucide-react';
+import { activateOnKey } from '../app/hooks';
+import { a11yLabel } from '../lib/a11yLabels';
 
 // App-specific screening thresholds; these are not NASA PHA criteria.
 export const THREAT_THRESHOLDS = {
@@ -852,6 +854,10 @@ function AsteroidRadar({ lang = 'en' }) {
                 return (
                   <div
                     key={ast.id}
+                    role="button"
+                    tabIndex={0}
+                    aria-label={ast.name}
+                    onKeyDown={activateOnKey(() => handleSelectAsteroid(ast))}
                     onClick={() => handleSelectAsteroid(ast)}
                     style={{
                       left: '50%',
@@ -1086,6 +1092,11 @@ function AsteroidRadar({ lang = 'en' }) {
                   <motion.div
                     key={ast.id}
                     layout
+                    role="button"
+                    tabIndex={0}
+                    aria-pressed={selectedAsteroid?.id === ast.id}
+                    aria-label={ast.name}
+                    onKeyDown={activateOnKey(() => handleSelectAsteroid(ast))}
                     onClick={() => handleSelectAsteroid(ast)}
                     className={`p-4 sm:p-5 rounded-3xl apple-liquid-glass transition-all cursor-pointer space-y-3.5 ${
                       selectedAsteroid?.id === ast.id
@@ -1196,6 +1207,7 @@ function AsteroidRadar({ lang = 'en' }) {
 
                 <button
                   type="button"
+                  aria-label={a11yLabel('close', lang)}
                   onClick={() => setSelectedAsteroid(null)}
                   className="p-2 rounded-[10px] apple-liquid-glass text-ink-3 hover:text-ink transition cursor-pointer"
                 >

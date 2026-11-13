@@ -37,6 +37,7 @@ export type RouteName =
   | 'knowledge'
   | 'tasks'
   | 'intelligence'
+  | 'guardian'
   | 'settings'
   | 'search'
   | 'profile'
@@ -74,6 +75,7 @@ const FLAT_SEGMENTS: Record<string, RouteName> = {
   knowledge: 'knowledge',
   tasks: 'tasks',
   intelligence: 'intelligence',
+  guardian: 'guardian',
   settings: 'settings',
   search: 'search',
   profile: 'profile',

@@ -7,7 +7,10 @@
  */
 import { readFileSync } from 'node:fs';
 import { execSync } from 'node:child_process';
-import i18n from '../src/i18n.ts';
+import i18n, { loadAllLocales } from '../src/i18n.ts';
+
+// Sinhala and Tamil are fetched on demand, so the audit loads them explicitly.
+await loadAllLocales();
 
 const files = execSync('grep -rl "" src --include=*.tsx --include=*.jsx --include=*.ts', { encoding: 'utf8' })
   .trim()

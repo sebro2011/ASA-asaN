@@ -1,5 +1,24 @@
 import { useState, useEffect, useCallback } from 'react';
 
+/**
+ * What `toggleFavorite` accepts: a mission id, or an APOD/news record. Every
+ * field is optional except the one being saved, and each is read with a
+ * fallback, so a partial record still saves instead of throwing.
+ */
+type FavoriteItem = {
+  date?: string;
+  id?: string;
+  title?: string;
+  explanation?: string;
+  description?: string;
+  url?: string;
+  thumbnail?: string;
+  hdurl?: string;
+  hdUrl?: string;
+  media_type?: string;
+  copyright?: string;
+};
+
 export interface SavedApod {
   date: string;
   title: string;
@@ -252,7 +271,7 @@ export function useFavorites() {
   );
 
   const handleToggleFavorite = useCallback(
-    (item: any) => {
+    (item: FavoriteItem | string | null) => {
       if (!item) return false;
       if (typeof item === 'string') {
         return toggleMission(item);

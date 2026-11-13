@@ -405,8 +405,17 @@ export function normaliseNeoWs(input: AdapterInput): NormalizedSeries[] {
     if (!Array.isArray(objects)) continue;
     for (const raw of objects) {
       if (!raw || typeof raw !== 'object') continue;
-      const object = raw as Record<string, any>;
-      const approach = Array.isArray(object.close_approach_data) ? object.close_approach_data[0] : null;
+      // Only three paths of a NeoWs object are read, and each goes straight into
+      // `parseValue`/`parseUtcTimestamp`, which accept unvalidated input.
+      const object = raw as {
+        close_approach_data?: unknown;
+        estimated_diameter?: { kilometers?: { estimated_diameter_max?: unknown } };
+      };
+      const approach = Array.isArray(object.close_approach_data) ? object.close_approach_data[0] as {
+        close_approach_date_full?: unknown;
+        close_approach_date?: unknown;
+        miss_distance?: { astronomical?: unknown };
+      } : null;
       const time = parseUtcTimestamp(approach?.close_approach_date_full ?? approach?.close_approach_date);
       if (!time) continue;
       const distanceAu = parseValue(approach?.miss_distance?.astronomical);

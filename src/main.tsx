@@ -8,7 +8,7 @@
  */
 import {StrictMode} from 'react';
 import {createRoot} from 'react-dom/client';
-import i18n from './i18n.ts';
+import i18n, { ensureInitialLanguage } from './i18n.ts';
 import { I18nextProvider } from 'react-i18next';
 import { TrilingualProvider } from './context/TrilingualProvider.jsx';
 import { ThemeProvider } from './app/theme.tsx';
@@ -90,18 +90,29 @@ if (typeof window !== 'undefined') {
   }
 }
 
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <I18nextProvider i18n={i18n}>
-      <ThemeProvider>
-        <RouterProvider>
-          <AuthProvider>
-            <TrilingualProvider>
-              <App />
-            </TrilingualProvider>
-          </AuthProvider>
-        </RouterProvider>
-      </ThemeProvider>
-    </I18nextProvider>
-  </StrictMode>,
-);
+const rootElement = document.getElementById('root')!;
+
+function render() {
+  createRoot(rootElement).render(
+    <StrictMode>
+      <I18nextProvider i18n={i18n}>
+        <ThemeProvider>
+          <RouterProvider>
+            <AuthProvider>
+              <TrilingualProvider>
+                <App />
+              </TrilingualProvider>
+            </AuthProvider>
+          </RouterProvider>
+        </ThemeProvider>
+      </I18nextProvider>
+    </StrictMode>,
+  );
+}
+
+// A returning Sinhala or Tamil reader needs a bundle that is no longer in the
+// first-load JavaScript. Wait for it before the first paint so the interface
+// never flashes English; a failure falls through to English instead of blocking.
+void ensureInitialLanguage()
+  .catch(() => undefined)
+  .then(render);

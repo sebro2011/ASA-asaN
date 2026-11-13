@@ -34,10 +34,13 @@ export function useTelemetrySync(): SyncStatus {
 
     // Try standard Background Sync API registration
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.ready.then((reg: any) => {
-        if ('sync' in reg) {
-          reg.sync.register('sync-nasa-telemetry').catch(() => {});
-        }
+      navigator.serviceWorker.ready.then((reg: ServiceWorkerRegistration) => {
+        // Background Sync is not in every lib.dom version, so name the shape
+        // instead of asserting `any`.
+        const syncManager = (reg as ServiceWorkerRegistration & {
+          sync?: { register(tag: string): Promise<void> };
+        }).sync;
+        syncManager?.register('sync-nasa-telemetry').catch(() => {});
       }).catch(() => {});
     }
   }, []);

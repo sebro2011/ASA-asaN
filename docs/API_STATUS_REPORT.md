@@ -1,6 +1,8 @@
 # API status report
 
-Status of every server route as of **2026-11-12**. "Live" means a response was
+Status of every server route as of **2026-11-13** (Guardian routes added; the AI
+provider evidence block below was re-measured on 2026-11-13 and is labelled with
+its timestamps). "Live" means a response was
 actually observed; "tested" means covered by injected-fetch tests; "unverified"
 means neither was possible from this environment.
 
@@ -14,21 +16,57 @@ means neither was possible from this environment.
 | `GET /api/workspace/config` | env | — | — | 200 with booleans only |
 | `GET /api/news/sources` | env | — | — | booleans only |
 
-## AI providers — production evidence (2026-11-12T10:32:23Z)
+## AI providers — production evidence, re-measured (2026-11-13T15:57–15:59Z)
 
-`GET /api/nova/diagnostics?probe=1` on commit `7251652`:
+`GET /api/nova/diagnostics?probe=1` against the live deployment of **`aeb601e`**
+(`main`), three probes inside two minutes. Each is a real upstream call made from
+Vercel — this sandbox has no egress to `generativelanguage.googleapis.com`, which
+is why the measurement had to come from the deployment:
 
-| Provider | Configured | Status | Detail |
+| Provider | Configured | Status | Detail (probe 1 / 2 / 3) |
 | --- | --- | --- | --- |
 | Local engine | yes | **ok** | in-process `nasa-local-engine` |
-| OpenRouter | yes | **ok** | `openrouter/free`, HTTP 200, 1 754 ms |
-| Gemini | yes | **error** | `gemini-3.8-flash` → 503 `UNAVAILABLE`; fallback `gemini-2.5-flash` → 404; `GET /v1beta/models` → 200 (48 models, key valid) |
+| OpenRouter | yes | **ok** | `openrouter/free`, HTTP 200 — 499 ms / 10 253 ms / 509 ms |
+| Gemini | yes | **error** | `gemini-3.8-flash` → **503 `PROVIDER_UNAVAILABLE`** every time (499 / 6 425 / 246 ms); last fallback `gemini-2.5-flash` → **404 `PROVIDER_MODEL_NOT_FOUND`** (143 / 149 / 150 ms); `GET /v1beta/models` → **200** (76 / 69 ms), **49** models listed |
 | Arena | no | not configured | correctly reported as unavailable |
+
+The provider's own body, returned by all three probes:
+
+```
+{ "error": { "code": 503, "message": "This model is currently experiencing high
+  demand. Spikes in demand are usually temporary. Please try again later.",
+  "status": "UNAVAILABLE" } }
+```
+
+What that settles:
+
+1. **The key is valid.** `keyValid: true`, `GET /v1beta/models` → 200 in 69–76 ms.
+   No 401, no 403, no 402.
+2. **The primary model id is not the problem.** `gemini-3.8-flash` answers 503 —
+   the model exists and is refusing work, in the vendor's words.
+3. **A listing is not an entitlement.** `gemini-2.5-flash` appears in the key's own
+   49-model `generateContent` list, and answers 404 when called. That is the
+   "listed yet 404" case, and it is the vendor's retirement notice, not a bug in
+   the probe (`docs/nova/INTELLIGENCE_LEVELS_MAPPING.md` §9 records the body:
+   *"no longer available to new users … use models/gemini-3.8-flash"*).
+4. **It is not a momentary spike in this observation window.** Three probes, two
+   minutes, identical outcome — plus the probes recorded on 2026-11-09, -11-10 and
+   -11-12 in `docs/nova/AI_PROVIDER_DIAGNOSTICS.md`. The message says "usually
+   temporary"; for this project it has not been.
 
 Conclusion: **NOVA answers through OpenRouter and the local engine.** Gemini
 generation is refused by the API for this deployment and is *not* operational.
-The 404 on a model the same key lists as available is unexplained and needs a live
-key to diagnose (audit finding M1).
+What is still unknown is narrower than before: the report does not say whether any
+of the four *alternative* ids can generate, because `modelsTried` collapsed five
+attempts into five names and only the last one kept its status. `modelAttempts`
+(the next probe's payload, added on this branch) keeps each attempt's status, so
+one probe will answer it.
+
+The earlier revision of this report called the 404 "unexplained"; the vendor's own
+message above explains it (a retired id, still listed). It is kept here as a
+correction rather than a rewrite, because the first reading — "the list and the
+call disagree, so this must be an access problem" — is the trap a future reader
+will fall into too.
 
 ## NASA data
 
@@ -36,9 +74,9 @@ key to diagnose (audit finding M1).
 | --- | --- | --- | --- | --- |
 | `GET /api/apod` | api.nasa.gov/planetary/apod | in-memory + SW | `cached` flag, source line in UI | tested |
 | `GET /api/apod-range` | api.nasa.gov | — | — | tested |
-| `GET /api/asteroids/neows` | api.nasa.gov/neo | **none** | **none** | live-unverified · audit M2 |
-| `GET /api/epic` | api.nasa.gov/EPIC | **none** | **none** | live-unverified · audit M2 |
-| `GET /api/exoplanets` | NASA Exoplanet Archive TAP | **none** | **none** | live-unverified · audit M2 |
+| `GET /api/asteroids/neows` | api.nasa.gov/neo | **10 min** (keyed by date range) · `cached` + `fetchedAt` | `fetchedAt` | live-unverified upstream · cache tested |
+| `GET /api/epic` | api.nasa.gov/EPIC | **15 min** · `cached` + `fetchedAt` | `fetchedAt` | live-unverified upstream · cache tested |
+| `GET /api/exoplanets` | NASA Exoplanet Archive TAP | **24 h** · `cached` + `fetchedAt` | `fetchedAt` | live-unverified upstream · cache tested |
 | `GET /api/nasa-archive` | **images-api.nasa.gov** (new) | 5 min TTL, 100 entries | `fetchedAt`, `cached` | tested · **live-verified** 2026-11-12T10:52:30Z |
 | `GET /api/solar-weather` | services.swpc.noaa.gov | last measured sample only | `fetchedAt`, `stale` | tested · **live-verified** 2026-11-12T11:02:48Z |
 | `GET /api/iss` | api.wheretheiss.at | last known | `timestamp`, `isFallback` | tested |
@@ -87,13 +125,54 @@ Two notes for operators:
 | `POST /api/forge/interpret`, `/investigate` | rate limited, provider seam |
 | `POST /api/forge/assistant` | bounded `research-context/1`, output audit, labelled local brief |
 
+## COSMORA API Guardian (added 2026-11-13)
+
+Public reads are credential-free and `no-store`; every action fails closed without
+`GUARDIAN_ADMIN_TOKEN`, and the cron entry fails closed without `CRON_SECRET`.
+"Tested" below means covered by `scripts/test-guardian-*.mjs`; the deployed
+behaviour was smoke-tested on the mounted Express app in this environment, **not**
+against a live Supabase project.
+
+| Route | Auth | Source | Cache | Failure mode | Verified |
+| --- | --- | --- | --- | --- | --- |
+| `GET /api/guardian/health` | none | store + monitor | `no-store` | 200 with `distributed: false` when the store is memory | tested + mounted-app smoke |
+| `GET /api/guardian/status` | none | store + monitor | `no-store` | 200; providers, breakers, store capability and its reason | tested + mounted-app smoke (13 providers, memory) |
+| `GET /api/guardian/providers` | none | catalogue | `no-store` | static | tested |
+| `GET /api/guardian/runs` · `GET /api/guardian/analytics` | admin | store | `no-store` | 403 `GUARDIAN_LOCKED` when unconfigured | tested |
+| `GET /api/guardian/audit` | admin | store | `no-store` | 403 when unconfigured; append-only rows | tested |
+| `GET /api/guardian/config` | admin | env | `no-store` | env **names** and readiness only, never values | tested |
+| `POST /api/guardian/run` | admin | 13 providers | — | `ran:false` + holder when a sweep is leased; metered providers skipped unless deep | tested |
+| `POST /api/guardian/verify` | admin | one provider | — | probe timeout → typed failure, never "ok" | tested |
+| `POST /api/guardian/recovery` | admin, 5/min | recovery actions | — | verification failure re-opens the circuit; human-only actions refused | tested |
+| `GET /api/guardian/cron` | `CRON_SECRET` | monitor | — | 503 `SCHEDULE_SECRET_MISSING` when unset; 200 `ran:false` when a sweep is held | tested + mounted-app smoke (503) |
+
+## Proxy caching (2026-11-13)
+
+`/api/asteroids/neows`, `/api/epic` and `/api/exoplanets` used to call their
+upstream on every request, spending the shared `DEMO_KEY` quota on identical
+answers. They now use a bounded TTL cache (`server/ttlCache.ts`):
+
+| Route | TTL | Entries | Why that TTL |
+| --- | --- | --- | --- |
+| `/api/asteroids/neows` | 10 min | 40 (one per date range) | the feed changes daily; 10 min covers a browsing session |
+| `/api/epic` | 15 min | 4 | a handful of frames per day |
+| `/api/exoplanets` | 24 h | 2 | a fixed query over a catalogue that changes on the order of months |
+
+Every response carries `cached: true|false` and `fetchedAt` (the time the value was
+actually fetched, not the time of this request), and sets
+`Cache-Control: public, max-age=<remaining>`. An **expired entry is deleted, not
+served** — when the upstream then fails the answer is a 503 with no data, never
+yesterday's numbers presented as today's. Tested in `scripts/test-nasa-cache.mjs`
+(12 cases).
+
 ## Environment variables (names only)
 
 `NASA_API_KEY`, `NEXT_PUBLIC_NASA_API_KEY` (legacy name, still read), `GEMINI_API_KEY`,
 `OPENROUTER_API_KEY`, `ARENA_API_KEY`, `NOVA_GEMINI_MODEL`, `NOVA_ANALYST_MODEL`,
 `EARTH_ANALYST_OPENROUTER_MODEL`, `EARTH_ANALYST_ARENA_MODEL`, `CORS_ORIGINS`,
 `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `NEWS_API_KEY`, `GNEWS_API_KEY`,
-`GUARDIAN_API_KEY`, `YOUTUBE_API_KEY`, `PORT`.
+`GUARDIAN_NEWS_API_KEY` (newspaper news key; `GUARDIAN_API_KEY` is its deprecated
+alias), `YOUTUBE_API_KEY`, `PORT`.
 
 No values are recorded here or anywhere else in the repository.
 

@@ -8,12 +8,13 @@
  * app shell reserves matching bottom padding.
  */
 
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Clapperboard, Grid2x2, House, Leaf, MoreHorizontal, X } from 'lucide-react';
 import { NAV_ENTRIES, NAV_GROUPS, type TabId } from './navigation';
 import type { SupportedLanguage } from '../i18n/translations';
 import { cx } from './primitives';
+import { useBodyScrollLock, useEscape, useFocusTrap } from '../app/hooks';
 
 const ITEMS: Array<{
   id: TabId | 'menu';
@@ -37,6 +38,12 @@ export default function MobileTabBar({
   lang: SupportedLanguage;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  // Same contract as the header sheet: Escape closes, Tab stays inside, and the
+  // page behind does not scroll under the panel.
+  const menuSheetRef = useRef<HTMLDivElement>(null);
+  useEscape(menuOpen, () => setMenuOpen(false));
+  useFocusTrap(menuOpen, menuSheetRef);
+  useBodyScrollLock(menuOpen);
 
   const select = (tab: TabId) => {
     onTabChange(tab);
@@ -96,12 +103,13 @@ export default function MobileTabBar({
             aria-modal="true"
             aria-label="All destinations"
           >
-            <div className="absolute inset-0 bg-void/85 backdrop-blur-sm" onClick={() => setMenuOpen(false)} />
+            <div aria-hidden="true" className="absolute inset-0 bg-void/85 backdrop-blur-sm" onClick={() => setMenuOpen(false)} />
             <motion.div
               initial={{ y: 28, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
               exit={{ y: 20, opacity: 0 }}
               transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+              ref={menuSheetRef}
               className="absolute inset-x-0 bottom-0 max-h-[82vh] overflow-y-auto rounded-t-[20px] border-t border-line bg-abyss px-4 pb-[max(env(safe-area-inset-bottom),1rem)] pt-3"
             >
               <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-line-strong" />

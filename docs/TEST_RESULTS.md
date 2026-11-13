@@ -1,16 +1,71 @@
 # Test results
 
-Latest full run: **2026-11-12**, branch `arena/ad469a17-asa-asan`.
+Latest full run: **2026-11-13**, branch `arena/8a962084-asa-asan`.
 
 | Command | Result |
 | --- | --- |
 | `npm run lint` (`tsc --noEmit`) | clean |
-| `npm run build` | exit 0 · 158 precache entries · entry chunk 888 KB |
-| `npm test` | **704 pass / 0 fail** |
+| `npm run build` | exit 0 · 89 JS chunks · entry **543.90 kB raw / 170.25 kB gzip** (was 920.85 / 245.83 before the locale split) · `si` 173.34 kB / 37.30 kB gzip on demand · `ta` 202.58 kB / 37.76 kB gzip on demand · CSS 63.65 kB gzip |
+| `npm test` | **890 pass / 0 fail** across **78** test scripts |
+| `npm run test:guardian` | 56 pass / 0 fail (core 28 · monitor/routes 22 · dashboard 6) |
+| `npm run test:rate-limit` | 9 pass / 0 fail |
+| `npm run test:nova-diagnostics` | 23 pass / 0 fail (model-list evidence; a 404 on a listed id yields `suggestedModel` + a pin instruction; `modelAttempts` keeps each alternative id's status) |
+| `npm run test:a11y` | 7 + 5 pass / 0 fail (keyboard reachability; no nameless icon button; label scripts) |
+| `npm run test:any-budget` | 3 pass / 0 fail (explicit `any` = **0**; strict mode on; **the detector is itself tested** against 9 positive and 6 negative fixtures) |
+| `npm run test:docs-links` | 3 pass / 0 fail (every internal link resolves; no orphan documents) |
+| `npm run test:security-headers` | 11 pass / 0 fail (prod CSP has no inline script; dev keeps Vite's; proxy trust bounded; live response header matches the policy) |
+| `npm run test:process-guards` | 4 pass / 0 fail (log once → exit 1; rejections non-fatal) |
+| `npm run test:hygiene` | 6 pass / 0 fail (one lockfile, name/version agreement, no hardcoded versions, CI uses npm ci) |
+| `npm run test:nova-routes` | 4 pass / 0 fail (4 paths routed and identical; `/api/nasa-ai` no longer 404s) |
+| `npm run test:space-news` | 13 pass / 0 fail (incl. the Guardian news key: canonical name, deprecated alias, canonical-wins precedence, neither configured) |
+| `npm run audit:env` | exit 0 · 31 variables · 0 undocumented · no secret reachable from browser code (was failing on a string literal, and blind to names reached through a constant) |
+| `npm run test:focus-trap` | 3 pass / 0 fail (Tab wrap, focus restore, wiring of all 4 overlays) |
+| `npm run test:contrast` | 7 pass / 0 fail (WCAG ratios computed from `tokens.css` + `nova-tokens.css`; documented numbers re-verified) |
+| `npm run test:a11y` | 7 pass / 0 fail (no pointer-only control; `activateOnKey`; Escape wiring; focus ring CSS) |
+| `npm run check:pwa` | post-build: 165 precached entries, external registration, no inline scripts |
+| `npm run test:nasa-cache` | 12 pass / 0 fail (TTL cache, honest `cached`/`fetchedAt`, outages never served from cache, client timeouts) |
+| `npm run test:workspace-chat` · `test:workspace-settings` | 21 and 11 pass (device-only chat) |
 | `npm run test:forge` | 224 pass / 0 fail |
-| `npm run test:nasa` | 22 pass / 0 fail |
+| `npm audit` | 6 advisories (2 low, 4 moderate), all in the build chain |
+| `npm start` → `GET /api/health` | 200 after the `tsx` fix (it crashed on `node server.ts`; see the audit's C1) |
+| `esbuild server/vercelEntry.ts` vs committed `api/index.js` | byte-identical |
 
-`npm test` runs 44 suites: `lint`, `test:api-routes`, `test:apod`, `test:earth`,
+### Suites added since 2026-11-12
+
+| Suite | Tests | What it pins |
+| --- | --- | --- |
+| `scripts/test-guardian-core.mjs` | 28 | store CAS/TTL/counters/leases, breaker races across two coordinators, fleet budgets, Postgres adapter (no key in a URL, typed timeouts), factory key validation |
+| `scripts/test-guardian-monitor.mjs` | 22 | sweep results, incident audit, metered skip vs deep sweep, circuit-open skip, deadline skips, analytics with `null` availability, recovery verification re-opening a breaker, admin/cron auth failing closed, scrubbing (incl. the news key, kept out of the Guardian's own readiness bucket) |
+| `scripts/test-guardian-ui.mjs` | 6 | incident rendering, unprobed provider is "no data", instance-local store labelled, token never in a URL, outage shows its code, metered labels |
+| `scripts/test-request-rate-limit.mjs` | 9 | exact `max` boundary, 429 + `Retry-After`, window reset, per-client isolation, per-limiter stores, `skip()`, prune, **bounded growth under 5,200 clients**, `req.ip` over headers |
+
+### Locale split — what changed and what proves it
+
+The three languages no longer ship together. English is imported statically;
+Sinhala and Tamil are dynamic imports requested on first selection (or before
+first paint for a returning reader, from `main.tsx`).
+
+| Evidence | Result |
+| --- | --- |
+| Data integrity | all nine dictionaries dumped to JSON before and after the move → **byte-identical** |
+| Key parity | **1,688 keys** in each of en/si/ta bundles, 0 missing (the parity suites still read the three-language aggregators) |
+| Switching | `i18n.changeLanguage('si')` → `නාසා විශ්ව ගවේෂකය`; `'ta'` → `நாசா விண்வெளி ஆய்வு மையம்`; back to `'en'` → English |
+| First load | entry **245.83 → 170.25 kB gzip (−31 %)**; si 37.3 kB and ta 37.8 kB only when needed |
+| Tests updated for the async contract | `test-workspace-shell`, `test-workspace-home`, `test-forge-ui`, `scripts/i18n-audit.mjs` — none of their assertions were removed; they now load the bundles before comparing |
+
+### What the 2026-11-13 run does not cover
+
+Same limits as before, stated again because they still apply: no outbound NASA,
+Gemini, OpenRouter, Arena or Supabase traffic from this environment, no browser
+automation (jsdom for DOM tests), and the Guardian's SQL migration has not been
+executed against PostgreSQL. The Guardian's distributed claims are proven with two
+coordinators over one store, not across processes.
+
+---
+
+## Earlier run — 2026-11-12, branch `arena/ad469a17-asa-asan`
+
+`npm test` then ran 44 suites: `lint`, `test:api-routes`, `test:apod`, `test:earth`,
 `test:nova-chat`, `test:nova-diagnostics`, `test:space-videos`, `test:space-news`,
 `test:community`, `test:ai-viewer`, `test:welcome`, `test:earth-server`,
 `test:earth-analyst`, `test:earth-analyst-ui`, `test:space-build-security`,

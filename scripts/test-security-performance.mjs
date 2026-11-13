@@ -143,6 +143,15 @@ test('PWA runtime image caching does not capture POWER JSON', async () => {
   assert.doesNotMatch(config, /url\.hostname\.includes\('nasa\.gov'\)/);
 });
 
-test('application leaves Express proxy trust disabled by default', () => {
-  assert.equal(app.get('trust proxy'), false);
+test('proxy trust is bounded, not blanket (audit M3)', () => {
+  // This test used to assert `trust proxy === false`, which pinned the bug: with
+  // trust disabled, `req.ip` is the platform proxy's address for every visitor,
+  // so each per-IP rate limit collapsed into one bucket shared by the whole
+  // deployment. The replacement asserts the shape that is actually correct — a
+  // known hop count, never `true`, which would make req.ip forgeable via
+  // X-Forwarded-For.
+  const trust = app.get('trust proxy');
+  assert.notEqual(trust, undefined, 'Express default (undefined) means no proxy support at all');
+  assert.notEqual(trust, true, 'trusting every hop makes the client IP attacker-controlled');
+  assert.ok(trust === false || (typeof trust === 'number' && trust >= 1 && trust <= 10), `unexpected trust value: ${trust}`);
 });

@@ -248,6 +248,20 @@ test('maps provider rate limits and outages to safe retryable errors', async () 
   assert.equal(providerError(500, 'openrouter').body.code, 'PROVIDER_UNAVAILABLE');
   assert.equal(providerError(404, 'openrouter', OPENROUTER_FREE_MODEL).body.code, 'FREE_MODEL_UNAVAILABLE');
 
+  // Audit M4: a 404 used to say "the model is unavailable" without naming it, so
+  // a key that listed 48 models while the configured one 404'd was undiagnosable
+  // from the response alone.
+  const missingModel = providerError(404, 'gemini', 'gemini-2.5-flash');
+  assert.equal(missingModel.body.model, 'gemini-2.5-flash', 'the failing model id must be visible');
+  assert.equal(missingModel.body.upstreamStatus, 404);
+  assert.match(missingModel.body.hint, /listed for the key yet restricted/, 'the hint must not blame quota');
+  assert.match(missingModel.body.hint, /diagnostics/, 'and must point at the evidence');
+  assert.doesNotMatch(JSON.stringify(missingModel.body), /quota|billing/i, 'never guess at billing');
+
+  const authFailure = providerError(403, 'gemini', 'gemini-3.8-flash');
+  assert.match(authFailure.body.hint, /configured but not authorised/, 'a rejected key is not a missing model');
+  assert.equal(authFailure.body.model, 'gemini-3.8-flash');
+
   assert.equal(rateLimited.status, 200);
   assert.equal(rateLimited.body.fallback, true);
   assert.equal(rateLimited.body.provider, 'NOVA Local Space Engine');

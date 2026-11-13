@@ -13,12 +13,15 @@ import express from 'express';
 import { createSpaceNewsRouter, parseArxivFeed, stripHtml } from '../server/spaceNews.ts';
 
 const realFetch = globalThis.fetch;
-const KEYS = ['GNEWS_API_KEY', 'NEWSAPI_KEY', 'GUARDIAN_API_KEY'];
+// Both Guardian news names: the canonical one and its deprecated alias must be
+// reset between tests, or one test's key configures the next one's source.
+const KEYS = ['GNEWS_API_KEY', 'NEWSAPI_KEY', 'GUARDIAN_NEWS_API_KEY', 'GUARDIAN_API_KEY'];
 const original = Object.fromEntries(KEYS.map((name) => [name, process.env[name]]));
 
 const FAKE = {
   GNEWS_API_KEY: 'gnews-secret-TEST-123',
   NEWSAPI_KEY: 'newsapi-secret-TEST-456',
+  GUARDIAN_NEWS_API_KEY: 'guardian-news-secret-TEST-789',
   GUARDIAN_API_KEY: 'guardian-secret-TEST-789',
 };
 
@@ -263,6 +266,61 @@ test('one failing provider does not hide the others; all failing answers 502', a
     assert.equal(body.ok, false);
     assert.equal(body.code, 'upstream');
     assert.equal(body.items, undefined, 'no invented items on failure');
+  });
+});
+
+test('the Guardian news key has one canonical name and a working alias', async () => {
+  const guardianOnly = (url) =>
+    url.startsWith('https://content.guardianapis.com') ? json(guardianBody) : json({ results: [], articles: [] });
+
+  // 1) The canonical name alone configures the source, and the report says so.
+  await withServer({
+    keys: { GUARDIAN_NEWS_API_KEY: 'canonical-name-TEST-AAA' },
+    upstream: guardianOnly,
+  }, async (get, calls) => {
+    const body = await (await get('/?limit=3')).json();
+    const call = calls.find((entry) => entry.url.startsWith('https://content.guardianapis.com'));
+    assert.ok(call, 'GUARDIAN_NEWS_API_KEY configures the Guardian source');
+    assert.match(call.url, /canonical-name-TEST-AAA/);
+    assert.equal(JSON.stringify(body).includes('canonical-name-TEST-AAA'), false, 'the key is never echoed');
+
+    const guardian = body.sources.find((source) => source.id === 'guardian');
+    assert.equal(guardian.envVar, 'GUARDIAN_NEWS_API_KEY', 'the report teaches the canonical name');
+    assert.deepEqual(guardian.envAliases, ['GUARDIAN_API_KEY'], 'the deprecated name is still documented');
+    assert.equal(guardian.configured, true);
+  });
+
+  // 2) The deprecated alias still works: no deployment has to rotate a key to rename one.
+  await withServer({
+    keys: { GUARDIAN_API_KEY: 'legacy-alias-TEST-BBB' },
+    upstream: guardianOnly,
+  }, async (get, calls) => {
+    const body = await (await get('/?limit=3')).json();
+    const call = calls.find((entry) => entry.url.startsWith('https://content.guardianapis.com'));
+    assert.ok(call, 'the alias still reaches the provider');
+    assert.match(call.url, /legacy-alias-TEST-BBB/);
+    const guardian = body.sources.find((source) => source.id === 'guardian');
+    assert.equal(guardian.configured, true, 'the alias counts as configured');
+    assert.equal(guardian.envVar, 'GUARDIAN_NEWS_API_KEY', 'but the alias is never the recommended name');
+  });
+
+  // 3) Both set: the canonical name wins, so a stale alias cannot shadow it.
+  await withServer({
+    keys: { GUARDIAN_NEWS_API_KEY: 'canonical-WINS-111', GUARDIAN_API_KEY: 'legacy-IGNORED-222' },
+    upstream: guardianOnly,
+  }, async (get, calls) => {
+    await get('/?limit=3');
+    const call = calls.find((entry) => entry.url.startsWith('https://content.guardianapis.com'));
+    assert.match(call.url, /canonical-WINS-111/);
+    assert.equal(call.url.includes('legacy-IGNORED-222'), false, 'the alias is not used when the canonical name is set');
+  });
+
+  // 4) Neither set: unconfigured, not silently "ok".
+  await withServer({ keys: {}, upstream: guardianOnly }, async (get) => {
+    const body = await (await get('/?limit=3')).json();
+    const guardian = body.sources.find((source) => source.id === 'guardian');
+    assert.equal(guardian.configured, false);
+    assert.equal(guardian.state, 'unconfigured');
   });
 });
 

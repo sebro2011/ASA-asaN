@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, type Request, type Response } from 'express';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { youtubeIdFromUrl } from '../src/features/space-shorts/youtubeUrl';
 import type { SpaceVideo, SpaceVideoCategory } from '../src/features/space-shorts/types';
@@ -26,12 +26,42 @@ export type CommunityStore = {
 };
 export type CommunityRuntime = { url: string; publicKey: string; store: CommunityStore };
 
-function checked<T>(result: { data: T; error: any }): T {
+/**
+ * Row shapes mirror `supabase/cosmovision.sql`: the NOT NULL columns are
+ * non-optional here, the nullable ones are `| null`. They are a description of
+ * the schema, so a migration that changes a column has to change this too —
+ * which is the point of writing them down.
+ */
+interface CommunityVideoRow {
+  id: string;
+  video_id: string;
+  title: string;
+  description: string;
+  category: string;
+  channel_title: string;
+  channel_id: string | null;
+  official_agency: boolean;
+  published_at: string | null;
+  duration_seconds: number | null;
+  created_at: string;
+}
+interface OwnSubmissionRow { id: string; title: string; status: string; created_at: string }
+interface ApprovedRow { id: string; video_id: string; title: string; channel_title: string }
+interface OpenReportRow {
+  id: string;
+  reason: string;
+  created_at: string;
+  /** `!inner` join: PostgREST may return the relation as an object or an array. */
+  video: { id: string; title: string; status: string } | { id: string; title: string; status: string }[] | null;
+}
+
+/** `error` is `unknown`, not `any`: only truthiness is ever read from it. */
+function checked<T>(result: { data: T; error: unknown }): T {
   if (result.error) throw new Error('community-unavailable');
   return result.data;
 }
 
-function toVideo(row: any): SpaceVideo {
+function toVideo(row: CommunityVideoRow): SpaceVideo {
   return {
     id: row.video_id, communityId: row.id, title: row.title, description: row.description,
     channelTitle: row.channel_title, channelId: row.channel_id || undefined,
@@ -89,7 +119,7 @@ function supabaseStore(client: SupabaseClient): CommunityStore {
     },
     async listOwn(userId) {
       const rows = checked(await client.from('cosmovision_videos').select('id,title,status,created_at').eq('submitter_id', userId).order('created_at', { ascending: false }).limit(100)) || [];
-      return rows.map((row: any) => ({ id: row.id, title: row.title, status: row.status, createdAt: row.created_at }));
+      return (rows as OwnSubmissionRow[]).map((row) => ({ id: row.id, title: row.title, status: row.status, createdAt: row.created_at }));
     },
     async report(videoId, userId, reason) {
       const video = checked(await client.from('cosmovision_videos').select('id').eq('id', videoId).eq('status', 'approved').maybeSingle());
@@ -105,9 +135,9 @@ function supabaseStore(client: SupabaseClient): CommunityStore {
         client.from('cosmovision_videos').select('id,video_id,title,channel_title').eq('status', 'approved').order('created_at', { ascending: false }).limit(100),
         client.from('cosmovision_reports').select('id,reason,created_at,video:cosmovision_videos!inner(id,title,status)').eq('status', 'open').order('created_at', { ascending: true }).limit(100)
       ]);
-      const pending = (checked(pendingResult) || []).map((row: any) => ({ id: row.id, videoId: row.video_id, title: row.title, description: row.description, category: row.category, channelTitle: row.channel_title, createdAt: row.created_at }));
-      const approved = (checked(approvedResult) || []).map((row: any) => ({ id: row.id, videoId: row.video_id, title: row.title, channelTitle: row.channel_title }));
-      const reports = (checked(reportsResult) || []).flatMap((row: any) => {
+      const pending = ((checked(pendingResult) || []) as CommunityVideoRow[]).map((row) => ({ id: row.id, videoId: row.video_id, title: row.title, description: row.description, category: row.category, channelTitle: row.channel_title, createdAt: row.created_at }));
+      const approved = ((checked(approvedResult) || []) as ApprovedRow[]).map((row) => ({ id: row.id, videoId: row.video_id, title: row.title, channelTitle: row.channel_title }));
+      const reports = ((checked(reportsResult) || []) as OpenReportRow[]).flatMap((row) => {
         const video = Array.isArray(row.video) ? row.video[0] : row.video;
         return video?.status === 'approved' ? [{ id: row.id, videoId: video.id, title: video.title, reason: row.reason, createdAt: row.created_at }] : [];
       });
@@ -188,18 +218,18 @@ export function createCommunityRouter(options: { runtime?: () => CommunityRuntim
     return res.json(config ? { enabled: true, url: config.url, publicKey: config.publicKey } : { enabled: false });
   });
 
-  async function authenticate(req: any, res: any, store: CommunityStore): Promise<string | null> {
+  async function authenticate(req: Request, res: Response, store: CommunityStore): Promise<string | null> {
     const match = /^Bearer ([\x21-\x7e]{20,8192})$/.exec(req.get('Authorization') || '');
     const userId = match ? await store.verifyUser(match[1]) : null;
     if (!userId) { res.status(401).json({ error: 'authentication-required' }); return null; }
     return userId;
   }
-  function getRuntime(res: any): CommunityRuntime | null {
+  function getRuntime(res: Response): CommunityRuntime | null {
     const config = runtime();
     if (!config) { res.status(503).json({ error: 'community-unavailable' }); return null; }
     return config;
   }
-  function fail(res: any) { return res.status(503).json({ error: 'community-unavailable' }); }
+  function fail(res: Response) { return res.status(503).json({ error: 'community-unavailable' }); }
 
   router.get('/videos', async (req, res) => {
     const category = req.query.category ?? 'all';

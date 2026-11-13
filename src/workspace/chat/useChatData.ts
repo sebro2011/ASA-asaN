@@ -18,6 +18,28 @@ import {
   removeLocalMessage,
   updateLocalConversation,
 } from './localChat';
+import { CHAT_LOCAL_ONLY_EVENT, isChatLocalOnly } from './chatStorage';
+
+/**
+ * Re-reads the "keep chats on this device" preference and updates on change, so
+ * toggling it in Settings moves an open chat surface at once.
+ */
+function useLocalOnlyPreference(): boolean {
+  const [localOnly, setLocalOnly] = useState(isChatLocalOnly);
+
+  useEffect(() => {
+    const update = () => setLocalOnly(isChatLocalOnly());
+    window.addEventListener(CHAT_LOCAL_ONLY_EVENT, update);
+    // Another tab may be the one that changed it.
+    window.addEventListener('storage', update);
+    return () => {
+      window.removeEventListener(CHAT_LOCAL_ONLY_EVENT, update);
+      window.removeEventListener('storage', update);
+    };
+  }, []);
+
+  return localOnly;
+}
 
 export type LoadState = 'idle' | 'loading' | 'ready' | 'error';
 
@@ -37,8 +59,13 @@ export function useConversations(client: SupabaseClient | null, userId: string |
   const [error, setError] = useState<string | null>(null);
 
   const repo = useMemo(() => (client ? conversationRepo(client) : null), [client]);
-  /** No cloud session (signed out, or no Supabase on this deployment) → device store. */
-  const local = !repo || !userId;
+  const localOnly = useLocalOnlyPreference();
+  /**
+   * Device store when there is no cloud session (signed out, or no Supabase on
+   * this deployment) — and when the reader has asked to keep chats on this
+   * device even while signed in.
+   */
+  const local = !repo || !userId || localOnly;
   const mounted = useRef(true);
 
   useEffect(() => {
@@ -49,12 +76,13 @@ export function useConversations(client: SupabaseClient | null, userId: string |
   }, []);
 
   const reload = useCallback(async () => {
-    if (!repo || !userId) {
+    if (local) {
       if (!mounted.current) return;
       setItems(listLocalConversations());
       setState('ready');
       return;
     }
+    if (!repo || !userId) return;
     setState('loading');
     setError(null);
     try {
@@ -67,7 +95,7 @@ export function useConversations(client: SupabaseClient | null, userId: string |
       setError(caught instanceof Error ? caught.message : 'load failed');
       setState('error');
     }
-  }, [repo, userId]);
+  }, [repo, userId, local]);
 
   useEffect(() => {
     void reload();
@@ -86,7 +114,7 @@ export function useConversations(client: SupabaseClient | null, userId: string |
     () => ({
       reload,
       async create(title = 'New conversation') {
-        if (!repo || !userId) {
+        if (local) {
           const row = createLocalConversation(title);
           setItems((current) => [row, ...current]);
           return row;
@@ -153,7 +181,8 @@ export function useThread(client: SupabaseClient | null, userId: string | null, 
   const [unsaved, setUnsaved] = useState<string[]>([]);
 
   const repo = useMemo(() => (client ? messageRepo(client) : null), [client]);
-  const local = !repo || !userId;
+  const localOnly = useLocalOnlyPreference();
+  const local = !repo || !userId || localOnly;
   const mounted = useRef(true);
 
   useEffect(() => {
@@ -235,7 +264,7 @@ export function useThread(client: SupabaseClient | null, userId: string | null, 
         return { saved: false, row };
       }
 
-      if (!repo || !userId || !targetId) {
+      if (local || !repo || !userId || !targetId) {
         setUnsaved((current) => [...current, row.id]);
         return { saved: false, row };
       }

@@ -34,6 +34,7 @@ import {
   Flame,
   BarChart3
 } from 'lucide-react';
+import { a11yLabel } from '../lib/a11yLabels';
 
 interface MissionsTimelineProps {
   lang: SupportedLanguage;
@@ -251,7 +252,7 @@ export const MissionsTimeline: React.FC<MissionsTimelineProps> = React.memo(({ l
           sources: []
         });
       }
-    } catch (err: any) {
+    } catch {
       setGroundedResult({
         query: queryTerm,
         answer: lang === 'si'
@@ -557,6 +558,8 @@ export const MissionsTimeline: React.FC<MissionsTimelineProps> = React.memo(({ l
               </button>
 
               <button
+                type="button"
+                aria-label={a11yLabel('close', lang)}
                 onClick={() => {
                   setShowGroundedSection(false);
                   if ('speechSynthesis' in window) {

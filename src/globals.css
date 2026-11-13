@@ -111,3 +111,28 @@ input[type="number"],
 select {
   color-scheme: dark;
 }
+
+/* -----------------------------------------------------------------------------
+   Focus ring.
+
+   The ring itself already exists — `src/styles/tokens.css` styles
+   `:where(a, button, input, select, textarea, summary, [tabindex]):focus-visible`
+   with `--focus`. This file must NOT define a second one: two rules diverge the
+   moment someone edits one of them.
+
+   What was missing is `[role="button"]` in that selector list (the role has no
+   native focus ring) and a high-contrast fallback. Both live here, and
+   `scripts/test-a11y-controls.mjs` asserts the two rules together.
+   -------------------------------------------------------------------------- */
+:where([role="button"]):focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+/* Windows high-contrast mode drops box-shadows; an outline survives. */
+@media (forced-colors: active) {
+  :where(a, button, [role="button"], summary):focus-visible {
+    outline: 2px solid Highlight;
+  }
+}

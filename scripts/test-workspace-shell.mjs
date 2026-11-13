@@ -13,7 +13,10 @@ import { test } from 'node:test';
 import { normalisePath, parseRoute, routeHref } from '../src/app/router.tsx';
 import { ACCOUNT_NAV, EXPLORE_NAV, ROUTE_LABEL_KEYS, WORKSPACE_NAV } from '../src/app/navConfig.ts';
 import { workspaceCopy } from '../src/i18n/workspaceCopy.ts';
-import { resources } from '../src/i18n.ts';
+import i18n, { loadAllLocales } from '../src/i18n.ts';
+
+// Sinhala and Tamil are lazy-loaded now, so a parity check has to ask for them.
+await loadAllLocales();
 
 test('normalisePath produces one canonical pathname', () => {
   assert.equal(normalisePath('/'), '/');
@@ -110,7 +113,7 @@ test('every workspace destination has a shell title, so the header never says "n
       continue;
     }
     for (const lang of ['en', 'si', 'ta']) {
-      if (!resources[lang].translation[key]) missing.push(`${item.id}: ${lang} missing ${key}`);
+      if (!i18n.getResourceBundle(lang, 'translation')[key]) missing.push(`${item.id}: ${lang} missing ${key}`);
     }
   }
   assert.deepEqual(missing, [], `shell titles must resolve:\n${missing.join('\n')}`);
@@ -121,7 +124,7 @@ test('every nav item has a label in every language', () => {
     for (const lang of ['en', 'si', 'ta']) {
       // Labels may live in the workspace namespace or the shared shell copy
       // (e.g. navHome) — assert against the merged resources the UI actually uses.
-      const dict = resources[lang].translation;
+      const dict = i18n.getResourceBundle(lang, 'translation');
       assert.ok(dict[item.labelKey], `${item.id} has no ${lang} label (${item.labelKey})`);
     }
     if (item.status === 'planned') {
@@ -159,7 +162,7 @@ test('every literal t() key in the workspace shell resolves in all three languag
     for (const match of source.matchAll(literal)) {
       const key = match[1];
       for (const lang of ['en', 'si', 'ta']) {
-        if (!resources[lang].translation[key]) missing.push(`${file}: ${lang} → ${key}`);
+        if (!i18n.getResourceBundle(lang, 'translation')[key]) missing.push(`${file}: ${lang} → ${key}`);
       }
     }
   }

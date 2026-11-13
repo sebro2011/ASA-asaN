@@ -26,7 +26,11 @@ const { hypothesisForgeCopy, HYPOTHESIS_FORGE_KEYS } = await import(
 );
 
 const LANGUAGES = ['en', 'si', 'ta'];
-const SOURCE = readFileSync(join(root, 'src/i18n/hypothesisForge.ts'), 'utf8');
+// The dictionary is split by language so si/ta can be lazy-loaded; the source
+// checks below read the actual language modules rather than the aggregator.
+const SOURCE = LANGUAGES.map((language) =>
+  readFileSync(join(root, `src/i18n/${language}/hypothesisForge.ts`), 'utf8'),
+).join('\n');
 
 function walk(dir) {
   const out = [];
@@ -61,10 +65,14 @@ test('key sets are identical across languages', () => {
 });
 
 test('every key is defined exactly once per language block', () => {
-  const blocks = SOURCE.split(/\nconst (?:en|si|ta): Copy = \{/).slice(1);
-  assert.equal(blocks.length, 3);
-  for (const [index, block] of blocks.entries()) {
-    const body = block.split('\n};')[0];
+  const bodies = LANGUAGES.map((language) =>
+    readFileSync(join(root, `src/i18n/${language}/hypothesisForge.ts`), 'utf8'),
+  );
+  assert.equal(bodies.length, 3);
+  for (const [index, raw] of bodies.entries()) {
+    const start = raw.indexOf('= {');
+    assert.ok(start > 0, `${LANGUAGES[index]} module has no object literal`);
+    const body = raw.slice(start).split('\n};')[0];
     const keys = [...body.matchAll(/^\s{2}(hf[A-Za-z0-9]+):/gm)].map((match) => match[1]);
     const duplicates = keys.filter((key, position) => keys.indexOf(key) !== position);
     assert.deepEqual(duplicates, [], `${LANGUAGES[index]} duplicates: ${duplicates.join(', ')}`);
@@ -143,9 +151,25 @@ test('every statically referenced interface key exists', () => {
 });
 
 test('the copy is merged into the i18next resources', () => {
+  // English is merged statically; Sinhala and Tamil are merged when their bundle
+  // is fetched. Both paths must actually include the Forge copy.
+  for (const language of ['en', 'si', 'ta']) {
+    const bundle = readFileSync(join(root, `src/i18n/${language}/index.ts`), 'utf8');
+    assert.match(
+      bundle,
+      /import \{ hypothesisForge(En|Si|Ta) \} from '\.\/hypothesisForge'/,
+      `${language} bundle does not import the Forge copy`,
+    );
+    assert.match(
+      bundle,
+      /\.\.\.hypothesisForge(En|Si|Ta)/,
+      `${language} bundle does not merge the Forge copy`,
+    );
+  }
   const i18n = readFileSync(join(root, 'src/i18n.ts'), 'utf8');
-  assert.match(i18n, /import \{ hypothesisForgeCopy \} from '\.\/i18n\/hypothesisForge'/);
-  assert.match(i18n, /Object\.assign\(bucket, hypothesisForgeCopy\[lang\]\)/);
+  assert.match(i18n, /import \{ enTranslation \} from '\.\/i18n\/en\/index\.ts'/, 'English bundle is not imported');
+  assert.match(i18n, /si: \(\) => import\('\.\/i18n\/si\/index\.ts'\)/, 'Sinhala bundle is not lazy');
+  assert.match(i18n, /ta: \(\) => import\('\.\/i18n\/ta\/index\.ts'\)/, 'Tamil bundle is not lazy');
 });
 
 test('the surface is chart-frame compliant and serves all eight sections', () => {

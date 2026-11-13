@@ -56,6 +56,22 @@ function stripComments(source) {
     .replace(/(^|[^:])\/\/.*$/gm, '$1');
 }
 
+/**
+ * Blanks string literals, keeping the rest of the line in place.
+ *
+ * A secret's *name* is not a secret: the APOD notice legitimately tells an
+ * operator that `NASA_API_KEY` exists. What must not appear in browser code is a
+ * read of its value — `process.env.X`, `import.meta.env.X`, `env.X` — and those
+ * are matched against the unstripped source, so stripping strings can only
+ * remove false positives.
+ */
+function stripStrings(source) {
+  return source
+    .replace(/'(?:[^'\\\n]|\\.)*'/g, "''")
+    .replace(/"(?:[^"\\\n]|\\.)*"/g, '""')
+    .replace(/`(?:[^`\\]|\\.)*`/g, '``');
+}
+
 /* ------------------------------------------------------------ 1. the vars */
 
 const envPatterns = [
@@ -63,6 +79,12 @@ const envPatterns = [
   /getProcessEnv\(\)\.([A-Z0-9_]+)/g,
   /\benv\.([A-Z][A-Z0-9_]{2,})\b/g,
   /envValue\(env,\s*'([A-Z0-9_]+)'\)/g,
+  // `key('NAME')` — the news sources read keys through this helper.
+  /\bkey\(\s*'([A-Z][A-Z0-9_]{2,})'\s*\)/g,
+  // `export const X_KEY_ENV = 'NAME'` — a name that is only reached through a
+  // constant. Without this, renaming a variable to an indirection would quietly
+  // drop it out of the audit (which is how `GUARDIAN_NEWS_API_KEY` was missed).
+  /\b[A-Z][A-Z0-9_]*(?:ENV|ENV_NAME)\s*=\s*'([A-Z][A-Z0-9_]{2,})'/g,
 ];
 
 /** name → { files:Set, pages:Set } */
@@ -104,9 +126,11 @@ const clientFiles = walk(join(ROOT, 'src'));
 const clientLeaks = new Set();
 for (const file of clientFiles) {
   const source = stripComments(read(file));
+  const withoutStrings = stripStrings(source);
   for (const name of usage.keys()) {
     if (classify(name) !== 'secret') continue;
-    if (source.includes(name)) {
+    // Code position only: a mention inside a string is copy, not a read.
+    if (new RegExp(`\\b${name}\\b`).test(withoutStrings)) {
       clientLeaks.add(`${relative(ROOT, file)} references ${name}`);
     }
   }

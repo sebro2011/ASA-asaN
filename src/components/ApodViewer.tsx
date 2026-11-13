@@ -31,6 +31,7 @@ import { SupportedLanguage, translations } from '../i18n/translations';
 import { useFavorites } from '../utils/favorites';
 import { fetchApod, translateSpaceContent } from '@/lib/nasaApi';
 import { httpsUrl, resolveApodPlayback } from '../lib/apodMedia';
+import { useEscape } from '../app/hooks';
 import { CustomApodDatePicker } from './CustomApodDatePicker';
 import APODStoryteller from './APODStoryteller.jsx';
 import { Button, DataStateBadge, ErrorState, IconButton, LoadingState, Panel, SourceNote } from '../ui/primitives';
@@ -85,6 +86,9 @@ export const ApodViewer: React.FC<ApodViewerProps> = React.memo(({ lang, onOpenE
   const [translationPhase, setTranslationPhase] = useState<'idle' | 'pending' | 'ready' | 'failed'>('idle');
   const [copied, setCopied] = useState(false);
   const [hdOpen, setHdOpen] = useState(false);
+  // The full-resolution lightbox had no keyboard exit: Escape closed it for
+  // nobody, and the backdrop click was pointer-only.
+  useEscape(hdOpen, () => setHdOpen(false));
   const [fullResolution, setFullResolution] = useState(false);
   // Which candidate URL is on screen, and whether all of them failed. A broken
   // `hdurl` used to leave an empty panel with no way to tell what happened.

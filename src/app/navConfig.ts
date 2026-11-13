@@ -23,6 +23,7 @@ import {
   Newspaper,
   PenLine,
   Settings,
+  ShieldCheck,
   UserRound,
   type LucideIcon,
 } from 'lucide-react';
@@ -154,6 +155,14 @@ export const WORKSPACE_NAV: WorkspaceNavItem[] = [
     status: 'live',
     descriptionKey: 'wsIntelSubtitle',
   },
+  {
+    id: 'guardian',
+    route: 'guardian',
+    href: '/guardian',
+    labelKey: 'wsMenuGuardian',
+    icon: ShieldCheck,
+    status: 'live',
+  },
 ];
 
 /** Secondary surface: the preserved NASA science suite (D1). */
@@ -216,5 +225,6 @@ export const ROUTE_LABEL_KEYS: Partial<Record<RouteName, string>> = {
   profile: 'wsProfile',
   explore: 'wsExplore',
   intelligence: 'wsMenuIntelligence',
+  guardian: 'wsMenuGuardian',
   workspace: 'wsNavWorkspace',
 };

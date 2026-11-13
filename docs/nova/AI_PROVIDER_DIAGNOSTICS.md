@@ -51,8 +51,19 @@ unexplained for so long. They mean different things:
 | no answer | `keyValid` + `keyCheck` | the generation call was too slow; the separate metadata check says whether the key itself is fine |
 
 When the model is the problem, the probe tries the other known ids and reports
-`fallbackModel` (the first that answered) plus `modelsTried`, so one report
-answers both questions: *is the key good?* and *is the model good?* It also lists
+`fallbackModel` (the first that answered) plus `modelsTried` **and
+`modelAttempts`** — one row per alternative id with its own `httpStatus`, `code`
+and `ms`. Names alone cannot distinguish "this id is retired" (404) from "this id
+is busy" (503), and that distinction is the whole difference between a console
+change and waiting. So one report answers three questions: *is the key good?*,
+*is the model good?*, and *which alternative actually answers?* When the
+configured id 404s but another id answers, the report also sets
+**`suggestedModel`** and spells out the fix (`set NOVA_GEMINI_MODEL=<that id>`) —
+because a listing in `/v1beta/models` is a catalogue entry, not an entitlement to
+call the model. That is how the earlier "listed for the key, yet 404" puzzle
+resolves: Google's own 404 body named the replacement
+(`models/gemini-2.5-flash is no longer available to new users … use
+models/gemini-3.8-flash`). It also lists
 the models the key may actually call (`availableModels`, `availableModelCount`,
 read from `GET /v1beta/models` and filtered to `generateContent`). In the app,
 **Settings → AI providers** shows the model problem and that list on their own
@@ -63,6 +74,14 @@ A `503` is treated as *model-scoped* in chat: it retries the other ids once
 answered and `modelFallback: true`. If every id is refused the same way, the
 report says so — `Every model id tried was refused the same way … quota, billing
 or a project restriction` — instead of blaming the model id.
+
+Measured on production `aeb601e` (2026-11-13, 15:57:37Z / 15:59:02Z / 15:59:46Z):
+three probes in two minutes, identical — `gemini-3.8-flash` **503** ("This model is
+currently experiencing high demand…"), last fallback `gemini-2.5-flash` **404**,
+`GET /v1beta/models` **200 in 69–76 ms with 49 models including
+`gemini-2.5-flash`**, `keyValid: true`, OpenRouter **200** in 499 / 10 253 / 509 ms.
+Full table: `docs/API_STATUS_REPORT.md`. The console steps that follow from it
+(env pin, redeploy, probe, rollback) are in `docs/nova/GEMINI_ACCESS_RUNBOOK.md`.
 
 Measured on production `bce50a1` (2026-11-10 13:53 UTC): both `gemini-3.8-flash`
 and `gemini-flash-latest` answered **503 "high demand"** (852 ms and 385 ms) while

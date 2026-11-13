@@ -25,15 +25,16 @@ type PendingVideo = { id: string; videoId: string; title: string; description: s
 type Report = { id: string; videoId: string; title: string; reason: string; createdAt: string };
 type Moderation = { pending: PendingVideo[]; approved: Array<{ id: string; videoId: string; title: string; channelTitle: string }>; reports: Report[] };
 
-async function requestJson(path: string, token?: string, init?: RequestInit): Promise<any> {
+async function requestJson<T>(path: string, token?: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`/api/community${path}`, {
     ...init, cache: 'no-store', signal: init?.signal || AbortSignal.timeout(20_000),
     headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}), ...init?.headers }
   });
-  let data: any;
+  let data: unknown;
   try { data = await response.json(); } catch { throw new Error('community-unavailable'); }
-  if (!response.ok) throw new Error(typeof data?.error === 'string' ? data.error : 'community-unavailable');
-  return data;
+  const error = data && typeof data === 'object' ? (data as { error?: unknown }).error : undefined;
+  if (!response.ok) throw new Error(typeof error === 'string' ? error : 'community-unavailable');
+  return data as T;
 }
 
 /** Credentials and access tokens are kept in component memory, not localStorage. */
@@ -45,7 +46,7 @@ export function useCommunity() {
   const client = useRef<SupabaseClient | null>(null);
   useEffect(() => {
     const controller = new AbortController();
-    requestJson('/config', undefined, { signal: controller.signal }).then((config) => {
+    requestJson<{ enabled?: boolean; url?: string; publicKey?: string }>('/config', undefined, { signal: controller.signal }).then((config) => {
       if (controller.signal.aborted) return;
       if (config.enabled === true && typeof config.url === 'string' && typeof config.publicKey === 'string') {
         try {
@@ -65,9 +66,9 @@ export function useCommunity() {
   const refresh = async (accessToken = token) => {
     if (!accessToken) return;
     try {
-      const data = await requestJson('/me', accessToken);
+      const data = await requestJson<{ moderator?: boolean; submissions?: unknown }>('/me', accessToken);
       setModerator(data.moderator === true);
-      setSubmissions(Array.isArray(data.submissions) ? data.submissions : []);
+      setSubmissions(Array.isArray(data.submissions) ? (data.submissions as OwnSubmission[]) : []);
     } catch (failure) {
       if (failure instanceof Error && failure.message === 'authentication-required') clearSession();
       throw failure;
@@ -88,8 +89,8 @@ export function useCommunity() {
   const signOut = () => clearSession();
   return {
     configuration, token, moderator, submissions, authenticate, refresh, signOut,
-    request: async (path: string, init?: RequestInit) => {
-      try { return await requestJson(path, token || undefined, init); }
+    request: async <T,>(path: string, init?: RequestInit): Promise<T> => {
+      try { return await requestJson<T>(path, token || undefined, init); }
       catch (failure) {
         if (failure instanceof Error && failure.message === 'authentication-required') clearSession();
         throw failure;
@@ -199,7 +200,7 @@ function UploadDialog({ community, onClose, onSubmitted }: { community: Communit
     if (!community.token || community.configuration !== 'enabled') { setError('sfSignInNeeded'); return; }
     setBusy(true);
     try {
-      const result = await community.request('/submissions', { method: 'POST', body: JSON.stringify({ url: url.trim(), title: cleanTitle, description: cleanDescription, category }) });
+      const result = await community.request<{ status?: string }>('/submissions', { method: 'POST', body: JSON.stringify({ url: url.trim(), title: cleanTitle, description: cleanDescription, category }) });
       if (result.status !== 'pending') throw new Error('community-unavailable');
       setSuccess(true); setUrl(''); setTitle(''); setDescription(''); setCategory(''); setRights(false);
       void community.refresh().catch(() => {}); onSubmitted();
@@ -248,7 +249,7 @@ function ModerationDialog({ community, onClose, onUpdated }: { community: Commun
   const { t } = useTranslation();
   const [data, setData] = useState<Moderation | null>(null); const [error, setError] = useState('');
   const [busy, setBusy] = useState(false); const [message, setMessage] = useState('');
-  const load = async () => { const result = await community.request('/moderation'); setData({ pending: Array.isArray(result.pending) ? result.pending : [], approved: Array.isArray(result.approved) ? result.approved : [], reports: Array.isArray(result.reports) ? result.reports : [] }); };
+  const load = async () => { const result = await community.request<{ pending?: unknown; approved?: unknown; reports?: unknown }>('/moderation'); setData({ pending: Array.isArray(result.pending) ? result.pending : [], approved: Array.isArray(result.approved) ? result.approved : [], reports: Array.isArray(result.reports) ? result.reports : [] }); };
   useEffect(() => { void load().catch((failure) => setError(errorKey(failure))); }, []);
   const act = async (id: string, action: 'approve' | 'reject' | 'takedown') => {
     setBusy(true); setError(''); setMessage('');
@@ -291,7 +292,7 @@ function ReportDialog({ video, community, onClose, onSignIn }: { video: SpaceVid
   const submit = async (event: React.FormEvent) => {
     event.preventDefault(); setError(''); setBusy(true);
     try {
-      const result = await community.request(`/videos/${encodeURIComponent(video.communityId || '')}/report`, { method: 'POST', body: JSON.stringify({ reason: reason.trim() }) });
+      const result = await community.request<{ status?: string }>(`/videos/${encodeURIComponent(video.communityId || '')}/report`, { method: 'POST', body: JSON.stringify({ reason: reason.trim() }) });
       if (result.status !== 'received') throw new Error('community-unavailable');
       setSuccess(true); setReason('');
     } catch (failure) { setError(errorKey(failure)); }

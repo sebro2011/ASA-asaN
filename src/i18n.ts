@@ -1,443 +1,77 @@
 import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
-import { earthIntelligenceTranslations } from './i18n/earthIntelligence';
-import { interfaceCopy } from './i18n/interfaceCopy';
-import { pageCopy } from './i18n/pageCopy';
-import { spaceShortsCopy } from './i18n/spaceShorts';
-import { workspaceCopy } from './i18n/workspaceCopy';
-import { hypothesisForgeCopy } from './i18n/hypothesisForge';
-import { forgeResearchCopy } from './i18n/forgeResearch';
+import { enTranslation } from './i18n/en/index.ts';
 
-export const resources = {
-  en: {
-    translation: {
-      appName: 'NASA Space Explorer',
-      appSubtitle: 'Trilingual Cosmic Portal (English • සිංහල • தமிழ்)',
-      navApod: 'Cosmic APOD',
-      nav3D: '3D Space Lab',
-      navMissions: 'Landmark Missions',
-      navNews: 'NASA News Feed',
-      navExportHtml: 'Single HTML File',
-      exportPdf: 'Export Cosmic PDF',
-      generatingPdf: 'Generating PDF...',
-      langEn: 'English',
-      langSi: 'සිංහල',
-      langTa: 'தமிழ்',
-      language: 'Language',
-      selectLanguage: 'Select Language',
-      networkStatus: 'Deep Space Network Online',
-      heroTag: 'Real-Time NASA Feed & Gemini AI Dynamic Translation',
-      heroTitle1: 'Explore the Cosmos in',
-      heroTitleHighlight: 'Three Languages',
-      heroDesc: 'Astronomy Picture of the Day (APOD), interactive 3D celestial mechanics, landmark spaceflight breakdowns from Apollo to Artemis, and live deep-space discoveries translated dynamically on-the-fly.',
-      apodHeading: 'Astronomy Picture of the Day',
-      apodSubheading: 'Discover the cosmos through the lens of NASA observatories, dynamically translated into Sinhala and Tamil via Gemini AI.',
-      selectDate: 'Select Date',
-      today: 'Today',
-      yesterday: 'Yesterday',
-      randomDate: 'Random Cosmic Day',
-      viewOriginalHd: 'View Ultra HD (4K)',
-      translatingWithGemini: 'Translating dynamically with Gemini AI...',
-      translatedByAi: 'Dynamic Gemini AI Science Translation',
-      readAloud: 'Read Aloud',
-      stopAudio: 'Stop Audio',
-      copyText: 'Copy Content',
-      copiedText: 'Copied to clipboard!',
-      quickPresets: 'Iconic Archive Jumps:',
-      presetWebbDeepField: 'Webb Deep Field',
-      presetPillars: 'Pillars of Creation',
-      presetArtemisOrion: 'Artemis Orion Earthrise',
-      presetMarsPanorama: 'Mars Jezero Panorama',
-      originalEnglish: 'English (Original NASA)',
-      copyright: 'Image Credit & Copyright',
-      visualizerHeading: 'Interactive 3D Celestial & Spacecraft Lab',
-      visualizerSubheading: 'Explore real-time 3D rendered planetary bodies and spacecraft with orbital mechanics, lighting controls, and camera telemetry.',
-      targetEarth: 'Planet Earth',
-      targetMoon: 'The Moon',
-      targetMars: 'Mars (Red Planet)',
-      targetSpacecraft: 'Orion Spacecraft',
-      toggleOrbit: 'Auto Rotate',
-      toggleAtmosphere: 'Atmosphere Glow',
-      resetCamera: 'Reset Vantage',
-      telemetrySpeed: 'Orbital Velocity',
-      telemetryAltitude: 'Current Altitude',
-      telemetryDistance: 'Telemetry Range',
-      solarSystemScale: 'Scale Realism',
-      orbitControlsHint: 'Drag to rotate • Scroll to zoom • Right-click to pan',
-      missionsHeading: 'Landmark NASA Space Missions',
-      missionsSubheading: "From humankind's first steps on the lunar surface to deep-space infrared eyes and Martian robotic explorers.",
-      missionStatus: 'Status',
-      missionLaunchDate: 'Launch Date',
-      missionDestination: 'Destination',
-      missionOperator: 'Mission Control',
-      missionObjective: 'Primary Objective',
-      stepBreakdown: 'Phase-by-Phase Mission Flight Plan',
-      stepLaunch: 'Liftoff & Booster Separation',
-      stepCruise: 'Trans-Planetary Injection & Cruise',
-      stepArrival: 'Orbital Insertion & Entry',
-      stepSurface: 'Surface Deployment & Exploration',
-      stepCompletion: 'Mission Science & Legacy',
-      newsHeading: 'Live NASA Science News',
-      newsSubheading: 'Recent official press releases and breakthrough astrophysical discoveries direct from NASA headquarters.',
-      readOfficialRelease: 'Read on NASA.gov',
-      latestUpdates: 'Latest Bulletins',
-      exportModalTitle: 'Standalone Single HTML File Export',
-      exportModalDesc: 'A complete, self-contained single HTML file with embedded CSS and inline JavaScript. Works independently in any browser with no dependencies required!',
-      copyHtmlCode: 'Copy Raw HTML',
-      downloadHtmlFile: 'Download .html File',
-      openStandaloneTab: 'Open Standalone Preview',
-      close: 'Close',
-      // Earth Intelligence Lab (NASA POWER)
-      navEarthLab: 'Earth Lab',
-      earthHeading: 'Earth Intelligence Lab',
-      earthSubheading: 'Explore historical monthly temperature and rainfall for locations around the world, powered by NASA POWER.',
-      earthIntro: 'Select a location to analyze years of satellite-derived environmental observations. Compare temperature and precipitation patterns with interactive charts, yearly averages and historical summaries.',
-      earthSourceBadge: 'NASA POWER Data',
-      earthLocationLabel: 'Observation Location',
-      earthLocationSriLanka: 'Sri Lanka (Colombo)',
-      earthLocationLondon: 'London',
-      earthLocationNewYork: 'New York',
-      earthCoordinates: 'Coordinates',
-      earthTimeRange: 'Time Range',
-      earthRangeAll: 'All Years',
-      earthRange10: 'Last 10 Years',
-      earthRange5: 'Last 5 Years',
-      earthTemperatureChart: 'Monthly Air Temperature',
-      earthRainfallChart: 'Monthly Rainfall',
-      earthTemperatureChartSub: 'T2M — air temperature 2 metres above the surface',
-      earthRainfallChartSub: 'PRECTOTCORR — corrected total precipitation',
-      earthMonthlySeries: 'Monthly value',
-      earthAnnualMean: 'Annual mean',
-      earthSummaryHeading: 'Historical Data Summary',
-      earthSummaryPeriod: 'Period Covered',
-      earthSummaryPeriodValue: '{{start}} – {{end}} · {{months}} months',
-      earthSummaryLatest: 'Latest',
-      earthSummaryAvgTemp: 'Average Temperature',
-      earthSummaryMaxTemp: 'Warmest month',
-      earthSummaryMinTemp: 'Coolest month',
-      earthSummaryAvgRain: 'Average Rainfall',
-      earthSummaryMaxRain: 'Wettest month',
-      earthSummaryTotalRain: 'Mean Annual Rainfall',
-      earthWarmestYear: 'Warmest year',
-      earthCoolestYear: 'Coolest year',
-      earthWettestYear: 'Wettest year',
-      earthDriestYear: 'Driest year',
-      earthYearlyTableHeading: 'Yearly Averages',
-      earthTableYear: 'Year',
-      earthTableAvgTemp: 'Avg Temp (°C)',
-      earthTableAvgRain: 'Avg Rain (mm/day)',
-      earthTableTotalRain: 'Total Rain (mm)',
-      earthTableMonths: 'Months',
-      earthLoading: 'Downloading NASA POWER monthly observations...',
-      earthError: 'Could not load NASA POWER data. Please check your connection and try again.',
-      earthNoData: 'No valid observations were returned for this location and time range.',
-      earthRetry: 'Try Again',
-      earthRefresh: 'Refresh Data',
-      earthUnitsNote: 'Units: temperature in degrees Celsius (°C); rainfall rate in millimetres per day (mm/day); annual rainfall total in millimetres (mm).',
-      earthDisclaimer: 'Source: NASA POWER satellite-based meteorological estimates. These are model-derived grid values, not direct weather-station measurements, and are intended for education and planning — not for operational forecasting.',
-      earthMonth: 'Month',
-      earthValue: 'Value',
-      earthTooltipTemp: 'Temperature',
-      earthTooltipRain: 'Rainfall',
-      earthNoDataShort: 'No data',
-      footerPoweredBy: 'Trilingual NASA Space Exploration, APOD & Real AR Observation Portal',
-    },
-  },
-  si: {
-    translation: {
-      appName: 'නාසා විශ්ව ගවේෂකය',
-      appSubtitle: 'තුන්භාෂා අභ්‍යවකාශ ද්වාරය (සිංහල • தமிழ் • English)',
-      navApod: 'දවසේ තාරකා ඡායාරූපය',
-      nav3D: '3D අභ්‍යවකාශගාරය',
-      navMissions: 'ඓතිහාසික මෙහෙයුම්',
-      navNews: 'නාසා සජීවී පුවත්',
-      navExportHtml: 'තනි HTML ගොනුව',
-      exportPdf: 'PDF වාර්තාව බාගන්න',
-      generatingPdf: 'PDF වාර්තාව සකසමින්...',
-      langEn: 'English',
-      langSi: 'සිංහල',
-      langTa: 'தமிழ்',
-      language: 'භාෂාව',
-      selectLanguage: 'භාෂාව තෝරන්න',
-      networkStatus: 'නාසා ගැඹුරු අභ්‍යවකාශ ජාලය සක්‍රියයි',
-      heroTag: 'නාසා සජීවී දත්ත සහ Gemini AI ස්වභාවික සිංහල පරිවර්තනය',
-      heroTitle1: 'විශ්වයේ විස්මිත අසිරිය',
-      heroTitleHighlight: 'සිංහල බසින් විඳගන්න',
-      heroDesc: 'නාසා ආයතනයේ දවසේ තාරකා විද්‍යා ඡායාරූපය (APOD), ත්‍රිමාන (3D) අභ්‍යවකාශ ආකෘති, ඇපලෝ සිට ආටෙමිස් දක්වා ඓතිහාසික චන්ද්‍ර මෙහෙයුම් සහ සජීවී විද්‍යා පුවත් එකම වේදිකාවකින්.',
-      apodHeading: 'දවසේ තාරකා විද්‍යා ඡායාරූපය (APOD)',
-      apodSubheading: 'නාසා නිරීක්ෂණාගාර මඟින් ග්‍රහණය කරගත් විශ්වයේ අසිරිය, Gemini AI මඟින් නිරවුල් සහ ස්වභාවික සිංහල භාෂාවට පරිවර්තනය කර රසවිඳින්න.',
-      selectDate: 'දිනය තෝරන්න',
-      today: 'අද දිනය',
-      yesterday: 'ඊයේ දිනය',
-      randomDate: 'අහඹු විශ්ව දිනය',
-      viewOriginalHd: 'අධි-විභේදන (4K) ඡායාරූපය',
-      translatingWithGemini: 'Gemini AI මඟින් සිංහල විද්‍යාත්මක පරිවර්තනය සකසමින් පවතී...',
-      translatedByAi: 'Gemini AI ස්වභාවික විද්‍යා පරිවර්තනය',
-      readAloud: 'හඬින් අසන්න',
-      stopAudio: 'හඬ නවත්වන්න',
-      copyText: 'පෙළ පිටපත් කරන්න',
-      copiedText: 'සාර්ථකව පිටපත් විය!',
-      quickPresets: 'සුප්‍රකට විශ්ව සංරක්ෂිත:',
-      presetWebbDeepField: 'ජේම්ස් වෙබ් ගැඹුරු විශ්වය',
-      presetPillars: 'මැවීමේ කුළුණු (Pillars)',
-      presetArtemisOrion: 'ආටෙමිස් ඔරායන් චන්ද්‍ර දසුන',
-      presetMarsPanorama: 'අඟහරු ජෙසීරෝ පරිදර්ශනය',
-      originalEnglish: 'මූලික ඉංග්‍රීසි (Original)',
-      copyright: 'ඡායාරූප හිමිකම',
-      visualizerHeading: 'අන්තර්ක්‍රියාකාරී 3D අභ්‍යවකාශ සහ යානා නිරීක්ෂණාගාරය',
-      visualizerSubheading: 'ග්‍රහලෝක කක්ෂ, වායුගෝලීය ආලෝකකරණය සහ අභ්‍යවකාශ යානා ආකෘති ත්‍රිමාන (3D) තාක්ෂණයෙන් තත්‍ය කාලීනව නිරීක්ෂණය කරන්න.',
-      targetEarth: 'පෘථිවි ග්‍රහලෝකය',
-      targetMoon: 'චන්ද්‍රයා (සඳ)',
-      targetMars: 'අඟහරු (රතු ග්‍රහයා)',
-      targetSpacecraft: 'ඔරායන් අභ්‍යවකාශ යානය',
-      toggleOrbit: 'ස්වයංක්‍රීය භ්‍රමණය',
-      toggleAtmosphere: 'වායුගෝලීය දීප්තිය',
-      resetCamera: 'කැමරාව මුල් පිහිටුමට',
-      telemetrySpeed: 'කක්ෂීය ප්‍රවේගය',
-      telemetryAltitude: 'වර්තමාන උන්නතාංශය',
-      telemetryDistance: 'දුරස්ථ දත්ත මිනුම',
-      solarSystemScale: 'පරිමාණ යථාර්ථවාදය',
-      orbitControlsHint: 'කරකැවීමට Mouse අදින්න • විශාලනයට Scroll කරන්න • පෑන් කිරීමට Right-click කරන්න',
-      missionsHeading: 'නාසා හි ඓතිහාසික අභ්‍යවකාශ මෙහෙයුම්',
-      missionsSubheading: 'මිනිසා සඳ මත පා තැබූ ඇපලෝ 11 සිට, ආටෙමිස්, ජේම්ස් වෙබ් දුරේක්ෂය සහ අඟහරු රෝවර දක්වා වික්‍රමාන්විත ගමන් මඟ.',
-      missionStatus: 'තත්ත්වය',
-      missionLaunchDate: 'දියත් කළ දිනය',
-      missionDestination: 'ඉලක්කය',
-      missionOperator: 'මෙහෙයුම් මධ්‍යස්ථානය',
-      missionObjective: 'ප්‍රධාන අරමුණ',
-      stepBreakdown: 'මෙහෙයුමේ පියවරෙන් පියවර ගමන් සටහන',
-      stepLaunch: 'ගුවන්ගත වීම සහ රොකට් වෙන්වීම',
-      stepCruise: 'ග්‍රහලෝකාන්තර ගමන් මඟ',
-      stepArrival: 'කක්ෂගත වීම සහ ඇතුළු වීම',
-      stepSurface: 'පෘෂ්ඨීය ගවේෂණය හා සාම්පල ලබාගැනීම',
-      stepCompletion: 'විද්‍යාත්මක සොයාගැනීම් සහ උරුමය',
-      newsHeading: 'නාසා සජීවී විද්‍යා පුවත්',
-      newsSubheading: 'නාසා මූලස්ථානයෙන් නිකුත් වන නවතම නිල මාධ්‍ය නිවේදන සහ අභ්‍යවකාශ සොයාගැනීම් පිළිබඳ තොරතුරු.',
-      readOfficialRelease: 'NASA.gov හි කියවන්න',
-      latestUpdates: 'නවතම ප්‍රවෘත්ති',
-      exportModalTitle: 'ස්වාධීන තනි HTML ගොනුව (Single HTML Export)',
-      exportModalDesc: 'CSS සහ JavaScript සියල්ල ඇතුළත් කර සකස් කළ ස්වාධීන තනි HTML ගොනුවකි. ඕනෑම වෙබ් බ්‍රවුසරයක කිසිදු බාහිර අවශ්‍යතාවයකින් තොරව සෘජුවම ක්‍රියාත්මක කළ හැක!',
-      copyHtmlCode: 'HTML කේතය පිටපත් කරන්න',
-      downloadHtmlFile: '.html ගොනුව බාගන්න',
-      openStandaloneTab: 'තනි ගොනුව පෙරදසුන් කරන්න',
-      close: 'වසන්න',
-      // Earth Intelligence Lab (NASA POWER)
-      navEarthLab: 'පෘථිවි පරීක්ෂණාගාරය',
-      earthHeading: 'පෘථිවි බුද්ධි විද්‍යාගාරය',
-      earthSubheading: 'NASA POWER තාක්ෂණය භාවිතා කරමින් ලොව පුරා ස්ථාන සඳහා ඓතිහාසික මාසික උෂ්ණත්වය සහ වර්ෂාපතනය අධ්‍යයනය කරන්න.',
-      earthIntro: 'ස්ථානයක් තෝරාගෙන වසර ගණනාවක චන්ද්‍රිකා-නිපදවූ පාරිසරික නිරීක්ෂණ විශ්ලේෂණය කරන්න. අන්තර්ක්‍රියාකාරී ප්‍රස්ථාර, වාර්ෂික සාමාන්‍ය සහ ඓතිහාසික සාරාංශ මගින් උෂ්ණත්ව සහ වර්ෂාපතන රටා සසඳන්න.',
-      earthSourceBadge: 'NASA POWER දත්ත',
-      earthLocationLabel: 'නිරීක්ෂණ ස්ථානය',
-      earthLocationSriLanka: 'ශ්‍රී ලංකාව (කොළඹ)',
-      earthLocationLondon: 'ලන්ඩන්',
-      earthLocationNewYork: 'නිව් යෝර්ක්',
-      earthCoordinates: 'ඛණ්ඩාංක',
-      earthTimeRange: 'කාල සීමාව',
-      earthRangeAll: 'සියලු වසර',
-      earthRange10: 'පසුගිය වසර 10',
-      earthRange5: 'පසුගිය වසර 5',
-      earthTemperatureChart: 'මාසික වායු උෂ්ණත්වය',
-      earthRainfallChart: 'මාසික වර්ෂාපතනය',
-      earthTemperatureChartSub: 'T2M — පෘෂ්ඨයෙන් මීටර් 2ක් ඉහළින් ඇති වායු උෂ්ණත්වය',
-      earthRainfallChartSub: 'PRECTOTCORR — නිවැරදි කළ මුළු වර්ෂාපතනය',
-      earthMonthlySeries: 'මාසික අගය',
-      earthAnnualMean: 'වාර්ෂික සාමාන්‍යය',
-      earthSummaryHeading: 'ඓතිහාසික දත්ත සාරාංශය',
-      earthSummaryPeriod: 'ආවරණය වන කාලය',
-      earthSummaryPeriodValue: '{{start}} – {{end}} · මාස {{months}}',
-      earthSummaryLatest: 'නවතම',
-      earthSummaryAvgTemp: 'සාමාන්‍ය උෂ්ණත්වය',
-      earthSummaryMaxTemp: 'උණුසුම්ම මාසය',
-      earthSummaryMinTemp: 'සීතලම මාසය',
-      earthSummaryAvgRain: 'සාමාන්‍ය වර්ෂාපතනය',
-      earthSummaryMaxRain: 'වැඩිපුරම වැසි ඇදහැළුණු මාසය',
-      earthSummaryTotalRain: 'සාමාන්‍ය වාර්ෂික වර්ෂාපතනය',
-      earthWarmestYear: 'උණුසුම්ම වසර',
-      earthCoolestYear: 'සීතලම වසර',
-      earthWettestYear: 'වැඩිපුරම වැසි ඇදහැළුණු වසර',
-      earthDriestYear: 'වියළිම වසර',
-      earthYearlyTableHeading: 'වසර අනුව සාමාන්‍ය',
-      earthTableYear: 'වසර',
-      earthTableAvgTemp: 'සාමාන්‍ය උෂ්ණත්වය (°C)',
-      earthTableAvgRain: 'සාමාන්‍ය වර්ෂාපතනය (mm/day)',
-      earthTableTotalRain: 'මුළු වර්ෂාපතනය (mm)',
-      earthTableMonths: 'මාස',
-      earthLoading: 'NASA POWER මාසික නිරීක්ෂණ බාගැනෙමින් පවතී...',
-      earthError: 'NASA POWER දත්ත ලබාගැනීමට නොහැකි විය. ඔබේ සම්බන්ධතාව පරීක්ෂා කර නැවත උත්සාහ කරන්න.',
-      earthNoData: 'මෙම ස්ථානය සහ කාල සීමාව සඳහා වලංගු නිරීක්ෂණ ලැබී නොමැත.',
-      earthRetry: 'නැවත උත්සාහ කරන්න',
-      earthRefresh: 'දත්ත නැවුම් කරන්න',
-      earthUnitsNote: 'ඒකක: උෂ්ණත්වය සෙල්සියස් අංශක (°C) වලින්; වර්ෂාපතන අනුපාතය මිලිමීටර/දින (mm/day) වලින්; වාර්ෂික වර්ෂාපතන එකතුව මිලිමීටර (mm) වලින්.',
-      earthDisclaimer: 'මූලාශ්‍රය: NASA POWER චන්ද්‍රිකා-පදනම් කාලගුණ ඇස්තමේන්තු. මේවා ආකෘති මගින් නිපදවූ ජාලක අගයන් වන අතර, සෘජු කාලගුණ මිනුම් නොවේ. අධ්‍යාපනික හා සැලසුම් අරමුණු සඳහා පමණි.',
-      earthMonth: 'මාසය',
-      earthValue: 'අගය',
-      earthTooltipTemp: 'උෂ්ණත්වය',
-      earthTooltipRain: 'වර්ෂාපතනය',
-      earthNoDataShort: 'දත්ත නොමැත',
-      footerPoweredBy: 'තිරෛභාෂික නාසා අභ්‍යවකාශ ගවේෂණ සහ සැබෑ AR තාරකා නිරීක්ෂණ පද්ධතිය',
-    },
-  },
-  ta: {
-    translation: {
-      appName: 'நாசா விண்வெளி ஆய்வு மையம்',
-      appSubtitle: 'முமொழி விண்வெளி தளம் (தமிழ் • සිංහල • English)',
-      navApod: 'நாளின் வானியல் படம்',
-      nav3D: '3D விண்வெளி ஆய்வகம்',
-      navMissions: 'வரலாற்றுப் பணிகள்',
-      navNews: 'நாசா நேரலைச் செய்திகள்',
-      navExportHtml: 'ஒற்றை HTML கோப்பு',
-      exportPdf: 'PDF அறிக்கையைப் பதிவிறக்கு',
-      generatingPdf: 'PDF அறிக்கை தயாராகிறது...',
-      langEn: 'English',
-      langSi: 'සිංහල',
-      langTa: 'தமிழ்',
-      language: 'மொழி',
-      selectLanguage: 'மொழியைத் தேர்ந்தெடுக்கவும்',
-      networkStatus: 'நாசா ஆழ விண்வெளி நெட்வொர்க் ஆன்லைனில் உள்ளது',
-      heroTag: 'நாசா நேரலை தரவு & Gemini AI துல்லிய தமிழ் மொழிபெயர்ப்பு',
-      heroTitle1: 'பிரபஞ்சத்தின் அதிசயங்களை',
-      heroTitleHighlight: 'தமிழில் ஆராயுங்கள்',
-      heroDesc: 'நாசாவின் நாளின் வானியல் புகைப்படம் (APOD), 3D கோளப் பார்வை, வரலாற்று விண்வெளி பயணங்களின் விரிவான தகவல்கள் மற்றும் நேரலைச் செய்திகள்.',
-      apodHeading: 'நாளின் வானியல் புகைப்படம் (APOD)',
-      apodSubheading: 'நாசாவின் தொலைநோக்கிகள் படம் பிடித்த பிரபஞ்ச விந்தைகளை, Gemini AI தொழில்நுட்பத்துடன் துல்லியமான தமிழ் மொழியில் கண்டு மகிழுங்கள்.',
-      selectDate: 'தேதியைத் தேர்ந்தெடுக்கவும்',
-      today: 'இன்று',
-      yesterday: 'நேற்று',
-      randomDate: 'ஏதேனும் ஒரு விண்வெளி நாள்',
-      viewOriginalHd: 'முழு HD (4K) காட்சி',
-      translatingWithGemini: 'Gemini AI மூலம் தமிழில் மொழிபெயர்க்கப்படுகிறது...',
-      translatedByAi: 'Gemini AI துல்லிய தமிழ் அறிவியல் மொழிபெயர்ப்பு',
-      readAloud: 'வாசித்து கேட்க',
-      stopAudio: 'ஒலியை நிறுத்து',
-      copyText: 'உரையை நகலெடு',
-      copiedText: 'நகலெடுக்கப்பட்டது!',
-      quickPresets: 'முக்கிய விண்வெளி காப்பகங்கள்:',
-      presetWebbDeepField: 'வெப் ஆழ விண்வெளிப் பார்வை',
-      presetPillars: 'படைப்பின் தூண்கள் (Pillars)',
-      presetArtemisOrion: 'ஆர்ட்டெமிஸ் ஓரியன் சந்திரக் காட்சி',
-      presetMarsPanorama: 'செவ்வாய் ஜெசெரோ பரந்த பார்வை',
-      originalEnglish: 'அசல் ஆங்கிலம் (Original)',
-      copyright: 'பட உரிமை & கடன்',
-      visualizerHeading: 'ஊடாடும் 3D விண்வெளி & விண்கல ஆய்வகம்',
-      visualizerSubheading: 'கோள்கள், விண்கலங்கள் மற்றும் வளிமண்டல ஒளிர்வை முப்பரிமாண (3D) தொழில்நுட்பத்தில் நிகழ்நேரத்தில் ஆராயுங்கள்.',
-      targetEarth: 'பூமி கிரகம்',
-      targetMoon: 'சந்திரன் (நிலவு)',
-      targetMars: 'செவ்வாய் (சிவப்பு கிரகம்)',
-      targetSpacecraft: 'ஓரியன் விண்கலம்',
-      toggleOrbit: 'சுய சுழற்சி',
-      toggleAtmosphere: 'வளிமண்டல ஒளிர்வு',
-      resetCamera: 'கேமராவை மீட்டமை',
-      telemetrySpeed: 'சுற்றுப்பாதை வேகம்',
-      telemetryAltitude: 'தற்போதைய உயரம்',
-      telemetryDistance: 'தொலைத்தொடர்பு வரம்பு',
-      solarSystemScale: 'அளவு யதார்த்தம்',
-      orbitControlsHint: 'சுழற்ற இழுக்கவும் • பெரிதாக்க ஸ்க்ரோல் செய்யவும் • நகர்த்த வலது கிளிக் செய்யவும்',
-      missionsHeading: 'நாசாவின் வரலாற்றுச் சிறப்புமிக்க விண்வெளிப் பணிகள்',
-      missionsSubheading: 'மனிதன் நிலவில் காலடி வைத்த அப்பல்லோ 11 முதல், ஆர்ட்டெமிஸ், ஜேம்ஸ் வெப் மற்றும் செவ்வாய் ரோவர்கள் வரை.',
-      missionStatus: 'நிலை',
-      missionLaunchDate: 'ஏவப்பட்ட தேதி',
-      missionDestination: 'இலக்கு',
-      missionOperator: 'கட்டுப்பாட்டு மையம்',
-      missionObjective: 'முதன்மை நோக்கம்',
-      stepBreakdown: 'படிப்படியான விண்வெளி பயண திட்டம்',
-      stepLaunch: 'ஏவுதல் மற்றும் பூஸ்டர் பிரிப்பு',
-      stepCruise: 'கோள்களுக்கிடையேயான பயணம்',
-      stepArrival: 'சுற்றுப்பாதையில் நுழைதல்',
-      stepSurface: 'தரை இறங்குதல் & ஆய்வு',
-      stepCompletion: 'அறிவியல் சாதனைகள் மற்றும் தாக்கம்',
-      newsHeading: 'நாசா நேரலை அறிவியல் செய்திகள்',
-      newsSubheading: 'நாசா தலைமையகத்திலிருந்து நேரடியாக வெளியாகும் சமீபத்திய அதிகாரப்பூர்வ செய்திகள் மற்றும் கண்டுபிடிப்புகள்.',
-      readOfficialRelease: 'NASA.gov இல் வாசிக்க',
-      latestUpdates: 'சமீபத்திய அறிவிப்புகள்',
-      exportModalTitle: 'தனித்த ஒற்றை HTML கோப்பு (Single HTML Export)',
-      exportModalDesc: 'CSS மற்றும் JavaScript அனைத்தையும் உள்ளடக்கிய முழுமையான ஒற்றை HTML கோப்பு. எந்த உலாவியிலும் வெளிப்புற இணைப்புகள் இன்றி நேரடியாக இயங்கும்!',
-      copyHtmlCode: 'HTML குறியீட்டை நகலெடு',
-      downloadHtmlFile: '.html கோப்பைப் பதிவிறக்கு',
-      openStandaloneTab: 'முன்னோட்டத்தைத் திற',
-      close: 'மூடு',
-      // Earth Intelligence Lab (NASA POWER)
-      navEarthLab: 'பூமி ஆய்வகம்',
-      earthHeading: 'பூமி நுண்ணறிவு ஆய்வகம்',
-      earthSubheading: 'NASA POWER மூலம் உலகெங்கிலும் உள்ள இடங்களின் வரலாற்று மாதாந்திர வெப்பநிலை மற்றும் மழைப்பொழிவை ஆராயுங்கள்.',
-      earthIntro: 'ஒரு இடத்தைத் தேர்ந்தெடுத்து பல ஆண்டுகளின் செயற்கைக்கோள் சுற்றுச்சூழல் கண்காணிப்புகளை ஆய்வு செய்யுங்கள். ஊடாடும் விளக்கப்படங்கள், ஆண்டு சராசரிகள் மற்றும் வரலாற்று சுருக்கங்கள் மூலம் வெப்பநிலை மற்றும் மழைப்பொழிவு முறைகளை ஒப்பிடுங்கள்.',
-      earthSourceBadge: 'NASA POWER தரவு',
-      earthLocationLabel: 'கண்காணிப்பு இடம்',
-      earthLocationSriLanka: 'இலங்கை (கொழும்பு)',
-      earthLocationLondon: 'லண்டன்',
-      earthLocationNewYork: 'நியூயார்க்',
-      earthCoordinates: 'ஆயத்தொலைகள்',
-      earthTimeRange: 'கால வரம்பு',
-      earthRangeAll: 'அனைத்து ஆண்டுகள்',
-      earthRange10: 'கடந்த 10 ஆண்டுகள்',
-      earthRange5: 'கடந்த 5 ஆண்டுகள்',
-      earthTemperatureChart: 'மாதாந்திர காற்று வெப்பநிலை',
-      earthRainfallChart: 'மாதாந்திர மழைப்பொழிவு',
-      earthTemperatureChartSub: 'T2M — மேற்பரப்பிலிருந்து 2 மீட்டர் உயரத்தில் காற்று வெப்பநிலை',
-      earthRainfallChartSub: 'PRECTOTCORR — திருத்தப்பட்ட மொத்த மழைப்பொழிவு',
-      earthMonthlySeries: 'மாதாந்திர மதிப்பு',
-      earthAnnualMean: 'ஆண்டு சராசரி',
-      earthSummaryHeading: 'வரலாற்று தரவு சுருக்கம்',
-      earthSummaryPeriod: 'உள்ளடக்கிய காலம்',
-      earthSummaryPeriodValue: '{{start}} – {{end}} · {{months}} மாதங்கள்',
-      earthSummaryLatest: 'சமீபத்திய',
-      earthSummaryAvgTemp: 'சராசரி வெப்பநிலை',
-      earthSummaryMaxTemp: 'வெப்பமான மாதம்',
-      earthSummaryMinTemp: 'குளிர்ந்த மாதம்',
-      earthSummaryAvgRain: 'சராசரி மழைப்பொழிவு',
-      earthSummaryMaxRain: 'அதிக மழை பெய்த மாதம்',
-      earthSummaryTotalRain: 'சராசரி ஆண்டு மழைப்பொழிவு',
-      earthWarmestYear: 'வெப்பமான ஆண்டு',
-      earthCoolestYear: 'குளிர்ந்த ஆண்டு',
-      earthWettestYear: 'அதிக மழை பெய்த ஆண்டு',
-      earthDriestYear: 'வறண்ட ஆண்டு',
-      earthYearlyTableHeading: 'ஆண்டு சராசரிகள்',
-      earthTableYear: 'ஆண்டு',
-      earthTableAvgTemp: 'சராசரி வெப்பநிலை (°C)',
-      earthTableAvgRain: 'சராசரி மழை (mm/day)',
-      earthTableTotalRain: 'மொத்த மழை (mm)',
-      earthTableMonths: 'மாதங்கள்',
-      earthLoading: 'NASA POWER மாதாந்திர கண்காணிப்புகள் பதிவிறக்கப்படுகின்றன...',
-      earthError: 'NASA POWER தரவைப் பெற முடியவில்லை. உங்கள் இணைப்பைச் சரிபார்த்து மீண்டும் முயற்சிக்கவும்.',
-      earthNoData: 'இந்த இடம் மற்றும் கால வரம்பிற்கு செல்லுபடியாகும் கண்காணிப்புகள் இல்லை.',
-      earthRetry: 'மீண்டும் முயற்சிக்கவும்',
-      earthRefresh: 'தரவைப் புதுப்பிக்கவும்',
-      earthUnitsNote: 'அலகுகள்: வெப்பநிலை செல்சியஸ் டிகிரியில் (°C); மழை விகிதம் மில்லிமீட்டர்/நாள் (mm/day); ஆண்டு மழைப்பொழிவு மொத்தம் மில்லிமீட்டரில் (mm).',
-      earthDisclaimer: 'ஆதாரம்: NASA POWER செயற்கைக்கோள் அடிப்படையிலான வானிலை மதிப்பீடுகள். இவை மாதிரி உருவாக்கப்பட்ட கட்ட மதிப்புகள், நேரடி வானிலை நிலைய அளவீடுகள் அல்ல. கல்வி மற்றும் திட்டமிடல் நோக்கங்களுக்காக மட்டுமே.',
-      earthMonth: 'மாதம்',
-      earthValue: 'மதிப்பு',
-      earthTooltipTemp: 'வெப்பநிலை',
-      earthTooltipRain: 'மழைப்பொழிவு',
-      earthNoDataShort: 'தரவு இல்லை',
-      footerPoweredBy: 'மும்மொழி நாசா விண்வெளி ஆராய்ச்சி மற்றும் நேரலை AR விண்மீன் கண்காணிப்பு அமைப்பு',
-    },
-  },
+/**
+ * Trilingual resources, split by language.
+ *
+ * English is imported statically because it is the default and the fallback.
+ * Sinhala and Tamil are dynamic imports: measured at 740 KB raw / 121 KB gzip,
+ * the three languages together were roughly half of the first-load JavaScript,
+ * and a visitor who reads English never needed two thirds of it.
+ *
+ * The split changes only *when* a dictionary is downloaded. Key parity is still
+ * enforced by the test suite, and the source data was verified byte-identical to
+ * the single-file originals when it was moved.
+ */
+
+export const resources: Record<string, { translation: Record<string, string> }> = {
+  en: { translation: enTranslation },
 };
 
-// ---------------------------------------------------------------------------
-// Earth Intelligence Lab keys (src/i18n/earthIntelligence.ts) are merged into
-// the existing trilingual resources so the Lab stays translatable without
-// touching the rest of the site's dictionaries.
-// ---------------------------------------------------------------------------
-(['en', 'si', 'ta'] as const).forEach((lang) => {
-  const bucket = (resources as any)?.[lang]?.translation;
-  if (bucket) {
-    Object.assign(bucket, earthIntelligenceTranslations[lang]);
-    // Redesigned shell / home / page-framing copy.
-    Object.assign(bucket, interfaceCopy[lang]);
-    Object.assign(bucket, pageCopy[lang]);
-    Object.assign(bucket, spaceShortsCopy[lang]);
-    // NOVA workspace shell / home / planned-module copy (Phase 3A).
-    Object.assign(bucket, workspaceCopy[lang]);
-    // NOVA Hypothesis Forge interface copy (scientific investigation mode).
-    Object.assign(bucket, hypothesisForgeCopy[lang]);
-    // Forge research workspace (projects / hypotheses / evidence / versions).
-    Object.assign(bucket, forgeResearchCopy[lang as 'en' | 'si' | 'ta']);
-  }
-});
+export type AppLanguage = 'en' | 'si' | 'ta';
+
+const LOCALE_LOADERS = {
+  si: () => import('./i18n/si/index.ts'),
+  ta: () => import('./i18n/ta/index.ts'),
+} as const;
+
+const namespaced = new Set<AppLanguage>(['en']);
+const inFlight = new Map<AppLanguage, Promise<void>>();
+
+/**
+ * Loads a language bundle once and registers it with i18next.
+ *
+ * Concurrent callers share one import: two clicks on "සිංහල" must not download
+ * the chunk twice. An unknown language resolves immediately — i18next then falls
+ * back to English, which is the pre-existing behaviour.
+ */
+export async function ensureLocale(language?: string): Promise<void> {
+  const code = String(language || '').slice(0, 2) as AppLanguage;
+  if (code !== 'si' && code !== 'ta') return;
+  if (namespaced.has(code)) return;
+
+  const pending = inFlight.get(code);
+  if (pending) return pending;
+
+  const load = (code === 'si' ? LOCALE_LOADERS.si() : LOCALE_LOADERS.ta())
+    .then((module: { siTranslation?: Record<string, string>; taTranslation?: Record<string, string> }) => {
+      const bundle = (code === 'si' ? module.siTranslation : module.taTranslation) || {};
+      i18n.addResourceBundle(code, 'translation', bundle, true, true);
+      resources[code] = { translation: bundle };
+      namespaced.add(code);
+    })
+    .catch((failure) => {
+      // Do not cache a failure: the next switch retries instead of leaving the
+      // user on English for the rest of the session.
+      console.error(`[i18n] could not load the ${code} bundle`, failure);
+    })
+    .finally(() => {
+      inFlight.delete(code);
+    });
+
+  inFlight.set(code, load);
+  return load;
+}
+
+/** Loads every language — used by the i18n audit and by the test suite. */
+export async function loadAllLocales(): Promise<void> {
+  await Promise.all([ensureLocale('si'), ensureLocale('ta')]);
+}
 
 // Honour the language already saved by the header (or its legacy provider).
 // Storage may be unavailable in private browsing or server-side tests.
-function initialLanguage(): 'en' | 'si' | 'ta' {
+function initialLanguage(): AppLanguage {
   try {
     const saved = localStorage.getItem('i18nextLng') || localStorage.getItem('nasa_preferred_lang');
     if (saved === 'en' || saved === 'si' || saved === 'ta') return saved;
@@ -445,12 +79,13 @@ function initialLanguage(): 'en' | 'si' | 'ta' {
   return 'en';
 }
 
-// Initialize i18next
+// Initialize i18next with English already in memory, so `t()` is usable on the
+// very first render and in server-side tests that never touch a browser.
 i18n
   .use(initReactI18next)
   .init({
     resources,
-    lng: initialLanguage(),
+    lng: 'en',
     fallbackLng: 'en',
     interpolation: {
       escapeValue: false, // React already escapes values
@@ -460,6 +95,36 @@ i18n
       caches: ['localStorage'],
     },
   });
+
+/**
+ * Every existing caller keeps calling `i18n.changeLanguage(code)` — the header,
+ * the command palette, the settings surface and the tests. Wrapping the method
+ * means none of them has to know that a switch may need to download a bundle
+ * first, and no surface can render raw keys because it changed language too
+ * early.
+ */
+type ChangeLanguage = typeof i18n.changeLanguage;
+const changeLanguageFromI18next: ChangeLanguage = i18n.changeLanguage.bind(i18n);
+i18n.changeLanguage = (async (language?: string, callback?: Parameters<ChangeLanguage>[1]) => {
+  await ensureLocale(language);
+  return changeLanguageFromI18next(language, callback);
+}) as ChangeLanguage;
+
+/**
+ * Applies the stored preference before the first paint.
+ *
+ * Called once from `src/main.tsx`. A returning Sinhala or Tamil reader therefore
+ * never sees an English flash; a first-time visitor resolves immediately because
+ * English is already loaded.
+ */
+export async function ensureInitialLanguage(): Promise<void> {
+  const code = initialLanguage();
+  if (code === 'en') return;
+  await ensureLocale(code);
+  if (i18n.language !== code) {
+    await changeLanguageFromI18next(code);
+  }
+}
 
 // Keep <html lang> in sync with the active language. This is a WCAG 3.1.1
 // requirement (screen readers pick pronunciation from it) and it applies to both

@@ -158,9 +158,11 @@ export default function AnalystPanel({ context, lang, aiCapable }: AnalystPanelP
 
       setAnswer({
         sections: body.sections || [],
-        sources: (body.sources || []).map((source: any) => ({
-          label: source.label,
-          url: source.url,
+        // The server normalises every source to this shape (server/earth/providers.ts
+        // `normaliseAnswer`); anything else it sends is dropped to a label/URL pair.
+        sources: ((body.sources || []) as Array<{ label?: string; url?: string; detail?: string }>).map((source) => ({
+          label: String(source.label || source.url || ''),
+          url: String(source.url || ''),
           retrievedAt: body.generatedAt || new Date().toISOString(),
           detail: source.detail
         })),

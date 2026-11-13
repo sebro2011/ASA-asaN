@@ -14,6 +14,7 @@ import {
   Layers,
   ChevronRight
 } from 'lucide-react';
+import { a11yLabel } from '../lib/a11yLabels';
 
 // Curated default Mars Perseverance Jezero Crater Hotspots
 const DEFAULT_MARS_HOTSPOTS = [
@@ -173,6 +174,7 @@ function MarsImageTagger({
 
                 <button
                   type="button"
+                  aria-label={a11yLabel('close', lang)}
                   onClick={() => setActiveHotspot(null)}
                   className="p-1 rounded-[8px] bg-white/[0.05] hover:bg-white/[0.1] text-ink-3 hover:text-ink transition"
                 >

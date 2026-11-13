@@ -15,6 +15,7 @@ import {
   Telescope
 } from 'lucide-react';
 import { SupportedLanguage } from '../i18n/translations';
+import { a11yLabel } from '../lib/a11yLabels';
 
 interface CustomApodDatePickerProps {
   selectedDate: string;
@@ -197,6 +198,7 @@ export const CustomApodDatePicker: React.FC<CustomApodDatePickerProps> = ({
 
               <button
                 type="button"
+                aria-label={a11yLabel('close', lang)}
                 onClick={() => setIsOpen(false)}
                 className="p-1 rounded-[8px] text-ink-3 hover:text-ink hover:bg-white/10 transition"
               >
@@ -208,6 +210,7 @@ export const CustomApodDatePicker: React.FC<CustomApodDatePickerProps> = ({
             <div className="flex items-center justify-between gap-2 mb-4 apple-liquid-glass p-2 rounded-[14px]">
               <button
                 type="button"
+                aria-label={a11yLabel('previousMonth', lang)}
                 onClick={handlePrevMonth}
                 disabled={viewYear === 1995 && viewMonth <= 5}
                 className="p-1.5 rounded-[10px] hover:bg-white/10 text-ink-2 hover:text-ink disabled:opacity-30 disabled:cursor-not-allowed transition"
@@ -245,6 +248,7 @@ export const CustomApodDatePicker: React.FC<CustomApodDatePickerProps> = ({
 
               <button
                 type="button"
+                aria-label={a11yLabel('nextMonth', lang)}
                 onClick={handleNextMonth}
                 disabled={viewYear === today.getFullYear() && viewMonth >= today.getMonth()}
                 className="p-1.5 rounded-[10px] hover:bg-surface-2 text-ink-2 hover:text-ink disabled:opacity-30 disabled:cursor-not-allowed transition"

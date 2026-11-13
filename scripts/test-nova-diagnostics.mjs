@@ -335,6 +335,10 @@ test('a bogus NOVA_GEMINI_MODEL is named, and the default is probed instead', as
   assert.match(gemini.fallbackModel.model, /^gemini-/);
   assert.equal(gemini.fallbackModel.ok, true, 'the retry proves another model works with this key');
   assert.match(gemini.hint, /answered with the same key/);
+  // The report has to end in an action, not in "review your configuration".
+  assert.equal(gemini.suggestedModel, gemini.fallbackModel.model, 'the id that answered is offered as a fix');
+  assert.match(gemini.hint, new RegExp(`set NOVA_GEMINI_MODEL=${gemini.fallbackModel.model}`));
+  assert.match(gemini.hint, /not an entitlement/, 'being listed is not being callable');
   assert.equal(calls.filter((url) => url.includes('gemini-9.9-ultra')).length, 1, 'the bad id is tried once, not looped');
 });
 
@@ -413,6 +417,20 @@ test('when every Gemini model id is busy, the report says so and lists what the 
   assert.equal(gemini.fallbackModel.ok, false, 'the alternatives were tried and also refused');
   assert.ok(gemini.modelsTried.length > 1, 'more than one id was attempted');
   assert.match(gemini.hint, /No alternative model probe succeeded/);
+  // Every failed attempt keeps its own status: names alone cannot tell a retired
+  // id (404) from a busy one (503), which is exactly what a live probe needed.
+  assert.equal(gemini.modelAttempts.length, gemini.modelsTried.length - 1, 'one row per alternative id');
+  for (const attempt of gemini.modelAttempts) {
+    assert.equal(typeof attempt.model, 'string');
+    assert.equal(attempt.ok, false);
+    assert.equal(attempt.httpStatus, 503, 'the stub refuses everything with 503');
+    assert.equal(attempt.code, 'PROVIDER_UNAVAILABLE');
+  }
+  assert.deepEqual(
+    gemini.modelAttempts.map((attempt) => attempt.model),
+    gemini.modelsTried.slice(1),
+    'the attempts line up with the names, in order',
+  );
   // Only generateContent models, and no `models/` prefix.
   assert.deepEqual(gemini.availableModels, ['gemini-2.5-flash', 'gemini-3.8-flash']);
   assert.equal(gemini.availableModelCount, 2);
@@ -448,4 +466,90 @@ test('mixed Gemini probe failures do not assert one cause or key validity', asyn
   assert.equal(gemini.fallbackModel.httpStatus, 404);
   assert.match(gemini.hint, /different causes/);
   assert.doesNotMatch(gemini.hint, /same way|key is valid|not a model-id problem/);
+});
+
+/* --------------------------------------------------------------------------
+ * Evidence before explanation: the model list decides what the hint may claim.
+ * ------------------------------------------------------------------------ */
+
+function modelListStub(models, postStatusFor) {
+  const calls = [];
+  const impl = async (url, init) => {
+    const target = String(url);
+    calls.push({ url: target, method: init?.method || 'GET' });
+    if ((init?.method || 'GET') === 'GET' && target.includes('/v1beta/models?')) {
+      return {
+        status: 200,
+        ok: true,
+        json: async () => ({
+          models: models.map((name) => ({ name: `models/${name}`, supportedGenerationMethods: ['generateContent'] })),
+        }),
+        text: async () => '{}',
+      };
+    }
+    const status = postStatusFor(target);
+    return { status, ok: false, text: async () => `{"error":{"code":${status}}}`, json: async () => ({}) };
+  };
+  return { impl, calls };
+}
+
+test('a model the key lists but cannot call blames access, not the model id', async () => {
+  // Production saw exactly this shape: 48 models listed for the key, yet the
+  // calls failed. The report must stop implying the id is wrong.
+  const { impl } = modelListStub(['gemini-3.8-flash', 'gemini-2.5-flash'], () => 404);
+  const report = await createDiagnosticsHandler({ fetchImpl: impl, env: envWith() })({ probe: true });
+  const gemini = report.providers.gemini;
+
+  assert.equal(gemini.modelListed, true, 'the report records that the id is listed');
+  assert.match(gemini.hint, /listed for this key/);
+  assert.match(gemini.hint, /access or API-version restrictions/);
+  assert.doesNotMatch(gemini.hint, /quota|billing/i, 'the cause is not guessed');
+  assert.match(gemini.hint, /No alternative model probe succeeded/);
+});
+
+test('a model absent from the key list names the variable and the list', async () => {
+  const { impl } = modelListStub(['gemini-2.5-flash'], () => 404);
+  const report = await createDiagnosticsHandler({
+    fetchImpl: impl,
+    env: envWith({ NOVA_GEMINI_MODEL: 'gemini-9.9-ultra' }),
+  })({ probe: true });
+  const gemini = report.providers.gemini;
+
+  assert.equal(gemini.modelListed, false);
+  assert.match(gemini.hint, /not among this key's 1 generateContent models/);
+  assert.match(gemini.hint, /availableModels/);
+  assert.doesNotMatch(gemini.hint, /quota|billing/i);
+});
+
+test('the ids the key can actually call are probed first', async () => {
+  const { impl, calls } = modelListStub(['gemini-2.5-flash'], () => 503);
+  await createDiagnosticsHandler({ fetchImpl: impl, env: envWith() })({ probe: true });
+
+  // OpenRouter is probed concurrently and also POSTs, so scope to Gemini.
+  const posts = calls
+    .filter((call) => call.method === 'POST' && call.url.includes('generativelanguage'))
+    .map((call) => call.url);
+  assert.ok(posts.length > 1, 'the fallbacks were probed');
+  assert.match(posts[1], /gemini-2\.5-flash/, 'the listed model is tried before unlisted aliases');
+  assert.equal(
+    posts.filter((url) => url.includes('gemini-3.8-flash')).length,
+    1,
+    'the configured id is never probed twice',
+  );
+});
+
+test('an unreadable model list leaves the hint hedged, with no new certainty', async () => {
+  const impl = async (url, init) => {
+    if ((init?.method || 'GET') === 'GET') {
+      return { status: 403, ok: false, json: async () => ({}), text: async () => '{"error":{}}' };
+    }
+    return { status: 404, ok: false, text: async () => '{}', json: async () => ({}) };
+  };
+  const report = await createDiagnosticsHandler({ fetchImpl: impl, env: envWith() })({ probe: true });
+  const gemini = report.providers.gemini;
+
+  assert.equal(gemini.modelListed, undefined, 'no list, no claim about the list');
+  assert.equal(gemini.availableModels, undefined);
+  assert.match(gemini.hint, /check NOVA_GEMINI_MODEL/);
+  assert.match(gemini.hint, /different causes/);
 });

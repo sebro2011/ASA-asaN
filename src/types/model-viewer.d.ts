@@ -22,7 +22,7 @@ declare global {
           exposure?: string | number;
           'environment-image'?: string;
           'touch-action'?: string;
-          onError?: (event: any) => void;
+          onError?: (event: Event) => void;
         },
         HTMLElement
       >;
