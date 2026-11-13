@@ -80,7 +80,8 @@ three probes in two minutes, identical — `gemini-3.8-flash` **503** ("This mod
 currently experiencing high demand…"), last fallback `gemini-2.5-flash` **404**,
 `GET /v1beta/models` **200 in 69–76 ms with 49 models including
 `gemini-2.5-flash`**, `keyValid: true`, OpenRouter **200** in 499 / 10 253 / 509 ms.
-Full table: `docs/API_STATUS_REPORT.md`.
+Full table: `docs/API_STATUS_REPORT.md`. The console steps that follow from it
+(env pin, redeploy, probe, rollback) are in `docs/nova/GEMINI_ACCESS_RUNBOOK.md`.
 
 Measured on production `bce50a1` (2026-11-10 13:53 UTC): both `gemini-3.8-flash`
 and `gemini-flash-latest` answered **503 "high demand"** (852 ms and 385 ms) while

@@ -48,6 +48,28 @@ longer includes Gemini access), `docs/nova/AI_PROVIDER_DIAGNOSTICS.md`,
 `docs/KNOWN_LIMITATIONS.md` (the four stale rows that still described no CI, six
 advisories, non-strict TS and an unresolved Gemini cause).
 
+### The remaining step is a console action, so it is written as one
+The audit's last item was "pin `NOVA_GEMINI_MODEL` or enable Gemini access", which
+is not a code change. Before writing it down, the production environment was
+read — keys only, no values decrypted — and it changed the instructions:
+
+* **`NOVA_GEMINI_MODEL` already exists** in production: `gemini-3.8-flash`, type
+  `plain`, all three targets, id `vTnXoATsN5lltQVo`. So the task is an *update*, not
+  a *create* — and it is currently pinned to the very id that answers 503.
+* Present: `GEMINI_API_KEY`, `OPENROUTER_API_KEY`, `NASA_API_KEY`,
+  `YOUTUBE_API_KEY`, `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`.
+* Absent (unchanged, and unrelated to M4): `GUARDIAN_ADMIN_TOKEN`, `CRON_SECRET`,
+  `GUARDIAN_NEWS_API_KEY`, `ARENA_*`, `DATABASE_URL`.
+
+`docs/nova/GEMINI_ACCESS_RUNBOOK.md` (Sinhala) is the resulting procedure: the
+decision tree from a probe's `code`, two evidence paths (all five ids at once via
+`modelAttempts` once this branch is deployed, or one id per redeploy), the exact
+Vercel screens, the `code` → HTTP → action table, the Google Cloud checks for the
+"all ids 404" case, rollback, and a closing verification. It records the two traps
+the measurement itself fell into: an env change does not reach a running function
+until a redeploy, and `?probe=1` is edge-cached — a repeat needs a fresh query
+parameter, or the reader sees the old `checkedAt` and believes nothing changed.
+
 ### Verification
 `npm test` 891 pass / 0 fail · `tsc --noEmit` clean · `npm run build` exit 0
 (`check:pwa` 165 entries) · `api/index.js` rebuilt · docs links resolve.

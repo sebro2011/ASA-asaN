@@ -267,6 +267,13 @@ which `modelAttempts`, `suggestedModel` and `availableModels` now make a one-gla
 decision. NOVA does not depend on it: OpenRouter and the local engine are the
 answering providers, and both were `ok` in the same probes.
 
+Those console steps are written out for an operator, in Sinhala, in
+`docs/nova/GEMINI_ACCESS_RUNBOOK.md` — including the two traps this audit hit
+itself: production already has `NOVA_GEMINI_MODEL` **set** (to the 503 model, so it
+is an *update*, not a *create*), and an env change does nothing until the next
+deployment; and `?probe=1` is cached at the edge, so a repeat needs a fresh query
+parameter or the reader sees the previous measurement with its old `checkedAt`.
+
 ### M5 — 67 test suites, none executed automatically — **OPEN, proposal**
 
 There is no `.github/` directory at all: no workflow, no required check, no
