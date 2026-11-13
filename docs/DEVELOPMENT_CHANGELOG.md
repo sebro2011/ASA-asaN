@@ -3,6 +3,42 @@
 Newest first. Every entry states what changed, which files, and how it was verified.
 Nothing here is a plan; if it was not executed it is not listed.
 
+## 2026-11-13 — Focus trap in both mobile sheets, and a withdrawn audit finding (branch `arena/8a962084-asa-asan`)
+
+### Fixed
+- The header sheet and the mobile tab sheet are `role="dialog" aria-modal="true"`
+  but let Tab walk out into the page behind. Both now use the existing
+  `useFocusTrap` + `useBodyScrollLock` (the same pair `MobileDrawer` and
+  `CommandPalette` already used), so focus enters the panel, wraps at both ends,
+  and returns to the trigger on close.
+
+### Corrected — audit **M5 was wrong**
+`MASTER_AUDIT_REPORT.md` claimed Mars Rover Photos was "not integrated", citing
+`grep -rn "mars-photos" server/` → no hits. **The grep was the bug**: the route
+lives at `/api/mars/photos` (`server/marsPhotos.ts`), so the string `mars-photos`
+appears only as a rate-limit key. What actually existed at the audit commit:
+
+- `createMarsPhotosRouter()` — rover/sol/page validation, 30-min cache (80
+  entries), `*.nasa.gov`-only image URLs with `api_key` stripped, malformed
+  records dropped, no sample images on failure; mounted behind a 60/min limiter.
+- `MarsRoverPhotos.tsx` — paging gallery with per-item camera/sol/Earth-date/rover,
+  image error handling, `cached` vs `fresh` labels, full en/si/ta copy; lazy-loaded
+  on the Missions tab.
+- `scripts/test-mars-photos.mjs` — 3 passing cases.
+
+M5 is marked **withdrawn** rather than deleted, with the procedural lesson written
+down: an audit finding must verify its own evidence.
+
+### Added
+- `scripts/test-focus-trap.mjs` (3 cases): Tab wraps at both ends, a mid-panel Tab
+  is not hijacked, focus is restored to the trigger, an inactive trap listens to
+  nothing, and all four overlays pass a real panel ref. jsdom has no layout, so the
+  test fakes `offsetWidth/offsetHeight` on the prototype instead of weakening the
+  visibility filter in production code.
+
+### Verification
+`npm test` → **854 pass / 0 fail** (was 851) · `tsc --noEmit` clean · `npm run build` ok · `api/index.js` in sync.
+
 ## 2026-11-13 — Contrast computed from the tokens, not estimated (branch `arena/8a962084-asa-asan`)
 
 ### Added

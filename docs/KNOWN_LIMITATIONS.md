@@ -28,10 +28,11 @@ These are current, measured limits. Each names the command or file behind it.
    proves every text token clears AA on its own surfaces, but the app draws on
    translucent glass over gradients. The effective backdrop is not modelled, and
    no browser was available to check rendering, anti-aliasing or `forced-colors`.
-2. **Focus is not trapped in the header drawer or the mobile tab sheet.** Escape
-   closes both, and their backdrops are `aria-hidden`, but Tab can leave the
-   panel. `MobileDrawer` and `CommandPalette` do trap focus — the pattern exists,
-   it just was not applied here.
+2. ~~Focus is not trapped in the header drawer or the mobile tab sheet.~~
+   **Fixed 2026-11-13**: both use `useFocusTrap` + `useBodyScrollLock`, verified in
+   `scripts/test-focus-trap.mjs`. Remaining: focus is trapped but the sheets are
+   rendered with `lg:hidden`, so a desktop viewport never shows them — untested at
+   those breakpoints in a real browser.
 3. **Icon-only buttons are partially labelled.** Audit m4 counted 3 `aria-label`s
    across 331 `<button>`s; most buttons carry visible text, so this is not a claim
    that the rest are broken, but the icon-only subset was not audited.
@@ -53,9 +54,11 @@ These are current, measured limits. Each names the command or file behind it.
    adapter is the natural place).
 3. **`DEMO_KEY` fallback is silent.** If `NASA_API_KEY` is missing, the server uses
    the demo tier without logging or exposing it. (M4)
-4. **Mars Rover Photos is not integrated.** The Forge dataset descriptor exists;
-   there is no route and no gallery. The old client-side helper (hardcoded
-   `DEMO_KEY`, fabricated ids) was removed on this branch. (M5)
+4. ~~Mars Rover Photos is not integrated.~~ **Withdrawn 2026-11-13 — the finding
+   was wrong.** The route (`/api/mars/photos`, cached, validated, rate-limited) and
+   a trilingual gallery were already in the tree; the audit's `grep` used a string
+   that only appears as a rate-limit key. Real limitation: the upstream API has no
+   Perseverance images, and the UI says so.
 5. **Live connector behaviour is partly verified.** NASA Images and NOAA SWPC Kp
    are confirmed live from production (see `docs/API_STATUS_REPORT.md`). The NOAA
    *plasma* feed returned nothing in that call, so solar-wind speed shows "not

@@ -29,7 +29,7 @@ import {
 import type { SupportedLanguage } from '../i18n/translations';
 import { NAV_ENTRIES, NAV_GROUPS, type TabId } from './navigation';
 import { cx } from './primitives';
-import { useEscape } from '../app/hooks';
+import { useBodyScrollLock, useEscape, useFocusTrap } from '../app/hooks';
 
 const LANGUAGES: Array<{ code: SupportedLanguage; native: string; english: string; script: string }> = [
   { code: 'en', native: 'English', english: 'English', script: 'EN' },
@@ -92,8 +92,13 @@ export default function AppHeader({
   const [langOpen, setLangOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   // The backdrop was the only way to dismiss the drawer with a pointer; a
-  // keyboard user had no exit other than tabbing to the close button.
+  // keyboard user had no exit other than tabbing to the close button. The sheet
+  // is a modal (role=dialog, aria-modal), so Tab must not walk out of it into the
+  // page behind — the same trap the drawer and command palette already use.
+  const mobileSheetRef = useRef<HTMLDivElement>(null);
   useEscape(mobileOpen, () => setMobileOpen(false));
+  useFocusTrap(mobileOpen, mobileSheetRef);
+  useBodyScrollLock(mobileOpen);
   const headerRef = useOutsideClose(() => {
     setOpenGroup(null);
     setLangOpen(false);
@@ -356,6 +361,7 @@ export default function AppHeader({
               animate={{ y: 0, opacity: 1 }}
               exit={{ y: -12, opacity: 0 }}
               transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+              ref={mobileSheetRef}
               className="absolute inset-x-0 top-0 max-h-[88vh] overflow-y-auto border-b border-line bg-abyss px-4 pb-6 pt-4"
             >
               <div className="flex items-center justify-between">

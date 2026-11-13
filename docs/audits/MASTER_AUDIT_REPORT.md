@@ -607,19 +607,30 @@ warning, and surface “demo quota” in the freshness metadata when active.
 
 **Priority P2 · Complexity S · Phase 3**
 
-### M5 — Mars Rover Photos integration does not exist
+### M5 — Mars Rover Photos integration — **WITHDRAWN 2026-11-13: the finding was wrong**
 
-The master prompt lists NASA Mars Rover Photos as an integration to maintain and
-improve. In this tree it exists only as a **Forge dataset descriptor**
-(`src/lib/forge/vocab.ts:338`, `endpoint: …/mars-photos/api/v1/rovers/curiosity/photos`)
-and as a count-only normaliser (`src/lib/forge/normalize.ts:576`). There is no
-route, no adapter and no viewer (`grep -rn "mars-photos" server/` → no hits).
+This report claimed the integration did not exist, on the evidence
+`grep -rn "mars-photos" server/` → no hits. **The grep was the bug.** The route is
+mounted at `/api/mars` (`server/marsPhotos.ts` → `router.get('/photos')`), so the
+literal string `mars-photos` appears only as a rate-limit key, never in a path.
 
-**Fix.** Add `/api/mars-photos` through the same cached-adapter pattern as M2 and a
-gallery surface that shows the camera, sol, Earth date and rover for each frame,
-with the image credit printed per item.
+What actually exists at the audit commit (`aeb601e`):
 
-**Priority P2 · Complexity M · Phase 3**
+- `server/marsPhotos.ts` — `createMarsPhotosRouter()`: rover/sol/page validation,
+  30-minute cache (80 entries), https-and-`*.nasa.gov`-only image URLs, `api_key`
+  stripped from image URLs, per-record rejection of malformed photos, no sample
+  images on failure. Mounted in `server.ts:206` behind a 60/min limiter.
+- `src/components/MarsRoverPhotos.tsx` — gallery with rover/sol controls, paging,
+  per-item camera/sol/Earth-date/rover, image error handling, `cached` vs
+  `fresh` labelling, and full en/si/ta copy. Lazy-loaded in
+  `src/explore/ExploreApp.tsx` on the Missions tab (`launch` and `mars` aliases).
+- `scripts/test-mars-photos.mjs` — 3 cases (validation, caching, redaction).
+
+**Remaining real limitation:** the upstream API offers Curiosity, Opportunity and
+Spirit only — no Perseverance — and the UI says so. Nothing to fix here; the
+lesson is procedural: **an audit finding must verify its own evidence.**
+
+**Withdrawn · Phase 3**
 
 ### M6 — 6 dependency advisories, all in the build chain
 
