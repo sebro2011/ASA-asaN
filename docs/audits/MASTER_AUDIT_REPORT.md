@@ -28,7 +28,7 @@ No claim below rests on reading alone; each has a command behind it.
 | --- | --- |
 | `npx tsc --noEmit` | clean (exit 0) |
 | `npm test` | **819 pass / 0 fail** across 67 test scripts (was 810 at the start of this pass; +9 from the new limiter suite) |
-| `npm run build` | exit 0 · 89 JS chunks · 4.98 MB raw / **1.42 MB gzip total** · entry `index-*.js` **920.85 kB raw / 245.83 kB gzip** · CSS 63.65 kB gzip |
+| `npm run build` | exit 0 · 89 JS chunks · 4.98 MB raw / **1.42 MB gzip total** · entry `index-*.js` **543.90 kB raw / 170.25 kB gzip** after the locale split (was 920.85 kB / 245.83 kB gzip) · `si` 37.3 kB and `ta` 37.8 kB gzip on demand · CSS 63.65 kB gzip |
 | `npm start` (as documented, `node server.ts`) | **crash** — `ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX` (see C1) |
 | `npx tsx server.ts` + `GET /api/health` | 200 `{"status":"ok"}` |
 | `npm audit` | **6 advisories** (2 low, 4 moderate, 0 high/critical), all in the build chain |
@@ -110,7 +110,7 @@ isolation, store separation, `skip()` not consuming budget, prune correctness,
 bounded growth under 5,200 distinct clients, and `clientKey` preferring the
 Express-resolved address over headers. Full suite 819/819.
 
-### M2 — Half of the first-load JavaScript is translation dictionaries — **OPEN, needs approval**
+### M2 — Half of the first-load JavaScript was translation dictionaries — **FIXED**
 
 **Evidence.** Measured, not estimated:
 
@@ -123,7 +123,27 @@ entry chunk:             920 KB raw / 246 KB gzip
 200 KB of source) and calls `i18next.init` synchronously for **en + si + ta**, so a
 first-time mobile visitor downloads all three languages to read one screen.
 
-**Options.**
+**Chosen: option A — lazy-load non-active locales.** Result, measured after the
+change: the entry chunk fell from **245.83 kB to 170.25 kB gzip (−31 %)** and
+Sinhala/Tamil arrive as 37.3 kB / 37.8 kB chunks only when selected. The data was
+verified byte-identical to the originals (JSON comparison of all nine dictionaries
+before and after), and every English key still exists in both other languages
+(1,688 keys per locale bundle).
+
+Structure: `src/i18n/{en,si,ta}/<dictionary>.ts` hold one language each;
+`src/i18n/<dictionary>.ts` remains as the three-language aggregator the parity tests
+read; `src/i18n/<lang>/index.ts` merges a bundle in the original order;
+`src/i18n.ts` imports English statically and dynamic-imports si/ta. Every existing
+`i18n.changeLanguage(...)` call site keeps working — the method is wrapped so a
+switch loads its bundle first — and `main.tsx` awaits the stored preference before
+first paint, so a returning Sinhala/Tamil reader never sees an English flash.
+
+What still ships eagerly: the legacy `src/i18n/translations.ts` (83 keys × 3
+languages, imported directly by 23 components) and per-component inline copy. That
+is the next 20–30 kB, and it needs the components refactored onto i18next — a
+separate, larger change.
+
+**The options as they were weighed.**
 
 | Option | Effect | Cost / risk |
 | --- | --- | --- |
@@ -258,8 +278,8 @@ deployment resolves its function, so it needs approval.
 | P0 | M1 limiter leak + per-request limiter | **fixed** | M |
 | P0 | M7 missing env documentation | **fixed** | S |
 | P1 | M6 README | **fixed** | S |
-| P1 | M5 CI workflow | needs a decision | S |
-| P1 | M2 lazy locale loading | needs approval | M–L |
+| P1 | M5 CI workflow | **fixed** (`.github/workflows/verify.yml`) | S |
+| P1 | M2 lazy locale loading | **fixed** (−31 % first load) | M |
 | P1 | M3 `trust proxy` policy | needs deployment facts | S once known |
 | P1 | M4 Gemini access / honest hint | external + Phase 2 | M |
 | P2 | Phase 2 NOVA (hint accuracy, history search/rename/archive, streaming) | open | L |
@@ -286,6 +306,16 @@ All four fixes were verified by the commands in §0 after they landed.
 5. **`README.md`** — new, with an explicit "verified / not verified" section.
 6. **`docs/TEST_RESULTS.md`, `docs/DEVELOPMENT_CHANGELOG.md`, `docs/API_STATUS_REPORT.md`**
    — refreshed to the 2026-11-13 state, Guardian included.
+7. **Lazy locales (M2, approved as option A)** — nine dictionaries split into
+   `en/`, `si/`, `ta/` modules, `src/i18n.ts` rewritten to import English and
+   dynamic-import the other two, `main.tsx` awaits the stored preference.
+   `scripts/test-workspace-shell.mjs`, `test-workspace-home.mjs`, `test-forge-ui.mjs`
+   and `scripts/i18n-audit.mjs` updated for the async contract (no assertion
+   weakened: they still compare all three languages). Entry 245.83 → 170.25 kB gzip.
+8. **CI (M5, approved)** — `.github/workflows/verify.yml`: `npm ci`, lint, test,
+   build, an `api/index.js` drift check, and `npm audit --audit-level=high`.
+   `package-lock.json` is now committed so `npm ci` is reproducible; `npm run
+   check:bundle` performs the same drift check locally.
 
 Suite after all of it: **819 pass / 0 fail**, `tsc --noEmit` clean, production
 build exit 0.
@@ -294,13 +324,7 @@ build exit 0.
 
 ## 7. Decisions requested before Phase 2
 
-1. **Locale loading** (M2) — option A (lazy non-active locales), B (per-surface
-   split) or C (accept and document)?
-2. **Committed server bundle** (M8) — keep with a CI drift check, or untrack and
-   build it?
-3. **CI workflow** (M5) — may I add `.github/workflows/verify.yml` (lint + test +
-   build + audit)? No secrets, no deployment steps.
-4. **`trust proxy`** (M3) — what is the actual deployed hop count in front of
+1. **`trust proxy`** (M3) — what is the actual deployed hop count in front of
    Express? Without that number the change would be a guess.
 5. **Deployment settings stay untouched** until you approve: the Guardian migration,
    `GUARDIAN_ADMIN_TOKEN`/`CRON_SECRET`, the Vercel cron entry, and PR #54's merge.

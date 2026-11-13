@@ -11,7 +11,7 @@ These are current, measured limits. Each names the command or file behind it.
 
 | Limit | Detail |
 | --- | --- |
-| **First-load JavaScript is half translation data** | The nine dictionaries total **740 KB raw / 121 KB gzip**; the entry chunk is **246 KB gzip**. All three languages load eagerly because `src/i18n.ts` imports every dictionary and initialises en/si/ta synchronously. Fixing it needs an architectural decision (see audit M2). |
+| **Some trilingual copy still ships eagerly** | The nine interface dictionaries now load per language (entry **170 kB gzip**, `si`/`ta` 37 kB each on demand — a 31 % cut). What remains is the legacy `src/i18n/translations.ts` (83 keys × 3 languages, imported directly by 23 components) and per-component inline copy: roughly another 20–30 kB. Fixing that means moving those components onto i18next. |
 | **Per-IP limits are per process** | `server/requestRateLimit.ts` bounds memory (prune at 5,000, cap 10,000) and prevents spoofing by using `req.ip`, but instances do not share counters. Fleet-wide budgets exist only in the Guardian, and only with a shared store configured. |
 | **`trust proxy` is unset** | Express reports the socket peer. Behind a proxy, many users can share one bucket; the change cannot be made safely without knowing the real hop count. |
 | **The committed server bundle can drift** | `api/index.js` is byte-identical to a fresh build today, but nothing enforces that. A stale commit deploys old server code while the tests pass against new source. |

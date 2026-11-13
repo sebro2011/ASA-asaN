@@ -3,6 +3,38 @@
 Newest first. Every entry states what changed, which files, and how it was verified.
 Nothing here is a plan; if it was not executed it is not listed.
 
+## 2026-11-13 — Lazy locale bundles, CI verification (branch `arena/8a962084-asa-asan`)
+
+### Changed
+- **Trilingual resources are now split by language.** `src/i18n/{en,si,ta}/` hold
+  one language each (nine dictionaries plus the former inline base dictionary);
+  `src/i18n/<name>.ts` stays as the three-language aggregator the parity suites
+  read; `src/i18n.ts` imports English statically and dynamic-imports Sinhala and
+  Tamil. `i18n.changeLanguage` is wrapped so every existing call site keeps
+  working, and `src/main.tsx` awaits the stored preference before first paint so a
+  returning Sinhala/Tamil reader never sees an English flash.
+  Measured: entry chunk **245.83 → 170.25 kB gzip (−31 %)**, `si` 37.3 kB and `ta`
+  37.8 kB fetched only when selected. The data was verified byte-identical before
+  and after the move.
+
+### Added
+- `.github/workflows/verify.yml` — `npm ci`, typecheck, the full suite, production
+  build, an `api/index.js` drift check and `npm audit --audit-level=high`. No
+  secrets, no deploy step.
+- `npm run check:bundle` — the same drift check locally.
+- `package-lock.json` is committed so `npm ci` is reproducible.
+
+### Updated for the async locale contract (no assertion removed)
+`scripts/test-workspace-shell.mjs`, `scripts/test-workspace-home.mjs`,
+`scripts/test-forge-ui.mjs` and `scripts/i18n-audit.mjs` now load the language
+bundles before comparing them; the Forge test reads the per-language modules
+instead of one file.
+
+### Verification
+`npm test` → **819 pass / 0 fail** · `tsc --noEmit` clean · `npm run build` exit 0 ·
+`npm run check:bundle` reports the bundle in sync · language switching exercised
+directly against i18next (`si`/`ta`/`en`).
+
 ## 2026-11-13 — COSMORA API Guardian, Phase 1 re-audit, bounded request limiting (branch `arena/8a962084-asa-asan`)
 
 ### Added

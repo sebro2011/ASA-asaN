@@ -226,7 +226,9 @@ test('the orb label follows its state in every language', async () => {
   const dom = installDom();
   try {
     const { orbStateLabelKey } = await import('../src/workspace/home/NovaOrb.tsx');
-    const { default: i18n } = await import('../src/i18n.ts');
+    const { default: i18n, loadAllLocales } = await import('../src/i18n.ts');
+    // Sinhala and Tamil are lazy-loaded; assert against the real bundles.
+    await loadAllLocales();
     const states = ['idle', 'thinking', 'listening', 'generating'].map(orbStateLabelKey);
     assert.equal(new Set(states).size, 4, 'each state has its own label');
 

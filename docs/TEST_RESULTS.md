@@ -5,7 +5,7 @@ Latest full run: **2026-11-13**, branch `arena/8a962084-asa-asan`.
 | Command | Result |
 | --- | --- |
 | `npm run lint` (`tsc --noEmit`) | clean |
-| `npm run build` | exit 0 · 89 JS chunks · entry **920.85 kB raw / 245.83 kB gzip** · CSS 63.65 kB gzip · 161 precache entries |
+| `npm run build` | exit 0 · 89 JS chunks · entry **543.90 kB raw / 170.25 kB gzip** (was 920.85 / 245.83 before the locale split) · `si` 173.34 kB / 37.30 kB gzip on demand · `ta` 202.58 kB / 37.76 kB gzip on demand · CSS 63.65 kB gzip |
 | `npm test` | **819 pass / 0 fail** across **67** test scripts |
 | `npm run test:guardian` | 56 pass / 0 fail (core 28 · monitor/routes 22 · dashboard 6) |
 | `npm run test:rate-limit` | 9 pass / 0 fail |
@@ -22,6 +22,20 @@ Latest full run: **2026-11-13**, branch `arena/8a962084-asa-asan`.
 | `scripts/test-guardian-monitor.mjs` | 22 | sweep results, incident audit, metered skip vs deep sweep, circuit-open skip, deadline skips, analytics with `null` availability, recovery verification re-opening a breaker, admin/cron auth failing closed, scrubbing |
 | `scripts/test-guardian-ui.mjs` | 6 | incident rendering, unprobed provider is "no data", instance-local store labelled, token never in a URL, outage shows its code, metered labels |
 | `scripts/test-request-rate-limit.mjs` | 9 | exact `max` boundary, 429 + `Retry-After`, window reset, per-client isolation, per-limiter stores, `skip()`, prune, **bounded growth under 5,200 clients**, `req.ip` over headers |
+
+### Locale split — what changed and what proves it
+
+The three languages no longer ship together. English is imported statically;
+Sinhala and Tamil are dynamic imports requested on first selection (or before
+first paint for a returning reader, from `main.tsx`).
+
+| Evidence | Result |
+| --- | --- |
+| Data integrity | all nine dictionaries dumped to JSON before and after the move → **byte-identical** |
+| Key parity | **1,688 keys** in each of en/si/ta bundles, 0 missing (the parity suites still read the three-language aggregators) |
+| Switching | `i18n.changeLanguage('si')` → `නාසා විශ්ව ගවේෂකය`; `'ta'` → `நாசா விண்வெளி ஆய்வு மையம்`; back to `'en'` → English |
+| First load | entry **245.83 → 170.25 kB gzip (−31 %)**; si 37.3 kB and ta 37.8 kB only when needed |
+| Tests updated for the async contract | `test-workspace-shell`, `test-workspace-home`, `test-forge-ui`, `scripts/i18n-audit.mjs` — none of their assertions were removed; they now load the bundles before comparing |
 
 ### What the 2026-11-13 run does not cover
 
