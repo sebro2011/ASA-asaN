@@ -30,10 +30,18 @@ Nothing here is a plan; if it was not executed it is not listed.
 bundles before comparing them; the Forge test reads the per-language modules
 instead of one file.
 
+### Fixed after CI exposed it
+- `scripts/test-apod-media.mjs` asserted that a live `api.nasa.gov` request fails.
+  That is true in this sandbox (egress blocked) and false on a runner with
+  internet, where the route legitimately recovers an official NASA Science record
+  and answers 200. Both upstreams are now stubbed, so the test proves the "no
+  fabricated cache hit" contract instead of the network. Found by CI run
+  43417395210; CI run 43418607086 is fully green (9/9 steps).
+
 ### Verification
 `npm test` → **819 pass / 0 fail** · `tsc --noEmit` clean · `npm run build` exit 0 ·
 `npm run check:bundle` reports the bundle in sync · language switching exercised
-directly against i18next (`si`/`ta`/`en`).
+directly against i18next (`si`/`ta`/`en`) · GitHub Actions `Verify` workflow green.
 
 ## 2026-11-13 — COSMORA API Guardian, Phase 1 re-audit, bounded request limiting (branch `arena/8a962084-asa-asan`)
 

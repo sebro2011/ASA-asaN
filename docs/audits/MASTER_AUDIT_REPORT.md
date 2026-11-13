@@ -239,6 +239,7 @@ deployment resolves its function, so it needs approval.
 | m9 | Two client fetches have no timeout, so a hung request leaves a permanent loading state | `lib/nasaApi.js:370` (`/api/satellites`), `:489` (`/api/news`) | add `AbortSignal.timeout`; **S** |
 | m10 | Production CSP allows `'unsafe-inline'` scripts | `server.ts` CSP array | nonce or hash pipeline; **M** |
 | m11 | Build-chain advisories | `npm audit`: deepmerge prototype poisoning, glob/minimatch DoS, via `vite-plugin-pwa` → `workbox-build` | no runtime exposure; fixing requires downgrading `vite-plugin-pwa`, which was previously rejected | 
+| m13 | A test proved the environment, not the product: `test-apod-media.mjs` expected a live `api.nasa.gov` call to fail. True here (egress blocked), false on a CI runner, where the route legitimately recovered an official NASA Science record and answered 200. | CI run 43417395210; fixed by stubbing **both** upstreams | fixed; **S** |
 | m12 | 72 `any`s and `tsconfig` without `strict` | `grep -rn ": any\b"`; `tsconfig.json` | documented before (M3 of the 2026-11-12 audit); enabling strict is a large, separate change |
 
 ---
@@ -288,6 +289,7 @@ deployment resolves its function, so it needs approval.
 | P2 | Phase 5 UI/UX (icon-button labels, tablet sweep) | open | M |
 | P3 | Phase 6 (CSP nonce, strict type migration, bundle budget) | open | L |
 | P3 | m1–m12 | open | S each |
+| — | m13 (new, from CI) — a test asserted this machine's network failure, not the behaviour | **fixed** | S |
 
 ---
 
@@ -312,7 +314,12 @@ All four fixes were verified by the commands in §0 after they landed.
    `scripts/test-workspace-shell.mjs`, `test-workspace-home.mjs`, `test-forge-ui.mjs`
    and `scripts/i18n-audit.mjs` updated for the async contract (no assertion
    weakened: they still compare all three languages). Entry 245.83 → 170.25 kB gzip.
-8. **CI (M5, approved)** — `.github/workflows/verify.yml`: `npm ci`, lint, test,
+8. **The first CI run found a test that depended on this machine's network.**
+   `test-apod-media.mjs` asserted a 503 on a live APOD request; on a runner with
+   internet the route correctly recovered an official NASA Science record and
+   answered 200. Both upstreams are now stubbed. This is the kind of defect a CI
+   gate exists to find, and it is why the green local suite was not the last word.
+9. **CI (M5, approved)** — `.github/workflows/verify.yml`: `npm ci`, lint, test,
    build, an `api/index.js` drift check, and `npm audit --audit-level=high`.
    `package-lock.json` is now committed so `npm ci` is reproducible; `npm run
    check:bundle` performs the same drift check locally.
