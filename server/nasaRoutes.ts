@@ -124,6 +124,27 @@ export function apodFallbackHint({ failureKind, upstreamStatus, usingDemoKey }: 
 export type JsonRecord = Record<string, unknown>;
 export const neowsCache = createTtlCache<JsonRecord>({ ttlMs: 10 * 60_000, maxEntries: 40 });
 
+/**
+ * A short-lived cache for the JPL Close Approach fallback, kept separate from
+ * `neowsCache` so a NeoWs recovery is never hidden behind a derived answer for a
+ * whole TTL, and so a derived answer is never stored under a live cache key.
+ */
+export const neowsCadCache = createTtlCache<JsonRecord>({ ttlMs: 5 * 60_000, maxEntries: 20 });
+
+/**
+ * NeoWs timeout. The home page asks for a 7-day window; that feed is ~400 KB and
+ * NASA does not always deliver it inside the 4 s the route used to allow, which
+ * showed up as a permanent "unavailable" tile. The function budget is 30 s and the
+ * client waits 15 s, so 12 s is the honest ceiling for this one upstream call.
+ */
+const NEOWS_TIMEOUT_MS = 12_000;
+/** JPL's close-approach API is a small JSON document; it does not need 12 s. */
+const CAD_TIMEOUT_MS = 8_000;
+/** Venus is at 0.28 AU; 0.2 AU is a defensible "near Earth" envelope for the panel. */
+const CAD_MAX_DIST_AU = 0.2;
+export const AU_IN_KM = 149_597_870.7;
+export const AU_IN_LUNAR_DISTANCES = AU_IN_KM / 384_400;
+
 /** An EPIC frame after this route has formatted it for the client. */
 interface EpicFrame {
   identifier: unknown;
@@ -162,6 +183,147 @@ export const exoplanetsCache = createTtlCache<JsonRecord[]>({ ttlMs: 24 * 60 * 6
 function sendCached(res: Response, body: Record<string, unknown>, hit: { storedAt: number; remainingMs: number }) {
   res.setHeader('Cache-Control', `public, max-age=${maxAgeSeconds(hit.remainingMs)}, stale-while-revalidate=60`);
   return res.json({ ...body, cached: true, fetchedAt: new Date(hit.storedAt).toISOString() });
+}
+
+/** What one upstream call to a metered NASA endpoint actually did. */
+export interface UpstreamAttempt {
+  ok: boolean;
+  /** 0 when the request never produced a response. */
+  status: number;
+  failureKind: 'network' | 'rate-limited' | 'upstream' | 'shape' | 'timeout';
+  ms: number;
+  body: unknown;
+}
+
+/**
+ * One upstream JSON call with an explicit deadline, returning *why* it failed
+ * instead of swallowing it. The NeoWs route used to catch and discard this, which
+ * is why an "unavailable" tile could not be diagnosed without server logs.
+ */
+export async function fetchJsonWithBudget(url: string, timeoutMs: number): Promise<UpstreamAttempt> {
+  const started = Date.now();
+  const controller = new AbortController();
+  const timer = setTimeout(() => {
+    try { controller.abort(new DOMException('Request timeout', 'AbortError')); } catch (_) {}
+  }, timeoutMs);
+  try {
+    const upstream = await fetch(url, { signal: controller.signal });
+    const ms = Date.now() - started;
+    if (!upstream.ok) {
+      return {
+        ok: false,
+        status: upstream.status,
+        // 429/403 are what a shared DEMO_KEY hits first; say so instead of
+        // reporting a generic outage.
+        failureKind: upstream.status === 429 || upstream.status === 403 ? 'rate-limited' : 'upstream',
+        ms,
+        body: null,
+      };
+    }
+    return { ok: true, status: upstream.status, failureKind: 'network', ms, body: redactApiKeys<unknown>(await upstream.json()) };
+  } catch (error) {
+    const ms = Date.now() - started;
+    const name = error instanceof Error ? error.name : '';
+    return { ok: false, status: 0, failureKind: name === 'AbortError' || ms >= timeoutMs ? 'timeout' : 'network', ms, body: null };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+const CAD_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+/**
+ * JPL writes close-approach dates as `2026-Nov-13 01:22`, not ISO. Slicing the
+ * first ten characters would yield `2026-Nov-1`, which every ISO check rejects —
+ * and with every row rejected the fallback would silently report zero objects,
+ * which is the worst possible answer. Parsed explicitly, with no reliance on the
+ * host's locale or time zone.
+ */
+export function cadDateToIso(value: unknown): string | null {
+  const match = /^(\d{4})-([A-Za-z]{3})-(\d{1,2})/.exec(String(value ?? '').trim());
+  if (!match) return null;
+  const month = CAD_MONTHS.indexOf(match[2][0].toUpperCase() + match[2].slice(1).toLowerCase()) + 1;
+  if (!month) return null;
+  const day = Number(match[3]);
+  if (!Number.isInteger(day) || day < 1 || day > 31) return null;
+  return `${match[1]}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}
+
+/**
+ * JPL Close Approach Data, converted into the NeoWs shape the client already reads.
+ *
+ * Only values JPL actually publishes are filled in. Hazard flags and diameters are
+ * `null` — not `false`, not zero — and the payload says so with `hazardFlags` and
+ * `diameters`, because "no PHA in this list" is a claim JPL's CAD API cannot make.
+ * Distances are converted from AU (1 AU = 149 597 870.7 km = 389.17 lunar
+ * distances), so every number shown is a real measurement, not an invention.
+ */
+/** The NeoWs-shaped feed the JPL fallback produces, with its provenance attached. */
+export interface CadDerivedFeed extends JsonRecord {
+  near_earth_objects: Record<string, unknown[]>;
+  element_count: number;
+  window: { start: string; end: string };
+  source: 'jpl-cad';
+  hazardFlags: 'unavailable';
+  diameters: 'unavailable';
+  maxDistanceAu: number;
+}
+
+export function neoWsShapeFromCad(
+  record: JsonRecord | null,
+  window: { start: string; end: string }
+): CadDerivedFeed {
+  const fields = Array.isArray(record?.fields) ? (record?.fields as unknown[]).map(String) : [];
+  const rows = Array.isArray(record?.data) ? (record?.data as unknown[][]) : [];
+  const at = (name: string) => fields.indexOf(name);
+  const iDesignation = at('des');
+  const iFullName = at('fullname');
+  const iDate = at('cd');
+  const iDistance = at('dist');
+  const iVelocity = at('v_rel');
+
+  const byDate: Record<string, unknown[]> = {};
+  let counted = 0;
+  for (const row of rows) {
+    if (!Array.isArray(row)) continue;
+    const date = cadDateToIso(iDate >= 0 ? row[iDate] : '');
+    if (!date) continue;
+    const designation = iDesignation >= 0 ? String(row[iDesignation] ?? '').trim() : '';
+    const fullName = iFullName >= 0 ? String(row[iFullName] ?? '').trim() : '';
+    if (!designation && !fullName) continue;
+    const au = iDistance >= 0 ? Number(row[iDistance]) : Number.NaN;
+    const kps = iVelocity >= 0 ? Number(row[iVelocity]) : Number.NaN;
+    counted += 1;
+    (byDate[date] ||= []).push({
+      id: designation || fullName,
+      name: fullName || designation,
+      is_potentially_hazardous_asteroid: null,
+      estimated_diameter: null,
+      close_approach_data: [
+        {
+          close_approach_date: date,
+          miss_distance: {
+            kilometers: Number.isFinite(au) ? String(au * AU_IN_KM) : null,
+            lunar: Number.isFinite(au) ? String(au * AU_IN_LUNAR_DISTANCES) : null,
+          },
+          relative_velocity: {
+            kilometers_per_second: Number.isFinite(kps) ? String(kps) : null,
+            kilometers_per_hour: Number.isFinite(kps) ? String(kps * 3600) : null,
+          },
+        },
+      ],
+    });
+  }
+
+  return {
+    near_earth_objects: byDate,
+    element_count: counted,
+    window,
+    source: 'jpl-cad',
+    hazardFlags: 'unavailable',
+    diameters: 'unavailable',
+    maxDistanceAu: CAD_MAX_DIST_AU,
+  };
 }
 
 function sendFresh(res: Response, body: Record<string, unknown>, ttlMs: number, storedAt: number) {
@@ -642,6 +804,7 @@ export function setupNasaRoutes(app: ExpressApplication, ai: GoogleGenAI) {
     const todayStr = new Date().toISOString().split('T')[0];
     const startDate = (req.query.start_date as string) || todayStr;
     const endDate = (req.query.end_date as string) || '';
+    const window = { start: startDate, end: endDate || startDate };
 
     const cacheKey = `${startDate}..${endDate}`;
     const hit = neowsCache.get(cacheKey);
@@ -651,34 +814,65 @@ export function setupNasaRoutes(app: ExpressApplication, ai: GoogleGenAI) {
       ? `https://api.nasa.gov/neo/rest/v1/feed?start_date=${encodeURIComponent(startDate)}&end_date=${encodeURIComponent(endDate)}&api_key=${nasaApiKey}`
       : `https://api.nasa.gov/neo/rest/v1/feed?start_date=${encodeURIComponent(startDate)}&api_key=${nasaApiKey}`;
 
-    let timeout: ReturnType<typeof setTimeout> | undefined;
-    let upstreamStatus = 0;
-    let failureKind: 'network' | 'rate-limited' | 'upstream' | 'shape' = 'network';
-    try {
-      const controller = new AbortController();
-      timeout = setTimeout(() => {
-        try { controller.abort(new DOMException('Request timeout', 'AbortError')); } catch (_) {}
-      }, 4000);
-      const nasaRes = await fetch(url, { signal: controller.signal });
-
-      if (nasaRes.ok) {
-        const data = redactApiKeys<unknown>(await nasaRes.json());
-        const record = data && typeof data === 'object' ? (data as JsonRecord) : null;
-        const neos = record?.near_earth_objects;
-        if (record && neos && typeof neos === 'object' && !Array.isArray(neos)) {
-          const storedAt = neowsCache.set(cacheKey, record);
-          return sendFresh(res, { success: true, data: record }, neowsCache.ttlMs, storedAt);
-        }
+    const primary = await fetchJsonWithBudget(url, NEOWS_TIMEOUT_MS);
+    if (primary.ok) {
+      const record = primary.body && typeof primary.body === 'object' ? (primary.body as JsonRecord) : null;
+      const neos = record?.near_earth_objects;
+      if (record && neos && typeof neos === 'object' && !Array.isArray(neos)) {
+        const storedAt = neowsCache.set(cacheKey, record);
+        return sendFresh(res, { success: true, data: record }, neowsCache.ttlMs, storedAt);
       }
-    } catch {
-      // Gracefully handle network timeouts or DEMO_KEY rate limits
-    } finally {
-      if (timeout) clearTimeout(timeout);
+      primary.failureKind = 'shape';
     }
 
-    // Do not invent close-approach dates, distances or velocities when NeoWs
-    // fails. Consumers can distinguish an outage from a valid empty feed.
-    return res.status(503).json({ success: false, data: null, code: 'NEOWS_UNAVAILABLE', message: 'NASA NeoWs data is temporarily unavailable.' });
+    // NeoWs timed out, refused, or answered with the wrong shape. JPL publishes the
+    // same close approaches through a second, keyless NASA API, so the panel can
+    // show real numbers instead of an "unavailable" tile — labelled as derived, and
+    // never mixed into `neowsCache`, so a NeoWs recovery is not hidden by it.
+    const degraded = {
+      primary: 'nasa-neows',
+      reason: primary.failureKind,
+      upstreamStatus: primary.status || undefined,
+      // `ms` is a measurement: 0 is a real value, so it is not coerced to undefined.
+      ms: primary.ms,
+    };
+    const cadKey = `cad..${startDate}..${endDate}`;
+    const cadHit = neowsCadCache.get(cadKey);
+    if (cadHit) {
+      return sendCached(res, { success: true, data: cadHit.value, isFallback: true, fallbackSource: 'jpl-cad', degraded }, cadHit);
+    }
+
+    const cadUrl = `https://ssd-api.jpl.nasa.gov/cad.api?date-min=${encodeURIComponent(window.start)}`
+      + `&date-max=${encodeURIComponent(window.end)}`
+      + `&dist-max=${CAD_MAX_DIST_AU}&body=Earth&sort=date&fullname=true`;
+    const cad = await fetchJsonWithBudget(cadUrl, CAD_TIMEOUT_MS);
+    if (cad.ok) {
+      const shaped = neoWsShapeFromCad(cad.body as JsonRecord | null, window);
+      if (shaped.element_count > 0) {
+        const storedAt = neowsCadCache.set(cadKey, shaped);
+        return sendFresh(res, { success: true, data: shaped, isFallback: true, fallbackSource: 'jpl-cad', degraded }, neowsCadCache.ttlMs, storedAt);
+      }
+    }
+
+    // Neither source answered. Do not invent close-approach dates, distances or
+    // velocities; report what upstream said, because a 503 with no reason is what
+    // made this failure undiagnosable from outside in the first place.
+    return res.status(503).json({
+      success: false,
+      data: null,
+      code: 'NEOWS_UNAVAILABLE',
+      message: 'NASA NeoWs data is temporarily unavailable.',
+      fallbackReason: primary.failureKind,
+      upstreamStatus: primary.status || undefined,
+      upstreamMs: primary.ms,
+      fallback: {
+        source: 'jpl-cad',
+        ok: cad.ok,
+        reason: cad.failureKind,
+        upstreamStatus: cad.status || undefined,
+        ms: cad.ms,
+      },
+    });
   });
 
   // ====================================================

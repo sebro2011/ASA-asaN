@@ -111,7 +111,9 @@ export default function SignalStrip({
         <SignalTile
           icon={Activity}
           title={t('signalNeo')}
-          detail="NASA NeoWs · 7-day close-approach feed"
+          // The tile must name the source it actually used: after the JPL fallback
+          // the numbers are real but they are not NeoWs's.
+          detail={neo.data?.state === 'derived' ? 'JPL close-approach data · NeoWs unreachable' : 'NASA NeoWs · 7-day close-approach feed'}
           state={toDataState(signal(neo))}
         />
         <SignalTile

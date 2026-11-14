@@ -175,6 +175,128 @@ test('a different date range is a different cache entry', async () => {
   }
 });
 
+const CAD_BODY = {
+  signature: { source: 'NASA/JPL Close Approach Data API', version: '1.4' },
+  count: 2,
+  fields: ['des', 'orbit_id', 'jd', 'cd', 'dist', 'dist_min', 'dist_max', 'v_rel', 'v_inf', 't_sigma_f', 'h', 'fullname'],
+  // Exactly the shape the live API returned on 2026-11-13: dates are `2026-Nov-13`,
+  // not ISO, and `fullname` arrives space-padded.
+  data: [
+    ['2026 AB1', '12', '2461388.5', '2026-Nov-13 04:12', '0.034512', '0.034300', '0.034724', '12.44', '13.10', '< 00:01', '22.1', '       (2026 AB1)'],
+    ['2026 CD2', '4', '2461389.5', '2026-Nov-14 19:40', '0.081200', '0.081000', '0.081400', '5.02', '5.71', '< 00:01', '25.8', '       (2026 CD2)'],
+  ],
+};
+
+const NEOWS_FAILS = async (url) => {
+  if (url.includes('/neo/rest/v1/feed')) return jsonResponse({ error: 'stubbed outage' }, 500);
+  if (url.includes('ssd-api.jpl.nasa.gov/cad.api')) return jsonResponse(CAD_BODY);
+  return jsonResponse({});
+};
+
+test('when NeoWs fails the panel still gets real close approaches, from JPL, labelled derived', async () => {
+  const { neowsCache, neowsCadCache } = await import('../server/nasaRoutes.ts');
+  neowsCache.clear();
+  neowsCadCache.clear();
+  const fetchState = installFetch(NEOWS_FAILS);
+
+  try {
+    await withServer(async (base) => {
+      const response = await fetch(`${base}/api/asteroids/neows?start_date=2026-11-13&end_date=2026-11-19`);
+      const body = await response.json();
+
+      assert.equal(response.status, 200, 'the panel is not left with a dead tile');
+      assert.equal(body.isFallback, true, 'and the payload says the feed is a fallback');
+      assert.equal(body.fallbackSource, 'jpl-cad');
+      assert.equal(body.data.source, 'jpl-cad');
+      assert.equal(body.data.element_count, 2);
+      assert.deepEqual(Object.keys(body.data.near_earth_objects).sort(), ['2026-11-13', '2026-11-14']);
+      assert.equal(body.degraded.primary, 'nasa-neows');
+      assert.equal(body.degraded.upstreamStatus, 500, 'the reason NeoWs failed is reported, not swallowed');
+
+      const first = body.data.near_earth_objects['2026-11-13'][0];
+      assert.equal(first.name, '(2026 AB1)');
+      assert.equal(first.is_potentially_hazardous_asteroid, null, 'no PHA flag is invented');
+      assert.equal(first.estimated_diameter, null, 'no diameter is invented');
+      // 0.034512 AU = 5 163 km… converted, not guessed.
+      const km = Number(first.close_approach_data[0].miss_distance.kilometers);
+      assert.ok(Math.abs(km - 0.034512 * 149_597_870.7) < 1, 'AU -> km is the real conversion');
+      const lunar = Number(first.close_approach_data[0].miss_distance.lunar);
+      assert.ok(Math.abs(lunar - 0.034512 * (149_597_870.7 / 384_400)) < 1e-6, 'AU -> lunar distances too');
+      assert.equal(first.close_approach_data[0].relative_velocity.kilometers_per_second, '12.44', 'JPL velocity passes through');
+      assert.equal(body.data.hazardFlags, 'unavailable');
+
+      const again = await (await fetch(`${base}/api/asteroids/neows?start_date=2026-11-13&end_date=2026-11-19`)).json();
+      assert.equal(again.cached, true, 'the derived answer is cached separately');
+      assert.equal(again.isFallback, true, 'and stays labelled after caching');
+      const cadCalls = fetchState.calls.filter((url) => url.includes('cad.api'));
+      assert.equal(cadCalls.length, 1, 'JPL was asked once for two page loads');
+      assert.match(cadCalls[0], /dist-max=0\.2/, 'the request states the envelope it used');
+      assert.match(cadCalls[0], /body=Earth/);
+    });
+  } finally {
+    fetchState.restore();
+  }
+});
+
+test('JPL dates are parsed as written, and an unparseable date is dropped, not guessed', async () => {
+  const { cadDateToIso } = await import('../server/nasaRoutes.ts');
+  assert.equal(cadDateToIso('2026-Nov-13 01:22'), '2026-11-13');
+  assert.equal(cadDateToIso('2026-Dec-01 23:59'), '2026-12-01');
+  assert.equal(cadDateToIso('  2026-Jan-05 00:00 '), '2026-01-05');
+  assert.equal(cadDateToIso('2026-11-13 04:12'), null, 'an ISO string is not one of JPL’s formats');
+  assert.equal(cadDateToIso(''), null);
+  assert.equal(cadDateToIso(null), null);
+  assert.equal(cadDateToIso('2026-Foo-13'), null);
+  assert.equal(cadDateToIso('2026-Nov-99'), null);
+});
+
+test('a derived answer is never stored under the live key', async () => {
+  const { neowsCache, neowsCadCache } = await import('../server/nasaRoutes.ts');
+  neowsCache.clear();
+  neowsCadCache.clear();
+  const fetchState = installFetch(NEOWS_FAILS);
+
+  try {
+    await withServer(async (base) => {
+      const derived = await (await fetch(`${base}/api/asteroids/neows?start_date=2026-11-13&end_date=2026-11-13`)).json();
+      assert.equal(derived.isFallback, true);
+      assert.equal(neowsCache.get('2026-11-13..2026-11-13'), null, 'nothing derived enters the live cache');
+    });
+  } finally {
+    fetchState.restore();
+  }
+});
+
+test('when both sources fail the 503 carries the reason, not just a shrug', async () => {
+  const { neowsCache, neowsCadCache } = await import('../server/nasaRoutes.ts');
+  neowsCache.clear();
+  neowsCadCache.clear();
+  const fetchState = installFetch(async (url) => {
+    if (url.includes('/neo/rest/v1/feed')) return jsonResponse({ error: 'quota' }, 429);
+    if (url.includes('cad.api')) return jsonResponse({ error: 'down' }, 503);
+    return jsonResponse({});
+  });
+
+  try {
+    await withServer(async (base) => {
+      const response = await fetch(`${base}/api/asteroids/neows?start_date=2026-11-13&end_date=2026-11-13`);
+      const body = await response.json();
+      assert.equal(response.status, 503);
+      assert.equal(body.code, 'NEOWS_UNAVAILABLE');
+      assert.equal(body.data, null);
+      assert.equal(body.fallbackReason, 'rate-limited', 'a 429 is named as a rate limit');
+      assert.equal(body.upstreamStatus, 429);
+      assert.equal(typeof body.upstreamMs, 'number');
+      assert.equal(body.fallback.ok, false);
+      assert.equal(body.fallback.source, 'jpl-cad');
+      assert.equal(body.fallback.upstreamStatus, 503);
+      assert.doesNotMatch(JSON.stringify(body), /api_key/, 'no key material in the failure');
+    });
+  } finally {
+    fetchState.restore();
+  }
+});
+
 test('an upstream outage stays an outage: no cached number is dressed up as current', async () => {
   const { neowsCache } = await import('../server/nasaRoutes.ts');
   neowsCache.clear();

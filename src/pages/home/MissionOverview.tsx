@@ -223,8 +223,8 @@ function NeoPanel({
             />
             <Metric
               label={t('neoHazardous')}
-              value={isReference ? '—' : numberFormat.format(overview.hazardousCount)}
-              note={isReference ? t('unavailableShort') : undefined}
+              value={isReference || !overview.hazardKnown ? '—' : numberFormat.format(overview.hazardousCount)}
+              note={isReference || !overview.hazardKnown ? t('unavailableShort') : undefined}
             />
           </div>
 
@@ -258,8 +258,11 @@ function NeoPanel({
                 </div>
                 <div className="flex items-baseline justify-between gap-3">
                   <dt className="text-ink-4">Classification</dt>
-                  <dd className={cx('font-mono', closest.hazardous ? 'text-caution' : 'text-signal')}>
-                    {closest.hazardous ? 'PHA — flagged' : 'Not flagged'}
+                  {/* `null` is unknown, not "not flagged": the JPL fallback publishes
+                      no PHA flags, and a green "Not flagged" would be a claim about
+                      planetary defence that no source in this request made. */}
+                  <dd className={cx('font-mono', closest.hazardous === null ? 'text-ink-4' : closest.hazardous ? 'text-caution' : 'text-signal')}>
+                    {closest.hazardous === null ? '—' : closest.hazardous ? 'PHA — flagged' : 'Not flagged'}
                   </dd>
                 </div>
               </dl>
