@@ -171,12 +171,27 @@ npm run lint
 npm run build
 ```
 
+The feed itself is resilient to a single dropped request: the first page is
+requested twice at most, with a ~0.9 s pause between attempts, and only a
+genuinely unreachable library ends in the error panel. The browser budget is
+20 s, above the server's own worst case of one 7 s `search.list` plus one 7 s
+`videos.list`; when the request is aborted by that budget the panel says the
+library did not answer in time instead of blaming the viewer's connection.
+Retry is deliberately limited to the first page — a later page carries a
+continuation token, and replaying it could duplicate or skip results.
+
 `npm run test:cosmovision` drives the player against a stubbed YouTube IFrame
 API in jsdom: it checks the call each control makes, that Picture-in-Picture and
 audio-track controls do not exist, that captions disappear when the player does
 not implement them, keyboard handling, the auto-hide rules, the close/share
 paths, the error-and-retry state, and label parity across English, Sinhala and
 Tamil. It needs no browser, no key and no network.
+
+`npm run test:resilience` guards the numbers behind the home page's four
+service tiles: the browser budget for NeoWs must exceed the server's own worst
+case (12 s NeoWs + 8 s JPL fallback), the feed budget must exceed the two 7 s
+YouTube calls, a last-known ISS fix must be reported as cached rather than live,
+and the retry helper must stay bounded and must never retry a caller abort.
 
 `test:space-videos` uses a mocked upstream and needs no key or network. It
 covers diverse fallback channels, astronomy relevance and anti-keyword-stuffing,

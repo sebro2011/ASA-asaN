@@ -11,6 +11,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { TRANSIENT_RETRY, withRetry } from '../lib/retry';
 
 export type ResourcePhase = 'idle' | 'loading' | 'ready' | 'error';
 
@@ -31,6 +32,12 @@ export interface UseApiResourceOptions {
   enabled?: boolean;
   /** Skip the initial automatic request. */
   manual?: boolean;
+  /**
+   * Extra automatic attempts after a failure (0 keeps the old one-shot behaviour).
+   * Opt-in, because a resource whose failure is itself the answer — an unavailable
+   * APOD day, for example — should not be requested twice.
+   */
+  retries?: number;
 }
 
 export function useApiResource<T>(
@@ -38,7 +45,7 @@ export function useApiResource<T>(
   deps: unknown[],
   options: UseApiResourceOptions = {}
 ): UseApiResourceResult<T> {
-  const { enabled = true, manual = false } = options;
+  const { enabled = true, manual = false, retries = 0 } = options;
   const [state, setState] = useState<ResourceState<T>>({
     data: null,
     phase: manual ? 'idle' : 'loading',
@@ -55,8 +62,12 @@ export function useApiResource<T>(
     let active = true;
     setState((previous) => ({ ...previous, phase: previous.data ? previous.phase : 'loading', error: null }));
 
-    loaderRef
-      .current(controller.signal)
+    const request = () =>
+      retries > 0
+        ? withRetry(() => loaderRef.current(controller.signal), { ...TRANSIENT_RETRY, attempts: retries + 1 }, { signal: controller.signal })
+        : loaderRef.current(controller.signal);
+
+    request()
       .then((value) => {
         if (!active || controller.signal.aborted) return;
         setState({

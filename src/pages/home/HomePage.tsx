@@ -29,10 +29,13 @@ export default function HomePage({
   onNavigate: (tab: TabId) => void;
 }) {
   const { t } = useTranslation();
-  const apod = useApiResource(loadApod, []);
-  const iss = useApiResource(loadIss, []);
-  const neo = useApiResource(loadNeo, []);
-  const earth = useApiResource(loadEarthPreview, []);
+  // One silent retry: these four tiles are the page's honesty statement, and a
+  // single dropped request used to turn a working service into UNAVAILABLE.
+  const retryOnce = { retries: 1 } as const;
+  const apod = useApiResource(loadApod, [], retryOnce);
+  const iss = useApiResource(loadIss, [], retryOnce);
+  const neo = useApiResource(loadNeo, [], retryOnce);
+  const earth = useApiResource(loadEarthPreview, [], retryOnce);
 
   return (
     <div className="pb-4">

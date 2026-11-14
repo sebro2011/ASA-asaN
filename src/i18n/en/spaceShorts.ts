@@ -84,6 +84,7 @@ export const spaceShortsEn = {
     ssStarterNetwork: 'YouTube could not be reached. Showing the starter collection instead.',
     ssStarterRate: 'Requests are temporarily limited. Showing the starter collection instead.',
     ssLoading: 'Finding videos…',
+    ssTimeout: 'The video library did not answer in time. Check your connection and try again.',
     ssError: 'Videos could not be loaded. Check your connection and try again.',
     ssMoreError: 'More videos could not be loaded. Please try again.',
     ssRateError: 'Too many requests. Please wait a moment and try again.',

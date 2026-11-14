@@ -104,7 +104,9 @@ export default function SignalStrip({
         <SignalTile
           icon={Satellite}
           title={t('signalIss')}
-          detail="api.wheretheiss.at · propagated fallback"
+          // The route serves the last genuine fix when wheretheiss.at fails; it has
+          // no propagated orbit of its own, so the tile says "last known fix".
+          detail="api.wheretheiss.at · last known fix on failure"
           state={toDataState(signal(iss))}
           stateLabel={iss.data?.state === 'simulated' ? t('stateSimulated') : undefined}
         />
