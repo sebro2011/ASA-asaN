@@ -5,6 +5,19 @@ Each item says what a user or operator would actually see, and where it is
 recorded. Entries dated 2026-11-12 below the current table remain accurate unless
 the table supersedes them.
 
+## 2026-11-14 — the four home-page service tiles
+
+The strip above the home fold reports four services (APOD, orbital tracking,
+near-Earth objects, NASA POWER). What a reader should expect when one of them
+cannot be reached:
+
+| Behaviour | Detail |
+| --- | --- |
+| **A failed tile may show a saved value** | Each live tile now keeps its last successful answer (`src/pages/home/homeData.ts`, `withLastKnown`): APOD for 7 days, the ISS fix for 6 hours, the NEO window for 24 hours. On failure the tile reads **CACHED**, the source line becomes the reason the live request failed, and the badge tooltip carries the original retrieval time. NASA POWER already worked this way, which is why it was the only tile that survived a bad connection while the others said UNAVAILABLE. |
+| **A tile says why it failed** | `offline — this device has no connection`, `the request did not leave this device`, `the server did not answer within N s`, `the server answered HTTP 504`, `the answer was not valid JSON`. A tile that only says UNAVAILABLE cannot be acted on, and "check your connection" is wrong when the connection is fine. |
+| **Each tile retries alone** | A failed tile offers its own *Try again*, which re-runs that one request. Reloading the page to rescue one tile discarded three healthy ones. |
+| **NASA POWER is a monthly archive** | Its **CACHED** badge is correct even on a good connection: `power.larc.nasa.gov` publishes monthly means, so a 12-hour local cache is the honest reading of the data, not a failure. |
+
 ## 2026-11-13 — Phase 1 re-audit additions
 
 These are current, measured limits. Each names the command or file behind it.

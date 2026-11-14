@@ -7,6 +7,8 @@
  * `state: 'static'` and the UI labels it as such.
  */
 
+import { cacheGet, cacheSet } from '../../lib/earth/cache';
+
 export type Provenance = 'live' | 'cached' | 'static' | 'simulated' | 'derived' | 'unavailable';
 
 export interface Sourced<T> {
@@ -27,18 +29,133 @@ export interface Sourced<T> {
  */
 export const NEOWS_CLIENT_BUDGET_MS = 26_000;
 
+/**
+ * How long a last-known value stays usable when the live request fails.
+ *
+ * The tiles are the page's honesty statement, and "UNAVAILABLE" is the least
+ * useful thing they can say when a value was successfully retrieved an hour
+ * ago. NASA POWER already behaves this way, which is why it was the only tile
+ * that survived a bad connection: every other tile threw away its own history.
+ * These windows are per data family, because an ISS position and a daily APOD
+ * age at completely different rates.
+ */
+const LAST_KNOWN = {
+  apod: 7 * 24 * 60 * 60 * 1000,
+  iss: 6 * 60 * 60 * 1000,
+  neo: 24 * 60 * 60 * 1000
+} as const;
+
+/** Why a home-page request failed, in the terms the tile can print. */
+export type ApiFailureCode = 'offline' | 'network' | 'timeout' | 'http' | 'shape';
+
+export class HomeApiError extends Error {
+  readonly code: ApiFailureCode;
+  readonly status?: number;
+  readonly elapsedMs: number;
+
+  constructor(code: ApiFailureCode, message: string, options: { status?: number; elapsedMs: number } = { elapsedMs: 0 }) {
+    super(message);
+    this.name = 'HomeApiError';
+    this.code = code;
+    this.status = options.status;
+    this.elapsedMs = options.elapsedMs;
+  }
+}
+
+/**
+ * One readable sentence for a failure. A tile that says "UNAVAILABLE" alone
+ * cannot be acted on: "HTTP 504" and "offline" need different responses from the
+ * reader, so the tile prints this instead.
+ */
+export function describeFailure(error: unknown): string {
+  if (error instanceof HomeApiError) return error.message;
+  const message = (error as Error | undefined)?.message;
+  return message && message.length < 120 ? message : 'request failed';
+}
+
+function timeAgo(iso: string, now = Date.now()): string {
+  const then = Date.parse(iso);
+  if (!Number.isFinite(then)) return 'earlier';
+  const minutes = Math.max(1, Math.round((now - then) / 60_000));
+  if (minutes < 60) return `${minutes} min ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 36) return `${hours} h ago`;
+  return `${Math.round(hours / 24)} days ago`;
+}
+
 async function getJson<T>(url: string, signal: AbortSignal, timeoutMs = 12000): Promise<T> {
+  const started = Date.now();
+  // A tile that knows the browser is offline should say so immediately instead
+  // of spending its whole budget to discover the same thing.
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+    throw new HomeApiError('offline', 'offline — this device has no connection', { elapsedMs: 0 });
+  }
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  let timedOut = false;
+  const timer = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, timeoutMs);
   const onAbort = () => controller.abort();
   signal.addEventListener('abort', onAbort, { once: true });
   try {
-    const response = await fetch(url, { signal: controller.signal, headers: { Accept: 'application/json' } });
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    return (await response.json()) as T;
+    let response: Response;
+    try {
+      response = await fetch(url, { signal: controller.signal, headers: { Accept: 'application/json' } });
+    } catch (error) {
+      // The caller moved on (unmount, reload, tab change): not a failure to report.
+      if (signal.aborted) throw error;
+      const elapsedMs = Date.now() - started;
+      if (timedOut) {
+        throw new HomeApiError('timeout', `the server did not answer within ${Math.round(timeoutMs / 1000)} s`, { elapsedMs });
+      }
+      throw new HomeApiError('network', 'the request did not leave this device', { elapsedMs });
+    }
+    if (!response.ok) {
+      throw new HomeApiError('http', `the server answered HTTP ${response.status}`, {
+        status: response.status,
+        elapsedMs: Date.now() - started
+      });
+    }
+    try {
+      return (await response.json()) as T;
+    } catch {
+      throw new HomeApiError('shape', 'the answer was not valid JSON', { elapsedMs: Date.now() - started });
+    }
   } finally {
     clearTimeout(timer);
     signal.removeEventListener('abort', onAbort);
+  }
+}
+
+/**
+ * Run a loader, remembering its last success. If the live request fails and a
+ * stored value exists, the stored value is returned as `cached` — with the
+ * original retrieval time and the reason the live request failed in the note.
+ * Nothing is presented as fresh when it is not.
+ */
+async function withLastKnown<T>(
+  key: keyof typeof LAST_KNOWN,
+  signal: AbortSignal,
+  load: () => Promise<Sourced<T>>
+): Promise<Sourced<T>> {
+  try {
+    const fresh = await load();
+    cacheSet(`home:${key}`, fresh, LAST_KNOWN[key]);
+    return fresh;
+  } catch (error) {
+    if ((error as Error | undefined)?.name === 'AbortError') throw error;
+    const hit = cacheGet<Sourced<T>>(`home:${key}`);
+    if (!hit) throw error;
+    const reason = describeFailure(error);
+    return {
+      ...hit.value,
+      state: 'cached',
+      note: [`Live request failed (${reason}).`, `Showing the value saved ${timeAgo(hit.storedAt)}.`, hit.value.note]
+        .filter(Boolean)
+        .join(' '),
+      retrievedAt: hit.storedAt
+    };
   }
 }
 
@@ -58,7 +175,11 @@ export interface Apod {
   source_url?: string;
 }
 
-export async function loadApod(signal: AbortSignal): Promise<Sourced<Apod>> {
+export function loadApod(signal: AbortSignal): Promise<Sourced<Apod>> {
+  return withLastKnown('apod', signal, () => loadApodLive(signal));
+}
+
+async function loadApodLive(signal: AbortSignal): Promise<Sourced<Apod>> {
   const payload = await getJson<{
     success?: boolean;
     data?: Apod;
@@ -96,7 +217,11 @@ export interface IssPosition {
   timestamp: number | null;
 }
 
-export async function loadIss(signal: AbortSignal): Promise<Sourced<IssPosition>> {
+export function loadIss(signal: AbortSignal): Promise<Sourced<IssPosition>> {
+  return withLastKnown('iss', signal, () => loadIssLive(signal));
+}
+
+async function loadIssLive(signal: AbortSignal): Promise<Sourced<IssPosition>> {
   const payload = await getJson<{
     success?: boolean;
     data?: Record<string, unknown>;
@@ -188,7 +313,11 @@ interface NeoWsFeed {
   maxDistanceAu?: unknown;
 }
 
-export async function loadNeo(signal: AbortSignal): Promise<Sourced<NeoOverview>> {
+export function loadNeo(signal: AbortSignal): Promise<Sourced<NeoOverview>> {
+  return withLastKnown('neo', signal, () => loadNeoLive(signal));
+}
+
+async function loadNeoLive(signal: AbortSignal): Promise<Sourced<NeoOverview>> {
   const start = new Date();
   const end = new Date(start.getTime() + 6 * 86400000);
   const window = { start: isoDate(start), end: isoDate(end) };

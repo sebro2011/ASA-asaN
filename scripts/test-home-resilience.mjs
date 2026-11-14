@@ -105,6 +105,85 @@ test('a last-known ISS fix is reported as cached, never as live telemetry', asyn
   }
 });
 
+/* ------------------------------------------------------- failure reporting */
+const { cacheClear } = await import('../src/lib/earth/cache.ts');
+const { HomeApiError, describeFailure } = await import('../src/pages/home/homeData.ts');
+
+const jsonResponse = (body, status = 200) =>
+  new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
+const ISS_BODY = { success: true, data: { latitude: 1, longitude: 2, altitude: 400, velocity: 27000, timestamp: 1794643679000 } };
+
+async function withFetch(stub, run) {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = stub;
+  try {
+    return await run();
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+}
+
+test('a failure is classified well enough for a tile to explain it', async () => {
+  const { loadIss } = await import('../src/pages/home/homeData.ts');
+  const signal = new AbortController().signal;
+
+  cacheClear('home:');
+  await withFetch(async () => jsonResponse({}, 504), async () => {
+    const error = await loadIss(signal).then(() => null, (reason) => reason);
+    assert.ok(error instanceof HomeApiError);
+    assert.equal(error.code, 'http');
+    assert.equal(error.status, 504);
+    assert.match(describeFailure(error), /HTTP 504/);
+  });
+
+  cacheClear('home:');
+  await withFetch(async () => new Response('<html>gateway</html>', { status: 200 }), async () => {
+    const error = await loadIss(signal).then(() => null, (reason) => reason);
+    assert.equal(error.code, 'shape', 'an HTML error page is not JSON');
+  });
+
+  cacheClear('home:');
+  await withFetch(async () => { throw new TypeError('Failed to fetch'); }, async () => {
+    const error = await loadIss(signal).then(() => null, (reason) => reason);
+    assert.equal(error.code, 'network');
+    assert.match(describeFailure(error), /did not leave this device/);
+  });
+
+  // An offline browser must not spend its whole budget to learn that.
+  cacheClear('home:');
+  Object.defineProperty(globalThis.navigator, 'onLine', { value: false, configurable: true });
+  await withFetch(async () => { throw new Error('should not be called'); }, async () => {
+    const error = await loadIss(signal).then(() => null, (reason) => reason);
+    assert.equal(error.code, 'offline');
+    assert.match(describeFailure(error), /offline/);
+  });
+  Object.defineProperty(globalThis.navigator, 'onLine', { value: true, configurable: true });
+});
+
+test('a failed tile shows the value it saved instead of dying', async () => {
+  const { loadIss } = await import('../src/pages/home/homeData.ts');
+  const signal = new AbortController().signal;
+
+  cacheClear('home:');
+  const live = await withFetch(async () => jsonResponse(ISS_BODY), () => loadIss(signal));
+  assert.equal(live.state, 'live');
+
+  // Same tab, same key: the second request fails, so the tile must fall back to
+  // the value it already had — labelled cached, with the reason stated.
+  const cached = await withFetch(async () => jsonResponse({}, 503), () => loadIss(signal));
+  assert.equal(cached.state, 'cached', 'a last-known value is cached, never live');
+  assert.equal(cached.data.latitude, 1);
+  assert.match(cached.note, /Live request failed \(the server answered HTTP 503\)/);
+  assert.match(cached.note, /saved/);
+  assert.ok(Date.parse(cached.retrievedAt) <= Date.now());
+
+  // With nothing saved, the failure is still reported instead of invented.
+  cacheClear('home:');
+  await withFetch(async () => { throw new TypeError('Failed to fetch'); }, async () => {
+    await assert.rejects(() => loadIss(signal), /did not leave this device/);
+  });
+});
+
 /* --------------------------------------------------- useApiResource retrying */
 const dom = new JSDOM('<!doctype html><html><body><div id="root"></div></body></html>', { url: 'https://example.test/' });
 const { window } = dom;
@@ -170,6 +249,49 @@ test('a persistent failure ends as an honest error after the bounded attempts', 
   }, { retries: 1 });
   assert.equal(calls, 2);
   assert.equal(seen.at(-1).phase, 'error');
+});
+
+test('a failed tile prints the reason and offers its own retry', async () => {
+  const ReactDOMClient = await import('react-dom/client');
+  const { I18nextProvider } = await import('react-i18next');
+  const i18nInstance = (await import('../src/i18n.ts')).default;
+  await i18nInstance.changeLanguage('en');
+  const SignalStrip = (await import('../src/pages/home/SignalStrip.tsx')).default;
+
+  let retried = 0;
+  const ready = (state) => ({ phase: 'ready', data: { data: {}, state }, error: null, reload: () => {} });
+  const broken = (error) => ({ phase: 'error', data: null, error, reload: () => { retried += 1; } });
+
+  const host = window.document.createElement('div');
+  window.document.body.appendChild(host);
+  const root = ReactDOMClient.createRoot(host);
+  await act(async () => {
+    root.render(
+      React.createElement(I18nextProvider, { i18n: i18nInstance },
+        React.createElement(SignalStrip, {
+          apod: broken('the server answered HTTP 504'),
+          iss: broken('offline — this device has no connection'),
+          neo: ready('derived'),
+          earth: ready('cached')
+        })
+      )
+    );
+  });
+
+  const text = host.textContent;
+  assert.match(text, /the server answered HTTP 504/, 'the tile says why, not just UNAVAILABLE');
+  assert.match(text, /offline — this device has no connection/);
+  assert.match(text, /Offline/, 'an offline browser is named as such');
+  assert.match(text, /Derived|derived/, 'a JPL fallback stays labelled derived');
+  assert.match(text, /Cached|cached/);
+
+  const retryButtons = [...host.querySelectorAll('button')];
+  assert.equal(retryButtons.length, 2, 'only the failed tiles offer a retry');
+  await act(async () => { retryButtons[0].click(); });
+  assert.equal(retried, 1, 'the retry re-runs that tile, not the page');
+
+  await act(async () => { root.unmount(); });
+  host.remove();
 });
 
 test.after(() => { dom.window.close(); });
