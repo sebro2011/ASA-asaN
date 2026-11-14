@@ -257,3 +257,17 @@
 /* Unknown short-video orientation is not claimed to be portrait. */
 .ss-film-frame.is-format-unknown { width: min(100%, 420px); aspect-ratio: 16 / 9; }
 @media (max-width: 600px) { .ss-film-frame.is-format-unknown { width: min(100%, 420px); } }
+
+/* --- CosmoVision cinematic player, frame-level polish (additive only) ---- */
+/* Vision Pro's spatial depth comes from the surface floating, so the frame keeps
+   its original black drop shadow and gains a soft cyan halo underneath it. */
+.ss-film-frame { border-radius: 18px; box-shadow: 0 24px 55px rgba(0, 0, 0, .45), 0 0 0 5px rgba(143, 183, 218, .025), 0 34px 78px -42px rgba(96, 200, 255, .55); }
+.ss-gallery-player { border-radius: 18px; box-shadow: 0 34px 88px -46px rgba(96, 200, 255, .45); }
+.ss-gallery-player .ss-portrait-frame,
+.ss-gallery-player .ss-landscape-frame { border-radius: 14px; }
+.ss-film-frame.is-format-unknown { border-radius: 18px; }
+@media (pointer: coarse) {
+  .cv-icon { width: 42px; min-width: 42px; height: 42px; min-height: 42px; }
+  .cv-glass { min-height: 40px; }
+  .cv-timeline-wrap { padding: 14px 0 10px; }
+}

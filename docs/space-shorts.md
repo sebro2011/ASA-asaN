@@ -44,12 +44,56 @@ playback. Some countries, browsers, extensions or networks block these hosts.
 The official player reports playback restrictions when possible and an ordinary
 YouTube link is always provided. Thumbnail requests occur before playback;
 YouTube's iframe API and `youtube-nocookie.com` player are loaded only after a
-viewer selects a video. Native YouTube controls provide pause/play, volume,
-full screen and captions when the creator supplies them. Playback starts muted.
-Video availability, captions, regional restrictions and embeds are controlled
-by YouTube and the video owner, not by this app. A stalled app request ends in
-an error after 20 seconds; an iframe that never becomes ready ends in a player
-error after 15 seconds, with retry and a YouTube link.
+viewer selects a video. Playback starts muted. Video availability, captions,
+regional restrictions and embeds are controlled by YouTube and the video owner,
+not by this app. A stalled app request ends in an error after 20 seconds; an
+iframe that never becomes ready ends in a player error after 15 seconds, with
+retry and a YouTube link.
+
+## The player
+
+The playback engine is unchanged: the official YouTube IFrame Player API on
+`youtube-nocookie.com`, loaded lazily on the first explicit click, with the same
+12-second script timeout, 15-second ready timeout, single retry and
+"Watch on YouTube" fallback. What surrounds it is a CosmoVision control layer
+that drives the iframe player object directly (`playVideo`, `pauseVideo`,
+`seekTo`, `getCurrentTime`, `getDuration`, `getVideoLoadedFraction`,
+`getPlayerState`, `setVolume`, `mute`/`unMute`, `setOption`/`unloadModule` for
+captions). YouTube's own chrome is turned off (`controls: 0`, `fs: 0`) because
+duplicate controls were confusing on a 286 px portrait frame.
+
+Every control on screen is operable and reaches the player:
+
+| Control | How it works |
+| --- | --- |
+| Play / pause | `playVideo` / `pauseVideo`; label and icon follow the real player state |
+| Back / forward 15 s | `seekTo`, clamped to `0…duration` |
+| Timeline | `input[type=range]` reading `getCurrentTime`/`getDuration` (250 ms poll); buffered range from `getVideoLoadedFraction`; hover shows the target time |
+| Elapsed / remaining time | formatted locally, remaining counts down to `0:00` |
+| Volume + mute | `setVolume` / `mute` / `unMute`; the slider appears only where `setVolume` is meaningful (iOS ignores it, so iOS gets the mute button alone) |
+| Captions | `setOption('captions','track',{languageCode})`, hidden entirely when `setOption` is unavailable. `getOptions('captions')` is read to report the real active track; when it answers with more than one track, the button opens a menu of those languages plus Off. Nothing is listed that the player did not report |
+| Fullscreen | `requestFullscreen` on the player frame (with the Safari prefix), hidden when the browser has no Fullscreen API |
+| Share | `navigator.share` with the validated `https://www.youtube.com/watch?v=<id>` URL, clipboard fallback, honest message when neither exists |
+| Close | Only where the surface has no other close control. The shorts feed has none, so the frame has one; the gallery player card already closes from its heading button, so its frame does not repeat it |
+
+Keyboard: `Space`/`K` play or pause, `J`/`L` ±15 s, `←`/`→` ±5 s, `↑`/`↓`
+volume, `M` mute, `F` fullscreen, `C` captions, `Home`/`End` jump, `Escape`
+closes where a close button exists. `Tab` is never intercepted. The chrome fades
+out after 2.6 s of inactivity while playing and returns on pointer movement,
+focus or a tap; that first tap only reveals the controls so it cannot pause the
+video by accident. It stays visible while paused, hovered, focused or scrubbing,
+and `prefers-reduced-motion` removes the transitions.
+
+Two capabilities are **not** offered, because the engine cannot provide them:
+Picture-in-Picture (a cross-origin YouTube iframe is not a `<video>` element, so
+`requestPictureInPicture` does not apply) and audio-track or individual
+caption-track selection (the iframe API exposes neither list). Neither appears as
+a disabled or decorative button. Captions can be switched on and off, but the
+track chosen is YouTube's default when the API reports no track list; on-screen
+captions also depend on the creator and on regional policy. Captions keep their
+original default-on behaviour (`cc_load_policy: 1`), and the button's pressed
+state is read back from `getOptions('captions')` rather than assumed — if the API
+does not answer, the button simply stops claiming a state.
 
 ## Data and quota behavior
 
@@ -126,6 +170,13 @@ npm run test:space-build-security
 npm run lint
 npm run build
 ```
+
+`npm run test:cosmovision` drives the player against a stubbed YouTube IFrame
+API in jsdom: it checks the call each control makes, that Picture-in-Picture and
+audio-track controls do not exist, that captions disappear when the player does
+not implement them, keyboard handling, the auto-hide rules, the close/share
+paths, the error-and-retry state, and label parity across English, Sinhala and
+Tamil. It needs no browser, no key and no network.
 
 `test:space-videos` uses a mocked upstream and needs no key or network. It
 covers diverse fallback channels, astronomy relevance and anti-keyword-stuffing,

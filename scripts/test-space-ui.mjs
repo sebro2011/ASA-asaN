@@ -10,14 +10,36 @@ if (!executablePath) {
 }
 const base = process.env.SPACE_TEST_BASE || 'http://127.0.0.1:3000';
 const playerApi = `
-  window.__spacePlayers = {created: [], destroyed: [], muted: 0, played: 0};
+  window.__spacePlayers = {created: [], destroyed: [], muted: 0, played: 0, paused: 0, unmuted: 0, seeks: [], volumes: [], captions: []};
+  // Mirrors the members the cinematic chrome actually calls; anything missing would be
+  // a control that cannot work, so the smoke would catch it as a thrown exception.
   window.YT = {Player: class {
     constructor(element, options) {
       this.id = options.videoId; this.frame = document.createElement('iframe'); element.replaceWith(this.frame);
+      this.time = 30; this.duration = 90; this.volume = 70; this.muted = true; this.state = 2;
       window.__spacePlayers.created.push({id: this.id, host: options.host, vars: options.playerVars});
-      setTimeout(() => { options.events.onReady({target: this}); if (this.id === 'TseGuyuVWKM') options.events.onError({data: 101}); }, 0);
+      setTimeout(() => {
+        options.events.onReady({target: this});
+        this.state = 1; options.events.onStateChange({data: 1});
+        if (this.id === 'TseGuyuVWKM') options.events.onError({data: 101});
+      }, 0);
     }
-    getIframe() { return this.frame; } mute() { window.__spacePlayers.muted++; } playVideo() { window.__spacePlayers.played++; }
+    getIframe() { return this.frame; }
+    mute() { window.__spacePlayers.muted++; this.muted = true; }
+    unMute() { window.__spacePlayers.unmuted++; this.muted = false; }
+    isMuted() { return this.muted; }
+    playVideo() { window.__spacePlayers.played++; this.state = 1; }
+    pauseVideo() { window.__spacePlayers.paused++; this.state = 2; }
+    seekTo(seconds) { window.__spacePlayers.seeks.push(seconds); this.time = seconds; }
+    getCurrentTime() { return this.time; }
+    getDuration() { return this.duration; }
+    getVideoLoadedFraction() { return 0.5; }
+    getPlayerState() { return this.state; }
+    setVolume(value) { window.__spacePlayers.volumes.push(value); this.volume = value; }
+    getVolume() { return this.volume; }
+    setOption(module, option, value) { window.__spacePlayers.captions.push({module, option, value}); }
+    loadModule(module) { window.__spacePlayers.captions.push({load: module}); }
+    unloadModule(module) { window.__spacePlayers.captions.push({unload: module}); }
     destroy() { window.__spacePlayers.destroyed.push(this.id); this.frame.remove(); }
   }}; window.onYouTubeIframeAPIReady();
 `;
@@ -64,6 +86,26 @@ try {
   let state = await page.evaluate(() => window.__spacePlayers);
   assert.equal(state.created[0].id, '1ifqd3n6ZFY'); assert.equal(state.created[0].host, 'https://www.youtube-nocookie.com');
   assert.equal(state.created[0].vars.mute, 1); assert.equal(state.muted, 1);
+  assert.equal(state.created[0].vars.controls, 0, 'the CosmoVision chrome replaces the YouTube chrome');
+
+  // The cinematic chrome is real: it drives the player object and hides nothing it cannot do.
+  await page.locator('.cv-player[data-status="ready"]').waitFor();
+  const labels = await page.locator('.cv-player button').evaluateAll((nodes) => nodes.map((node) => node.getAttribute('aria-label')));
+  for (const label of ['Pause', 'Back 15 seconds', 'Forward 15 seconds', 'Unmute', 'Subtitles and captions', 'Share this video', 'Fullscreen', 'Close player']) {
+    assert.ok(labels.includes(label), `missing chrome control: ${label} (saw ${labels.join(' | ')})`);
+  }
+  assert.equal(labels.some((label) => /picture.?in.?picture/i.test(label)), false, 'no fake PiP control on an iframe');
+  assert.equal(labels.some((label) => /audio track|audio language/i.test(label)), false, 'the iframe API exposes no audio tracks');
+  await page.getByRole('button', { name: 'Back 15 seconds' }).click();
+  await page.waitForFunction(() => window.__spacePlayers.seeks.length === 1);
+  assert.equal((await page.evaluate(() => window.__spacePlayers.seeks))[0], 15, '30 s − 15 s reached the player');
+  await page.locator('.cv-play').click();
+  await page.waitForFunction(() => window.__spacePlayers.paused === 1);
+  await page.getByRole('button', { name: 'Unmute' }).click();
+  await page.waitForFunction(() => window.__spacePlayers.unmuted === 1);
+  await page.locator('.cv-player').press('KeyM');
+  await page.waitForFunction(() => window.__spacePlayers.muted === 2);
+  await checkAxe('.ss-film-frame');
   await page.getByRole('button', { name: 'Next video', exact: true }).click();
   await page.waitForFunction(() => window.__spacePlayers?.created.length === 2);
   state = await page.evaluate(() => window.__spacePlayers); assert.deepEqual(state.destroyed, ['1ifqd3n6ZFY']);

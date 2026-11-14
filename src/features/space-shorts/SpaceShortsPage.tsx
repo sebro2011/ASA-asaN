@@ -8,6 +8,7 @@ import YouTubePlayer from './YouTubePlayer';
 import { CommunityActions, ReportButton, useCommunity } from './CommunityTools';
 import type { SpaceVideo, SpaceVideoCategory, SpaceVideoResponse } from './types';
 import './spaceShorts.css';
+import './cosmovisionPlayer.css';
 
 const CATEGORIES: Array<{ id: SpaceVideoCategory; key: string }> = [
   { id: 'all', key: 'ssAll' },
@@ -199,7 +200,7 @@ function ShortsFeed({ items, index, setIndex, playerOpen, setPlayerOpen }: { ite
       <div className="ss-short-layout">
         <div className="ss-film-column">
           <div className={`ss-film-frame ${video.portraitVerified ? '' : 'is-format-unknown'}`}>
-            {playerOpen ? <YouTubePlayer key={video.id} video={video} /> : (
+            {playerOpen ? <YouTubePlayer key={video.id} video={video} onClose={() => setPlayerOpen(false)} /> : (
               <button type="button" className="ss-poster" onClick={() => setPlayerOpen(true)} aria-label={t('ssPlay', { title: video.title })}>
                 <Thumbnail video={video} className="ss-poster-image" />
                 <span className="ss-poster-shade" />
@@ -384,6 +385,8 @@ export default function SpaceShortsPage() {
         {!loading && !error && data && !items.length && <div className="ss-empty" role="status"><Search size={24} aria-hidden="true" /><h3>{t(tab === 'community' ? 'sfCommunityEmpty' : 'ssEmpty')}</h3><p>{t(tab === 'community' ? 'sfCommunityEmptyBody' : 'ssEmptyBody')}</p></div>}
         {!loading && !error && tab === 'shorts' && items.length > 0 && <div ref={shortPanel}><ShortsFeed items={items} index={index} setIndex={setIndex} playerOpen={shortPlayerOpen} setPlayerOpen={setShortPlayerOpen} /></div>}
         {!loading && !error && tab !== 'shorts' && selected && <div className="ss-gallery-player" ref={galleryPlayer}>
+          {/* One close affordance per surface: this player card already closes from the
+              heading button directly above the frame, so the frame itself carries none. */}
           <div className="ss-gallery-player-heading"><span><span className="ss-status-dot" /> {t('ssSelectedVideo')}</span><button type="button" onClick={() => setSelected(null)} aria-label={t('ssClosePlayer')}><X size={18} aria-hidden="true" /></button></div>
           <div className="ss-gallery-player-content">
             <div className={selected.portraitVerified ? 'ss-portrait-frame' : 'ss-landscape-frame'}><YouTubePlayer key={selected.id} video={selected} /></div>
