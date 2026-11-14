@@ -71,8 +71,15 @@ async function checkAxe(scope = '.space-shorts') {
 }
 
 try {
-  // The legacy route still opens the short-video feed.
+  // The pre-rename alias still opens the short-video feed, and lands on the
+  // canonical URL rather than lingering on a second address.
   await page.goto(`${base}/space-shorts`, { waitUntil: 'domcontentloaded' });
+  await page.locator('.ss-short-panel').waitFor({ timeout: 60000 });
+  await page.waitForFunction(() => window.location.pathname === '/cosmovision');
+  assert.equal(await page.locator('h1').innerText(), 'CosmoVision');
+
+  // The canonical route is the one everything links to.
+  await page.goto(`${base}/cosmovision`, { waitUntil: 'domcontentloaded' });
   await page.locator('.ss-short-panel').waitFor({ timeout: 60000 });
   assert.equal(await page.locator('h1').innerText(), 'CosmoVision');
   assert.equal(await page.getByRole('tab', { name: 'Space Shorts' }).getAttribute('aria-selected'), 'true');

@@ -1,8 +1,10 @@
 # CosmoVision
 
 CosmoVision is a lazy-loaded astronomy video destination at **`/cosmovision`**.
-Existing **`/space-shorts`** links continue to open the same page, and other
-state-based destinations remain unchanged. It provides a short-video feed and
+The pre-rename **`/space-shorts`** URL still opens this page (it is an alias, not
+a second address: the router resolves it and the address bar is rewritten to
+`/cosmovision`, so old bookmarks and shared links keep working without
+advertising a second URL). Other state-based destinations remain unchanged. It provides a short-video feed and
 a searchable, filterable gallery from multiple YouTube channels, with All,
 Space Shorts, NASA and Community tabs. All combines YouTube/starter results
 with approved community results when the community backend is available; it

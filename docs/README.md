@@ -69,7 +69,7 @@ Start at the specification, then follow the track you need:
 
 ## Features and recovery
 
-- [`space-shorts.md`](space-shorts.md) — CosmoVision (`/cosmovision`, `/space-shorts`), including the cinematic player's controls and the two capabilities it does not offer
+- [`space-shorts.md`](space-shorts.md) — CosmoVision (`/cosmovision`; the pre-rename `/space-shorts` alias redirects here), including the cinematic player's controls and the two capabilities it does not offer
 - Recovery notes, written during incident work and kept because they still
   describe how to diagnose a deployment:
   [`VERCEL_PRODUCTION_DIAGNOSTICS.md`](recovery/VERCEL_PRODUCTION_DIAGNOSTICS.md),
