@@ -116,6 +116,14 @@ export function parseRoute(pathname: string): AppRoute {
     return { name: 'explore', tab: 'space-shorts', path: '/cosmovision' };
   }
 
+  // `/space-shorts` is what this destination was called before the rename, and
+  // the docs promised those links keep working. It resolves to the same page and
+  // reports the canonical `/cosmovision` path, which App.tsx then writes into the
+  // address bar — one destination, one URL, old bookmarks included.
+  if (parts[0] === 'space-shorts' && parts.length === 1) {
+    return { name: 'explore', tab: 'space-shorts', path: '/cosmovision' };
+  }
+
   if (parts[0] === 'explore') {
     if (parts.length === 1) return { name: 'explore', tab: 'home', path: '/explore' };
     // The in-Explore assistant tab was retired in favour of the NOVA chat

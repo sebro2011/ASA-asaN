@@ -16,6 +16,17 @@ export interface Sourced<T> {
   retrievedAt: string;
 }
 
+/**
+ * The browser must wait longer than the server's own worst case, or it aborts a
+ * request the server was still going to answer. NeoWs is the case that matters:
+ * `/api/asteroids/neows` may spend 12 s on NeoWs and then 8 s on the JPL fallback
+ * before it replies, so a 15 s client budget marked the tile UNAVAILABLE while the
+ * server was still working — and the JPL data it eventually produced was thrown
+ * away. The server's cap is 20 s; this budget leaves room for a cold start and a
+ * slow response body, and stays under the function's 30 s limit.
+ */
+export const NEOWS_CLIENT_BUDGET_MS = 26_000;
+
 async function getJson<T>(url: string, signal: AbortSignal, timeoutMs = 12000): Promise<T> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -86,11 +97,14 @@ export interface IssPosition {
 }
 
 export async function loadIss(signal: AbortSignal): Promise<Sourced<IssPosition>> {
-  const payload = await getJson<{ success?: boolean; data?: Record<string, unknown>; simulated?: boolean }>(
-    '/api/iss',
-    signal,
-    15000
-  );
+  const payload = await getJson<{
+    success?: boolean;
+    data?: Record<string, unknown>;
+    simulated?: boolean;
+    /** The server answered with its last genuine fix because the upstream failed. */
+    isFallback?: boolean;
+    note?: string;
+  }>('/api/iss', signal, 15000);
   const raw = payload?.data;
   if (!raw || Number.isNaN(Number(raw.latitude)) || Number.isNaN(Number(raw.longitude))) {
     throw new Error('Orbital element set unavailable');
@@ -108,10 +122,14 @@ export async function loadIss(signal: AbortSignal): Promise<Sourced<IssPosition>
       visibility: typeof raw.visibility === 'string' ? raw.visibility : undefined,
       timestamp: toNumber(raw.timestamp)
     },
-    state: payload.simulated ? 'simulated' : 'live',
+    // A last-known fix is cached data, not a live position: saying "live" here
+    // would date-stamp old telemetry as current.
+    state: payload.simulated ? 'simulated' : payload.isFallback ? 'cached' : 'live',
     note: payload.simulated
       ? 'The upstream tracking service did not answer; this trajectory is propagated locally and is not live spacecraft telemetry.'
-      : undefined,
+      : payload.isFallback
+        ? payload.note || 'The upstream tracking service did not answer; this is the last known ISS fix, not a current position.'
+        : undefined,
     retrievedAt: new Date().toISOString()
   };
 }
@@ -182,7 +200,7 @@ export async function loadNeo(signal: AbortSignal): Promise<Sourced<NeoOverview>
   }>(
     `/api/asteroids/neows?start_date=${window.start}&end_date=${window.end}`,
     signal,
-    15000
+    NEOWS_CLIENT_BUDGET_MS
   );
   const feed = payload?.data;
   const grouped = feed?.near_earth_objects;

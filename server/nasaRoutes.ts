@@ -135,11 +135,14 @@ export const neowsCadCache = createTtlCache<JsonRecord>({ ttlMs: 5 * 60_000, max
  * NeoWs timeout. The home page asks for a 7-day window; that feed is ~400 KB and
  * NASA does not always deliver it inside the 4 s the route used to allow, which
  * showed up as a permanent "unavailable" tile. The function budget is 30 s and the
- * client waits 15 s, so 12 s is the honest ceiling for this one upstream call.
+ * client waits 26 s (12 s here + 8 s JPL + a cold start), so 12 s is the honest
+ * ceiling for this one upstream call. The client budget lives in
+ * src/pages/home/homeData.ts (`NEOWS_CLIENT_BUDGET_MS`) and is asserted against
+ * these two constants in scripts/test-home-resilience.mjs.
  */
-const NEOWS_TIMEOUT_MS = 12_000;
+export const NEOWS_TIMEOUT_MS = 12_000;
 /** JPL's close-approach API is a small JSON document; it does not need 12 s. */
-const CAD_TIMEOUT_MS = 8_000;
+export const CAD_TIMEOUT_MS = 8_000;
 /** Venus is at 0.28 AU; 0.2 AU is a defensible "near Earth" envelope for the panel. */
 const CAD_MAX_DIST_AU = 0.2;
 export const AU_IN_KM = 149_597_870.7;

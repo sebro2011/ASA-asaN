@@ -7,6 +7,8 @@ import {
 import YouTubePlayer from './YouTubePlayer';
 import { CommunityActions, ReportButton, useCommunity } from './CommunityTools';
 import type { SpaceVideo, SpaceVideoCategory, SpaceVideoResponse } from './types';
+import { withRetry } from '../../lib/retry';
+import { FEED_REQUEST_TIMEOUT_MS, FEED_RETRY } from './feedPolicy';
 import './spaceShorts.css';
 import './cosmovisionPlayer.css';
 
@@ -53,7 +55,7 @@ async function fetchSingle(tab: Exclude<FeedTab, 'all'> | 'youtube', category: S
   const cancel = () => controller.abort();
   if (signal.aborted) cancel();
   else signal.addEventListener('abort', cancel, { once: true });
-  const timeout = window.setTimeout(cancel, 20_000);
+  const timeout = window.setTimeout(cancel, FEED_REQUEST_TIMEOUT_MS);
   try {
     const endpoint = community ? '/api/community/videos' : '/api/space-videos';
     const response = await fetch(`${endpoint}?${params}`, { signal: controller.signal });
@@ -289,7 +291,13 @@ export default function SpaceShortsPage() {
     const controller = new AbortController(); request.current = controller;
     setLoading(true); setLoadingMore(false); setError(''); setMoreError(''); setData(null);
     setIndex(0); setSelected(null); setShortPlayerOpen(false); setReportVideo(null);
-    fetchPage(tab, category, query, '', controller.signal).then((result) => {
+    // The first page gets one silent retry: a dropped packet, a cold function or a
+    // 30-second upstream stall is not a reason to show a dead library to the viewer.
+    withRetry(
+      () => fetchPage(tab, category, query, '', controller.signal),
+      FEED_RETRY,
+      { signal: controller.signal }
+    ).then((result) => {
       if (!controller.signal.aborted) setData(result);
     }).catch((failure) => {
       if (!controller.signal.aborted) setError(failure instanceof Error ? failure.message : 'upstream');
@@ -381,7 +389,7 @@ export default function SpaceShortsPage() {
         {data?.source === 'curated' && <StarterNotice reason={data.reason} />}
         {data?.communityUnavailable && <div className="ss-notice" role="status"><Info size={16} aria-hidden="true" /> {community.configuration === 'disabled' ? t('sfCommunityUnavailable') : t('sfCommunityFeedUnavailable')}</div>}
         {loading && <div className="ss-skeleton-grid" role="status" aria-label={t('sfSkeleton')}><span className="sr-only">{t('ssLoading')}</span>{Array.from({ length: 6 }, (_, item) => <div className="ss-skeleton-card" key={item}><span /><i /><i /></div>)}</div>}
-        {!loading && error && <div className="ss-empty" role="alert"><Info size={24} aria-hidden="true" /><p>{error === 'rate-limit' ? t('ssRateError') : tab === 'community' ? (community.configuration === 'disabled' ? t('sfCommunityUnavailable') : t('sfCommunityFeedUnavailable')) : t('ssError')}</p><button className="ss-secondary-action" type="button" onClick={() => setRetry((value) => value + 1)}>{t('ssRetry')}</button></div>}
+        {!loading && error && <div className="ss-empty" role="alert"><Info size={24} aria-hidden="true" /><p>{error === 'rate-limit' ? t('ssRateError') : error === 'network' ? t('ssTimeout') : tab === 'community' ? (community.configuration === 'disabled' ? t('sfCommunityUnavailable') : t('sfCommunityFeedUnavailable')) : t('ssError')}</p><button className="ss-secondary-action" type="button" onClick={() => setRetry((value) => value + 1)}>{t('ssRetry')}</button></div>}
         {!loading && !error && data && !items.length && <div className="ss-empty" role="status"><Search size={24} aria-hidden="true" /><h3>{t(tab === 'community' ? 'sfCommunityEmpty' : 'ssEmpty')}</h3><p>{t(tab === 'community' ? 'sfCommunityEmptyBody' : 'ssEmptyBody')}</p></div>}
         {!loading && !error && tab === 'shorts' && items.length > 0 && <div ref={shortPanel}><ShortsFeed items={items} index={index} setIndex={setIndex} playerOpen={shortPlayerOpen} setPlayerOpen={setShortPlayerOpen} /></div>}
         {!loading && !error && tab !== 'shorts' && selected && <div className="ss-gallery-player" ref={galleryPlayer}>

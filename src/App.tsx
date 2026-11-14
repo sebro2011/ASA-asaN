@@ -172,13 +172,18 @@ function WorkspaceSurface({ route }: { route: AppRoute }) {
 export default function App() {
   const route = useRoute();
 
-  // `/explore/assistant` was the old NOVA assistant tab. It is retired; the URL
-  // is rewritten once so a bookmark lands in the chat workspace cleanly.
+  // Two retired URLs keep working, but not as second addresses: each is
+  // rewritten once so the address bar agrees with what was documented.
+  // `/explore/assistant` was the old NOVA assistant tab → the chat workspace.
+  // `/space-shorts` is CosmoVision's pre-rename URL → the canonical route.
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    if (normalisePath(window.location.pathname) === '/explore/assistant') {
+    const current = normalisePath(window.location.pathname);
+    if (current === '/explore/assistant') {
       navigate('/chat', { replace: true });
+      return;
     }
+    if (current === '/space-shorts') navigate('/cosmovision', { replace: true });
   }, [route.path]);
 
   // NASA Space Explorer is the product. It owns `/` and every science

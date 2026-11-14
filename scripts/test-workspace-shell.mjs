@@ -61,6 +61,16 @@ test('explore routes preserve all destinations and the legacy cosmovision URL', 
   });
   // A space-shorts deep link canonicalises to the legacy shareable URL.
   assert.equal(parseRoute('/explore/space-shorts').path, '/cosmovision');
+  // The pre-rename URL is an alias for the same destination, not a 404 and not a
+  // second address: it resolves to space-shorts and reports the canonical path.
+  assert.deepEqual(parseRoute('/space-shorts'), {
+    name: 'explore',
+    tab: 'space-shorts',
+    path: '/cosmovision',
+  });
+  assert.deepEqual(parseRoute('/space-shorts/'), parseRoute('/space-shorts'));
+  assert.equal(parseRoute('/space-shorts/extra').name, 'notFound');
+  assert.equal(routeHref(parseRoute('/space-shorts').name, { tab: 'space-shorts' }), '/cosmovision');
   assert.equal(parseRoute('/explore/earth').tab, 'earth');
   assert.equal(parseRoute('/explore/unknown-tab').name, 'notFound');
 });
