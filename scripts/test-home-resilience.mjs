@@ -147,6 +147,12 @@ test('a failure is classified well enough for a tile to explain it', async () =>
     const error = await loadIss(signal).then(() => null, (reason) => reason);
     assert.equal(error.code, 'network');
     assert.match(describeFailure(error), /did not leave this device/);
+    // The tooltip detail is what makes a bug report actionable: an error name, a
+    // duration, and whether a worker handled the request.
+    assert.match(error.diagnostics, /network/);
+    assert.match(error.diagnostics, /ms/);
+    assert.match(error.diagnostics, /TypeError/);
+    assert.match(error.diagnostics, /service worker: (active|none|unsupported)/);
   });
 
   // An offline browser must not spend its whole budget to learn that.

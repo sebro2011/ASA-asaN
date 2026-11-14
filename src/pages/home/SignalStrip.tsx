@@ -32,6 +32,8 @@ export interface SignalResource {
   phase: ResourcePhase;
   data: Sourced<unknown> | null;
   error?: string | null;
+  /** Mechanical detail for the failed request (tooltip). */
+  errorDetail?: string | null;
   reload?: () => void;
 }
 
@@ -124,6 +126,7 @@ export default function SignalStrip({
   const retryLabel = t('retry');
 
   const tile = (resource: SignalResource) => {
+    const resolved = resource;
     const signal: Signal = { phase: resource.phase, provenance: resource.data?.state };
     const failed = resource.phase === 'error';
     const reason = failed ? resource.error || t('retry') : null;
@@ -131,7 +134,7 @@ export default function SignalStrip({
       state: toDataState(signal),
       // "Offline" is a state of the reader's device, not of NASA: name it.
       stateLabel: failed && reason && /offline/i.test(reason) ? 'Offline' : undefined,
-      stateDetail: resource.data?.note,
+      stateDetail: resolved.data?.note ?? resolved.errorDetail ?? undefined,
       failure: reason,
       onRetry: failed ? resource.reload : undefined,
       retryLabel

@@ -52,14 +52,43 @@ export class HomeApiError extends Error {
   readonly code: ApiFailureCode;
   readonly status?: number;
   readonly elapsedMs: number;
+  /**
+   * The mechanical detail behind the sentence: error name, elapsed time, and
+   * whether a service worker handled the request. It is never shown as the
+   * tile's main line (a reader wants "offline", not "TypeError"), but it is
+   * exactly what makes a bug report actionable — a fetch that fails inside a
+   * worker looks identical to a dead network from the outside.
+   */
+  readonly diagnostics: string;
 
-  constructor(code: ApiFailureCode, message: string, options: { status?: number; elapsedMs: number } = { elapsedMs: 0 }) {
+  constructor(
+    code: ApiFailureCode,
+    message: string,
+    options: { status?: number; elapsedMs: number; cause?: unknown }
+  ) {
     super(message);
     this.name = 'HomeApiError';
     this.code = code;
     this.status = options.status;
     this.elapsedMs = options.elapsedMs;
+    const cause = options.cause as { name?: string; message?: string } | undefined;
+    const causeLabel = cause?.name ? `${cause.name}${cause.message ? `: ${cause.message}` : ''}` : 'no exception';
+    this.diagnostics = [
+      code,
+      options.status ? `HTTP ${options.status}` : null,
+      `${options.elapsedMs} ms`,
+      causeLabel,
+      serviceWorkerState()
+    ]
+      .filter(Boolean)
+      .join(' · ');
   }
+}
+
+/** Whether a service worker is intercepting this page's requests. */
+function serviceWorkerState(): string {
+  if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return 'service worker: unsupported';
+  return navigator.serviceWorker.controller ? 'service worker: active' : 'service worker: none';
 }
 
 /**
@@ -107,9 +136,12 @@ async function getJson<T>(url: string, signal: AbortSignal, timeoutMs = 12000): 
       if (signal.aborted) throw error;
       const elapsedMs = Date.now() - started;
       if (timedOut) {
-        throw new HomeApiError('timeout', `the server did not answer within ${Math.round(timeoutMs / 1000)} s`, { elapsedMs });
+        throw new HomeApiError('timeout', `the server did not answer within ${Math.round(timeoutMs / 1000)} s`, {
+          elapsedMs,
+          cause: error
+        });
       }
-      throw new HomeApiError('network', 'the request did not leave this device', { elapsedMs });
+      throw new HomeApiError('network', 'the request did not leave this device', { elapsedMs, cause: error });
     }
     if (!response.ok) {
       throw new HomeApiError('http', `the server answered HTTP ${response.status}`, {
