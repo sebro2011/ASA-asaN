@@ -325,3 +325,39 @@
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   .cv-glass, .cv-toast, .cv-timeline-hint { background: rgba(14, 30, 44, .92); }
 }
+
+/* --- caption track menu (only rendered when the API reported >1 track) --- */
+.cv-captions { position: relative; display: inline-flex; }
+.cv-captions-menu {
+  position: absolute;
+  z-index: 9;
+  right: 0;
+  bottom: calc(100% + 8px);
+  display: grid;
+  min-width: 132px;
+  max-width: 190px;
+  padding: 5px;
+  border: 1px solid var(--cv-stroke);
+  border-radius: 15px;
+  background: linear-gradient(180deg, rgba(22, 40, 56, .86), rgba(10, 20, 30, .9));
+  -webkit-backdrop-filter: blur(22px) saturate(180%);
+  backdrop-filter: blur(22px) saturate(180%);
+  box-shadow: 0 18px 44px rgba(0, 0, 0, .55), inset 0 1px 0 rgba(255, 255, 255, .18);
+}
+.cv-captions-option {
+  padding: 8px 11px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: #dfeefb;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+  transition: background .15s ease, color .15s ease;
+}
+.cv-captions-option:hover { background: rgba(255, 255, 255, .12); color: #fff; }
+.cv-captions-option[aria-pressed='true'] { background: rgba(108, 215, 235, .22); color: #c8f4ff; }
+.cv-captions-option:focus-visible { outline: 2px solid rgba(158, 232, 255, .9); outline-offset: -2px; }

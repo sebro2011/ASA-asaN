@@ -142,6 +142,27 @@ test('timeline announces elapsed, duration and remaining time', () => {
   assert.equal(timelineValueText(30, 90), '0:30 / 1:30, -1:00');
 });
 
+test('caption readers trust only what the API actually returned', async () => {
+  const { readCaptionTracks, readActiveCaptionCode } = await import('../src/features/space-shorts/playerControls.ts');
+  for (const junk of [undefined, null, {}, { tracklist: 'nope' }, { tracklist: [null, 5, {}] }]) {
+    assert.deepEqual(readCaptionTracks(junk), [], 'unknown shapes must produce no menu at all');
+    assert.equal(readActiveCaptionCode(junk), null);
+  }
+  const options = {
+    tracklist: [
+      { languageCode: 'en', languageName: 'English' },
+      { languageCode: 'si' },
+      { languageCode: 'en', languageName: 'English (duplicate)' }
+    ],
+    tracks: [{ languageCode: 'si', languageName: 'Sinhala' }]
+  };
+  assert.deepEqual(readCaptionTracks(options), [
+    { languageCode: 'en', languageName: 'English' },
+    { languageCode: 'si', languageName: 'si' }
+  ]);
+  assert.equal(readActiveCaptionCode(options), 'si');
+});
+
 test('skip and nudge constants match the buttons and the keys', () => {
   assert.equal(SKIP_SECONDS, 15);
   assert.equal(NUDGE_SECONDS, 5);
@@ -188,8 +209,8 @@ globalThis.cancelAnimationFrame = (id) => clearTimeout(id);
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
 /** One stub instance per mount, recorded so assertions can read the calls. */
-const calls = { created: [], destroyed: [], destroyedInstances: 0, seek: [], volume: [], mute: 0, unmute: 0, play: 0, pause: 0, fullscreen: 0, shared: [] };
-let stubConfig = { captionsApi: true, duration: 90, currentTime: 30, volume: 70, muted: true, state: 2 };
+const calls = { created: [], destroyed: [], destroyedInstances: 0, seek: [], volume: [], mute: 0, unmute: 0, play: 0, pause: 0, fullscreen: 0, shared: [], captions: [] };
+let stubConfig = { captionsApi: true, duration: 90, currentTime: 30, volume: 70, muted: true, state: 2, captionOptions: null, captionActive: null };
 let clockTime = 0;
 
 class StubYoutubePlayer {
@@ -200,9 +221,19 @@ class StubYoutubePlayer {
     this.frame.title = 'stub';
     element.replaceWith(this.frame);
     if (stubConfig.captionsApi) {
-      this.setOption = (module, option, value) => calls.captions = { module, option, value };
+      this.setOption = (module, option, value) => {
+        calls.captions.push({ module, option, value });
+        stubConfig.captionActive = value?.languageCode ?? null;
+      };
       this.loadModule = (module) => (calls.captionsModule = `load:${module}`);
       this.unloadModule = (module) => (calls.captionsModule = `unload:${module}`);
+      this.getOptions = (module) => {
+        if (module !== 'captions' || !stubConfig.captionOptions) return undefined;
+        return {
+          tracklist: stubConfig.captionOptions,
+          tracks: stubConfig.captionActive ? [{ languageCode: stubConfig.captionActive }] : []
+        };
+      };
     }
     setTimeout(() => options.events.onReady({ target: this }), 0);
   }
@@ -256,7 +287,7 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 function resetCalls() {
   for (const key of Object.keys(calls)) calls[key] = Array.isArray(calls[key]) ? [] : 0;
   calls.created = [];
-  stubConfig = { captionsApi: true, duration: 90, currentTime: 30, volume: 70, muted: true, state: 2 };
+  stubConfig = { captionsApi: true, duration: 90, currentTime: 30, volume: 70, muted: true, state: 2, captionOptions: null, captionActive: null };
   clockTime = 30;
 }
 
@@ -403,6 +434,67 @@ test('play, pause, ±15 s, mute, volume and the timeline all reach the player ob
   }
 });
 
+test('caption tracks are offered only when the player reported them, and only those are requested', async () => {
+  resetCalls();
+  stubConfig = {
+    ...stubConfig,
+    captionOptions: [
+      { languageCode: 'en', languageName: 'English' },
+      { languageCode: 'si', languageName: 'Sinhala' }
+    ],
+    captionActive: 'en'
+  };
+  const view = await mount();
+  try {
+    const cc = findButton('Subtitles and captions');
+    assert.ok(cc, 'the captions control exists when the API implements it');
+    assert.equal(cc.getAttribute('aria-pressed'), 'true', 'the pressed state is the real active track, not a guess');
+    assert.equal(cc.getAttribute('aria-haspopup'), 'true');
+    assert.equal(window.document.querySelector('.cv-captions-menu'), null, 'the menu is closed until asked for');
+
+    await act(async () => { cc.click(); });
+    const options = [...window.document.querySelectorAll('.cv-captions-option')].map((node) => node.textContent.trim());
+    assert.deepEqual(options, ['Off', 'English', 'Sinhala'], 'off plus the reported tracks, nothing invented');
+
+    const sinhala = [...window.document.querySelectorAll('.cv-captions-option')].find((node) => node.textContent.trim() === 'Sinhala');
+    await act(async () => { sinhala.click(); });
+    assert.deepEqual(calls.captions.at(-1), { module: 'captions', option: 'track', value: { languageCode: 'si' } });
+    assert.equal(window.document.querySelector('.cv-captions-menu'), null, 'choosing closes the menu');
+    assert.equal(findButton('Subtitles and captions').getAttribute('aria-pressed'), 'true');
+
+    await act(async () => { findButton('Subtitles and captions').click(); });
+    const off = [...window.document.querySelectorAll('.cv-captions-option')].find((node) => node.textContent.trim() === 'Off');
+    await act(async () => { off.click(); });
+    assert.deepEqual(calls.captions.at(-1), { module: 'captions', option: 'track', value: {} });
+    assert.equal(findButton('Subtitles and captions').getAttribute('aria-pressed'), 'false');
+
+    // Escape closes the menu before it would close the player.
+    await act(async () => { findButton('Subtitles and captions').click(); });
+    assert.ok(window.document.querySelector('.cv-captions-menu'));
+    const player = window.document.querySelector('.cv-player');
+    await act(async () => {
+      player.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+    });
+    assert.equal(window.document.querySelector('.cv-captions-menu'), null, 'Escape closes the menu first');
+  } finally {
+    await view.unmount();
+  }
+});
+
+test('a single reported track toggles captions without inventing a menu', async () => {
+  resetCalls();
+  stubConfig = { ...stubConfig, captionOptions: [{ languageCode: 'en', languageName: 'English' }], captionActive: null };
+  const view = await mount();
+  try {
+    assert.equal(findButton('Subtitles and captions').getAttribute('aria-pressed'), 'false', 'nothing active is reported, so nothing is claimed');
+    await act(async () => { findButton('Subtitles and captions').click(); });
+    assert.equal(window.document.querySelector('.cv-captions-menu'), null, 'one track needs no menu');
+    assert.deepEqual(calls.captions.at(-1), { module: 'captions', option: 'track', value: { languageCode: 'en' } });
+  } finally {
+    await view.unmount();
+  }
+});
+
 test('share uses the Web Share API with the validated watch URL', async () => {
   resetCalls();
   const view = await mount();
@@ -430,7 +522,7 @@ test('fullscreen is requested on the player frame, and the close button calls th
   }
 });
 
-test('the shorts player has no close button unless the page gives it one', async () => {
+test('a player left without onClose (the gallery card) keeps the page’s own close', async () => {
   resetCalls();
   const view = await mount();
   try {

@@ -30,9 +30,12 @@ import {
   formatRemaining,
   playerCapabilities,
   progressFraction,
+  readActiveCaptionCode,
+  readCaptionTracks,
   resolveShortcut,
   timelineValueText,
-  volumeState
+  volumeState,
+  type CaptionTrack
 } from './playerControls';
 
 type PlayerStatus = 'loading' | 'ready' | 'error';
@@ -70,6 +73,11 @@ export default function YouTubePlayer({ video, onClose }: { video: SpaceVideo; o
   const [muted, setMuted] = useState(true);
   const [captionsOn, setCaptionsOn] = useState(false);
   const [captionsAvailable, setCaptionsAvailable] = useState(false);
+  /** Only set when the API actually reported a track list; never guessed. */
+  const [captionTracks, setCaptionTracks] = useState<CaptionTrack[]>([]);
+  const [captionMenuOpen, setCaptionMenuOpen] = useState(false);
+  const [activeCaption, setActiveCaption] = useState<string | null>(null);
+  const [captionStateKnown, setCaptionStateKnown] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
   const [fullscreenApi, setFullscreenApi] = useState(false);
   const [hardwareVolume, setHardwareVolume] = useState(false);
@@ -140,10 +148,10 @@ export default function YouTubePlayer({ video, onClose }: { video: SpaceVideo; o
             autoplay: 1,
             mute: 1,
             playsinline: 1,
-            // The cinematic chrome replaces the YouTube chrome; captions start off so
-            // the CC toggle reports a state that is actually true.
+            // The cinematic chrome replaces the YouTube chrome. Captions keep their
+            // original default-on behaviour; the toggle reads the real state back.
             controls: 0,
-            cc_load_policy: 0,
+            cc_load_policy: 1,
             rel: 0,
             fs: 0,
             origin: window.location.origin
@@ -159,6 +167,23 @@ export default function YouTubePlayer({ video, onClose }: { video: SpaceVideo; o
                 setCaptionsAvailable(
                   typeof event.target.setOption === 'function' && typeof event.target.unloadModule === 'function'
                 );
+                const captionOptions =
+                  typeof event.target.getOptions === 'function'
+                    ? (() => {
+                        try {
+                          return event.target.getOptions?.('captions');
+                        } catch {
+                          return undefined;
+                        }
+                      })()
+                    : undefined;
+                const tracks = readCaptionTracks(captionOptions);
+                setCaptionTracks(tracks);
+                setActiveCaption(readActiveCaptionCode(captionOptions));
+                // `undefined` means the API did not answer: keep the button honest by
+                // treating the state as unknown instead of claiming captions are off.
+                setCaptionStateKnown(captionOptions !== undefined);
+                if (captionOptions !== undefined) setCaptionsOn(readActiveCaptionCode(captionOptions) !== null);
                 event.target.mute();
                 event.target.playVideo();
               } catch {
@@ -311,23 +336,46 @@ export default function YouTubePlayer({ video, onClose }: { video: SpaceVideo; o
     }
   }, [muted]);
 
-  const toggleCaptions = useCallback(() => {
-    const player = playerRef.current;
-    if (!player) return;
-    try {
-      if (captionsOn) {
-        player.unloadModule?.('captions');
-        setCaptionsOn(false);
-      } else {
-        player.loadModule?.('captions');
-        player.setOption?.('captions', 'track', {});
-        setCaptionsOn(true);
+  /**
+   * `null` turns captions off, a language code turns that track on. Only language
+   * codes the player itself reported are ever requested.
+   */
+  const selectCaptionTrack = useCallback(
+    (languageCode: string | null) => {
+      const player = playerRef.current;
+      if (!player) return;
+      try {
+        if (languageCode) {
+          player.loadModule?.('captions');
+          player.setOption?.('captions', 'track', { languageCode });
+          setActiveCaption(languageCode);
+          setCaptionsOn(true);
+        } else {
+          player.setOption?.('captions', 'track', {});
+          setActiveCaption(null);
+          setCaptionsOn(false);
+        }
+        setCaptionStateKnown(true);
+      } catch {
+        setCaptionsAvailable(false);
+        setToast(t('cvCaptionsUnavailable'));
       }
-    } catch {
-      setCaptionsAvailable(false);
-      setToast(t('cvCaptionsUnavailable'));
+      setCaptionMenuOpen(false);
+    },
+    [t]
+  );
+
+  const toggleCaptions = useCallback(() => {
+    if (captionTracks.length > 1) {
+      setCaptionMenuOpen((open) => !open);
+      return;
     }
-  }, [captionsOn, t]);
+    if (captionsOn) {
+      selectCaptionTrack(null);
+    } else {
+      selectCaptionTrack(captionTracks[0]?.languageCode ?? null);
+    }
+  }, [captionTracks, captionsOn, selectCaptionTrack]);
 
   const toggleFullscreen = useCallback(async () => {
     const root = rootRef.current;
@@ -374,6 +422,11 @@ export default function YouTubePlayer({ video, onClose }: { video: SpaceVideo; o
       const target = event.target as HTMLElement | null;
       // Sliders own their arrow keys; text fields own everything.
       if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) return;
+      if (event.key === 'Escape' && captionMenuOpen) {
+        event.preventDefault();
+        setCaptionMenuOpen(false);
+        return;
+      }
       const action = resolveShortcut(event.key, { hasClose: Boolean(onClose) });
       if (!action) return;
       event.preventDefault();
@@ -424,6 +477,7 @@ export default function YouTubePlayer({ video, onClose }: { video: SpaceVideo; o
     [
       applySeek,
       applyVolume,
+      captionMenuOpen,
       caps.captions,
       current,
       duration,
@@ -452,6 +506,10 @@ export default function YouTubePlayer({ video, onClose }: { video: SpaceVideo; o
     scrubbing: scrubbing !== null,
     idleMs
   });
+  useEffect(() => {
+    if (!visible) setCaptionMenuOpen(false);
+  }, [visible]);
+
   const volumeIcon = volumeState(volume, muted);
   const watchUrl = `https://www.youtube.com/watch?v=${encodeURIComponent(video.id)}`;
 
@@ -663,15 +721,43 @@ export default function YouTubePlayer({ video, onClose }: { video: SpaceVideo; o
                   </button>
                 )}
                 {caps.captions ? (
-                  <button
-                    type="button"
-                    className="cv-glass cv-icon"
-                    onClick={toggleCaptions}
-                    aria-label={t('cvCaptions')}
-                    aria-pressed={captionsOn}
-                  >
-                    <Captions size={18} aria-hidden="true" />
-                  </button>
+                  <div className="cv-captions">
+                    <button
+                      type="button"
+                      className="cv-glass cv-icon"
+                      onClick={toggleCaptions}
+                      aria-label={t('cvCaptions')}
+                      aria-haspopup={captionTracks.length > 1 ? 'true' : undefined}
+                      aria-expanded={captionTracks.length > 1 ? captionMenuOpen : undefined}
+                      {...(captionStateKnown ? { 'aria-pressed': captionsOn } : {})}
+                    >
+                      <Captions size={18} aria-hidden="true" />
+                    </button>
+                    {captionMenuOpen && captionTracks.length > 1 ? (
+                      <div className="cv-captions-menu" role="group" aria-label={t('cvCaptions')}>
+                        <button
+                          type="button"
+                          className="cv-captions-option"
+                          onClick={() => selectCaptionTrack(null)}
+                          aria-pressed={!captionsOn}
+                        >
+                          {t('cvCaptionsOff')}
+                        </button>
+                        {captionTracks.map((track) => (
+                          <button
+                            key={track.languageCode}
+                            type="button"
+                            className="cv-captions-option"
+                            lang={track.languageCode}
+                            onClick={() => selectCaptionTrack(track.languageCode)}
+                            aria-pressed={captionsOn && activeCaption === track.languageCode}
+                          >
+                            {track.languageName}
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
                 ) : null}
                 <button type="button" className="cv-glass cv-icon" onClick={() => void share()} aria-label={t('cvShare')}>
                   <Share2 size={18} aria-hidden="true" />

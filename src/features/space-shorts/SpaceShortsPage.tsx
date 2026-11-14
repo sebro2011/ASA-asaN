@@ -385,9 +385,11 @@ export default function SpaceShortsPage() {
         {!loading && !error && data && !items.length && <div className="ss-empty" role="status"><Search size={24} aria-hidden="true" /><h3>{t(tab === 'community' ? 'sfCommunityEmpty' : 'ssEmpty')}</h3><p>{t(tab === 'community' ? 'sfCommunityEmptyBody' : 'ssEmptyBody')}</p></div>}
         {!loading && !error && tab === 'shorts' && items.length > 0 && <div ref={shortPanel}><ShortsFeed items={items} index={index} setIndex={setIndex} playerOpen={shortPlayerOpen} setPlayerOpen={setShortPlayerOpen} /></div>}
         {!loading && !error && tab !== 'shorts' && selected && <div className="ss-gallery-player" ref={galleryPlayer}>
+          {/* One close affordance per surface: this player card already closes from the
+              heading button directly above the frame, so the frame itself carries none. */}
           <div className="ss-gallery-player-heading"><span><span className="ss-status-dot" /> {t('ssSelectedVideo')}</span><button type="button" onClick={() => setSelected(null)} aria-label={t('ssClosePlayer')}><X size={18} aria-hidden="true" /></button></div>
           <div className="ss-gallery-player-content">
-            <div className={selected.portraitVerified ? 'ss-portrait-frame' : 'ss-landscape-frame'}><YouTubePlayer key={selected.id} video={selected} onClose={() => setSelected(null)} /></div>
+            <div className={selected.portraitVerified ? 'ss-portrait-frame' : 'ss-landscape-frame'}><YouTubePlayer key={selected.id} video={selected} /></div>
             <div className="ss-gallery-player-copy"><h3>{selected.title}</h3><Channel video={selected} /><p>{selected.description}</p><div className="ss-story-links"><WatchLink video={selected} /><SourceLink video={selected} />{selected.communityId && <ReportButton onClick={() => setReportVideo(selected)} />}</div><p className="ss-player-instructions">{t(selected.communityId ? 'sfReviewNote' : 'ssPlayerHelp')}</p>
               {related.length > 0 && <div className="ss-related"><h4>{t('sfRelated')}</h4>{related.map((video) => <button key={video.id} type="button" onClick={() => setSelected(video)}><Thumbnail video={video} /><span>{video.title}<small>{video.channelTitle || t('ssPublisherUnknown')}</small></span><ChevronRight size={15} aria-hidden="true" /></button>)}</div>}
             </div>

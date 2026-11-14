@@ -65,6 +65,7 @@ export const spaceShortsSi = {
     cvExitFullscreen: 'සම්පූර්ණ තිරයෙන් ඉවත් වන්න',
     cvFullscreenUnavailable: 'මෙම බ්‍රව්සරයේ සම්පූර්ණ තිරය ලබා නොදේ.',
     cvCaptions: 'උපසිරැසි',
+    cvCaptionsOff: 'ක්‍රියා විරහිතයි',
     cvCaptionsUnavailable: 'මෙම වීඩියෝව සඳහා උපසිරැසි නොමැත.',
     cvShare: 'මෙම වීඩියෝව බෙදාගන්න',
     cvShareCopied: 'වීඩියෝ සබැඳිය පිටපත් කර ඇත.',

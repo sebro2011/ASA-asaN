@@ -65,6 +65,7 @@ export const spaceShortsEn = {
     cvExitFullscreen: 'Exit fullscreen',
     cvFullscreenUnavailable: 'Fullscreen is not available in this browser.',
     cvCaptions: 'Subtitles and captions',
+    cvCaptionsOff: 'Off',
     cvCaptionsUnavailable: 'Captions are not available for this video.',
     cvShare: 'Share this video',
     cvShareCopied: 'Video link copied.',

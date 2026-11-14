@@ -110,6 +110,46 @@ export function playerCapabilities(input: {
   };
 }
 
+/**
+ * `getOptions('captions')` is undocumented in detail and may return nothing at all.
+ * These two readers take whatever arrives and produce a trustworthy list — or an
+ * empty one, which is what makes the menu disappear instead of guessing.
+ */
+export interface CaptionTrack {
+  languageCode: string;
+  languageName: string;
+}
+
+export function readCaptionTracks(raw: unknown): CaptionTrack[] {
+  if (!raw || typeof raw !== 'object') return [];
+  const list = (raw as { tracklist?: unknown }).tracklist;
+  if (!Array.isArray(list)) return [];
+  const seen = new Set<string>();
+  const tracks: CaptionTrack[] = [];
+  for (const entry of list) {
+    if (!entry || typeof entry !== 'object') continue;
+    const code = (entry as { languageCode?: unknown }).languageCode;
+    if (typeof code !== 'string' || !code || seen.has(code)) continue;
+    seen.add(code);
+    const name = (entry as { languageName?: unknown }).languageName;
+    tracks.push({ languageCode: code, languageName: typeof name === 'string' && name.trim() ? name : code });
+  }
+  return tracks;
+}
+
+/** The language currently being displayed, or null when captions are off/unknown. */
+export function readActiveCaptionCode(raw: unknown): string | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const tracks = (raw as { tracks?: unknown }).tracks;
+  if (!Array.isArray(tracks)) return null;
+  for (const entry of tracks) {
+    if (!entry || typeof entry !== 'object') continue;
+    const code = (entry as { languageCode?: unknown }).languageCode;
+    if (typeof code === 'string' && code) return code;
+  }
+  return null;
+}
+
 /** Keyboard map. Letters are case-insensitive; anything else is ignored. */
 export function resolveShortcut(key: string, options: { hasClose: boolean } = { hasClose: false }): PlayerAction | null {
   if (typeof key !== 'string' || !key) return null;

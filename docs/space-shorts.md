@@ -71,10 +71,10 @@ Every control on screen is operable and reaches the player:
 | Timeline | `input[type=range]` reading `getCurrentTime`/`getDuration` (250 ms poll); buffered range from `getVideoLoadedFraction`; hover shows the target time |
 | Elapsed / remaining time | formatted locally, remaining counts down to `0:00` |
 | Volume + mute | `setVolume` / `mute` / `unMute`; the slider appears only where `setVolume` is meaningful (iOS ignores it, so iOS gets the mute button alone) |
-| Captions | `loadModule('captions')` + `setOption('captions','track',{})`, hidden entirely when `setOption` is unavailable |
+| Captions | `setOption('captions','track',{languageCode})`, hidden entirely when `setOption` is unavailable. `getOptions('captions')` is read to report the real active track; when it answers with more than one track, the button opens a menu of those languages plus Off. Nothing is listed that the player did not report |
 | Fullscreen | `requestFullscreen` on the player frame (with the Safari prefix), hidden when the browser has no Fullscreen API |
 | Share | `navigator.share` with the validated `https://www.youtube.com/watch?v=<id>` URL, clipboard fallback, honest message when neither exists |
-| Close | Gallery player and the shorts feed; the page keeps its own close button |
+| Close | Only where the surface has no other close control. The shorts feed has none, so the frame has one; the gallery player card already closes from its heading button, so its frame does not repeat it |
 
 Keyboard: `Space`/`K` play or pause, `J`/`L` ±15 s, `←`/`→` ±5 s, `↑`/`↓`
 volume, `M` mute, `F` fullscreen, `C` captions, `Home`/`End` jump, `Escape`
@@ -89,10 +89,11 @@ Picture-in-Picture (a cross-origin YouTube iframe is not a `<video>` element, so
 `requestPictureInPicture` does not apply) and audio-track or individual
 caption-track selection (the iframe API exposes neither list). Neither appears as
 a disabled or decorative button. Captions can be switched on and off, but the
-track chosen is YouTube's default; on-screen captions also depend on the creator
-and on regional policy. Captions now start switched off (`cc_load_policy: 0`)
-instead of starting on, so the state announced by the captions button is always
-the state the video is really in.
+track chosen is YouTube's default when the API reports no track list; on-screen
+captions also depend on the creator and on regional policy. Captions keep their
+original default-on behaviour (`cc_load_policy: 1`), and the button's pressed
+state is read back from `getOptions('captions')` rather than assumed — if the API
+does not answer, the button simply stops claiming a state.
 
 ## Data and quota behavior
 

@@ -38,6 +38,8 @@ export interface YouTubePlayerInstance {
   setOption?: (module: string, option: string, value: unknown) => void;
   loadModule?: (module: string) => void;
   unloadModule?: (module: string) => void;
+  /** `getOptions('captions')` is the only way to learn the real caption state. */
+  getOptions?: (module: string) => unknown;
 }
 
 export interface YouTubePlayerEvent {

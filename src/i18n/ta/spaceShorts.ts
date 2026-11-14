@@ -65,6 +65,7 @@ export const spaceShortsTa = {
     cvExitFullscreen: 'முழுத்திரையிலிருந்து வெளியேறு',
     cvFullscreenUnavailable: 'இந்த உலாவியில் முழுத்திரை கிடைக்கவில்லை.',
     cvCaptions: 'வசன வரிகள்',
+    cvCaptionsOff: 'முடக்கத்தில்',
     cvCaptionsUnavailable: 'இந்தக் காணொளிக்கு வசன வரிகள் இல்லை.',
     cvShare: 'இந்தக் காணொளியைப் பகிர்',
     cvShareCopied: 'காணொளி இணைப்பு நகலெடுக்கப்பட்டது.',
