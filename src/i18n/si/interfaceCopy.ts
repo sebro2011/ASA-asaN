@@ -158,7 +158,7 @@ export const interfaceCopySi: Copy = {
   apodReadNasa: 'NASA දිනකට එක් ඡායාරූපයක් ප්‍රකාශයට පත් කරයි. වෙනත් ආකාරයක් සඳහන් නොවේ නම් පරිවර්තනය යන්ත්‍රගතය.',
 
   /* welcome screen & version management */
-  welcomeEyebrow: 'NASA අභ්‍යවකාශ ගවේෂකය',
+  welcomeEyebrow: 'COSMORA',
   welcomeTitle: 'ඔබේ අභ්‍යවකාශ නිරීක්ෂණ මධ්‍යස්ථානයට සාදරයෙන් පිළිගනිමු',
   welcomeBody:
     'සත්‍ය NASA ඡායාරූප, පෘථිවි දේශගුණ වාර්තා, පෘථිවියට ආසන්න වස්තු සහ ඓතිහාසික මෙහෙයුම් ගවේෂණය කරන්න — සෑම අගයකම මූලාශ්‍රය දක්වා ඇත, English, සිංහල සහ தமிழ் භාෂාවලින්.',

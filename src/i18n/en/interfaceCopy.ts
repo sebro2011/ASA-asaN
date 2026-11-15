@@ -167,7 +167,7 @@ export const interfaceCopyEn: Copy = {
   apodReadNasa: 'NASA publishes one image per day with an astronomer-written caption. Translation is machine-generated unless stated.',
 
   /* welcome screen & version management */
-  welcomeEyebrow: 'NASA Space Explorer',
+  welcomeEyebrow: 'COSMORA',
   welcomeTitle: 'Welcome to your space observation deck',
   welcomeBody:
     'Explore real NASA imagery, Earth climate records, near-Earth objects and landmark missions — every figure traced to its source, in English, සිංහල and தமிழ்.',

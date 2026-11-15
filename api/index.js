@@ -1302,7 +1302,7 @@ function readResponseText(response) {
 var ANALYST_MODEL = process.env.NOVA_ANALYST_MODEL || "gemini-3.8-flash";
 var OPENROUTER_MODEL = process.env.EARTH_ANALYST_OPENROUTER_MODEL || "google/gemini-2.0-flash-001";
 var ARENA_MODEL = process.env.EARTH_ANALYST_ARENA_MODEL || "gemini-2.5-flash";
-var ANALYST_SYSTEM_INSTRUCTION = `You are the Earth Science Analyst inside the NASA Space Explorer Earth Intelligence Lab.
+var ANALYST_SYSTEM_INSTRUCTION = `You are the Earth Science Analyst inside the COSMORA Earth Intelligence Lab.
 
 Absolute rules:
 1. You may ONLY use the numbers, dataset names, dates, coverage strings and URLs present in the JSON context supplied by the client. Never add measurements, hotspot counts, alerts, place names or sources from memory.
@@ -1489,7 +1489,7 @@ function createOpenRouterProvider(options) {
     apiKey: options.apiKey,
     model: options.model || OPENROUTER_MODEL,
     baseUrl: "https://openrouter.ai/api/v1",
-    extraHeaders: { "HTTP-Referer": "https://nasa-space-expolere.vercel.app", "X-Title": "NASA Space Explorer \u2014 Earth Lab" },
+    extraHeaders: { "HTTP-Referer": "https://nasa-space-expolere.vercel.app", "X-Title": "COSMORA \u2014 Earth Lab" },
     fetchImpl: options.fetchImpl
   });
 }
@@ -6903,7 +6903,7 @@ var DATASETS = [
     id: "nova-iss-tle",
     organisation: "Other",
     programme: "Existing ISS integration",
-    title: "ISS orbital elements (existing Space Explorer feed)",
+    title: "ISS orbital elements (existing COSMORA feed)",
     description: "Two-line elements already used by the app\u2019s ISS tracker, served by wheretheiss.at. Provides orbital information, not measurements of any Earth phenomenon.",
     documentationUrl: "https://wheretheiss.at/w/developer",
     endpoint: "https://api.wheretheiss.at/v1/satellites/25544/tles",
@@ -6922,7 +6922,7 @@ var DATASETS = [
       "A propagated altitude is a derived quantity, not a direct measurement.",
       "Not a NASA API; attribution is shown wherever it is used."
     ],
-    attribution: "wheretheiss.at orbital data (existing NASA Space Explorer integration).",
+    attribution: "wheretheiss.at orbital data (existing COSMORA integration).",
     keyRequired: false
   }
 ];
@@ -10795,7 +10795,7 @@ async function fetchText(url, options, cacheKey2, ttlMs) {
       headers: {
         Accept: "application/json",
         // NASA asks clients to identify themselves; no secret is included.
-        "User-Agent": "NOVA-Hypothesis-Forge/1.0 (NASA Space Explorer scientific investigation)"
+        "User-Agent": "COSMORA-Hypothesis-Forge/1.0 (COSMORA scientific investigation)"
       }
     });
     const text2 = await response.text();
@@ -18604,7 +18604,7 @@ async function startServer() {
     app.use(vite.middlewares);
   }
   const server = app.listen(PORT, "0.0.0.0", () => {
-    console.log(`NASA Space Exploration Server running at http://0.0.0.0:${PORT}`);
+    console.log(`COSMORA server running at http://0.0.0.0:${PORT}`);
   });
   const handleShutdown = (signal) => {
     console.log(`[Lifecycle] Received ${signal}. Gracefully closing HTTP server...`);
