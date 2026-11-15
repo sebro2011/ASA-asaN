@@ -102,7 +102,7 @@ export default function AppShell({ route, children }: { route: AppRoute; childre
 
   useEffect(() => {
     const label = titleFor(route, t);
-    document.title = route.name === 'home' ? 'NOVA AI — AI workspace' : `${label} · NOVA AI`;
+    document.title = route.name === 'home' ? 'COSMORA — AI workspace' : `${label} · COSMORA`;
   }, [route, t]);
 
   return (

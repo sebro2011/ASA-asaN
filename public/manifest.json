@@ -1,8 +1,8 @@
 {
   "id": "/",
-  "name": "NASA Space Explorer",
-  "short_name": "Space Explorer",
-  "description": "NASA imagery, Earth intelligence, asteroids, missions and deep-space 3D — with the NOVA astronomy assistant built in. English, Sinhala and Tamil.",
+  "name": "COSMORA",
+  "short_name": "COSMORA",
+  "description": "COSMORA — NASA imagery, Earth intelligence, asteroids, missions and deep-space 3D, with the NOVA astronomy assistant built in. English, Sinhala and Tamil.",
   "theme_color": "#08090D",
   "background_color": "#08090D",
   "display": "standalone",

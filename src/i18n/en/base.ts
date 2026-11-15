@@ -7,7 +7,7 @@
  */
 
 export const baseEn: Record<string, string> = {
-      appName: 'NASA Space Explorer',
+      appName: 'COSMORA',
       appSubtitle: 'Trilingual Cosmic Portal (English • සිංහල • தமிழ்)',
       navApod: 'Cosmic APOD',
       nav3D: '3D Space Lab',

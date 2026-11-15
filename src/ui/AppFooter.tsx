@@ -46,7 +46,7 @@ export default function AppFooter({
       <div className="mx-auto max-w-[1400px] px-4 sm:px-6 lg:px-8">
         <div className="grid gap-10 lg:grid-cols-[1.15fr_2fr]">
           <div>
-            <p className="text-sm font-semibold tracking-tight text-ink">NASA Space Explorer</p>
+            <p className="text-sm font-semibold tracking-tight text-ink">COSMORA</p>
             <p className="mt-2 max-w-sm text-[12.5px] leading-relaxed text-ink-3">
               An independent, trilingual interface to publicly available NASA science data. Not affiliated with or
               endorsed by the National Aeronautics and Space Administration.

@@ -72,7 +72,7 @@ export default function TopBar({
         <p className="truncate text-[13px] font-medium text-ws-text">{title}</p>
         {isMobile ? (
           <p className="truncate font-mono text-[9px] uppercase tracking-[0.16em] text-ws-text-3">
-            NOVA AI
+            COSMORA
           </p>
         ) : (
           <p className="truncate font-mono text-[9.5px] uppercase tracking-[0.16em] text-ws-text-3">

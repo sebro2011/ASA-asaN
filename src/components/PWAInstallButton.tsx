@@ -23,14 +23,14 @@ type Copy = {
 
 const COPY: Record<string, Copy> = {
   en: {
-    installTitle: 'Install NASA Space Explorer',
+    installTitle: 'Install COSMORA',
     install: 'Install App',
     installIos: 'Install on iOS',
     iosHeading: 'Install on iPhone / iPad',
     iosClose: 'Close install guide',
     step1: 'Tap the <strong>Share button</strong> (square with an upward arrow) in the Safari toolbar.',
     step2: 'Scroll down and tap <strong>“Add to Home Screen”</strong> (+).',
-    step3: 'Tap <strong>Add</strong> in the top-right corner to launch NASA Space Explorer offline anytime.',
+    step3: 'Tap <strong>Add</strong> in the top-right corner to launch COSMORA offline anytime.',
     gotIt: 'Got It'
   },
   si: {

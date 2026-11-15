@@ -7,7 +7,7 @@
  */
 
 export const baseTa: Record<string, string> = {
-      appName: 'நாசா விண்வெளி ஆய்வு மையம்',
+      appName: 'COSMORA',
       appSubtitle: 'முமொழி விண்வெளி தளம் (தமிழ் • සිංහල • English)',
       navApod: 'நாளின் வானியல் படம்',
       nav3D: '3D விண்வெளி ஆய்வகம்',

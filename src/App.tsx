@@ -186,7 +186,7 @@ export default function App() {
     if (current === '/space-shorts') navigate('/cosmovision', { replace: true });
   }, [route.path]);
 
-  // NASA Space Explorer is the product. It owns `/` and every science
+  // COSMORA is the product. It owns `/` and every science
   // destination; the NOVA workspace is a destination of its own at /workspace,
   // and NOVA's astronomy assistant is a tab inside Explore (as it always was).
   if (route.name === 'home') return <ExploreSurface route={{ ...route, tab: 'home' }} />;

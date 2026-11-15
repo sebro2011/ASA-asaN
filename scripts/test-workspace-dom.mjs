@@ -499,7 +499,7 @@ test('the shell renders in Sinhala and Tamil, not only English', async () => {
   assert.ok(direction, '<html lang> is set for the active language');
 });
 
-test('the front door is the NASA Space Explorer, not the NOVA workspace', async () => {
+test('the front door is COSMORA, not the NOVA workspace', async () => {
   const dom = installDom();
   dom.window.history.replaceState({}, '', '/');
   const { act } = await import('react');
@@ -540,7 +540,7 @@ test('the front door is the NASA Space Explorer, not the NOVA workspace', async 
     });
 
     const text = document.body.textContent || '';
-    assert.match(text, /NASA Space Explorer/);
+    assert.match(text, /COSMORA/);
     // Workspace chrome must not be on the front door any more.
     assert.equal(document.querySelector('.nova-sidebar'), null);
     assert.equal(text.includes('New chat'), false);

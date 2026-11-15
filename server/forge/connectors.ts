@@ -115,7 +115,7 @@ async function fetchText(
       headers: {
         Accept: 'application/json',
         // NASA asks clients to identify themselves; no secret is included.
-        'User-Agent': 'NOVA-Hypothesis-Forge/1.0 (NASA Space Explorer scientific investigation)',
+        'User-Agent': 'COSMORA-Hypothesis-Forge/1.0 (COSMORA scientific investigation)',
       },
     });
     const text = await response.text();

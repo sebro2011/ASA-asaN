@@ -430,7 +430,7 @@ async function startServer() {
   }
 
   const server = app.listen(PORT, '0.0.0.0', () => {
-    console.log(`NASA Space Exploration Server running at http://0.0.0.0:${PORT}`);
+    console.log(`COSMORA server running at http://0.0.0.0:${PORT}`);
   });
 
   // Graceful shutdown handler for Cloud Run container lifecycle
