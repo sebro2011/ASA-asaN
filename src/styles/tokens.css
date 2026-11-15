@@ -114,6 +114,22 @@
   --hairline-strong: rgba(148, 178, 214, 0.22);
   --glass-fill: rgba(10, 19, 34, 0.66);
   --glass-fill-solid: rgba(8, 16, 29, 0.94);
+  /* Three blur strengths, not six. Components used to pick from Tailwind's
+     backdrop-blur scale independently, so the same kind of panel was 4 px on one
+     page and 40 px on another. `.glass*` in the components layer is now the only
+     place these are read from. */
+  --glass-blur-inset: 8px;
+  --glass-blur: 16px;
+  --glass-blur-strong: 26px;
+  --glass-saturate: 140%;
+  --glass-edge: rgba(148, 178, 214, 0.14);
+  --glass-edge-quiet: rgba(148, 178, 214, 0.09);
+  --glass-specular: rgba(255, 255, 255, 0.16);
+  /* Motion: three durations, two curves. Anything longer than --duration-slow is
+     a progress indicator's business, not a surface transition's. */
+  --duration-fast: 140ms;
+  --duration-base: 220ms;
+  --duration-slow: 360ms;
   --focus: #7fe2fb;
   --nav-height: 64px;
 }
@@ -264,6 +280,57 @@
     pointer-events: none;
   }
 
+  /* --------------------------------------------------------------- glass surfaces
+     The single definition of a translucent surface in the product. Components must
+     use these classes (or <Glass>, src/ui/Glass.tsx) instead of a backdrop-blur
+     utility: 69 raw utilities had accumulated across 27 files, which is why the
+     same panel looked different on every page.
+
+     Declared in the components layer on purpose — Tailwind utilities are emitted
+     afterwards, so a component can still override the fill (`bg-surface/40`) or the
+     border (`border-line`) while keeping the shared blur. */
+  .glass,
+  .glass-strong,
+  .glass-inset {
+    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+    backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+    background-color: var(--glass-fill);
+  }
+
+  /* Only the default panel contributes an edge. A sheet or an inset that draws its
+     own `border-b`/`border-t` must not be given a full box by the primitive — that
+     turned the sticky header and the mobile bar into outlined boxes. */
+  .glass {
+    border: 1px solid var(--glass-edge);
+  }
+
+  /* Sheets and modals: heavier blur, denser fill, because text usually sits over
+     imagery rather than over the page background. */
+  .glass-strong {
+    -webkit-backdrop-filter: blur(var(--glass-blur-strong)) saturate(var(--glass-saturate));
+    backdrop-filter: blur(var(--glass-blur-strong)) saturate(var(--glass-saturate));
+    background-color: var(--glass-fill-solid);
+  }
+
+  /* A surface inside a glass surface: less blur, quieter edge, so nesting reads as
+     depth instead of as another sheet. */
+  .glass-inset {
+    -webkit-backdrop-filter: blur(var(--glass-blur-inset)) saturate(var(--glass-saturate));
+    backdrop-filter: blur(var(--glass-blur-inset)) saturate(var(--glass-saturate));
+    background-color: rgba(4, 9, 17, 0.6);
+  }
+
+  /* No backdrop-filter (older Safari, some embedded webviews): an opaque fill is
+     honest. The alternative is translucent text over whatever happens to be behind
+     it, which is the one outcome worse than a flat panel. */
+  @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    .glass,
+    .glass-strong,
+    .glass-inset {
+      background-color: var(--glass-fill-solid);
+    }
+  }
+
   /* ---------------------------------------------------------------- typography */
   .eyebrow {
     font-family: var(--font-mono);
@@ -389,6 +456,14 @@
     backdrop-filter: none;
     -webkit-backdrop-filter: none;
     background: linear-gradient(180deg, rgba(13, 24, 41, 0.96), rgba(6, 13, 24, 0.98));
+  }
+  /* Glass keeps its own fill on a phone: a scrim that turns opaque stops being a
+     scrim. Only the blur pass — the expensive part — is dropped. */
+  .glass,
+  .glass-strong,
+  .glass-inset {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
   }
   .grid-field {
     background-size: 44px 44px;

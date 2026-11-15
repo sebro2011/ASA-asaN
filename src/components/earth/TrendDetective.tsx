@@ -135,7 +135,7 @@ function SourceTooltip({
   const rows = payload.filter((entry) => typeof entry.value === 'number');
   if (!rows.length) return null;
   return (
-    <div className="rounded-[10px] border border-line bg-abyss/97 px-3 py-2 shadow-2xl backdrop-blur-md">
+    <div className="rounded-[10px] border border-line bg-abyss/97 px-3 py-2 shadow-2xl glass">
       <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-atmo">{labelName}</p>
       <ul className="mt-1.5 space-y-0.5">
         {rows.map((entry, index) => (
@@ -657,7 +657,7 @@ export default function TrendDetective({ area, onAreaChange, onPowerResolved, re
                           typeof entry.value === 'number' && typeof entry.dataKey === 'string');
                         if (!rows.length) return null;
                         return (
-                          <div className="rounded-[10px] border border-line bg-abyss/97 px-3 py-2 shadow-2xl backdrop-blur-md">
+                          <div className="rounded-[10px] border border-line bg-abyss/97 px-3 py-2 shadow-2xl glass">
                             <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-atmo">{label}</p>
                             <ul className="mt-1.5 space-y-0.5">
                               {rows.map((entry) => (

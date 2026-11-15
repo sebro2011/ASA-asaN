@@ -42,7 +42,7 @@ export default function MobileDrawer({ open, route, onClose }: MobileDrawerProps
         type="button"
         aria-label={t('wsCloseMenu')}
         onClick={onClose}
-        className="absolute inset-0 h-full w-full bg-black/55 backdrop-blur-[2px]"
+        className="absolute inset-0 h-full w-full bg-black/55"
         tabIndex={-1}
       />
       <div

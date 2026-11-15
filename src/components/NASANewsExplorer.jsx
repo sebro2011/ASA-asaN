@@ -258,7 +258,7 @@ export default function NASANewsExplorer({ className = '' }) {
     <div className={`space-y-6 ${className}`}>
       
       {/* Header Banner */}
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-slate-950 via-indigo-950/70 to-slate-950 border border-line p-6 sm:p-8 shadow-2xl backdrop-blur-xl">
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-slate-950 via-indigo-950/70 to-slate-950 border border-line p-6 sm:p-8 shadow-2xl glass-strong">
         <div className="absolute top-0 right-0 w-80 h-80 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none -mr-20 -mt-20" />
         
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
@@ -444,7 +444,7 @@ export default function NASANewsExplorer({ className = '' }) {
                 initial={{ opacity: 0, y: 16 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.35, delay: (idx % 8) * 0.05 }}
-                className="group flex flex-col justify-between rounded-3xl bg-surface/60 hover:bg-surface/60/95 backdrop-blur-xl border border-line/90 hover:border-cyan-500/50 shadow-xl hover:shadow-cyan-950/30 transition-all duration-300 overflow-hidden relative"
+                className="group flex flex-col justify-between rounded-3xl bg-surface/60 hover:bg-surface/60/95 glass-strong border border-line/90 hover:border-cyan-500/50 shadow-xl hover:shadow-cyan-950/30 transition-all duration-300 overflow-hidden relative"
               >
                 {/* Image Container with HD Badge */}
                 {/* The heading and "Read more" below are the keyboard path to
@@ -464,12 +464,12 @@ export default function NASANewsExplorer({ className = '' }) {
                   <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-transparent to-transparent opacity-80" />
 
                   {/* Year Tag Badge */}
-                  <div className="absolute top-3 left-3 px-2.5 py-1 rounded-[10px] bg-abyss/70 backdrop-blur-md border border-cyan-500/40 text-[10px] font-mono font-bold text-cyan-300">
+                  <div className="absolute top-3 left-3 px-2.5 py-1 rounded-[10px] bg-abyss/70 glass border border-cyan-500/40 text-[10px] font-mono font-bold text-cyan-300">
                     {item.year || item.date?.slice(0, 4)}
                   </div>
 
                   {/* Category Pill */}
-                  <div className="absolute top-3 right-3 px-2 py-0.5 rounded-[8px] bg-indigo-950/80 backdrop-blur-md border border-indigo-500/30 text-[9px] font-mono text-indigo-300">
+                  <div className="absolute top-3 right-3 px-2 py-0.5 rounded-[8px] bg-indigo-950/80 glass border border-indigo-500/30 text-[9px] font-mono text-indigo-300">
                     {item.category}
                   </div>
 
@@ -582,7 +582,7 @@ export default function NASANewsExplorer({ className = '' }) {
       {/* Full Detail & HD Modal */}
       <AnimatePresence>
         {selectedDetailItem && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-abyss/70 backdrop-blur-md">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-abyss/70 glass">
             <motion.div
               initial={{ opacity: 0, scale: 0.95, y: 16 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}

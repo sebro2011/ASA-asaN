@@ -210,7 +210,7 @@ function NasaNewsFeed() {
       {!apodLoading && !apod && <p role="status" className="text-sm text-ink-3">NASA APOD is currently unavailable.</p>}
       {/* Featured NASA APOD Highlight Banner */}
       {apod && (
-        <div className="relative rounded-3xl overflow-hidden border border-cyan-500/25 bg-gradient-to-r from-[#0B0F19] via-[#0e1626] to-[#0B0F19] p-1 shadow-2xl backdrop-blur-2xl">
+        <div className="relative rounded-3xl overflow-hidden border border-cyan-500/25 bg-gradient-to-r from-[#0B0F19] via-[#0e1626] to-[#0B0F19] p-1 shadow-2xl glass-strong">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 p-6 sm:p-8 items-center">
             {/* APOD Media Preview */}
             <div className="lg:col-span-5 relative rounded-[14px] overflow-hidden aspect-video lg:aspect-square bg-[#05070d] border border-cyan-500/20 shadow-xl group">
@@ -220,7 +220,7 @@ function NasaNewsFeed() {
                 className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
               /> : <p className="p-6 text-ink-2">Video APOD: open the media link below.</p>}
               <div className="absolute top-3 left-3">
-                <span className="px-3 py-1 rounded-full text-xs font-mono font-bold bg-[#0B0F19]/90 text-cyan-300 border border-cyan-500/40 backdrop-blur-md flex items-center gap-1.5">
+                <span className="px-3 py-1 rounded-full text-xs font-mono font-bold bg-[#0B0F19]/90 text-cyan-300 border border-cyan-500/40 glass flex items-center gap-1.5">
                   <Compass className="w-3.5 h-3.5 text-cyan-400" />
                   APOD • {apod.date}
                 </span>

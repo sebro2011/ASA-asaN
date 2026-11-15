@@ -187,7 +187,7 @@ const StableModelViewerCanvas = memo(function StableModelViewerCanvas({
       {/* Elevated AR launch button with slot="ar-button" */}
       <button
         slot="ar-button"
-        className="absolute bottom-5 right-5 z-20 px-4 py-2.5 rounded-[14px] bg-gradient-to-r from-cyan-500 via-blue-600 to-indigo-600 hover:from-cyan-400 hover:to-indigo-500 text-white font-mono text-xs font-bold shadow-2xl shadow-cyan-500/40 border border-cyan-300/40 flex items-center gap-2 cursor-pointer transition transform hover:scale-105 active:scale-95 backdrop-blur-md"
+        className="absolute bottom-5 right-5 z-20 px-4 py-2.5 rounded-[14px] bg-gradient-to-r from-cyan-500 via-blue-600 to-indigo-600 hover:from-cyan-400 hover:to-indigo-500 text-white font-mono text-xs font-bold shadow-2xl shadow-cyan-500/40 border border-cyan-300/40 flex items-center gap-2 cursor-pointer transition transform hover:scale-105 active:scale-95 glass"
       >
         <Camera className="w-4 h-4 text-cyan-200" />
         <span>PROJECT IN REAL SPACE (AR)</span>
@@ -196,7 +196,7 @@ const StableModelViewerCanvas = memo(function StableModelViewerCanvas({
       {/* AR Guidance Prompt Overlay with slot="ar-prompt" */}
       <div
         slot="ar-prompt"
-        className="absolute bottom-20 left-1/2 -translate-x-1/2 z-20 px-4 py-2 rounded-[14px] bg-abyss/85 border border-cyan-500/40 text-cyan-200 text-xs font-mono shadow-2xl pointer-events-none flex items-center gap-2 backdrop-blur-md whitespace-nowrap"
+        className="absolute bottom-20 left-1/2 -translate-x-1/2 z-20 px-4 py-2 rounded-[14px] bg-abyss/85 border border-cyan-500/40 text-cyan-200 text-xs font-mono shadow-2xl pointer-events-none flex items-center gap-2 glass whitespace-nowrap"
       >
         <Sparkles className="w-3.5 h-3.5 text-cyan-400 animate-spin" />
         <span>Point camera at a flat ground surface and move device gently</span>
@@ -418,7 +418,7 @@ export function ArModelViewer({
   const mobileArUrl = typeof window !== 'undefined' ? window.location.href : '';
 
   return (
-    <div className={`w-full bg-surface/65 border border-line rounded-3xl p-4 sm:p-6 shadow-2xl space-y-5 font-sans text-ink backdrop-blur-xl relative overflow-hidden ${className}`}>
+    <div className={`w-full bg-surface/65 border border-line rounded-3xl p-4 sm:p-6 shadow-2xl space-y-5 font-sans text-ink glass-strong relative overflow-hidden ${className}`}>
       {/* Background Ambient Glows */}
       <div className="absolute -top-32 -right-32 w-72 h-72 bg-cyan-600/10 rounded-full blur-3xl pointer-events-none" />
       <div className="absolute -bottom-32 -left-32 w-72 h-72 bg-purple-600/10 rounded-full blur-3xl pointer-events-none" />
@@ -613,7 +613,7 @@ export function ArModelViewer({
         {/* Viewport Floating Controls */}
         <div className="absolute top-4 left-4 z-10 flex items-center gap-2 flex-wrap pointer-events-none">
           <span
-            className={`px-2.5 py-1 rounded-[10px] bg-abyss/70 border border-line text-[10px] font-mono backdrop-blur-md flex items-center gap-1.5 shadow-md ${
+            className={`px-2.5 py-1 rounded-[10px] bg-abyss/70 border border-line text-[10px] font-mono glass flex items-center gap-1.5 shadow-md ${
               isArSupported ? 'text-cyan-300' : 'text-ink-3'
             }`}
           >
@@ -634,13 +634,13 @@ export function ArModelViewer({
                   ? '3D பார்வையாளர்'
                   : '3D VIEWER'}
           </span>
-          <span className="px-2.5 py-1 rounded-[10px] bg-abyss/70 border border-line text-[10px] font-mono text-ink-2 backdrop-blur-md">
+          <span className="px-2.5 py-1 rounded-[10px] bg-abyss/70 border border-line text-[10px] font-mono text-ink-2 glass">
             DRAG TO ORBIT • PINCH TO ZOOM
           </span>
         </div>
 
         {/* Quick Toolbar on Bottom Left */}
-        <div className="absolute bottom-4 left-4 z-10 flex items-center gap-1.5 bg-abyss/70 border border-line rounded-[10px] p-1 backdrop-blur-md">
+        <div className="absolute bottom-4 left-4 z-10 flex items-center gap-1.5 bg-abyss/70 border border-line rounded-[10px] p-1 glass">
           {/* Auto-Rotate Toggle */}
           <button
             type="button"
@@ -709,7 +709,7 @@ export function ArModelViewer({
 
       {/* Desktop QR Modal for Instant Mobile Phone Testing */}
       {showQrModal && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 bg-black/80 glass flex items-center justify-center p-4">
           <div className="bg-surface/60 border border-cyan-500/40 rounded-3xl p-6 max-w-md w-full space-y-4 shadow-2xl relative text-center">
             <button
               type="button"

@@ -204,7 +204,7 @@ export default function CommandPalette({ open, onClose }: { open: boolean; onClo
         aria-label={t('wsCommandClose')}
         onClick={onClose}
         tabIndex={-1}
-        className="absolute inset-0 h-full w-full bg-black/50 backdrop-blur-[3px]"
+        className="absolute inset-0 h-full w-full bg-black/50 glass-inset"
       />
       <div
         ref={panelRef}

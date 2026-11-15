@@ -170,8 +170,15 @@ test('the overlays can be dismissed from the keyboard', () => {
     assert.match(source, /useEscape\(/, `${file} must use the shared Escape hook`);
     assert.match(source, new RegExp(`useEscape\\(\\s*${flag}\\b`), `${file} must close on Escape while ${flag} is open`);
     if (hasBackdrop) {
-      // The backdrop is decorative: it must not be announced or tabbed to.
-      assert.match(source, /aria-hidden="true"[^>]*backdrop-blur|backdrop-blur[^>]*aria-hidden="true"/, `${file} backdrop must be aria-hidden`);
+      // The backdrop is decorative: it must not be announced or tabbed to. It is
+      // identified by a glass tone class rather than a raw `backdrop-blur` utility —
+      // blur strength is a design token now (see scripts/test-design-tokens.mjs), and
+      // this assertion should not pin the implementation to one spelling of it.
+      assert.match(
+        source,
+        /aria-hidden="true"[^>]*\bglass(?:-strong|-inset)?\b|\bglass(?:-strong|-inset)?\b[^>]*aria-hidden="true"/,
+        `${file} backdrop must be aria-hidden`
+      );
     }
   }
 });
