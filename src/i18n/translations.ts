@@ -102,7 +102,7 @@ export interface TranslationDictionary {
 
 export const translations: Record<SupportedLanguage, TranslationDictionary> = {
   en: {
-    appName: "NASA Space Explorer",
+    appName: "COSMORA",
     appSubtitle: "Trilingual Cosmic Portal (English • සිංහල • தமிழ்)",
     navApod: "Cosmic APOD",
     nav3D: "3D Space Lab",
@@ -194,7 +194,7 @@ export const translations: Record<SupportedLanguage, TranslationDictionary> = {
   },
 
   si: {
-    appName: "නාසා විශ්ව ගවේෂකය",
+    appName: "COSMORA",
     appSubtitle: "තුන්භාෂා අභ්‍යවකාශ ද්වාරය (සිංහල • தமிழ் • English)",
     navApod: "දවසේ තාරකා ඡායාරූපය",
     nav3D: "3D අභ්‍යවකාශගාරය",
@@ -286,7 +286,7 @@ export const translations: Record<SupportedLanguage, TranslationDictionary> = {
   },
 
   ta: {
-    appName: "நாசா விண்வெளி ஆய்வு மையம்",
+    appName: "COSMORA",
     appSubtitle: "முமொழி விண்வெளி தளம் (தமிழ் • සිංහල • English)",
     navApod: "நாளின் வானியல் படம்",
     nav3D: "3D விண்வெளி ஆய்வகம்",

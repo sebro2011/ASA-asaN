@@ -20,7 +20,7 @@ function resolveInitialLanguage() {
 
 export const TRILINGUAL_DICTIONARY = {
   en: {
-    appName: 'NASA Space Explorer',
+    appName: 'COSMORA',
     tagline: 'Interactive 3D Spaceflight & Keyless AI Exploration',
     mars: 'Mars',
     iss: 'International Space Station',
@@ -45,7 +45,7 @@ export const TRILINGUAL_DICTIONARY = {
     voiceNotSupported: 'Web Speech API not supported in this browser'
   },
   si: {
-    appName: 'NASA අභ්‍යවකාශ ගවේෂකය (NASA Space Explorer)',
+    appName: 'COSMORA',
     tagline: 'ත්‍රිමාන අභ්‍යවකාශ සහ කෘත්‍රිම බුද්ධි ගවේෂණ වේදිකාව',
     mars: 'අඟහරු ග්‍රහයා',
     iss: 'ජාත්‍යන්තර අභ්‍යවකාශ මධ්‍යස්ථානය',
@@ -70,7 +70,7 @@ export const TRILINGUAL_DICTIONARY = {
     voiceNotSupported: 'මෙම බ්‍රවුසරයේ Web Speech API සහාය නොදක්වයි'
   },
   ta: {
-    appName: 'NASA விண்வெளி ஆய்வி (NASA Space Explorer)',
+    appName: 'COSMORA',
     tagline: 'முப்பரிமாண விண்வெளி மற்றும் AI ஆய்வு தளம்',
     mars: 'செவ்வாய் கிரகம்',
     iss: 'சர்வதேச விண்வெளி நிலையம்',

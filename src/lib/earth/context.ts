@@ -294,7 +294,7 @@ export function buildMarkdownReport(bundle: ReportBundle): string {
   out.push('- NASA POWER — https://power.larc.nasa.gov/');
   out.push('- NASA FIRMS (thermal anomalies referenced by the GIBS fire layers) — https://firms.modaps.eosdis.nasa.gov/');
   out.push('');
-  out.push('> Imagery and data are provided by NASA. This report was assembled by NASA Space Explorer and is not an official NASA product.');
+  out.push('> Imagery and data are provided by NASA. This report was assembled by COSMORA and is not an official NASA product.');
   return out.join('\n');
 }
 

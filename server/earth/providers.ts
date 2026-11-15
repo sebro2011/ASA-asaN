@@ -36,7 +36,7 @@ export const ANALYST_MODEL = process.env.NOVA_ANALYST_MODEL || 'gemini-3.8-flash
 export const OPENROUTER_MODEL = process.env.EARTH_ANALYST_OPENROUTER_MODEL || 'google/gemini-2.0-flash-001';
 export const ARENA_MODEL = process.env.EARTH_ANALYST_ARENA_MODEL || 'gemini-2.5-flash';
 
-export const ANALYST_SYSTEM_INSTRUCTION = `You are the Earth Science Analyst inside the NASA Space Explorer Earth Intelligence Lab.
+export const ANALYST_SYSTEM_INSTRUCTION = `You are the Earth Science Analyst inside the COSMORA Earth Intelligence Lab.
 
 Absolute rules:
 1. You may ONLY use the numbers, dataset names, dates, coverage strings and URLs present in the JSON context supplied by the client. Never add measurements, hotspot counts, alerts, place names or sources from memory.
@@ -307,7 +307,7 @@ export function createOpenRouterProvider(options: { apiKey?: string; model?: str
     apiKey: options.apiKey,
     model: options.model || OPENROUTER_MODEL,
     baseUrl: 'https://openrouter.ai/api/v1',
-    extraHeaders: { 'HTTP-Referer': 'https://nasa-space-expolere.vercel.app', 'X-Title': 'NASA Space Explorer — Earth Lab' },
+    extraHeaders: { 'HTTP-Referer': 'https://nasa-space-expolere.vercel.app', 'X-Title': 'COSMORA — Earth Lab' },
     fetchImpl: options.fetchImpl,
   });
 }

@@ -143,7 +143,7 @@ export default function AppHeader({
           type="button"
           onClick={() => go('home')}
           className="group flex min-w-0 items-center gap-2.5 rounded-lg text-left"
-          aria-label="NASA Space Explorer — home"
+          aria-label="COSMORA — home"
         >
           <span className="relative grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-full border border-line-strong bg-[radial-gradient(circle_at_30%_25%,#1a3a63,#040911_70%)] lg:h-10 lg:w-10">
             <svg viewBox="0 0 32 32" className="h-5 w-5 text-atmo" aria-hidden="true">
@@ -163,8 +163,8 @@ export default function AppHeader({
             </svg>
           </span>
           <span className="min-w-0">
-            <span className="block truncate text-[13px] font-semibold leading-none tracking-tight text-ink lg:text-sm">
-              NASA Space Explorer
+            <span className="block truncate text-[13px] font-semibold leading-none tracking-[0.06em] text-ink lg:text-sm">
+              COSMORA
             </span>
             <span className="mt-1 block truncate font-mono text-[9.5px] uppercase tracking-[0.18em] text-ink-4">
               Earth · Missions · Deep Space

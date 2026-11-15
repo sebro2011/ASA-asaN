@@ -68,7 +68,18 @@ lies about its data is worse than an ugly one that does not.
 4. Acceptance: `scripts/test-design-tokens.mjs` asserts no raw `backdrop-blur-*`
    utility survives outside the primitive; build size does not grow.
 
-### Phase 2 — Brand: COSMORA
+### Phase 2 — Brand: COSMORA  · **done (2026-11-15)**
+
+Delivered across both the text layer and raster brand assets: document title,
+OpenGraph/Twitter card (`public/brand/og-image.png`), PWA manifest and icon set
+(`icon-512.png`, `icon-192.png`, `pwa-maskable-512x512.png`, `apple-touch-icon.png`,
+`favicon.ico`), header, footer, typographic welcome lockup, trilingual PWA install
+prompt, the three language dictionaries, report exports, Earth analyst system
+instruction and server startup banner. NOVA remains the assistant's name; NASA
+remains credited as the open data source. Guarded by `scripts/test-brand.mjs`.
+
+Original plan follows.
+
 Rename in one pass, with the decisions in §4 answered first:
 - UI strings (3 dictionaries), `<title>` templates, PWA manifest, OG/lockup assets,
   Guardian already says COSMORA so it becomes consistent rather than a special case.
