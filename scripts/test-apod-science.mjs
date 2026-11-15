@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { fetchScienceApod } from '../server/apodScience.ts';
-import { apodCache } from '../server/nasaRoutes.ts';
+import { apodCache, currentApodDateEastern, previousApodDate } from '../server/nasaRoutes.ts';
 import { fetchApod, clearNasaApiCache } from '../lib/nasaApi.js';
 import express from 'express';
 import { setupNasaRoutes } from '../server/nasaRoutes.ts';
@@ -95,5 +95,38 @@ test('single APOD route recovers when the legacy provider is unreachable', async
     const response = await original(`http://127.0.0.1:${server.address().port}/api/apod?date=${date}`);
     assert.equal(response.status, 200);
     assert.equal((await response.json()).data.source, 'NASA Science APOD archive');
+  } finally { globalThis.fetch = original; apodCache.clear(); await new Promise(r => server.close(r)); }
+});
+
+test('default /api/apod uses US Eastern APOD day and falls back one day as cached when today is unpublished', async () => {
+  // 02:00 UTC on Nov 15 (07:30 in Colombo) is still Nov 14 21:00 in America/New_York.
+  assert.equal(currentApodDateEastern(new Date('2026-11-15T02:00:00Z')), '2026-11-14');
+  assert.equal(previousApodDate('2026-11-15'), '2026-11-14');
+
+  const original = globalThis.fetch;
+  const app = express(); setupNasaRoutes(app, {}); apodCache.clear();
+  const server = app.listen(0, '127.0.0.1'); await new Promise(r => server.once('listening', r));
+  const todayEt = currentApodDateEastern();
+  const prevEt = previousApodDate(todayEt);
+  globalThis.fetch = async url => {
+    const href = String(url);
+    if (href.includes('api.nasa.gov')) {
+      const requested = new URL(href).searchParams.get('date');
+      if (!requested) {
+        return json({ date: todayEt, title: 'NASA Science', url: 'https://science.nasa.gov/wp-content/themes/nasa-child/assets/images/nasa-logo@2x.png' });
+      }
+      if (requested === prevEt) {
+        return json({ date: prevEt, title: 'Yesterday Real APOD', explanation: 'Verified entry from yesterday.', url: 'https://apod.nasa.gov/apod/image/prev.jpg', media_type: 'image' });
+      }
+    }
+    return json([]);
+  };
+  try {
+    const response = await original(`http://127.0.0.1:${server.address().port}/api/apod`);
+    assert.equal(response.status, 200);
+    const body = await response.json();
+    assert.equal(body.cached, true, 'an earlier day is labelled cached, never live');
+    assert.equal(body.data.date, prevEt);
+    assert.match(body.note, /not yet available/);
   } finally { globalThis.fetch = original; apodCache.clear(); await new Promise(r => server.close(r)); }
 });

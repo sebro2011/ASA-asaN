@@ -4978,7 +4978,7 @@ function validUrl(value, host) {
   }
 }
 async function readJson(url, fetchImpl) {
-  const response = await fetchImpl(url, { signal: AbortSignal.timeout(3e3), redirect: "error", headers: { Accept: "application/json" } });
+  const response = await fetchImpl(url, { signal: AbortSignal.timeout(4500), redirect: "error", headers: { Accept: "application/json" } });
   if (!response.ok) throw new Error("NASA Science unavailable");
   const size = Number(response.headers.get("content-length"));
   if (size > 15e5) throw new Error("NASA Science response too large");
@@ -5248,6 +5248,24 @@ var translationCache = /* @__PURE__ */ new Map();
 var apodCache = /* @__PURE__ */ new Map();
 var APOD_TODAY_TTL_MS = 15 * 6e4;
 var apodTodayCachedAt = 0;
+var apodTodayNote;
+function currentApodDateEastern(now = /* @__PURE__ */ new Date()) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/New_York",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).formatToParts(now);
+  const get = (type) => parts.find((part) => part.type === type)?.value || "";
+  const formatted = `${get("year")}-${get("month")}-${get("day")}`;
+  return /^\d{4}-\d{2}-\d{2}$/.test(formatted) ? formatted : now.toISOString().slice(0, 10);
+}
+function previousApodDate(isoDate2) {
+  const parsed = /* @__PURE__ */ new Date(`${isoDate2}T12:00:00Z`);
+  if (Number.isNaN(parsed.getTime())) return isoDate2;
+  parsed.setUTCDate(parsed.getUTCDate() - 1);
+  return parsed.toISOString().slice(0, 10);
+}
 var SATELLITE_REGISTRY = [
   {
     id: "iss",
@@ -5493,12 +5511,18 @@ function setupNasaRoutes(app2, ai2) {
       return res.json({ success: true, data: apodCache.get(date), cached: true });
     }
     if (!date && apodCache.has("today") && Date.now() - apodTodayCachedAt < APOD_TODAY_TTL_MS) {
-      return res.json({ success: true, data: apodCache.get("today"), cached: true });
+      return res.json({
+        success: true,
+        data: apodCache.get("today"),
+        cached: true,
+        ...apodTodayNote ? { note: apodTodayNote } : {}
+      });
     }
     const nasaApiKey = process.env.NEXT_PUBLIC_NASA_API_KEY || process.env.NASA_API_KEY || "DEMO_KEY";
     const url = date ? `https://api.nasa.gov/planetary/apod?api_key=${nasaApiKey}&date=${date}` : `https://api.nasa.gov/planetary/apod?api_key=${nasaApiKey}`;
     let timeout;
     let upstreamStatus = 0;
+    let upstreamDate = "";
     let degradeReason = null;
     let failureKind = "network";
     try {
@@ -5513,13 +5537,18 @@ function setupNasaRoutes(app2, ai2) {
       upstreamStatus = nasaRes.status;
       if (nasaRes.ok) {
         const data = normaliseApodMedia(redactApiKeys(await nasaRes.json()));
+        if (typeof data?.date === "string" && isValidApodDate(data.date)) {
+          upstreamDate = data.date;
+        }
         if (isDegradedApodRecord(data)) {
           degradeReason = "degraded";
         } else if (data && data.title && data.url && (!date || data.date === date)) {
           if (date) apodCache.set(date, data);
           else {
             apodCache.set("today", data);
+            if (typeof data.date === "string") apodCache.set(data.date, data);
             apodTodayCachedAt = Date.now();
+            apodTodayNote = void 0;
           }
           return res.json({ success: true, data });
         }
@@ -5533,15 +5562,55 @@ function setupNasaRoutes(app2, ai2) {
       if (timeout) clearTimeout(timeout);
     }
     if (degradeReason) failureKind = degradeReason;
-    const scienceDate = date || (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+    const scienceDate = date || upstreamDate || currentApodDateEastern();
     const scienceRecord = await fetchScienceApod(scienceDate);
     if (scienceRecord) {
       if (date) apodCache.set(date, scienceRecord);
       else {
         apodCache.set("today", scienceRecord);
+        apodCache.set(scienceDate, scienceRecord);
         apodTodayCachedAt = Date.now();
+        apodTodayNote = void 0;
       }
       return res.json({ success: true, data: scienceRecord });
+    }
+    if (!date) {
+      const prevDate = previousApodDate(scienceDate);
+      const recentNote = `Today\u2019s APOD (${scienceDate}) is not yet available from NASA, so the most recent published APOD (${prevDate}) is shown.`;
+      if (apodCache.has(prevDate)) {
+        const cachedPrev = apodCache.get(prevDate);
+        apodCache.set("today", cachedPrev);
+        apodTodayCachedAt = Date.now();
+        apodTodayNote = recentNote;
+        return res.json({ success: true, data: cachedPrev, cached: true, note: recentNote });
+      }
+      if (failureKind !== "network" && failureKind !== "rate-limited") {
+        try {
+          const prevRes = await fetch(
+            `https://api.nasa.gov/planetary/apod?api_key=${nasaApiKey}&date=${prevDate}`,
+            { signal: AbortSignal.timeout(3500) }
+          );
+          if (prevRes.ok) {
+            const prevData = normaliseApodMedia(redactApiKeys(await prevRes.json()));
+            if (!isDegradedApodRecord(prevData) && prevData?.title && prevData?.url && prevData.date === prevDate) {
+              apodCache.set(prevDate, prevData);
+              apodCache.set("today", prevData);
+              apodTodayCachedAt = Date.now();
+              apodTodayNote = recentNote;
+              return res.json({ success: true, data: prevData, cached: true, note: recentNote });
+            }
+          }
+        } catch {
+        }
+      }
+      const prevScience = await fetchScienceApod(prevDate);
+      if (prevScience) {
+        apodCache.set(prevDate, prevScience);
+        apodCache.set("today", prevScience);
+        apodTodayCachedAt = Date.now();
+        apodTodayNote = recentNote;
+        return res.json({ success: true, data: prevScience, cached: true, note: recentNote });
+      }
     }
     const usingDemoKey = nasaApiKey === "DEMO_KEY";
     return res.status(503).json({

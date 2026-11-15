@@ -43,7 +43,7 @@ interface WpMedia {
 
 /** The one place untyped JSON becomes typed; `?type=media` matters: this is NASA's CMS. */
 async function readJson<T>(url: string, fetchImpl: typeof fetch): Promise<T> {
-  const response = await fetchImpl(url, { signal: AbortSignal.timeout(3000), redirect: 'error', headers: { Accept: 'application/json' } });
+  const response = await fetchImpl(url, { signal: AbortSignal.timeout(4500), redirect: 'error', headers: { Accept: 'application/json' } });
   if (!response.ok) throw new Error('NASA Science unavailable');
   const size = Number(response.headers.get('content-length'));
   if (size > 1_500_000) throw new Error('NASA Science response too large');

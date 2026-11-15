@@ -148,7 +148,7 @@ export default function SignalStrip({
 
   return (
     <section aria-label={t('signalsTitle')} className="mx-auto max-w-[1400px] px-4 sm:px-6 lg:px-8">
-      <div className="surface-highlight grid grid-cols-1 overflow-hidden rounded-[16px] border border-line bg-surface/40 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="surface surface-highlight grid grid-cols-1 overflow-hidden rounded-[16px] border border-line sm:grid-cols-2 lg:grid-cols-4">
         <SignalTile icon={Aperture} title={t('signalApod')} detail="NASA APOD / NASA Science" {...apodTile} />
         <SignalTile
           icon={Satellite}
