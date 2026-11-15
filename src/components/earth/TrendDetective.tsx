@@ -606,6 +606,13 @@ export default function TrendDetective({ area, onAreaChange, onPowerResolved, re
                         <stop offset="0%" stopColor={TEMP_COLOR} stopOpacity={0.22} />
                         <stop offset="100%" stopColor={TEMP_COLOR} stopOpacity={0.01} />
                       </linearGradient>
+                      {/* The precipitation series filled with `url(#earthMonthlyFillPrecip1)`,
+                          an id this chart never defined, so the fill resolved to
+                          nothing and the series was invisible. */}
+                      <linearGradient id="earthMonthlyFillPrecip" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor={PRECIP_COLOR} stopOpacity={0.55} />
+                        <stop offset="100%" stopColor={PRECIP_COLOR} stopOpacity={0.12} />
+                      </linearGradient>
                     </defs>
                     <CartesianGrid stroke={GRID} strokeDasharray="3 4" vertical={false} />
                     <XAxis
@@ -616,7 +623,12 @@ export default function TrendDetective({ area, onAreaChange, onPowerResolved, re
                       minTickGap={40}
                       tickFormatter={(value: string) => (value.endsWith('-01') ? value.slice(0, 4) : '')}
                     />
+                    {/* Each axis must carry the id its series bind to. Recharts
+                        defaults every axis to id 0, so two unlabelled axes left the
+                        right-hand (precipitation) axis orphaned and drew its series
+                        against the temperature scale, where it was clipped. */}
                     <YAxis
+                      yAxisId={0}
                       dataKey={activeParams[0]}
                       stroke={AXIS}
                       tickLine={false}
@@ -627,6 +639,7 @@ export default function TrendDetective({ area, onAreaChange, onPowerResolved, re
                       orientation="left"
                     />
                     <YAxis
+                      yAxisId={1}
                       dataKey={activeParams[1]}
                       stroke={AXIS}
                       tickLine={false}
@@ -662,18 +675,32 @@ export default function TrendDetective({ area, onAreaChange, onPowerResolved, re
                     />
                     {activeParams.map((code, idx) => {
                       const isTemp = unitFamily(code) === 'temperature';
-                      return (
+                      const yAxisId = idx === 0 ? 0 : 1;
+                      // Temperature reads as a line over its gradient; precipitation
+                      // reads as bars on the right axis, which is what the chart says
+                      // it shows. Neither series is plotted against the other's scale.
+                      return isTemp ? (
                         <Area
                           key={code}
+                          yAxisId={yAxisId}
                           type="monotone"
                           dataKey={code}
-                          stroke={isTemp ? TEMP_COLOR : PRECIP_COLOR}
+                          stroke={TEMP_COLOR}
                           strokeWidth={1.6}
-                          fill={isTemp ? 'url(#earthMonthlyFillTemp)' : `url(#earthMonthlyFillPrecip${idx})`}
+                          fill="url(#earthMonthlyFillTemp)"
                           dot={false}
                           connectNulls={false}
                           isAnimationActive={false}
-                          yAxisId={idx === 0 ? 0 : 1}
+                        />
+                      ) : (
+                        <Bar
+                          key={code}
+                          yAxisId={yAxisId}
+                          dataKey={code}
+                          fill="url(#earthMonthlyFillPrecip)"
+                          stroke={PRECIP_COLOR}
+                          strokeWidth={0.6}
+                          isAnimationActive={false}
                         />
                       );
                     })}

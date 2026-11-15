@@ -10,6 +10,7 @@ older phase reports are kept for provenance and are marked at the top of the fil
 | [`../README.md`](../README.md) | What the app is, how to run it |
 | [`audits/MASTER_AUDIT_REPORT.md`](audits/MASTER_AUDIT_REPORT.md) | What is broken, what was fixed, what still needs a decision |
 | [`KNOWN_LIMITATIONS.md`](KNOWN_LIMITATIONS.md) | What does not work, stated plainly |
+| [`COSMORA_ROADMAP.md`](COSMORA_ROADMAP.md) | Audit of the current platform, the defects found, and the phased plan for the COSMORA redesign |
 | [`TEST_RESULTS.md`](TEST_RESULTS.md) | What was actually run, and what it proves |
 | [`API_STATUS_REPORT.md`](API_STATUS_REPORT.md) | Every route: source, cache, failure mode, live status |
 | [`DEVELOPMENT_CHANGELOG.md`](DEVELOPMENT_CHANGELOG.md) | Dated changes with their verification |
