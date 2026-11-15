@@ -80,7 +80,7 @@ export default function Sidebar({ route, collapsed, onToggleCollapsed }: Sidebar
       aria-label={t('wsMainNavigation')}
     >
       <div className="nova-sidebar__brand">
-        <Link to="/" className="min-w-0 rounded-lg" aria-label="NOVA AI — Home">
+        <Link to="/" className="min-w-0 rounded-lg" aria-label="COSMORA — Home">
           <NovaWordmark collapsed={collapsed} />
         </Link>
         {collapsed ? null : (

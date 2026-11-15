@@ -1,6 +1,8 @@
 # Brand assets — how the artwork becomes the icon set
 
-Source of truth: the commissioned **NASA Space Explorer — Orbital Horizon**
+Source of truth: the commissioned **Orbital Horizon** artwork (commissioned when the
+product was named *NASA Space Explorer*; the wordmark baked into the PNGs is that
+retired name — see *Open item* below).
 artwork (1536×1024 PNG, semi-transparent vignette, `alpha` mean 0.94 — every
 asset below is flattened onto `#04060e` so nothing renders on an unexpected
 backdrop).
@@ -17,6 +19,16 @@ backdrop).
 | `public/pwa-maskable-512x512.png` | 512 | manifest `maskable` — lockup at ~62 % so a circular mask never clips it |
 | `public/apple-touch-icon.png` | 180 | iOS home screen (opaque, no alpha) |
 | `public/favicon.png`, `public/favicon.ico` | 32, 16/32/48 | browser tab — the lockup's four-point star, which is legible at 16 px where a 4.5:1 wordmark is not |
+
+## Open item — the artwork predates the rename
+
+The product is **COSMORA** (platform) with **NOVA** as the assistant. The binary
+artwork — `public/brand/og-image.png`, `space-explorer-lockup.png` and the icons
+generated from it — still renders the retired wordmark. The interface no longer
+uses the lockup: the header draws a typographic wordmark over the orbit glyph, so
+nothing user-facing is wrong today. The OG image is the exception: it is what a
+shared link shows, and it still says the old name. Replacing it needs new artwork
+(not a code change); until then this is the one place the old name survives.
 
 ## Recipe (ImageMagick)
 

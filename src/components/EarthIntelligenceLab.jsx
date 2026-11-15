@@ -1,5 +1,5 @@
 /**
- * Earth Intelligence Lab — NASA Space Explorer (SYS.13)
+ * Earth Intelligence Lab — COSMORA (SYS.13)
  *
  * Upgraded in place: the previous NASA POWER monthly explorer is preserved as the
  * "Trend Detective" workspace (same service, same datasets, richer controls), and
@@ -408,7 +408,7 @@ export default function EarthIntelligenceLab({ lang = 'en' }) {
         title: t('earthPixelCompare'),
         status: 'derived',
         dataset: 'Rendered-pixel comparison (client-side, from GIBS WMS imagery)',
-        provider: 'Derived by NASA Space Explorer',
+        provider: 'Derived by COSMORA',
         sourceUrl: difference.urlA,
         observation: `${date} vs ${compareDate}`,
         retrievedAt: difference.computedAt,

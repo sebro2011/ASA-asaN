@@ -68,7 +68,20 @@ lies about its data is worse than an ugly one that does not.
 4. Acceptance: `scripts/test-design-tokens.mjs` asserts no raw `backdrop-blur-*`
    utility survives outside the primitive; build size does not grow.
 
-### Phase 2 — Brand: COSMORA
+### Phase 2 — Brand: COSMORA  · **done (text layer, 2026-11-15)**
+
+Delivered: product name in the document title, manifest, header, footer, install
+prompt, welcome screen, the three language dictionaries, report exports, the
+analyst's system instruction and the server's startup banner. NOVA remains the
+assistant's name — "ask NOVA" still means something. Guarded by
+`scripts/test-brand.mjs`, which also asserts NASA is credited as the source on
+every surface that names the brand.
+
+Not delivered: the binary artwork (OG image, lockup, icons) still carries the old
+wordmark — see `docs/BRAND_ASSETS.md`. That needs new artwork, not code.
+
+Original plan follows.
+
 Rename in one pass, with the decisions in §4 answered first:
 - UI strings (3 dictionaries), `<title>` templates, PWA manifest, OG/lockup assets,
   Guardian already says COSMORA so it becomes consistent rather than a special case.

@@ -376,7 +376,7 @@ export const DATASETS: DatasetDescriptor[] = [
       'A propagated altitude is a derived quantity, not a direct measurement.',
       'Not a NASA API; attribution is shown wherever it is used.',
     ],
-    attribution: 'wheretheiss.at orbital data (existing NASA Space Explorer integration).',
+    attribution: 'wheretheiss.at orbital data (existing COSMORA integration).',
     keyRequired: false,
   },
 ];
