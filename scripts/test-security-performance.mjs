@@ -136,6 +136,23 @@ test('the service worker never answers an API navigation with the app shell', as
   assert.match(match[1], /\^\\\/api\\\//, 'the denylist covers /api/*');
 });
 
+test('the service worker stays out of the home tiles’ request path', async () => {
+  // A worker cache that serves a stale or poisoned entry makes a healthy endpoint
+  // look broken, and a fetch that fails *inside* the worker is indistinguishable
+  // from a dead network in the UI. The home tiles keep their own labelled cache,
+  // so the worker must hand these three paths straight to the network.
+  const config = await readFile(new URL('../vite.config.ts', import.meta.url), 'utf8');
+  const networkOnly = /urlPattern:\s*\(\{ url \}\)\s*=>[\s\S]*?handler:\s*'NetworkOnly'/.exec(config);
+  assert.ok(networkOnly, 'vite.config.ts declares a NetworkOnly route');
+  const route = networkOnly[0];
+  for (const path of ['/api/apod', '/api/iss', '/api/asteroids/neows']) {
+    assert.ok(route.includes(`'${path}'`), `the NetworkOnly route covers ${path}`);
+  }
+  // Workbox matches in order: a caching route declared first would win.
+  const firstCache = config.search(/cacheName:/);
+  assert.ok(firstCache > networkOnly.index, 'the NetworkOnly route is declared before the caching routes');
+});
+
 test('PWA runtime image caching does not capture POWER JSON', async () => {
   const config = await readFile(new URL('../vite.config.ts', import.meta.url), 'utf8');
   assert.match(config, /url\.pathname !== '\/api\/earth\/power'/);

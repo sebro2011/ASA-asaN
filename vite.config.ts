@@ -37,18 +37,20 @@ export default defineConfig(({ mode }) => {
           globIgnores: ['**/brand/og-image.png'],
           runtimeCaching: [
             {
-              urlPattern: ({ url }) => url.pathname.startsWith('/api/apod'),
-              handler: 'NetworkFirst',
-              options: {
-                cacheName: 'nasa-apod-data',
-                expiration: {
-                  maxEntries: 50,
-                  maxAgeSeconds: 60 * 60 * 24 * 30 // 30 days
-                },
-                cacheableResponse: {
-                  statuses: [0, 200]
-                }
-              }
+              // The three home-page tiles keep their own provenance-aware cache
+              // (`withLastKnown` in src/pages/home/homeData.ts) which labels a
+              // saved value CACHED and carries its retrieval time. A second,
+              // silent cache in the worker can only contradict that label — and
+              // when it holds a stale or poisoned entry it turns a working
+              // endpoint into "UNAVAILABLE". NetworkOnly leaves the network as
+              // the single source, so a failure is a real failure and the app —
+              // not the worker — decides what to show. First match wins, so this
+              // must stay above the caching routes below.
+              urlPattern: ({ url }) =>
+                url.pathname === '/api/apod' ||
+                url.pathname === '/api/iss' ||
+                url.pathname === '/api/asteroids/neows',
+              handler: 'NetworkOnly'
             },
             {
               // POWER responses carry retrieval timestamps and have their own

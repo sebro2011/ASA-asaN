@@ -18,7 +18,14 @@ export type ResourcePhase = 'idle' | 'loading' | 'ready' | 'error';
 export interface ResourceState<T> {
   data: T | null;
   phase: ResourcePhase;
+  /** One readable sentence for the reader (what the tile prints). */
   error: string | null;
+  /**
+   * The mechanical detail behind `error` — error name, elapsed time, whether a
+   * service worker handled the request. Shown as a tooltip, because a reader
+   * wants "offline" while a bug report needs `TypeError: Failed to fetch`.
+   */
+  errorDetail: string | null;
   /** ISO timestamp of the last successful load. */
   loadedAt: string | null;
 }
@@ -50,6 +57,7 @@ export function useApiResource<T>(
     data: null,
     phase: manual ? 'idle' : 'loading',
     error: null,
+    errorDetail: null,
     loadedAt: null
   });
   const [nonce, setNonce] = useState(0);
@@ -60,7 +68,12 @@ export function useApiResource<T>(
     if (!enabled || manual) return undefined;
     const controller = new AbortController();
     let active = true;
-    setState((previous) => ({ ...previous, phase: previous.data ? previous.phase : 'loading', error: null }));
+    setState((previous) => ({
+      ...previous,
+      phase: previous.data ? previous.phase : 'loading',
+      error: null,
+      errorDetail: null
+    }));
 
     const request = () =>
       retries > 0
@@ -74,6 +87,7 @@ export function useApiResource<T>(
           data: value,
           phase: 'ready',
           error: null,
+          errorDetail: null,
           loadedAt: new Date().toISOString()
         });
       })
@@ -83,6 +97,7 @@ export function useApiResource<T>(
           data: previous.data,
           phase: 'error',
           error: (error as Error)?.message || 'Request failed',
+          errorDetail: (error as { diagnostics?: string })?.diagnostics ?? null,
           loadedAt: previous.loadedAt
         }));
       });
