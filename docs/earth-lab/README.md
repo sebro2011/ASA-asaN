@@ -14,6 +14,7 @@ statistics cannot be improvised inside them.
 | [`03_STATISTICAL_METHOD.md`](03_STATISTICAL_METHOD.md) | The trend engine: method, calibrated thresholds, refusal rules, 13 acceptance tests |
 | [`04_DESIGN_AND_BUILD_PLAN.md`](04_DESIGN_AND_BUILD_PLAN.md) | Figma frames, component inventory, module signatures, hour-by-hour schedule |
 | [`05_TEST_PLAN.md`](05_TEST_PLAN.md) | What must be proven before submission |
+| [`06_SCIENTIFIC_CORRECTION_REPORT.md`](06_SCIENTIFIC_CORRECTION_REPORT.md) | What was actually wrong in the shipped statistics, what was corrected, the measured before/after false-positive rates, and what remains unfixed |
 
 ## The one number to remember
 

@@ -715,6 +715,28 @@ function parsePowerResponse(payload, requested) {
   };
 }
 
+// src/lib/earth/statisticsConfig.ts
+var STATISTICS_CONFIG = Object.freeze({
+  trendAlpha: 0.01,
+  literalAlpha05: 0.05,
+  literalAlpha01: 0.01,
+  comparisonAlpha: 0.05,
+  minAnnualObservations: 10,
+  minEffectiveObservations: 10,
+  shortRecordEffectiveObservations: 14,
+  minPettittObservations: 12,
+  minSplitEpochYears: 2,
+  minSeasonalMonthObservations: 5,
+  minSeasonalMonths: 6,
+  minSeasonalYears: 8,
+  minCorrelationObservations: 12,
+  wmoClimatologyYears: 30,
+  maxAutocorrelationLagDivisor: 3,
+  maxAutocorrelationLagCap: 10,
+  bootstrapReplicates: 999,
+  bootstrapSeed: 6221086
+});
+
 // src/lib/earth/spaceAppsResources.ts
 var SPACE_APPS_RESOURCE_MATRIX = [
   {

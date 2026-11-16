@@ -66,6 +66,7 @@ import {
   detectUnusualObservations,
   type BaselineMode
 } from '../../lib/earth/climateEngine';
+import { STATISTICS_CONFIG, describeTrendAlpha } from '../../lib/earth/statisticsConfig';
 import { downloadTextFile, powerSeriesCsv } from '../../lib/earth/context';
 import { describeSeries, seriesLimitations } from '../../lib/earth/analysis';
 import { SRI_LANKA_PLACES, WORLD_PLACES, type GazetteerEntry } from '../../lib/earth/geocode';
@@ -772,22 +773,22 @@ export default function TrendDetective({ area, onAreaChange, onPowerResolved, re
                 <span className="chip border-cyan-400/40 bg-cyan-500/10 text-cyan-200">
                   Official NASA Source · POWER MERRA-2
                 </span>
-                {primaryExtended.mannKendall.eligible ? (
+                {primaryExtended.mannKendall.inferenceEligible ? (
                   <span
                     className={cx(
                       'chip',
-                      primaryExtended.mannKendall.significantAt05
+                      primaryExtended.mannKendall.significant
                         ? 'border-signal/50 bg-signal/10 text-signal'
                         : 'border-line text-ink-2'
                     )}
                   >
-                    {primaryExtended.mannKendall.significantAt05
-                      ? `Mann–Kendall p = ${primaryExtended.mannKendall.pValue} (< 0.05 · ${primaryExtended.mannKendall.direction})`
-                      : `Mann–Kendall p = ${primaryExtended.mannKendall.pValue} (no monotonic trend at α = 0.05)`}
+                    {primaryExtended.mannKendall.significant
+                      ? `Mann–Kendall p = ${primaryExtended.mannKendall.pValue} (< ${STATISTICS_CONFIG.trendAlpha} · ${primaryExtended.mannKendall.direction})`
+                      : `Mann–Kendall p = ${primaryExtended.mannKendall.pValue} (no monotonic trend at ${describeTrendAlpha()})`}
                   </span>
                 ) : (
                   <span className="chip border-caution/40 text-caution">
-                    Mann–Kendall withheld (n = {primaryExtended.mannKendall.n} &lt; 10 yrs)
+                    Mann–Kendall withheld — {primaryExtended.mannKendall.ineligibilityReason}
                   </span>
                 )}
                 {primaryExtended.mannKendall.senCi95PerDecade ? (
@@ -1591,14 +1592,18 @@ export default function TrendDetective({ area, onAreaChange, onPowerResolved, re
                             <span
                               className={cx(
                                 'chip',
-                                historicalSplit.tTest!.significantAt05
+                                historicalSplit.tTest!.significant
                                   ? 'border-signal/50 bg-signal/10 text-signal'
-                                  : 'border-line text-ink-3'
+                                  : historicalSplit.tTest!.inferenceEligible
+                                    ? 'border-line text-ink-3'
+                                    : 'border-caution/40 text-caution'
                               )}
                             >
-                              {historicalSplit.tTest!.significantAt05
-                                ? `p = ${historicalSplit.tTest!.pValue} (< 0.05 · significant)`
-                                : `p = ${historicalSplit.tTest!.pValue} (>= 0.05 · not significant)`}
+                              {!historicalSplit.tTest!.inferenceEligible
+                                ? 'Inference withheld'
+                                : historicalSplit.tTest!.significant
+                                  ? `p = ${historicalSplit.tTest!.pValueAdjusted} (< ${STATISTICS_CONFIG.comparisonAlpha} · significant)`
+                                  : `p = ${historicalSplit.tTest!.pValueAdjusted} (>= ${STATISTICS_CONFIG.comparisonAlpha} · not significant)`}
                             </span>
                           </div>
                           <dl className="grid grid-cols-2 gap-2 border-y border-line/50 pt-2 font-mono text-[10.5px]">
@@ -1626,14 +1631,34 @@ export default function TrendDetective({ area, onAreaChange, onPowerResolved, re
                                   : 'Equal variances rejected (Welch unequal-variance)'}
                               </dd>
                             </div>
+                            <div>
+                              <dt className="text-[9px] uppercase text-ink-4">ρ̂₁ / variance factor</dt>
+                              <dd className="text-ink">
+                                {historicalSplit.tTest!.lag1Autocorrelation} / ×
+                                {historicalSplit.tTest!.varianceInflationFactor}
+                              </dd>
+                            </div>
+                            <div>
+                              <dt className="text-[9px] uppercase text-ink-4">Effective n after adjustment</dt>
+                              <dd className="text-ink">{historicalSplit.tTest!.effectiveSampleSize}</dd>
+                            </div>
+                            <div className="col-span-2">
+                              <dt className="text-[9px] uppercase text-ink-4">Unadjusted p (for comparison)</dt>
+                              <dd className="text-ink">{historicalSplit.tTest!.pValue}</dd>
+                            </div>
                           </dl>
+                          {historicalSplit.tTest!.dependenceWarning ? (
+                            <p className="rounded-[8px] border border-caution/30 bg-caution/[0.06] p-2 text-[10.5px] leading-relaxed text-caution">
+                              {historicalSplit.tTest!.dependenceWarning}
+                            </p>
+                          ) : null}
                           <p className="text-[11px] leading-relaxed text-ink-2">
                             {historicalSplit.tTest!.interpretation}
                           </p>
                         </div>
                       ) : null}
                       <p className="text-[11px] leading-relaxed text-ink-4">
-                        Descriptive difference between the earlier and later halves of complete calendar years in the retrieved record. Significance is assessed by the two-sample t-test above; without a significant result, the direction of the raw mean difference is not presented as evidence of a real shift.
+                        Descriptive difference between the earlier and later halves of complete calendar years in the retrieved record. Significance is assessed by the two-sample t-test above, corrected for the serial correlation between consecutive years; when the effective sample after that correction is too small, no verdict is published at all. Without a significant result, the direction of the raw mean difference is not presented as evidence of a real shift.
                       </p>
                     </div>
                   ) : (
@@ -1812,10 +1837,57 @@ export default function TrendDetective({ area, onAreaChange, onPowerResolved, re
                   icon={CheckCircle2}
                   actions={
                     <span className="chip border-cyan-400/40 bg-cyan-500/10 text-cyan-200">
-                      α = 0.05 (two-sided)
+                      {describeTrendAlpha()}
                     </span>
                   }
                 />
+
+                {/* Aggregated, dependence-aware verdict. One conclusion, with the
+                    tests that support it and the tests that disagree - never an
+                    average of p-values and never a bare badge. */}
+                <div
+                  className={cx(
+                    'rounded-[12px] border p-4 space-y-2',
+                    primaryExtended.trendVerdict.direction === 'insufficient-data'
+                      ? 'border-caution/40 bg-caution/[0.06]'
+                      : primaryExtended.trendVerdict.significant
+                        ? 'border-signal/40 bg-signal/[0.06]'
+                        : 'border-line/70 bg-abyss/60'
+                  )}
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-atmo">
+                      Trend verdict · dependence-aware
+                    </span>
+                    <span className="chip border-line text-ink-3">
+                      {primaryExtended.trendVerdict.direction === 'insufficient-data'
+                        ? 'No conclusion published'
+                        : `confidence: ${primaryExtended.trendVerdict.confidence}`}
+                    </span>
+                  </div>
+                  <p className="text-[12px] leading-relaxed text-ink">
+                    {primaryExtended.trendVerdict.summary}
+                  </p>
+                  {primaryExtended.trendVerdict.direction !== 'insufficient-data' ? (
+                    <div className="flex flex-wrap gap-x-4 gap-y-1 font-mono text-[10.5px] text-ink-3">
+                      <span>
+                        α = {primaryExtended.trendVerdict.alpha} · p ={' '}
+                        {primaryExtended.trendVerdict.primaryPValue} · n* ={' '}
+                        {primaryExtended.trendVerdict.effectiveSampleSize}
+                      </span>
+                      {primaryExtended.trendVerdict.supportingTests.length ? (
+                        <span className="text-signal">
+                          supports: {primaryExtended.trendVerdict.supportingTests.join('; ')}
+                        </span>
+                      ) : null}
+                      {primaryExtended.trendVerdict.dissentingTests.length ? (
+                        <span className="text-caution">
+                          dissents: {primaryExtended.trendVerdict.dissentingTests.join('; ')}
+                        </span>
+                      ) : null}
+                    </div>
+                  ) : null}
+                </div>
 
                 <div className="grid gap-4 lg:grid-cols-3">
                   {/* 1. Hamed-Rao Mann-Kendall */}
@@ -1827,18 +1899,20 @@ export default function TrendDetective({ area, onAreaChange, onPowerResolved, re
                       <span
                         className={cx(
                           'chip',
-                          !primaryExtended.mannKendall.eligible
+                          !primaryExtended.mannKendall.inferenceEligible
                             ? 'border-caution/40 text-caution'
-                            : primaryExtended.mannKendall.significantAt05
+                            : primaryExtended.mannKendall.significant
                               ? 'border-signal/50 bg-signal/10 text-signal'
                               : 'border-line text-ink-3'
                         )}
                       >
                         {!primaryExtended.mannKendall.eligible
                           ? 'Insufficient n'
-                          : primaryExtended.mannKendall.significantAt05
-                            ? `Significant (${primaryExtended.mannKendall.direction})`
-                            : 'Not significant'}
+                          : !primaryExtended.mannKendall.inferenceEligible
+                            ? 'Inference withheld'
+                            : primaryExtended.mannKendall.significant
+                              ? `Significant (${primaryExtended.mannKendall.direction})`
+                              : 'Not significant'}
                       </span>
                     </div>
                     {primaryExtended.mannKendall.eligible ? (
@@ -1858,9 +1932,25 @@ export default function TrendDetective({ area, onAreaChange, onPowerResolved, re
                           </dd>
                         </div>
                         <div>
-                          <dt className="text-[9.5px] uppercase text-ink-4">Lag-1 r₁ / VIF</dt>
+                          <dt className="text-[9.5px] uppercase text-ink-4">Lag-1 ρ̂₁ / VIF</dt>
                           <dd className="text-ink">
-                            {primaryExtended.mannKendall.lag1Autocorrelation} / ×{primaryExtended.mannKendall.effectiveSampleRatio}
+                            {primaryExtended.mannKendall.lag1Autocorrelation} / ×{primaryExtended.mannKendall.varianceInflationFactor}
+                          </dd>
+                        </div>
+                        <div>
+                          <dt className="text-[9.5px] uppercase text-ink-4">Effective n* / confidence</dt>
+                          <dd className="text-ink">
+                            {primaryExtended.mannKendall.effectiveSampleSize} / {primaryExtended.mannKendall.confidence}
+                          </dd>
+                        </div>
+                        <div className="col-span-2">
+                          <dt className="text-[9.5px] uppercase text-ink-4">
+                            Block-bootstrap cross-check (dependence-aware)
+                          </dt>
+                          <dd className="text-ink">
+                            {primaryExtended.mannKendall.bootstrap
+                              ? `p = ${primaryExtended.mannKendall.bootstrap.pValue.toFixed(4)} (block ${primaryExtended.mannKendall.bootstrap.blockLength}, ${primaryExtended.mannKendall.bootstrap.replicates} reps) · ${primaryExtended.mannKendall.inferenceAgreement}`
+                              : 'not available for this record'}
                           </dd>
                         </div>
                         <div className="col-span-2">
@@ -1887,18 +1977,20 @@ export default function TrendDetective({ area, onAreaChange, onPowerResolved, re
                       <span
                         className={cx(
                           'chip',
-                          !primaryExtended.seasonalMannKendall.eligible
+                          !primaryExtended.seasonalMannKendall.inferenceEligible
                             ? 'border-caution/40 text-caution'
-                            : primaryExtended.seasonalMannKendall.significantAt05
+                            : primaryExtended.seasonalMannKendall.significant
                               ? 'border-signal/50 bg-signal/10 text-signal'
                               : 'border-line text-ink-3'
                         )}
                       >
                         {!primaryExtended.seasonalMannKendall.eligible
                           ? 'Insufficient span'
-                          : primaryExtended.seasonalMannKendall.significantAt05
-                            ? `Significant (${primaryExtended.seasonalMannKendall.direction})`
-                            : 'Not significant'}
+                          : !primaryExtended.seasonalMannKendall.inferenceEligible
+                            ? 'Inference withheld'
+                            : primaryExtended.seasonalMannKendall.significant
+                              ? `Significant (${primaryExtended.seasonalMannKendall.direction})`
+                              : 'Not significant'}
                       </span>
                     </div>
                     {primaryExtended.seasonalMannKendall.eligible ? (
@@ -1945,14 +2037,14 @@ export default function TrendDetective({ area, onAreaChange, onPowerResolved, re
                           'chip',
                           !primaryExtended.pettittChangePoint.eligible
                             ? 'border-caution/40 text-caution'
-                            : primaryExtended.pettittChangePoint.significantAt05
+                            : primaryExtended.pettittChangePoint.significant
                               ? 'border-amber-400/50 bg-amber-500/10 text-amber-200'
                               : 'border-line text-ink-3'
                         )}
                       >
                         {!primaryExtended.pettittChangePoint.eligible
-                          ? 'Requires n ≥ 12'
-                          : primaryExtended.pettittChangePoint.significantAt05
+                          ? `Requires n ≥ ${STATISTICS_CONFIG.minPettittObservations}`
+                          : primaryExtended.pettittChangePoint.significant
                             ? `Shift ~${primaryExtended.pettittChangePoint.changeYear}`
                             : 'No step shift'}
                       </span>

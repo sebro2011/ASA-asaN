@@ -6,30 +6,120 @@
  * (Helsel et al., 2020), NOAA NCEI, and KNMI Climate Explorer:
  *
  *   1. Mann–Kendall Monotonic Trend Test (Mann 1945; Kendall 1975) with exact
- *      tie-group variance adjustment and Hamed & Rao (1998) effective-sample-size
- *      correction for serial autocorrelation.
+ *      tie-group variance adjustment and Hamed & Rao (1998) rank-autocorrelation
+ *      variance correction.
  *   2. Distribution-free 95% Confidence Interval on Theil–Sen Slope (Gilbert 1987).
  *   3. Seasonal Mann–Kendall Test & Seasonal Sen's Slope (Hirsch, Slack & Smith 1982)
- *      for monthly hydro-climatic records with strong monsoon/seasonal cycles.
+ *      for monthly hydro-climatic records with strong monsoon/seasonal cycles,
+ *      with the within-year Hamed–Rao correction of Hirsch & Slack (1984).
  *   4. Pettitt Non-Parametric Change-Point Test (Pettitt 1979) for regime shifts.
  *   5. Standardized 12-Month Precipitation Index (SPI-12 via Thom 1958 Gamma MLE
  *      with zero-inflation handling) and Bretherton et al. (1999) effective-DOF
  *      cross-series correlation (Pearson r & Spearman rank rho).
+ *   6. Dependence-aware circular block bootstrap on the Mann–Kendall S statistic,
+ *      which needs no variance estimator and is therefore valid for short,
+ *      strongly autocorrelated records where no analytic correction is calibrated.
  *
  * Scientific honesty rules enforced in code:
- *   - Hypothesis tests refuse to emit p-values when sample sizes fall below
- *     validity thresholds (n < 10 annual points for Mann–Kendall; n < 12 for Pettitt).
- *   - Windows shorter than the 30-year WMO climatological normal (10 <= n < 30)
- *     carry an explicit sub-climatological variability warning (ENSO / IOD).
- *   - Rejecting H0 (p < 0.05) establishes a statistically significant monotonic
- *     trend WITHIN THE OBSERVED WINDOW ONLY — never physical causal attribution.
+ *   - Every threshold lives in `statisticsConfig.ts`; none is written literally here.
+ *   - Hypothesis tests refuse to emit p-values when sample sizes fall below the
+ *     configured validity thresholds, AND when the effective (autocorrelation-
+ *     adjusted) sample size is below the configured floor. A p-value is never
+ *     shown for a record that cannot support inference.
+ *   - Windows shorter than the 30-year WMO climatological normal carry an
+ *     explicit sub-climatological variability warning (ENSO / IOD).
+ *   - Rejecting H0 establishes a monotonic trend WITHIN THE OBSERVED WINDOW ONLY —
+ *     never physical causal attribution.
+ *
+ * ## Autocorrelation correction: what was wrong and what it is now
+ *
+ * The Hamed & Rao (1998) variance-correction factor is
+ *
+ *     n/n* = 1 + 2·Σ_k (n−k)(n−k−1)(n−k−2)·ρ_k / (n(n−1)(n−2))
+ *
+ * where ρ_k is the lag-k autocorrelation **of the ranks of the detrended
+ * series**, and — per the paper — only lags whose ρ_k exceeds the significance
+ * bound ±1.96/√n contribute.
+ *
+ * The previous implementation departed from that in four ways at once:
+ *
+ *   1. It took ρ_1 from the *values*, not the ranks, while ρ_2…ρ_k came from the
+ *      ranks — so `lag1Autocorrelation` and the correction disagreed.
+ *   2. It summed **|ρ_k|** (absolute values) instead of applying the
+ *      significance gate. The present specification (§4.2 step 3) requires
+ *      negative lags to be zeroed rather than sign-flipped: negative
+ *      autocorrelation in a detrended noise series is largely a Stuart–Ord
+ *      artefact of detrending, and treating it as real shrinks the variance and
+ *      makes the test anti-conservative.
+ *   3. It used a fixed `min(n−3, 10)` lag window instead of `min(n−3, ⌊n/3⌋)`.
+ *   4. `effectiveSampleRatio` reported the variance-inflation factor n/n* under
+ *      a name that means its reciprocal, and the effective sample size was never
+ *      exposed or gated on at all.
+ *
+ * Correcting 1–4 is *not* enough on its own. A 600-replicate AR(1) study
+ * (`npm run test:stats`, and the `hamedRao*` description strings) shows that the
+ * literal published recipe — significance gate, no sign clamp — is
+ * **anti-conservative** at n = 30: 9.8 % / 18.0 % / 26.2 % / 30.0 % false
+ * positives at φ = 0, 0.3, 0.6, 0.8 versus a nominal 5 %. Zeroing negative lags
+ * (as the project specification requires) brings that to 1.3 / 5.3 / 12.3 /
+ * 19.2 %. Both are reported, so the reader can see which was applied; the
+ * published verdict uses the specified variant.
+ *
+ * Because the analytic correction still over-rejects for strongly autocorrelated
+ * short records, the block bootstrap is shipped alongside it and the UI text
+ * states the residual limitation rather than implying calibration that was not
+ * measured.
  */
 
+import {
+  STATISTICS_CONFIG,
+  maxAutocorrelationLag,
+  statisticsConfigSnapshot,
+  type StatisticsConfig,
+  type StatisticsConfigSnapshot
+} from './statisticsConfig';
+
+export type { StatisticsConfig, StatisticsConfigSnapshot };
+export { STATISTICS_CONFIG, maxAutocorrelationLag, statisticsConfigSnapshot };
+
 export type TrendDirection = 'increasing' | 'decreasing' | 'no-trend' | 'insufficient-data';
+
+/**
+ * How much confidence the record supports. Mirrors specification §5:
+ * `insufficient data` never carries a p-value, `short record` is computed but
+ * below the effective-sample-size band, `strong` meets every requirement.
+ */
+export type TrendConfidence = 'strong' | 'short-record' | 'insufficient-data';
+
+/**
+ * Which inference a reader should trust when the two disagree.
+ *
+ * - `agreement` — analytic and resampling p-values fall on the same side.
+ * - `analytic-only` — no resampling available (too few effective observations).
+ * - `bootstrap-more-conservative` — the bootstrap refuses significance the
+ *   analytic test grants. For autocorrelated short records this is the expected
+ *   pattern and the bootstrap should be believed.
+ * - `analytic-more-conservative` — rare; recorded rather than hidden.
+ */
+export type InferenceAgreement =
+  | 'agreement'
+  | 'analytic-only'
+  | 'bootstrap-more-conservative'
+  | 'analytic-more-conservative';
 
 export interface MannKendallResult {
   testName: 'Mann–Kendall (Hamed–Rao autocorrelation-adjusted)';
   eligible: boolean;
+  /**
+   * Whether an inferential verdict may be published. False whenever the record
+   * fails the raw or the effective-sample-size requirement; when false,
+   * `pValue`, `zAdjusted` and the CI are all `null` and the UI must withhold
+   * the conclusion.
+   */
+  inferenceEligible: boolean;
+  /** Why inference was withheld, or `null` when it was not. */
+  ineligibilityReason: string | null;
+  confidence: TrendConfidence;
   n: number;
   fromYear: number | null;
   toYear: number | null;
@@ -37,9 +127,28 @@ export interface MannKendallResult {
   sStatistic: number | null;
   kendallTau: number | null;
   rawVariance: number | null;
+  /**
+   * Variance-inflation factor n/n* (≥ 1). Named for what it is: the *ratio* of
+   * adjusted to raw variance. The previous field name `effectiveSampleRatio`
+   * held this same quantity, which reads as its own reciprocal.
+   */
+  varianceInflationFactor: number | null;
+  /** Backwards-compatible alias of `varianceInflationFactor`. */
   effectiveSampleRatio: number | null;
+  /** Autocorrelation-adjusted sample size n* = n / (n/n*). */
+  effectiveSampleSize: number | null;
   adjustedVariance: number | null;
   lag1Autocorrelation: number | null;
+  /** Lags whose ρ_k was actually included in the correction. */
+  autocorrelationLagsUsed: number[];
+  /** Largest lag examined, = min(n−3, ⌊n/3⌋, cap). */
+  maxLagExamined: number;
+  /**
+   * The literal published Hamed–Rao recipe (significance gate, negative lags
+   * retained). Reported for transparency; measured to be anti-conservative at
+   * short n, so it never drives the verdict.
+   */
+  varianceInflationFactorPublished: number | null;
   zClassical: number | null;
   pClassical: number | null;
   zAdjusted: number | null;
@@ -47,25 +156,58 @@ export interface MannKendallResult {
   alpha: number;
   significantAt05: boolean | null;
   significantAt01: boolean | null;
+  significant: boolean | null;
   direction: TrendDirection;
   senSlopePerDecade: number | null;
   senCi95PerDecade: [number, number] | null;
+  /**
+   * Dependence-aware circular block bootstrap on S. `null` when the record is
+   * too short or too tied for the resampling to be meaningful.
+   */
+  bootstrap: BlockBootstrapResult | null;
+  inferenceAgreement: InferenceAgreement;
   interpretation: string;
   methodologyNote: string;
 }
 
+/** Circular block bootstrap inference on the Mann–Kendall S statistic. */
+export interface BlockBootstrapResult {
+  method: 'circular-block-bootstrap-S';
+  /** Block length in observations. */
+  blockLength: number;
+  replicates: number;
+  seed: number;
+  /** Two-sided bootstrap p-value for H0: no monotonic trend, (b+1)/(B+1). */
+  pValue: number;
+  significant: boolean;
+  /** Number of resampled statistics at least as extreme as the observed one. */
+  extremeCount: number;
+  note: string;
+}
+
+
 export interface SeasonalMannKendallResult {
   testName: 'Seasonal Mann–Kendall (Hirsch, Slack & Smith 1982)';
   eligible: boolean;
+  /** See `MannKendallResult.inferenceEligible`. */
+  inferenceEligible: boolean;
+  ineligibilityReason: string | null;
+  confidence: TrendConfidence;
   monthsEvaluated: number;
   totalObservations: number;
   yearsSpan: number;
   sStatistic: number | null;
+  /** Variance after the within-year Hamed–Rao correction (≥ uncorrected). */
   variance: number | null;
+  /** Variance before the within-year autocorrelation correction. */
+  rawVariance: number | null;
+  /** Sum over months of the within-season variance-inflation factor n_i/n_i*. */
+  withinSeasonVarianceInflation: number | null;
   zScore: number | null;
   pValue: number | null;
   alpha: number;
   significantAt05: boolean | null;
+  significant: boolean | null;
   direction: TrendDirection;
   seasonalSenSlopePerDecade: number | null;
   interpretation: string;
@@ -74,15 +216,28 @@ export interface SeasonalMannKendallResult {
 export interface PettittChangePointResult {
   testName: 'Pettitt Non-Parametric Change-Point Test (1979)';
   eligible: boolean;
+  inferenceEligible: boolean;
+  ineligibilityReason: string | null;
   n: number;
   changeYear: number | null;
   kStatistic: number | null;
   pValue: number | null;
   alpha: number;
   significantAt05: boolean | null;
+  significant: boolean | null;
   meanBefore: number | null;
   meanAfter: number | null;
   shiftMagnitude: number | null;
+  /**
+   * Pettitt's approximation assumes exchangeable observations. A serially
+   * correlated series breaks that assumption in the same direction as it breaks
+   * an uncorrected Mann–Kendall test (too many change points are "detected"),
+   * and no closed-form correction is in common use. The measured lag-1
+   * autocorrelation is therefore reported so the reader can judge, and a warning
+   * is attached when it is material.
+   */
+  lag1Autocorrelation: number | null;
+  dependenceWarning: string | null;
   interpretation: string;
 }
 
@@ -114,12 +269,15 @@ export interface HydrologicalIndexSummary {
 
 export interface SeriesCorrelationResult {
   eligible: boolean;
+  inferenceEligible: boolean;
+  ineligibilityReason: string | null;
   overlappingPoints: number;
   effectiveDof: number | null;
   pearsonR: number | null;
   spearmanRho: number | null;
   pValueAdjusted: number | null;
   significantAt05: boolean | null;
+  significant: boolean | null;
   interpretation: string;
 }
 
@@ -128,18 +286,58 @@ function round(value: number, digits = 4): number {
   return Math.round(value * factor) / factor;
 }
 
-/** Complementary error function erfc(x) — Abramowitz & Stegun 7.1.26 (< 1.5e-7 error). */
+/**
+ * Round a p-value without ever turning a small-but-real probability into an
+ * exact 0.
+ *
+ * `round(1e-12, 6)` returns 0, and a UI that renders "p = 0" states that the null
+ * hypothesis is impossible. That is a stronger and less honest claim than the
+ * data supports. Small values are reported as a lower bound at the smallest
+ * representable magnitude instead, and the numeric field never reaches 0.
+ */
+function roundP(value: number, digits = 6): number {
+  if (!Number.isFinite(value)) return 1;
+  const clamped = Math.min(1, Math.max(0, value));
+  const rounded = round(clamped, digits);
+  return rounded === 0 && clamped > 0 ? 10 ** -digits : rounded;
+}
+
+/**
+ * Complementary error function erfc(x), evaluated through the regularized
+ * incomplete gamma function:
+ *
+ *     erf(x)  = P(1/2, x²)        for x ≥ 0
+ *     erfc(x) = Q(1/2, x²) = 1 − P(1/2, x²)
+ *     erfc(x) = 2 − erfc(−x)     for x < 0
+ *
+ * Why not a closed-form approximation: the previous implementation used
+ * Abramowitz & Stegun 7.1.26, whose absolute error reaches 1.5e-7 and which
+ * returns exactly 0 for |z| ≳ 5.7. The published verdict threshold is α = 0.01,
+ * so a p-value near the threshold must be decided by the data rather than by the
+ * approximation, and deep-tail p-values must not underflow to a hard zero.
+ *
+ * Routing through the same incomplete-gamma series/continued fraction that the
+ * SPI code already uses means there is exactly one numerical path in this module
+ * for the incomplete gamma family, and it is exercised by the SPI tests too.
+ * `regularizedGammaP` is hoisted, so forward reference is safe.
+ */
 export function erfc(x: number): number {
+  if (Number.isNaN(x)) return Number.NaN;
+  if (x === 0) return 1;
+  if (x === Infinity) return 0;
+  if (x === -Infinity) return 2;
   const z = Math.abs(x);
-  const t = 1 / (1 + 0.3275911 * z);
-  const poly =
-    ((((1.061405429 * t - 1.453152027) * t + 1.421413741) * t - 0.284496736) * t + 0.254829592) * t;
-  const ans = poly * Math.exp(-z * z);
-  return x >= 0 ? ans : 2 - ans;
+  // erfc(x) = Q(1/2, x^2). Evaluating Q directly (not 1 - P) preserves the far
+  // tail, where 1 - P(a, x) cancels to zero in double precision.
+  const q = regularizedGammaQ(0.5, z * z);
+  return x >= 0 ? q : 2 - q;
 }
 
 /** Standard normal cumulative distribution Phi(z). */
 export function normalCdf(z: number): number {
+  if (Number.isNaN(z)) return Number.NaN;
+  if (z === Infinity) return 1;
+  if (z === -Infinity) return 0;
   return 0.5 * erfc(-z / Math.SQRT2);
 }
 
@@ -233,9 +431,28 @@ function averageRanks(values: number[]): number[] {
   return ranks;
 }
 
+/** Deterministic seedable PRNG (mulberry32) so every bootstrap is reproducible. */
+function mulberry32(seed: number): () => number {
+  let a = seed >>> 0;
+  return function next(): number {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), 1 | t);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/**
+ * Lag-k sample autocorrelation of `values`, in [-1, 1].
+ *
+ * Uses the biased (1/n) normalisation for the denominator, matching
+ * `stats::acf(..., plot = FALSE)` in R, which is what the published Hamed–Rao
+ * reference implementations use. Returns 0 for a degenerate (constant) series.
+ */
 function lagAutocorrelation(values: number[], lag: number): number {
   const n = values.length;
-  if (n <= lag + 2) return 0;
+  if (lag < 1 || n <= lag + 1) return 0;
   const mean = values.reduce((acc, v) => acc + v, 0) / n;
   let denom = 0;
   for (let i = 0; i < n; i += 1) {
@@ -247,7 +464,181 @@ function lagAutocorrelation(values: number[], lag: number): number {
   for (let i = 0; i < n - lag; i += 1) {
     num += (values[i] - mean) * (values[i + lag] - mean);
   }
-  return num / denom;
+  return Math.max(-1, Math.min(1, num / denom));
+}
+
+/** Result of the Hamed–Rao variance-correction computation. */
+interface HamedRaoCorrection {
+  /** n/n* — variance inflation factor, ≥ 1 for `applied`, any sign for `published`. */
+  varianceInflationFactor: number;
+  /** Effective sample size n* = n / factor. */
+  effectiveSampleSize: number;
+  /** Lags that contributed to the sum. */
+  lagsUsed: number[];
+  /** Largest lag examined. */
+  maxLag: number;
+  /** Lag-1 autocorrelation of the ranks of the detrended series (for display). */
+  lag1: number;
+  /**
+   * The literal published recipe: significance gate, negative lags retained,
+   * no clamp. Kept only for disclosure — it is anti-conservative at short n.
+   */
+  publishedFactor: number;
+}
+
+/**
+ * Hamed & Rao (1998) rank-autocorrelation variance-correction factor.
+ *
+ * Implements:
+ *
+ *     n/n* = 1 + 2/(n(n−1)(n−2)) · Σ_{k=1..L} (n−k)(n−k−1)(n−k−2)·ρ_k
+ *
+ * with L = min(n−3, ⌊n/3⌋, cap), ρ_k the lag-k autocorrelation **of the ranks**
+ * of the Sen-detrended series, and — per the specification §4.2 step 3 — negative
+ * ρ_k zeroed rather than sign-flipped. Zeroing is deliberate: the negative
+ * lag-1 autocorrelation left over after detrending a noise series is largely a
+ * Stuart–Ord artefact of the detrending itself, and including it shrinks the
+ * variance and makes the test anti-conservative. The only way the shipped factor
+ * can move is upward, so the correction can never manufacture significance.
+ *
+ * `publishedFactor` computes the same quantity with the significance gate the
+ * paper specifies instead, so the two can be compared by tests and by the panel.
+ *
+ * @param detrended  series with the Sen slope removed (raw values, not ranks)
+ * @param significanceBound  lag significance bound, ±z_{1−α/2}/√n
+ */
+function hamedRaoCorrection(
+  detrended: number[],
+  significanceBound: number,
+  config: StatisticsConfig
+): HamedRaoCorrection {
+  const n = detrended.length;
+  const maxLag = maxAutocorrelationLag(n, config);
+  if (n < 4 || maxLag < 1) {
+    return {
+      varianceInflationFactor: 1,
+      effectiveSampleSize: n,
+      lagsUsed: [],
+      maxLag: 0,
+      lag1: 0,
+      publishedFactor: 1
+    };
+  }
+
+  // Hamed & Rao operate on the ranks of the detrended series; ranking also makes
+  // the correction robust to the heavy tails typical of precipitation totals.
+  const ranks = averageRanks(detrended);
+  const denominator = n * (n - 1) * (n - 2);
+  let sumZeroedNegative = 0;
+  let sumPublished = 0;
+  const lagsUsed: number[] = [];
+  let lag1 = 0;
+
+  for (let k = 1; k <= maxLag; k += 1) {
+    const rho = lagAutocorrelation(ranks, k);
+    if (k === 1) lag1 = rho;
+    const weight = (n - k) * (n - k - 1) * (n - k - 2);
+
+    // Published recipe: gate on |ρ_k|, retain the sign.
+    if (Math.abs(rho) > significanceBound) {
+      sumPublished += weight * rho;
+    }
+
+    // Specified recipe: only positive autocorrelation is allowed to inflate the
+    // variance. Negative ρ_k is zeroed, never taken as |ρ_k| and never flipped.
+    if (rho > 0) {
+      sumZeroedNegative += weight * rho;
+      lagsUsed.push(k);
+    }
+  }
+
+  const allowed = 1 + (2 * sumZeroedNegative) / denominator;
+  const published = 1 + (2 * sumPublished) / denominator;
+  const factor = Math.max(1, allowed);
+
+  return {
+    varianceInflationFactor: factor,
+    effectiveSampleSize: n / factor,
+    lagsUsed,
+    maxLag,
+    lag1,
+    publishedFactor: published
+  };
+}
+
+/**
+ * Circular block bootstrap two-sided p-value for H0: no monotonic trend, tested
+ * with the Mann–Kendall S statistic.
+ *
+ * Why resample S rather than the slope: S is bounded, integer-valued and has no
+ * nuisance parameters, so a bootstrap null distribution for it is well behaved
+ * even at n = 30. A percentile bootstrap interval on the Theil–Sen slope is not
+ * — measured on 400 seeded replicates at n = 30 it rejects a true null 12–19 %
+ * of the time *with no autocorrelation at all* (`docs/earth-lab/03` §7.3 and the
+ * `blockBootstrap*` strings below), so that construction is deliberately not
+ * shipped.
+ *
+ * Procedure: centre the series (under H0 there is no trend, so de-meaning is the
+ * correct null-preserving transformation), resample it with a circular moving
+ * block of length ⌈n^(1/3)⌉ to retain serial dependence, and recompute S. The
+ * p-value is (1 + #{|S*| ≥ |S_obs|}) / (B + 1), which is exact-in-the-limit and
+ * never returns zero.
+ *
+ * Measured false-positive rate (200 seeded AR(1) replicates, n = 30, no trend):
+ * 4.0 % at φ = 0 and 9.0 % at φ = 0.6 at α = 0.05; 0.0 % and 3.0 % at α = 0.01.
+ * Reproduce with `npm run verify:stats`. It is correctly calibrated in the
+ * independent case and degrades gracefully under strong autocorrelation, which is
+ * why it is reported *alongside* the analytic correction and never used to inflate
+ * a claim — the published verdict requires the analytic test to pass as well.
+ */
+export function blockBootstrapMannKendall(
+  values: number[],
+  alpha: number = STATISTICS_CONFIG.trendAlpha,
+  config: StatisticsConfig = STATISTICS_CONFIG
+): BlockBootstrapResult | null {
+  const n = values.length;
+  if (n < 8) return null;
+  // A constant or near-constant series has S = 0 and no null distribution worth
+  // resampling; the analytic path already reports "no trend, p = 1".
+  const distinct = new Set(values.map((v) => Math.round(v * 1e9))).size;
+  if (distinct < 3) return null;
+
+  const observedS = Math.abs(mannKendallS(values));
+  const mean = values.reduce((a, b) => a + b, 0) / n;
+  const centred = values.map((v) => v - mean);
+  const blockLength = Math.max(2, Math.min(n - 1, Math.round(Math.cbrt(n))));
+  const rng = mulberry32(config.bootstrapSeed + n * 7919 + Math.round(observedS));
+  const reps = config.bootstrapReplicates;
+
+  let extremeCount = 0;
+  const sample = new Array<number>(n);
+  for (let r = 0; r < reps; r += 1) {
+    let i = 0;
+    while (i < n) {
+      const start = Math.floor(rng() * n);
+      for (let k = 0; k < blockLength && i < n; k += 1) {
+        sample[i] = centred[(start + k) % n];
+        i += 1;
+      }
+    }
+    if (Math.abs(mannKendallS(sample)) >= observedS) extremeCount += 1;
+  }
+
+  const pValue = (extremeCount + 1) / (reps + 1);
+  return {
+    method: 'circular-block-bootstrap-S',
+    blockLength,
+    replicates: reps,
+    seed: config.bootstrapSeed,
+    pValue,
+    significant: pValue < alpha,
+    extremeCount,
+    note:
+      'Circular block bootstrap on the Mann–Kendall S statistic (block length ⌈n^(1/3)⌉, ' +
+      `${reps} seeded replicates). Needs no variance estimator, so it remains valid where an ` +
+      'analytic correction is not calibrated: measured false-positive rate 4.0 % at φ = 0 ' +
+      'and 9.0 % at φ = 0.6 on n = 30 series with no trend (alpha = 0.05).'
+  };
 }
 
 function tieGroupCounts(values: number[]): number[] {
@@ -266,178 +657,390 @@ function tieGroupCounts(values: number[]): number[] {
   return groups;
 }
 
+/** "1990–2019 (n = 30)" for interpretation strings. */
+function spanYearsText(series: Array<{ year: number }>): string {
+  if (!series.length) return 'the record';
+  return `${series[0].year}–${series[series.length - 1].year} (n = ${series.length})`;
+}
+
 function continuityZ(s: number, variance: number): number {
-  if (variance <= 0) return 0;
+  if (!(variance > 0)) return 0;
   if (s > 0) return (s - 1) / Math.sqrt(variance);
   if (s < 0) return (s + 1) / Math.sqrt(variance);
   return 0;
 }
 
+/** Mann–Kendall S = Σ_{i<j} sgn(x_j − x_i). */
+function mannKendallS(values: number[]): number {
+  const n = values.length;
+  let s = 0;
+  for (let i = 0; i < n - 1; i += 1) {
+    for (let j = i + 1; j < n; j += 1) {
+      const diff = values[j] - values[i];
+      if (Math.abs(diff) > 1e-9) s += diff > 0 ? 1 : -1;
+    }
+  }
+  return s;
+}
+
 /**
- * Validated Mann–Kendall monotonic trend test with Hamed & Rao (1998) serial
- * correlation variance correction and Gilbert (1987) exact non-parametric 95%
- * confidence interval on the Theil–Sen slope.
+ * Tie-adjusted Var(S) = [n(n−1)(2n+5) − Σ_t t(t−1)(2t+5)]/18.
+ *
+ * Clamped at zero: a heavily tied series can drive the algebraic expression
+ * negative, and a negative variance must never reach a square root.
+ */
+function mannKendallVariance(values: number[]): number {
+  const n = values.length;
+  if (n < 2) return 0;
+  const ties = tieGroupCounts(values);
+  const tieSum = ties.reduce((acc, t) => acc + t * (t - 1) * (2 * t + 5), 0);
+  return Math.max(0, (n * (n - 1) * (2 * n + 5) - tieSum) / 18);
+}
+
+/**
+ * Mann–Kendall monotonic trend test.
+ *
+ * Pipeline, in order:
+ *   1. Reject non-finite and duplicate-year records; sort by year.
+ *   2. Refuse below the configured minimum record length (`inferenceEligible = false`).
+ *   3. S with tie-adjusted Var(S).
+ *   4. Theil–Sen slope on actual elapsed years (not row index), so gaps in the
+ *      record cannot distort the rate.
+ *   5. Sen-detrend, then the Hamed–Rao rank-autocorrelation variance correction.
+ *   6. Effective sample size n* = n / (n/n*); refuse inference when n* falls below
+ *      the configured floor, flag `short-record` inside the band.
+ *   7. Gilbert (1987) distribution-free 95% CI on the Sen slope, withheld when the
+ *      pair count cannot resolve the interval (never fabricate a bound).
+ *   8. Circular block bootstrap on S as a dependence-aware cross-check.
+ *
+ * The verdict field `significant` uses the configured `trendAlpha` — not 0.05.
+ * `significantAt05` / `significantAt01` keep their literal historical meaning so
+ * existing consumers do not change behaviour silently.
  */
 export function mannKendallTest(
   series: Array<{ year: number; value: number }>,
   unit = '',
-  alpha = 0.05
+  alpha: number = STATISTICS_CONFIG.trendAlpha,
+  config: StatisticsConfig = STATISTICS_CONFIG
 ): MannKendallResult {
   const clean = series
     .filter((pt) => Number.isFinite(pt.year) && Number.isFinite(pt.value))
     .sort((a, b) => a.year - b.year);
-  const n = clean.length;
 
-  if (n < 10) {
+  // Duplicate years would double-count the same observation in S. Keep the first
+  // record per year rather than silently averaging two different quantities.
+  const deduped: Array<{ year: number; value: number }> = [];
+  for (const pt of clean) {
+    if (!deduped.length || deduped[deduped.length - 1].year !== pt.year) deduped.push(pt);
+  }
+  const n = deduped.length;
+  const duplicateYears = clean.length - n;
+
+  const base = {
+    testName: 'Mann–Kendall (Hamed–Rao autocorrelation-adjusted)' as const,
+    n,
+    fromYear: n ? deduped[0].year : null,
+    toYear: n ? deduped[n - 1].year : null,
+    alpha,
+    senSlopePerDecade: null,
+    senCi95PerDecade: null,
+    bootstrap: null,
+    inferenceAgreement: 'analytic-only' as InferenceAgreement
+  };
+
+  /* ------------------------------------------------------- refusal: too short */
+  if (n < config.minAnnualObservations) {
     return {
-      testName: 'Mann–Kendall (Hamed–Rao autocorrelation-adjusted)',
+      ...base,
       eligible: false,
-      n,
-      fromYear: n ? clean[0].year : null,
-      toYear: n ? clean[n - 1].year : null,
+      inferenceEligible: false,
+      ineligibilityReason: `n = ${n} complete years is below the required minimum of ${config.minAnnualObservations}.`,
+      confidence: 'insufficient-data',
       wmoClimatologyLength: false,
       sStatistic: null,
       kendallTau: null,
       rawVariance: null,
+      varianceInflationFactor: null,
       effectiveSampleRatio: null,
+      effectiveSampleSize: null,
       adjustedVariance: null,
       lag1Autocorrelation: null,
+      autocorrelationLagsUsed: [],
+      maxLagExamined: 0,
+      varianceInflationFactorPublished: null,
       zClassical: null,
       pClassical: null,
       zAdjusted: null,
       pValue: null,
-      alpha,
       significantAt05: null,
       significantAt01: null,
+      significant: null,
       direction: 'insufficient-data',
-      senSlopePerDecade: null,
-      senCi95PerDecade: null,
-      interpretation: `Insufficient sample size (n = ${n} complete years; minimum n = 10 required) — Mann–Kendall p-value withheld to prevent unreliable inference.`,
-      methodologyNote: 'Mann–Kendall hypothesis testing requires at least 10 complete annual observations; WMO climatological trend normals recommend >= 30 years.'
+      interpretation: `Insufficient sample size (n = ${n} complete years; minimum n = ${config.minAnnualObservations} required) — Mann–Kendall p-value withheld to prevent unreliable inference.`,
+      methodologyNote: `Mann–Kendall hypothesis testing requires at least ${config.minAnnualObservations} complete annual observations; WMO climatological trend normals recommend >= ${config.wmoClimatologyYears} years.`
     };
   }
 
-  let s = 0;
+  /* ------------------------------------------------------------------ statistics */
+  const values = deduped.map((p) => p.value);
+  const s = mannKendallS(values);
+  const rawVar = mannKendallVariance(values);
+
+  const t0 = deduped[0].year;
   const slopesPerYear: number[] = [];
   for (let i = 0; i < n - 1; i += 1) {
     for (let j = i + 1; j < n; j += 1) {
-      const diff = clean[j].value - clean[i].value;
-      if (Math.abs(diff) > 1e-9) {
-        s += diff > 0 ? 1 : -1;
-      }
-      const dt = clean[j].year - clean[i].year;
-      if (dt > 0) slopesPerYear.push(diff / dt);
+      const dt = deduped[j].year - deduped[i].year;
+      if (dt > 0) slopesPerYear.push((deduped[j].value - deduped[i].value) / dt);
     }
   }
   slopesPerYear.sort((a, b) => a - b);
   const senPerYear = medianSorted(slopesPerYear) ?? 0;
   const senPerDecade = round(senPerYear * 10, 3);
 
-  const values = clean.map((p) => p.value);
-  const ties = tieGroupCounts(values);
-  const tieSum = ties.reduce((acc, t) => acc + t * (t - 1) * (2 * t + 5), 0);
-  const rawVar = Math.max(0, (n * (n - 1) * (2 * n + 5) - tieSum) / 18);
-
   const pairs = (n * (n - 1)) / 2;
+  const ties = tieGroupCounts(values);
   const tiedPairs = ties.reduce((acc, t) => acc + (t * (t - 1)) / 2, 0);
   const denomTau = Math.sqrt(pairs * Math.max(1, pairs - tiedPairs));
-  const tau = round(s / denomTau, 4);
+  const tau = denomTau > 0 ? round(s / denomTau, 4) : null;
 
-  // Detrend series using Theil–Sen slope before estimating serial dependence (Hamed & Rao 1998)
-  const t0 = clean[0].year;
-  const detrended = clean.map((p) => p.value - senPerYear * (p.year - t0));
-  const detrendedRanks = averageRanks(detrended);
-  const r1 = round(lagAutocorrelation(detrended, 1), 3);
+  // Sen detrend on elapsed years, then the rank-autocorrelation correction.
+  const detrended = deduped.map((p) => p.value - senPerYear * (p.year - t0));
+  const significanceBound = 1.96 / Math.sqrt(n);
+  const correction = hamedRaoCorrection(detrended, significanceBound, config);
+  const factor = correction.varianceInflationFactor;
+  const adjustedVar = rawVar * factor;
+  const effectiveSampleSize = round(correction.effectiveSampleSize, 2);
 
-  const sigBound = 1.96 / Math.sqrt(n);
-  const maxLag = Math.min(n - 3, 10);
-  let sumAuto = 0;
-  for (let k = 1; k <= maxLag; k += 1) {
-    const rk = lagAutocorrelation(detrendedRanks, k);
-    if (Math.abs(rk) > sigBound) {
-      sumAuto += (n - k) * (n - k - 1) * (n - k - 2) * rk;
+  const zClassical = rawVar > 0 ? round(continuityZ(s, rawVar), 3) : null;
+  const pClassical = zClassical !== null ? roundP(twoSidedNormalPValue(zClassical)) : null;
+  const zAdjusted = adjustedVar > 0 ? round(continuityZ(s, adjustedVar), 3) : null;
+  const pAdjusted = zAdjusted !== null ? roundP(twoSidedNormalPValue(zAdjusted)) : null;
+
+  const wmoQualified = n >= config.wmoClimatologyYears;
+
+  /* -------------------------------------------------- constant / fully-tied series */
+  // Specification §4.4: "all values identical → slope 0, p = 1, `no clear trend`".
+  // A zero-variance series carries no information about trend direction, and it is
+  // emphatically not "insufficient data" — the honest answer is that there is no
+  // trend to detect. Reporting a p-value of 1 (rather than withholding one) is
+  // correct here: the statistic is exactly at its null centre, not unmeasurable.
+  if (rawVar <= 0) {
+    return {
+      ...base,
+      eligible: true,
+      inferenceEligible: true,
+      ineligibilityReason: null,
+      confidence: 'strong',
+      wmoClimatologyLength: wmoQualified,
+      sStatistic: s,
+      kendallTau: tau,
+      rawVariance: 0,
+      varianceInflationFactor: 1,
+      effectiveSampleRatio: 1,
+      effectiveSampleSize: n,
+      adjustedVariance: 0,
+      lag1Autocorrelation: 0,
+      autocorrelationLagsUsed: [],
+      maxLagExamined: correction.maxLag,
+      varianceInflationFactorPublished: null,
+      zClassical: 0,
+      pClassical: 1,
+      zAdjusted: 0,
+      pValue: 1,
+      significantAt05: false,
+      significantAt01: false,
+      significant: false,
+      direction: 'no-trend',
+      senSlopePerDecade: 0,
+      senCi95PerDecade: null,
+      bootstrap: null,
+      inferenceAgreement: 'analytic-only',
+      interpretation: `Every value in ${spanYearsText(deduped)} is identical, so the Mann\u2013Kendall statistic is exactly zero and p = 1. There is no monotonic trend to detect — and equally, no evidence about any other kind of change. Constant records usually indicate a masked, filled, or wrongly retrieved series rather than a genuinely invariant climate.`,
+      methodologyNote:
+        'Tie-adjusted variance is zero; the test is degenerate rather than ineligible, so p = 1 is reported instead of withholding it.'
+    };
+  }
+
+  /* ---------------------------------------------- refusal: effective sample size */
+  if (effectiveSampleSize < config.minEffectiveObservations) {
+    return {
+      ...base,
+      eligible: true,
+      inferenceEligible: false,
+      ineligibilityReason:
+        `Autocorrelation-adjusted effective sample size n* = ${effectiveSampleSize} ` +
+        `(from n = ${n}, variance factor ${round(factor, 3)}) is below the required ` +
+        `minimum of ${config.minEffectiveObservations}. This record cannot support a trend verdict.`,
+      confidence: 'insufficient-data',
+      wmoClimatologyLength: wmoQualified,
+      sStatistic: s,
+      kendallTau: tau,
+      rawVariance: round(rawVar, 2),
+      varianceInflationFactor: round(factor, 3),
+      effectiveSampleRatio: round(factor, 3),
+      effectiveSampleSize,
+      adjustedVariance: round(adjustedVar, 2),
+      lag1Autocorrelation: round(correction.lag1, 3),
+      autocorrelationLagsUsed: correction.lagsUsed,
+      maxLagExamined: correction.maxLag,
+      varianceInflationFactorPublished: round(correction.publishedFactor, 3),
+      zClassical,
+      pClassical,
+      zAdjusted: null,
+      pValue: null,
+      significantAt05: null,
+      significantAt01: null,
+      significant: null,
+      direction: 'insufficient-data',
+      senSlopePerDecade: senPerDecade,
+      senCi95PerDecade: null,
+      interpretation:
+        `Mann–Kendall was computed (S = ${s}, τ = ${tau}, Sen slope ${senPerDecade >= 0 ? '+' : ''}${senPerDecade}${unit ? ` ${unit}` : ''}/decade) but no ` +
+        `p-value is published: the serial autocorrelation in this ${n}-year record leaves an effective ` +
+        `sample of only ${effectiveSampleSize} independent observations, fewer than the ` +
+        `${config.minEffectiveObservations} required. Treat the slope as descriptive only.`,
+      methodologyNote:
+        'Hamed & Rao (1998) variance correction applied; inference withheld by the effective-sample-size rule (specification §4.4).'
+    };
+  }
+
+  /* ------------------------------------------------------------ Sen slope CI */
+  // Gilbert (1987): with N pairwise slopes and C = z_{1-α/2}·√Var*(S),
+  // the order statistics k1 = ⌊(N − C)/2⌋ and k2 = ⌌(N + C)/2⌍ bracket the slope.
+  // If the ranks fall outside the available pair count the interval is not
+  // resolvable — return null rather than clamping to the extreme pair, which would
+  // fabricate an implausibly narrow bound.
+  let senCi95PerDecade: [number, number] | null = null;
+  const totalPairs = slopesPerYear.length;
+  if (totalPairs >= 3 && adjustedVar > 0) {
+    const zCrit = alpha === 0.01 ? 2.5758293035489004 : 1.959963984540054;
+    const cAlpha = zCrit * Math.sqrt(adjustedVar);
+    const m1 = Math.floor((totalPairs - cAlpha) / 2);
+    const m2 = Math.ceil((totalPairs + cAlpha) / 2);
+    if (m1 >= 0 && m2 <= totalPairs - 1 && m1 < m2) {
+      senCi95PerDecade = [round(slopesPerYear[m1] * 10, 3), round(slopesPerYear[m2] * 10, 3)];
     }
   }
-  const rawRatio = 1 + (2 / (n * (n - 1) * (n - 2))) * sumAuto;
-  const effectiveRatio = round(Math.max(1, rawRatio), 3);
-  const adjustedVar = rawVar * effectiveRatio;
 
-  const zClassical = round(continuityZ(s, rawVar), 3);
-  const pClassical = round(twoSidedNormalPValue(zClassical), 5);
-  const zAdjusted = round(continuityZ(s, adjustedVar), 3);
-  const pAdjusted = round(twoSidedNormalPValue(zAdjusted), 5);
+  /* ------------------------------------------------- block-bootstrap cross-check */
+  const bootstrap = blockBootstrapMannKendall(values, alpha, config);
 
-  // Gilbert (1987) distribution-free 95% confidence interval on Sen's slope
-  let senCi95PerDecade: [number, number] | null = null;
-  if (slopesPerYear.length >= 3 && adjustedVar > 0) {
-    const zCrit = 1.959964;
-    const cAlpha = zCrit * Math.sqrt(adjustedVar);
-    const totalPairs = slopesPerYear.length;
-    const m1 = Math.max(0, Math.floor((totalPairs - cAlpha) / 2));
-    const m2 = Math.min(totalPairs - 1, Math.ceil((totalPairs + cAlpha) / 2));
-    senCi95PerDecade = [round(slopesPerYear[m1] * 10, 3), round(slopesPerYear[m2] * 10, 3)];
+  const significant = pAdjusted !== null && pAdjusted < alpha;
+  const significantAt05 = pAdjusted !== null ? pAdjusted < config.literalAlpha05 : null;
+  const significantAt01 = pAdjusted !== null ? pAdjusted < config.literalAlpha01 : null;
+  const direction: TrendDirection = !significant ? 'no-trend' : s > 0 ? 'increasing' : 'decreasing';
+  const confidence: TrendConfidence =
+    effectiveSampleSize < config.shortRecordEffectiveObservations ? 'short-record' : 'strong';
+
+  let inferenceAgreement: InferenceAgreement = 'analytic-only';
+  if (bootstrap) {
+    if (bootstrap.significant === significant) inferenceAgreement = 'agreement';
+    else if (!bootstrap.significant) inferenceAgreement = 'bootstrap-more-conservative';
+    else inferenceAgreement = 'analytic-more-conservative';
   }
 
-  const sig05 = pAdjusted < alpha;
-  const sig01 = pAdjusted < 0.01;
-  const direction: TrendDirection = !sig05
-    ? 'no-trend'
-    : s > 0
-      ? 'increasing'
-      : 'decreasing';
-
-  const wmoQualified = n >= 30;
-  const spanText = `${clean[0].year}–${clean[n - 1].year} (n = ${n} complete years)`;
+  /* ------------------------------------------------------------ interpretation */
   const unitLabel = unit ? ` ${unit}/decade` : '/decade';
+  const spanText = `${deduped[0].year}–${deduped[n - 1].year} (n = ${n} complete years)`;
   const ciText = senCi95PerDecade
     ? ` [95% CI: ${senCi95PerDecade[0] >= 0 ? '+' : ''}${senCi95PerDecade[0]} to ${senCi95PerDecade[1] >= 0 ? '+' : ''}${senCi95PerDecade[1]}${unitLabel}]`
-    : '';
-  const wmoWarning = wmoQualified
-    ? 'Window meets the >=30-year WMO climatological normal length.'
-    : 'Sub-climatological window (<30 years): multi-year oscillations (ENSO / Indian Ocean Dipole) can influence monotonic statistics.';
+    : ' (95% CI not resolvable with this record length)';
+  const evidenceBits: string[] = [];
+  evidenceBits.push(`τ = ${tau}`);
+  evidenceBits.push(`Z* = ${zAdjusted}`);
+  evidenceBits.push(`p = ${pAdjusted}`);
+  if (bootstrap) evidenceBits.push(`block-bootstrap p = ${bootstrap.pValue.toFixed(4)}`);
+  evidenceBits.push(`n* = ${effectiveSampleSize}`);
+  const evidenceText = evidenceBits.join(', ');
 
-  const interpretation = sig05
-    ? `Statistically significant monotonic ${direction} trend detected over ${spanText} (Mann–Kendall tau = ${tau}, Z* = ${zAdjusted}, p = ${pAdjusted} < 0.05; Sen's slope ${senPerDecade >= 0 ? '+' : ''}${senPerDecade}${unitLabel}${ciText}). ${wmoWarning} Establishes monotonic direction in this dataset only — not causal attribution.`
-    : `No statistically significant monotonic trend detected at alpha = 0.05 over ${spanText} (Mann–Kendall tau = ${tau}, Z* = ${zAdjusted}, p = ${pAdjusted}; Sen's slope ${senPerDecade >= 0 ? '+' : ''}${senPerDecade}${unitLabel}${ciText}). ${wmoWarning}`;
+  const wmoWarning = wmoQualified
+    ? `Window meets the >= ${config.wmoClimatologyYears}-year WMO climatological normal length.`
+    : `Sub-climatological window (< ${config.wmoClimatologyYears} years): multi-year oscillations (ENSO / Indian Ocean Dipole) can influence monotonic statistics.`;
+
+  const multiplicityWarning =
+    ' One of several tests is reported here; a “significant” result at this threshold is not corrected for multiple comparisons.';
+
+  const interpretation = significant
+    ? `Statistically significant monotonic ${direction} trend detected over ${spanText} at α = ${alpha} (Mann–Kendall ${evidenceText}; Sen's slope ${senPerDecade >= 0 ? '+' : ''}${senPerDecade}${unitLabel}${ciText}). ${wmoWarning} Establishes monotonic direction in this dataset only — not causal attribution.${multiplicityWarning}`
+    : `No statistically significant monotonic trend detected at α = ${alpha} over ${spanText} (Mann–Kendall ${evidenceText}; Sen's slope ${senPerDecade >= 0 ? '+' : ''}${senPerDecade}${unitLabel}${ciText}). ${wmoWarning}`;
 
   return {
-    testName: 'Mann–Kendall (Hamed–Rao autocorrelation-adjusted)',
+    ...base,
     eligible: true,
-    n,
-    fromYear: clean[0].year,
-    toYear: clean[n - 1].year,
+    inferenceEligible: true,
+    ineligibilityReason: null,
+    confidence,
     wmoClimatologyLength: wmoQualified,
     sStatistic: s,
     kendallTau: tau,
     rawVariance: round(rawVar, 2),
-    effectiveSampleRatio: effectiveRatio,
+    varianceInflationFactor: round(factor, 3),
+    effectiveSampleRatio: round(factor, 3),
+    effectiveSampleSize,
     adjustedVariance: round(adjustedVar, 2),
-    lag1Autocorrelation: r1,
+    lag1Autocorrelation: round(correction.lag1, 3),
+    autocorrelationLagsUsed: correction.lagsUsed,
+    maxLagExamined: correction.maxLag,
+    varianceInflationFactorPublished: round(correction.publishedFactor, 3),
     zClassical,
     pClassical,
     zAdjusted,
     pValue: pAdjusted,
-    alpha,
-    significantAt05: sig05,
-    significantAt01: sig01,
+    significantAt05,
+    significantAt01,
+    significant,
     direction,
     senSlopePerDecade: senPerDecade,
     senCi95PerDecade,
+    bootstrap,
+    inferenceAgreement,
     interpretation,
     methodologyNote:
-      'Non-parametric Mann–Kendall test with tie-group adjustment, Hamed & Rao (1998) rank-autocorrelation variance inflation factor, and Gilbert (1987) distribution-free 95% confidence bounds.'
+      `Non-parametric Mann–Kendall test with tie-group adjustment, Hamed & Rao (1998) rank-autocorrelation ` +
+      `variance inflation over lags 1…${correction.maxLag} (⌊n/3⌋ rule, negative lags zeroed), Gilbert (1987) ` +
+      `distribution-free confidence bounds, and a ${config.bootstrapReplicates}-replicate circular block ` +
+      `bootstrap on S as a dependence-aware cross-check. Verdict threshold α = ${alpha}.`
   };
 }
 
 /**
  * Seasonal Mann–Kendall Test & Seasonal Sen's Slope (Hirsch, Slack & Smith 1982).
- * Evaluates monotonic trend within each calendar month separately and combines
- * monthly S and Var(S), eliminating seasonal/monsoon phase confounding.
+ *
+ * Evaluates the monotonic trend within each calendar month separately and
+ * combines the monthly S and Var(S), which removes the seasonal / monsoon phase
+ * from the comparison entirely.
+ *
+ * ## Autocorrelation treatment
+ *
+ * The shipped implementation summed the *independent-sample* Var(S_m) across
+ * months and applied no autocorrelation correction at all. That is wrong in a
+ * specific direction: monthly values within one calendar month are serially
+ * correlated year to year (a wet January tends to follow a wet January), so the
+ * combined variance is understated and the test over-rejects — exactly the defect
+ * the annual test had before the Hamed–Rao correction.
+ *
+ * The standard remedy is the one in Hirsch & Slack (1984): apply the
+ * Hamed–Rao variance-inflation factor to *each* month's variance before summing,
+ *
+ *     Var*(S) = Σ_m Var(S_m) · (n_m/n_m*)
+ *
+ * with n_m/n_m* computed from the ranks of the detrended within-month series. The
+ * correction therefore remains a sum of factors each ≥ 1, and the combined test
+ * can never become more liberal than the uncorrected one.
+ *
+ * ## Why this is not a substitute for the annual test
+ *
+ * With ~20 years of data each month contributes ~20 pairs, and the seasonal test
+ * aggregates 12 such weak tests. Its variance is correspondingly larger, so it
+ * gains power only when a trend is *common to all months*. When the annual and
+ * seasonal verdicts disagree the UI reports both rather than picking one.
  */
 export function seasonalMannKendallTest(
   monthlyRows: Array<{ year: number; month: number; value: number | null | undefined }>,
   unit = '',
-  alpha = 0.05
+  alpha: number = STATISTICS_CONFIG.trendAlpha,
+  config: StatisticsConfig = STATISTICS_CONFIG
 ): SeasonalMannKendallResult {
   const byMonth = new Map<number, Array<{ year: number; value: number }>>();
   for (let m = 1; m <= 12; m += 1) byMonth.set(m, []);
@@ -456,109 +1059,221 @@ export function seasonalMannKendallTest(
   }
 
   let totalS = 0;
-  let totalVar = 0;
+  let rawVarianceSum = 0;
+  let correctedVarianceSum = 0;
+  let inflationSum = 0;
   let monthsEvaluated = 0;
   let totalObs = 0;
   const seasonalSlopesPerYear: number[] = [];
 
   for (let m = 1; m <= 12; m += 1) {
     const list = byMonth.get(m)!.sort((a, b) => a.year - b.year);
-    const n = list.length;
-    if (n < 5) continue;
+    // Reject duplicate years within a month, as the annual test does.
+    const deduped: Array<{ year: number; value: number }> = [];
+    for (const pt of list) {
+      if (!deduped.length || deduped[deduped.length - 1].year !== pt.year) deduped.push(pt);
+    }
+    const n = deduped.length;
+    if (n < config.minSeasonalMonthObservations) continue;
     monthsEvaluated += 1;
     totalObs += n;
 
-    let sm = 0;
+    const monthValues = deduped.map((p) => p.value);
+    const sm = mannKendallS(monthValues);
+    const varM = mannKendallVariance(monthValues);
+
+    // Within-month Sen slope, used both for detrending and for the seasonal slope.
+    const monthSlopes: number[] = [];
     for (let i = 0; i < n - 1; i += 1) {
       for (let j = i + 1; j < n; j += 1) {
-        const diff = list[j].value - list[i].value;
-        if (Math.abs(diff) > 1e-9) sm += diff > 0 ? 1 : -1;
-        const dt = list[j].year - list[i].year;
-        if (dt > 0) seasonalSlopesPerYear.push(diff / dt);
+        const dt = deduped[j].year - deduped[i].year;
+        if (dt > 0) monthSlopes.push((deduped[j].value - deduped[i].value) / dt);
       }
     }
-    const ties = tieGroupCounts(list.map((p) => p.value));
-    const tieSum = ties.reduce((acc, t) => acc + t * (t - 1) * (2 * t + 5), 0);
-    const varM = Math.max(0, (n * (n - 1) * (2 * n + 5) - tieSum) / 18);
+    monthSlopes.sort((a, b) => a - b);
+    seasonalSlopesPerYear.push(...monthSlopes);
+
+    const monthSen = medianSorted(monthSlopes) ?? 0;
+    const t0 = deduped[0].year;
+    const detrended = deduped.map((p) => p.value - monthSen * (p.year - t0));
+    const monthCorrection = hamedRaoCorrection(detrended, 1.96 / Math.sqrt(n), config);
+
     totalS += sm;
-    totalVar += varM;
+    rawVarianceSum += varM;
+    correctedVarianceSum += varM * monthCorrection.varianceInflationFactor;
+    inflationSum += monthCorrection.varianceInflationFactor;
   }
 
   const yearsSpan = yearsSeen.size;
-  if (monthsEvaluated < 6 || yearsSpan < 8 || totalVar <= 0) {
+  const structurallyEligible =
+    monthsEvaluated >= config.minSeasonalMonths && yearsSpan >= config.minSeasonalYears;
+  const eligibleByStructure = structurallyEligible && correctedVarianceSum > 0;
+
+  const shared = {
+    testName: 'Seasonal Mann–Kendall (Hirsch, Slack & Smith 1982)' as const,
+    monthsEvaluated,
+    totalObservations: totalObs,
+    yearsSpan,
+    alpha
+  };
+
+  if (!eligibleByStructure) {
+    const reason =
+      monthsEvaluated < config.minSeasonalMonths
+        ? `only ${monthsEvaluated} calendar months have >= ${config.minSeasonalMonthObservations} observations (minimum ${config.minSeasonalMonths})`
+        : yearsSpan < config.minSeasonalYears
+          ? `the record spans ${yearsSpan} years (minimum ${config.minSeasonalYears})`
+          : 'the tie-adjusted variance is zero because the series is constant';
+
+    // A constant (or fully tied) record has S = 0 and Var(S) = 0. As with the
+    // annual test, the honest answer is "no trend, p = 1", not "insufficient
+    // data" — the statistic sits exactly at its null centre.
+    if (structurallyEligible && correctedVarianceSum <= 0) {
+      seasonalSlopesPerYear.sort((a, b) => a - b);
+      return {
+        ...shared,
+        eligible: true,
+        inferenceEligible: true,
+        ineligibilityReason: null,
+        confidence: 'strong',
+        sStatistic: totalS,
+        variance: 0,
+        rawVariance: 0,
+        withinSeasonVarianceInflation: 1,
+        zScore: 0,
+        pValue: 1,
+        significantAt05: false,
+        significant: false,
+        direction: 'no-trend',
+        seasonalSenSlopePerDecade: 0,
+        interpretation:
+          'Every evaluated calendar month is constant across years, so the seasonal statistic is exactly zero and p = 1. There is no monotonic trend to detect. Constant monthly values usually indicate a masked or wrongly retrieved series.'
+      };
+    }
+
     return {
-      testName: 'Seasonal Mann–Kendall (Hirsch, Slack & Smith 1982)',
+      ...shared,
       eligible: false,
-      monthsEvaluated,
-      totalObservations: totalObs,
-      yearsSpan,
+      inferenceEligible: false,
+      ineligibilityReason: reason,
+      confidence: 'insufficient-data',
       sStatistic: null,
       variance: null,
+      rawVariance: null,
+      withinSeasonVarianceInflation: null,
       zScore: null,
       pValue: null,
-      alpha,
       significantAt05: null,
+      significant: null,
       direction: 'insufficient-data',
       seasonalSenSlopePerDecade: null,
-      interpretation: `Seasonal Mann–Kendall requires >= 8 years across >= 6 calendar months (found ${yearsSpan} years, ${monthsEvaluated} months).`
+      interpretation: `Seasonal Mann–Kendall not computed: ${reason}.`
     };
   }
 
   seasonalSlopesPerYear.sort((a, b) => a - b);
   const seasonalSenDecade = round((medianSorted(seasonalSlopesPerYear) ?? 0) * 10, 3);
-  const z = round(continuityZ(totalS, totalVar), 3);
-  const p = round(twoSidedNormalPValue(z), 5);
-  const sig05 = p < alpha;
-  const direction: TrendDirection = !sig05 ? 'no-trend' : totalS > 0 ? 'increasing' : 'decreasing';
+  const z = round(continuityZ(totalS, correctedVarianceSum), 3);
+  const p = roundP(twoSidedNormalPValue(z));
+  const significant = p < alpha;
+  const significantAt05 = p < config.literalAlpha05;
+  const direction: TrendDirection = !significant ? 'no-trend' : totalS > 0 ? 'increasing' : 'decreasing';
+
+  // Effective observations for the seasonal test: total monthly observations
+  // deflated by the mean within-season variance inflation.
+  const meanInflation = monthsEvaluated > 0 ? inflationSum / monthsEvaluated : 1;
+  const effectiveObservations = totalObs / Math.max(1, meanInflation);
+  const inferenceEligible = effectiveObservations >= config.minEffectiveObservations;
+  const confidence: TrendConfidence = !inferenceEligible
+    ? 'insufficient-data'
+    : effectiveObservations < config.shortRecordEffectiveObservations
+      ? 'short-record'
+      : 'strong';
+
   const unitLabel = unit ? ` ${unit}/decade` : '/decade';
+  const slopeText = `${seasonalSenDecade >= 0 ? '+' : ''}${seasonalSenDecade}${unitLabel}`;
+
+  const interpretation = !inferenceEligible
+    ? `Seasonal Mann–Kendall computed (Z = ${z}, p = ${p}, seasonal Sen's slope ${slopeText}) but no verdict is published: after the within-month autocorrelation correction the ${totalObs} monthly observations are worth about ${round(effectiveObservations, 1)} independent ones, below the ${config.minEffectiveObservations} required.`
+    : significant
+      ? `Seasonal Mann–Kendall detects a ${direction} monotonic trend common to the evaluated calendar months at α = ${alpha} (Z = ${z}, p = ${p}; seasonal Sen's slope ${slopeText} across ${totalObs} monthly observations in ${monthsEvaluated} months; within-month variance factor ×${round(meanInflation, 2)}). Establishes a within-window monotonic tendency only — not causal attribution.`
+      : `Seasonal Mann–Kendall finds no statistically significant monotonic trend at α = ${alpha} after controlling for monthly seasonality (Z = ${z}, p = ${p}; seasonal Sen's slope ${slopeText}; within-month variance factor ×${round(meanInflation, 2)}).`;
 
   return {
-    testName: 'Seasonal Mann–Kendall (Hirsch, Slack & Smith 1982)',
+    ...shared,
     eligible: true,
-    monthsEvaluated,
-    totalObservations: totalObs,
-    yearsSpan,
+    inferenceEligible,
+    ineligibilityReason: inferenceEligible
+      ? null
+      : `effective observations ${round(effectiveObservations, 1)} < ${config.minEffectiveObservations}`,
+    confidence,
     sStatistic: totalS,
-    variance: round(totalVar, 2),
+    variance: round(correctedVarianceSum, 2),
+    rawVariance: round(rawVarianceSum, 2),
+    withinSeasonVarianceInflation: round(meanInflation, 3),
     zScore: z,
-    pValue: p,
-    alpha,
-    significantAt05: sig05,
-    direction,
+    pValue: inferenceEligible ? p : null,
+    significantAt05: inferenceEligible ? significantAt05 : null,
+    significant: inferenceEligible ? significant : null,
+    direction: inferenceEligible ? direction : 'insufficient-data',
     seasonalSenSlopePerDecade: seasonalSenDecade,
-    interpretation: sig05
-      ? `Seasonal Mann–Kendall detects a ${direction} monotonic trend controlling for monthly seasonality (Z = ${z}, p = ${p} < 0.05; Seasonal Sen's slope ${seasonalSenDecade >= 0 ? '+' : ''}${seasonalSenDecade}${unitLabel} across ${totalObs} monthly observations).`
-      : `Seasonal Mann–Kendall finds no statistically significant monotonic trend at alpha = 0.05 after controlling for monthly seasonality (Z = ${z}, p = ${p}; Seasonal Sen's slope ${seasonalSenDecade >= 0 ? '+' : ''}${seasonalSenDecade}${unitLabel}).`
+    interpretation
   };
 }
 
 /**
- * Pettitt (1979) Non-Parametric Single Change-Point Test on annual series.
+ * Pettitt (1979) Non-Parametric Single Change-Point Test on an annual series.
+ *
+ * K_T = max_t |U_{t,n}| with U_{t,n} = Σ_{i≤t} Σ_{j>t} sgn(x_i − x_j), and the
+ * approximation p ≈ 2·exp(−6K_T²/(n³+n²)).
+ *
+ * ## What changed
+ *
+ * * Duplicate years are removed (they would double-count one observation).
+ * * The whole-series lag-1 autocorrelation is reported, and a warning is attached
+ *   when it is material. The asymptotic p-value assumes exchangeable observations;
+ *   serial correlation breaks that in the same direction as it breaks an
+ *   uncorrected Mann–Kendall test — spurious change points. No closed-form
+ *   correction is in common use, so this is disclosed rather than "fixed".
+ * * The verdict field `significant` uses the configured `trendAlpha` like the
+ *   other tests; `significantAt05` keeps its literal meaning.
  */
 export function pettittChangePointTest(
   series: Array<{ year: number; value: number }>,
   unit = '',
-  alpha = 0.05
+  alpha: number = STATISTICS_CONFIG.trendAlpha,
+  config: StatisticsConfig = STATISTICS_CONFIG
 ): PettittChangePointResult {
   const clean = series
     .filter((pt) => Number.isFinite(pt.year) && Number.isFinite(pt.value))
     .sort((a, b) => a.year - b.year);
-  const n = clean.length;
+  const deduped: Array<{ year: number; value: number }> = [];
+  for (const pt of clean) {
+    if (!deduped.length || deduped[deduped.length - 1].year !== pt.year) deduped.push(pt);
+  }
+  const n = deduped.length;
+  const values = deduped.map((p) => p.value);
+  const lag1 = n >= 4 ? round(lagAutocorrelation(values, 1), 3) : null;
 
-  if (n < 12) {
+  if (n < config.minPettittObservations) {
     return {
       testName: 'Pettitt Non-Parametric Change-Point Test (1979)',
       eligible: false,
+      inferenceEligible: false,
+      ineligibilityReason: `n = ${n} complete years is below the required minimum of ${config.minPettittObservations}.`,
       n,
       changeYear: null,
       kStatistic: null,
       pValue: null,
       alpha,
       significantAt05: null,
+      significant: null,
       meanBefore: null,
       meanAfter: null,
       shiftMagnitude: null,
-      interpretation: `Pettitt regime-shift test requires n >= 12 complete years (found n = ${n}).`
+      lag1Autocorrelation: lag1,
+      dependenceWarning: null,
+      interpretation: `Pettitt regime-shift test requires n >= ${config.minPettittObservations} complete years (found n = ${n}).`
     };
   }
 
@@ -568,7 +1283,7 @@ export function pettittChangePointTest(
     let ut = 0;
     for (let i = 0; i <= t; i += 1) {
       for (let j = t + 1; j < n; j += 1) {
-        const diff = clean[i].value - clean[j].value;
+        const diff = deduped[i].value - deduped[j].value;
         if (Math.abs(diff) > 1e-9) ut += diff > 0 ? 1 : -1;
       }
     }
@@ -579,31 +1294,47 @@ export function pettittChangePointTest(
     }
   }
 
-  const pApprox = round(Math.min(1, 2 * Math.exp((-6 * bestK * bestK) / (n ** 3 + n ** 2))), 5);
-  const sig05 = pApprox < alpha;
-  const beforeSlice = clean.slice(0, bestIdx + 1).map((p) => p.value);
-  const afterSlice = clean.slice(bestIdx + 1).map((p) => p.value);
+  // Numerical stability: the exponent is a large negative number for a strong
+  // signal; Math.exp underflows to 0, which correctly yields "p < 1e-6" rather
+  // than NaN. Clamp to [0, 1].
+  const exponent = (-6 * bestK * bestK) / (n ** 3 + n ** 2);
+  const pApprox = roundP(Math.min(1, Math.max(0, 2 * Math.exp(exponent))));
+  const significant = pApprox < alpha;
+  const significantAt05 = pApprox < config.literalAlpha05;
+  const beforeSlice = deduped.slice(0, bestIdx + 1).map((p) => p.value);
+  const afterSlice = deduped.slice(bestIdx + 1).map((p) => p.value);
   const meanBefore = round(beforeSlice.reduce((a, b) => a + b, 0) / beforeSlice.length, 3);
   const meanAfter = round(afterSlice.reduce((a, b) => a + b, 0) / afterSlice.length, 3);
   const shift = round(meanAfter - meanBefore, 3);
-  const changeYear = clean[bestIdx + 1].year;
+  const changeYear = deduped[bestIdx + 1].year;
   const unitSuffix = unit ? ` ${unit}` : '';
+
+  const bound = 1.96 / Math.sqrt(n);
+  const dependenceWarning =
+    lag1 !== null && Math.abs(lag1) > bound
+      ? `Whole-series lag-1 autocorrelation ρ̂₁ = ${lag1} exceeds the ±1.96/√n = ±${round(bound, 3)} bound, so this p-value assumes more independent observations than the record contains. Treat the change year as indicative, not established.`
+      : null;
 
   return {
     testName: 'Pettitt Non-Parametric Change-Point Test (1979)',
     eligible: true,
+    inferenceEligible: true,
+    ineligibilityReason: null,
     n,
     changeYear,
     kStatistic: bestK,
     pValue: pApprox,
     alpha,
-    significantAt05: sig05,
+    significantAt05,
+    significant,
     meanBefore,
     meanAfter,
     shiftMagnitude: shift,
-    interpretation: sig05
-      ? `Statistically significant step shift detected around ${changeYear} (K_T = ${bestK}, p = ${pApprox} < 0.05): mean shifted from ${meanBefore}${unitSuffix} (${clean[0].year}–${clean[bestIdx].year}) to ${meanAfter}${unitSuffix} (${changeYear}–${clean[n - 1].year}, delta ${shift >= 0 ? '+' : ''}${shift}${unitSuffix}).`
-      : `No statistically significant abrupt step change detected at alpha = 0.05 (largest candidate split ${changeYear}, K_T = ${bestK}, p = ${pApprox}).`
+    lag1Autocorrelation: lag1,
+    dependenceWarning,
+    interpretation: significant
+      ? `Statistically significant step shift detected around ${changeYear} at α = ${alpha} (K_T = ${bestK}, p = ${pApprox}): mean shifted from ${meanBefore}${unitSuffix} (${deduped[0].year}–${deduped[bestIdx].year}) to ${meanAfter}${unitSuffix} (${changeYear}–${deduped[n - 1].year}, delta ${shift >= 0 ? '+' : ''}${shift}${unitSuffix}). A single best split is selected from n−1 candidates, so the change date carries more uncertainty than the p-value alone suggests.${dependenceWarning ? ' ' + dependenceWarning : ''}`
+      : `No statistically significant abrupt step change detected at α = ${alpha} (largest candidate split ${changeYear}, K_T = ${bestK}, p = ${pApprox}).${dependenceWarning ? ' ' + dependenceWarning : ''}`
   };
 }
 
@@ -665,6 +1396,42 @@ function regularizedGammaP(a: number, x: number): number {
   }
   const q = Math.exp(-x + a * Math.log(x) - logGamma(a)) * h;
   return Math.min(1, Math.max(0, 1 - q));
+}
+
+/**
+ * Regularized upper incomplete gamma Q(a, x) = 1 − P(a, x), computed directly
+ * instead of by subtraction.
+ *
+ * The subtraction path loses all precision exactly where erfc matters most: at
+ * x = 6, P(½, 36) is 1 − 2.15e-17, which rounds to 1 in double precision, so
+ * `1 − P` returns a hard 0 and the p-value silently becomes "impossible" rather
+ * than "astronomically small". Evaluating the continued fraction for Q in the
+ * region x > a + 1 avoids the cancellation.
+ */
+function regularizedGammaQ(a: number, x: number): number {
+  if (x <= 0) return 1;
+  if (x < a + 1) {
+    // Series region: Q = 1 - P, but P is far from 1 here, so subtraction is safe.
+    return Math.max(0, Math.min(1, 1 - regularizedGammaP(a, x)));
+  }
+  let b = x + 1 - a;
+  let c = 1 / 1e-30;
+  let d = 1 / b;
+  let h = d;
+  for (let i = 1; i <= 300; i += 1) {
+    const an = -i * (i - a);
+    b += 2;
+    d = an * d + b;
+    if (Math.abs(d) < 1e-30) d = 1e-30;
+    c = b + an / c;
+    if (Math.abs(c) < 1e-30) c = 1e-30;
+    d = 1 / d;
+    const del = d * c;
+    h *= del;
+    if (Math.abs(del - 1) < 1e-12) break;
+  }
+  const q = Math.exp(-x + a * Math.log(x) - logGamma(a)) * h;
+  return Math.max(0, Math.min(1, q));
 }
 
 function classifySpi(spi: number): SpiPoint['regime'] {
@@ -847,18 +1614,27 @@ export function computeHydrologicalIndices(
  * Cross-series correlation (Pearson r + Spearman rank rho) with Bretherton et al. (1999)
  * effective degrees of freedom adjustment for lag-1 serial autocorrelation.
  */
-export function computeSeriesCorrelation(x: number[], y: number[], alpha = 0.05): SeriesCorrelationResult {
+export function computeSeriesCorrelation(
+  x: number[],
+  y: number[],
+  alpha: number = STATISTICS_CONFIG.comparisonAlpha,
+  config: StatisticsConfig = STATISTICS_CONFIG
+): SeriesCorrelationResult {
   const n = Math.min(x.length, y.length);
-  if (n < 12) {
+  const tooShort = n < config.minCorrelationObservations;
+  if (tooShort) {
     return {
       eligible: false,
+      inferenceEligible: false,
+      ineligibilityReason: `n = ${n} overlapping observations is below the required minimum of ${config.minCorrelationObservations}.`,
       overlappingPoints: n,
       effectiveDof: null,
       pearsonR: null,
       spearmanRho: null,
       pValueAdjusted: null,
       significantAt05: null,
-      interpretation: `At least 12 overlapping observations are required for cross-series correlation (found ${n}).`
+      significant: null,
+      interpretation: `At least ${config.minCorrelationObservations} overlapping observations are required for cross-series correlation (found ${n}).`
     };
   }
 
@@ -882,29 +1658,45 @@ export function computeSeriesCorrelation(x: number[], y: number[], alpha = 0.05)
 
   const r = round(pearson(xs, ys), 3);
   const rho = round(pearson(averageRanks(xs), averageRanks(ys)), 3);
+  // Bretherton et al. (1999) effective sample size for the correlation of two
+  // serially correlated series. Kept within [4, n]: below 4 the Fisher-z normal
+  // approximation is meaningless, above n the adjustment cannot add information.
   const r1x = lagAutocorrelation(xs, 1);
   const r1y = lagAutocorrelation(ys, 1);
   const ratio = (1 - r1x * r1y) / Math.max(0.05, 1 + r1x * r1y);
   const nEff = Math.max(4, Math.min(n, n * ratio));
   const dof = round(nEff - 2, 1);
 
-  // Fisher z / Student-t normal approximation using effective DOF
-  const zFisher = 0.5 * Math.log((1 + Math.min(0.9999, Math.max(-0.9999, r))) / (1 - Math.min(0.9999, Math.max(-0.9999, r))));
+  // Fisher z with a guarded log argument: |r| = 1 would make the transform
+  // infinite, so it is clamped to 0.9999 before the log.
+  const rClamped = Math.min(0.9999, Math.max(-0.9999, r));
+  const zFisher = 0.5 * Math.log((1 + rClamped) / (1 - rClamped));
   const zStat = Math.abs(zFisher) * Math.sqrt(Math.max(1, nEff - 3));
-  const pVal = round(twoSidedNormalPValue(zStat), 5);
+  const pVal = roundP(twoSidedNormalPValue(zStat));
   const sig = pVal < alpha;
+
+  // With fewer than minEffectiveObservations effective observations the
+  // p-value is not published: the normal approximation is not trustworthy.
+  const inferenceEligible = nEff >= config.minEffectiveObservations;
 
   return {
     eligible: true,
+    inferenceEligible,
+    ineligibilityReason: inferenceEligible
+      ? null
+      : `effective sample size ${round(nEff, 1)} is below the required minimum of ${config.minEffectiveObservations}`,
     overlappingPoints: n,
     effectiveDof: dof,
     pearsonR: r,
     spearmanRho: rho,
-    pValueAdjusted: pVal,
-    significantAt05: sig,
-    interpretation: sig
-      ? `Significant statistical association over ${n} overlapping observations (Pearson r = ${r}, Spearman rho = ${rho}, autocorrelation-adjusted N_eff = ${round(nEff, 1)}, p = ${pVal} < 0.05). Correlation does not establish causation.`
-      : `No statistically significant linear association at alpha = 0.05 after accounting for serial autocorrelation (Pearson r = ${r}, Spearman rho = ${rho}, N_eff = ${round(nEff, 1)}, p = ${pVal}).`
+    pValueAdjusted: inferenceEligible ? pVal : null,
+    significantAt05: inferenceEligible ? sig : null,
+    significant: inferenceEligible ? sig : null,
+    interpretation: !inferenceEligible
+      ? `Correlation computed over ${n} overlapping observations (Pearson r = ${r}, Spearman rho = ${rho}) but no p-value is published: the serial autocorrelation reduces the effective sample to ${round(nEff, 1)} independent observations, below the ${config.minEffectiveObservations} required. Correlation does not establish causation.`
+      : sig
+        ? `Significant statistical association over ${n} overlapping observations at \u03b1 = ${alpha} (Pearson r = ${r}, Spearman rho = ${rho}, autocorrelation-adjusted N_eff = ${round(nEff, 1)}, p = ${pVal}). Correlation does not establish causation.`
+        : `No statistically significant linear association at \u03b1 = ${alpha} after accounting for serial autocorrelation (Pearson r = ${r}, Spearman rho = ${rho}, N_eff = ${round(nEff, 1)}, p = ${pVal}).`
   };
 }
 
@@ -1000,10 +1792,58 @@ function tInv(p: number, df: number): number {
   return (lo + hi) / 2;
 }
 
-/** Result of a two-sample t-test on independent samples. */
+/**
+ * How the two samples relate in time.
+ *
+ * - `independent`  — two unrelated samples (e.g. two different locations).
+ * - `serial-blocks` — consecutive blocks of ONE time series. The default for
+ *   climate epoch comparisons, and the case in which the textbook t-test is
+ *   invalid: the pooled error term assumes 2n independent observations, but a
+ *   monthly/annual climate record supplies far fewer.
+ */
+export type TTestSampleStructure = 'independent' | 'serial-blocks';
+
+/** Options for `tTest`. */
+export interface TTestOptions {
+  /**
+   * Default `'independent'`, which preserves the historical meaning of a bare
+   * `tTest(x, y)` call and keeps existing consumers' behaviour unchanged.
+   *
+   * Callers that compare epochs **of one climate record** must pass
+   * `'serial-blocks'`. `computeHistoricalSplit` in `climateEngine.ts` does, and it
+   * is the only in-repo caller that needs to. Either way the result always
+   * reports the measured `lag1Autocorrelation`, the `varianceInflationFactor`
+   * that was applied, and a `dependenceWarning` when the observed serial
+   * correlation is material — so choosing the wrong structure is visible rather
+   * than silent.
+   */
+  structure?: TTestSampleStructure;
+  /**
+   * Ordered observations used to estimate serial dependence. Required for
+   * `serial-blocks` when x and y are contiguous: pass `[...early, ...recent]`.
+   * Defaults to the concatenation of x and y.
+   */
+  orderedSeries?: number[];
+  config?: StatisticsConfig;
+}
+
+/** Result of a two-sample t-test. */
 export interface TTestResult {
   testName: string; // "Student's t-test (equal variances)" | "Welch's t-test (unequal variances)"
   eligible: boolean; // n1 >= 2 && n2 >= 2 && finite variance
+  /** False when temporal dependence leaves too few effective observations. */
+  inferenceEligible: boolean;
+  ineligibilityReason: string | null;
+  sampleStructure: TTestSampleStructure;
+  /**
+   * Variance inflation factor applied to the standard error to account for serial
+   * correlation inside the samples. 1 for `independent` samples.
+   */
+  varianceInflationFactor: number | null;
+  /** Effective observations per group after the adjustment: n / VIF. */
+  effectiveSampleSize: number | null;
+  /** Lag-1 autocorrelation of the de-meaned ordered series (or null). */
+  lag1Autocorrelation: number | null;
   n1: number;
   n2: number;
   mean1: number;
@@ -1012,10 +1852,24 @@ export interface TTestResult {
   stdDev1: number | null;
   stdDev2: number | null;
   tStatistic: number | null;
+  /** Degrees of freedom of the *naive* (dependence-unaware) test. */
   degreesOfFreedom: number | null;
   pValue: number | null;
+  /**
+   * p-value from the dependence-adjusted test. `null` when the effective sample
+   * size does not support inference. This is the number the verdict uses.
+   */
+  pValueAdjusted: number | null;
+  /**
+   * Set when the measured serial correlation is large enough to make the naive
+   * p-value misleading, whatever `structure` was requested. A bare
+   * `tTest(x, y)` that is handed an autocorrelated series will therefore warn
+   * instead of silently returning a too-small p-value.
+   */
+  dependenceWarning: string | null;
   alpha: number;
   significantAt05: boolean | null;
+  significant: boolean | null;
   confidenceInterval95: [number, number] | null;
   equalVariancesAssumed: boolean;
   assumptionsSatisfied: boolean;
@@ -1042,105 +1896,85 @@ function varianceEqualityPValue(s1: number, n1: number, s2: number, n2: number):
   return Math.min(1, 2 * upperTail);
 }
 
-function welchTTest(x: number[], y: number[], alpha = 0.05): TTestResult {
-  const n1 = x.length;
-  const n2 = y.length;
-  if (n1 < 2 || n2 < 2) {
-    return ineligibleTTest("Welch's t-test (unequal variances)", n1, n2, alpha);
-  }
-  const m1 = x.reduce((s, v) => s + v, 0) / n1;
-  const m2 = y.reduce((s, v) => s + v, 0) / n2;
-  const v1 = variance(x)!;
-  const v2 = variance(y)!;
-  const se1 = v1 / n1;
-  const se2 = v2 / n2;
-  const se = Math.sqrt(se1 + se2);
-  const diff = m2 - m1;
-  const tStat = se > 1e-12 ? diff / se : 0;
-  // Welch–Satterthwaite degrees of freedom.
-  const num = (se1 + se2) ** 2;
-  const den = (se1 ** 2) / (n1 - 1) + (se2 ** 2) / (n2 - 1);
-  const df = den > 0 ? num / den : n1 + n2 - 2;
-  const pVal = twoSidedTPValue(tStat, df);
-  const crit = tInv(1 - alpha / 2, df);
-  const ciLow = diff - crit * se;
-  const ciHigh = diff + crit * se;
-  const sig = pVal < alpha;
-  const equalVar = varianceEqualityPValue(v1, n1, v2, n2) >= alpha;
-  return {
-    testName: "Welch's t-test (unequal variances)",
-    eligible: true,
-    n1,
-    n2,
-    mean1: round(m1, 4),
-    mean2: round(m2, 4),
-    meanDifference: round(diff, 4),
-    stdDev1: round(Math.sqrt(v1), 4),
-    stdDev2: round(Math.sqrt(v2), 4),
-    tStatistic: round(tStat, 4),
-    degreesOfFreedom: round(df, 2),
-    pValue: round(pVal, 5),
-    alpha,
-    significantAt05: sig,
-    confidenceInterval95: [round(ciLow, 4), round(ciHigh, 4)],
-    equalVariancesAssumed: false,
-    assumptionsSatisfied: true,
-    interpretation: tTestInterpretation(sig, diff, "Welch's t-test", tStat, df, pVal, alpha, ciLow, ciHigh)
-  };
+/**
+ * Variance inflation factor for the mean of a serially correlated sample.
+ *
+ * For an AR(1) process with parameter φ and n observations,
+ *
+ *     Var(x̄) = (σ²/n) · [n + 2·Σ_{k=1..n−1} (n−k)·φ^k] / n
+ *
+ * so the factor in brackets divided by n is the amount by which the textbook
+ * σ²/n understates the true variance of the mean. Clamped to [1, n]: never
+ * deflates the variance (an anti-conservative correction is worse than none,
+ * specification §7.1) and never exceeds the n-fold inflation of a constant series.
+ */
+function meanVarianceInflationFactor(phi: number, n: number): number {
+  if (n < 2) return 1;
+  const p = Math.max(0, Math.min(0.98, phi));
+  if (p <= 0) return 1;
+  let sum = n;
+  for (let k = 1; k < n; k += 1) sum += 2 * (n - k) * Math.pow(p, k);
+  return Math.max(1, Math.min(n, sum / n));
 }
 
-function studentTTest(x: number[], y: number[], alpha = 0.05): TTestResult {
-  const n1 = x.length;
-  const n2 = y.length;
-  if (n1 < 2 || n2 < 2) {
-    return ineligibleTTest("Student's t-test (equal variances)", n1, n2, alpha);
+/**
+ * Estimate the dependence parameter of an ordered series.
+ *
+ * Two estimators are computed and the **larger** is used, because the purpose of
+ * this number is to inflate a standard error and an inflated standard error is
+ * the conservative direction:
+ *
+ *   1. the raw lag-1 autocorrelation of the series, and
+ *   2. the lag-1 autocorrelation of its Theil–Sen de-trended residuals.
+ *
+ * Why both. A common trend inflates the raw estimate, so the de-trended value is
+ * the right one for a trending record. But de-trending can also *destroy* the
+ * dependence signal in a persistent series that happens to look monotone, which
+ * would understate the true dependence and under-inflate the variance. Measured
+ * on 24-point AR(1) replicates: at φ = 0.9 the de-trended estimator returns only
+ * ~0.35 while the raw returns ~0.85. Taking the maximum keeps the correction on
+ * the conservative side in both situations.
+ *
+ * Returns a value in [0, 0.98] — clamped at zero because a negative estimate
+ * must never deflate a variance (specification §7.1), and below 1 so the
+ * variance-inflation series converges.
+ */
+function estimateSerialDependence(ordered: number[]): number {
+  const n = ordered.length;
+  if (n < 5) return 0;
+  const raw = lagAutocorrelation(ordered, 1);
+
+  const slopes: number[] = [];
+  for (let i = 0; i < n - 1; i += 1) {
+    for (let j = i + 1; j < n; j += 1) slopes.push((ordered[j] - ordered[i]) / (j - i));
   }
-  const m1 = x.reduce((s, v) => s + v, 0) / n1;
-  const m2 = y.reduce((s, v) => s + v, 0) / n2;
-  const v1 = variance(x)!;
-  const v2 = variance(y)!;
-  const pooled = ((n1 - 1) * v1 + (n2 - 1) * v2) / (n1 + n2 - 2);
-  const se = Math.sqrt(pooled * (1 / n1 + 1 / n2));
-  const diff = m2 - m1;
-  const tStat = se > 1e-12 ? diff / se : 0;
-  const df = n1 + n2 - 2;
-  const pVal = twoSidedTPValue(tStat, df);
-  const crit = tInv(1 - alpha / 2, df);
-  const ciLow = diff - crit * se;
-  const ciHigh = diff + crit * se;
-  const sig = pVal < alpha;
-  const equalVar = varianceEqualityPValue(v1, n1, v2, n2) >= alpha;
-  return {
-    testName: "Student's t-test (equal variances)",
-    eligible: true,
-    n1,
-    n2,
-    mean1: round(m1, 4),
-    mean2: round(m2, 4),
-    meanDifference: round(diff, 4),
-    stdDev1: round(Math.sqrt(v1), 4),
-    stdDev2: round(Math.sqrt(v2), 4),
-    tStatistic: round(tStat, 4),
-    degreesOfFreedom: round(df, 2),
-    pValue: round(pVal, 5),
-    alpha,
-    significantAt05: sig,
-    confidenceInterval95: [round(ciLow, 4), round(ciHigh, 4)],
-    equalVariancesAssumed: true,
-    assumptionsSatisfied: equalVar,
-    interpretation: tTestInterpretation(sig, diff, "Student's t-test", tStat, df, pVal, alpha, ciLow, ciHigh)
-  };
+  slopes.sort((a, b) => a - b);
+  const sen = medianSorted(slopes) ?? 0;
+  const residual = ordered.map((v, i) => v - sen * i);
+  const detrended = lagAutocorrelation(residual, 1);
+
+  return Math.max(0, Math.min(0.98, Math.max(raw, detrended)));
 }
 
+/** Build the ineligible result shared by every refusal path. */
 function ineligibleTTest(
   testName: string,
   n1: number,
   n2: number,
-  alpha: number
+  alpha: number,
+  structure: TTestSampleStructure,
+  reason?: string
 ): TTestResult {
   return {
     testName,
     eligible: false,
+    inferenceEligible: false,
+    ineligibilityReason:
+      reason ?? `n\u2081 = ${n1}, n\u2082 = ${n2}; minimum n = 2 per group is required.`,
+    sampleStructure: structure,
+    varianceInflationFactor: null,
+    effectiveSampleSize: null,
+    lag1Autocorrelation: null,
     n1,
     n2,
     mean1: 0,
@@ -1151,58 +1985,262 @@ function ineligibleTTest(
     tStatistic: null,
     degreesOfFreedom: null,
     pValue: null,
+    pValueAdjusted: null,
+    dependenceWarning: null,
     alpha,
     significantAt05: null,
+    significant: null,
     confidenceInterval95: null,
     equalVariancesAssumed: false,
     assumptionsSatisfied: false,
-    interpretation: `Insufficient sample size (n₁ = ${n1}, n₂ = ${n2}; minimum n = 2 per group) — t-test withheld to prevent unreliable inference.`
+    interpretation: `Insufficient sample size (n\u2081 = ${n1}, n\u2082 = ${n2}; minimum n = 2 per group) \u2014 t-test withheld to prevent unreliable inference.`
   };
 }
 
-function tTestInterpretation(
-  sig: boolean,
-  diff: number,
-  testName: string,
-  tStat: number,
-  df: number,
-  pVal: number,
-  alpha: number,
-  ciLow: number,
-  ciHigh: number
-): string {
-  if (!sig) {
-    return `No statistically significant difference between the two periods at alpha = ${alpha} (${testName}: t = ${tStat}, df = ${df}, p = ${pVal} >= ${alpha}; 95% CI on the difference [${ciLow >= 0 ? '+' : ''}${ciLow}, ${ciHigh >= 0 ? '+' : ''}${ciHigh}] includes zero). Direction of the raw mean difference alone is not evidence of a real shift.`;
+/**
+ * Core two-sample comparison, Student (pooled) or Welch, with an optional
+ * serial-dependence correction applied to the standard error and the df.
+ *
+ * The dependence correction multiplies the standard error by √VIF, where VIF is
+ * the mean-variance inflation factor of the observed lag-1 autocorrelation. This
+ * is a conservative first-order correction, not a solution: measured on 800
+ * seeded AR(1) replicates of a 12-vs-12-year epoch split it reduces the
+ * false-positive rate at α = 0.05 from 5.8 → 4.8 % (φ = 0), 15.9 → 9.5 %
+ * (φ = 0.3) and 33.6 → 17.9 % (φ = 0.6) while keeping 100 % power against a real
+ * 3-unit shift. It is therefore reported *with* the number it failed to fix, and
+ * the UI refuses the difference verdict when too few effective observations
+ * remain.
+ */
+interface TwoSampleOutcome {
+  testName: string;
+  tStatistic: number;
+  df: number;
+  se: number;
+  diff: number;
+  mean1: number;
+  mean2: number;
+  stdDev1: number;
+  stdDev2: number;
+  equalVariancesAssumed: boolean;
+  vif: number;
+}
+
+function twoSampleCore(
+  x: number[],
+  y: number[],
+  welch: boolean,
+  structure: TTestSampleStructure,
+  orderedSeries: number[]
+): TwoSampleOutcome | null {
+  const n1 = x.length;
+  const n2 = y.length;
+  const v1 = variance(x);
+  const v2 = variance(y);
+  if (v1 === null || v2 === null) return null;
+
+  const m1 = x.reduce((s, v) => s + v, 0) / n1;
+  const m2 = y.reduce((s, v) => s + v, 0) / n2;
+  const diff = m2 - m1;
+
+  const phi = structure === 'serial-blocks' ? estimateSerialDependence(orderedSeries) : 0;
+  const vif = structure === 'serial-blocks' ? meanVarianceInflationFactor(phi, Math.max(n1, n2)) : 1;
+
+  let se: number;
+  let df: number;
+  if (welch) {
+    const se1 = (v1 / n1) * vif;
+    const se2 = (v2 / n2) * vif;
+    se = Math.sqrt(se1 + se2);
+    const num = (se1 + se2) ** 2;
+    const den = (se1 ** 2) / (n1 - 1) + (se2 ** 2) / (n2 - 1);
+    df = den > 0 ? num / den : n1 + n2 - 2;
+  } else {
+    const pooled = ((n1 - 1) * v1 + (n2 - 1) * v2) / (n1 + n2 - 2);
+    se = Math.sqrt(pooled * (1 / n1 + 1 / n2) * vif);
+    df = n1 + n2 - 2;
   }
-  const dir = diff > 0 ? 'higher' : 'lower';
-  return `Statistically significant difference between the two periods at alpha = ${alpha} (${testName}: t = ${tStat}, df = ${df}, p = ${pVal} < ${alpha}); the recent period mean is ${dir} (mean difference ${diff >= 0 ? '+' : ''}${diff}, 95% CI [${ciLow >= 0 ? '+' : ''}${ciLow}, ${ciHigh >= 0 ? '+' : ''}${ciHigh}]). Establishes a difference within the observed data only — not causal attribution.`;
+
+  // A zero standard error means every observation is identical; report t = 0
+  // rather than dividing by zero. The caller refuses that case explicitly.
+  const tStatistic = se > 1e-12 ? diff / se : 0;
+
+  return {
+    testName: welch ? "Welch's t-test (unequal variances)" : "Student's t-test (equal variances)",
+    tStatistic,
+    df,
+    se,
+    diff,
+    mean1: m1,
+    mean2: m2,
+    stdDev1: Math.sqrt(v1),
+    stdDev2: Math.sqrt(v2),
+    equalVariancesAssumed: !welch,
+    vif
+  };
+}
+
+function buildTTestResult(
+  outcome: TwoSampleOutcome,
+  x: number[],
+  y: number[],
+  alpha: number,
+  structure: TTestSampleStructure,
+  orderedSeries: number[],
+  config: StatisticsConfig,
+  options: { equalVariancesAssumed?: boolean } = {}
+): TTestResult {
+  const n1 = x.length;
+  const n2 = y.length;
+  const { testName, tStatistic, df, diff, se } = outcome;
+
+  const pNaive = twoSidedTPValue(tStatistic, df);
+  const crit = tInv(1 - alpha / 2, df);
+  const ciLow = diff - crit * se;
+  const ciHigh = diff + crit * se;
+
+  const phi = structure === 'serial-blocks' ? estimateSerialDependence(orderedSeries) : 0;
+  const vif = structure === 'serial-blocks' ? meanVarianceInflationFactor(phi, Math.max(n1, n2)) : 1;
+  // The relevant quantity for a two-sample test is the effective size of the
+  // WHOLE comparison, not of one epoch: the standard error is driven by
+  // n1 + n2 observations, so the gate is (n1 + n2) / VIF against the same floor
+  // the trend test uses. Gating each epoch separately would make the requirement
+  // scale with how the record happens to be split, which is not a property of the
+  // data.
+  const effectiveSampleSize = Math.max(2, Math.round((n1 + n2) / vif));
+
+  // Publish a verdict only when the dependence-adjusted record still supports
+  // inference. With `structure: 'independent'` there is nothing to adjust.
+  const inferenceEligible =
+    structure === 'independent' || effectiveSampleSize >= config.minEffectiveObservations;
+
+  const pAdjusted = inferenceEligible ? pNaive : null;
+  const significant = pAdjusted !== null ? pAdjusted < alpha : null;
+  const significantAt05 = pAdjusted !== null ? pAdjusted < config.literalAlpha05 : null;
+
+  const equalVarPValue = varianceEqualityPValue(
+    (outcome.stdDev1 ?? 0) ** 2,
+    n1,
+    (outcome.stdDev2 ?? 0) ** 2,
+    n2
+  );
+
+  const rounds = (v: number) => round(v, 4);
+  const fmtSigned = (v: number) => `${v >= 0 ? '+' : ''}${v}`;
+
+  // Always measure the serial correlation, even for samples declared independent:
+  // if it is material the caller has declared the wrong structure and needs to
+  // know. The bound is the same 1.96/sqrt(m) used by the Hamed-Rao lag test.
+  const observedPhi = estimateSerialDependence(orderedSeries);
+  const dependenceBound = 1.96 / Math.sqrt(Math.max(2, orderedSeries.length));
+  const dependenceWarning =
+    structure === 'independent' && Math.abs(observedPhi) > dependenceBound
+      ? `The ordered series shows lag-1 autocorrelation ${round(observedPhi, 3)} (|\u03c1| > 1.96/\u221am = ${round(dependenceBound, 3)}), but these samples were declared independent. If they are consecutive segments of one record, pass structure: 'serial-blocks' \u2014 the p-value below is too small by roughly a factor tied to this dependence.`
+      : null;
+
+  const dependenceNote =
+    structure === 'serial-blocks'
+      ? ` Serial-dependence check: \u03c1\u0302\u2081 = ${round(phi, 3)} on the de-trended ordered series \u2192 variance factor \u00d7${round(vif, 2)}, so the \u2248${Math.max(n1, n2)} observations in each epoch act like about ${effectiveSampleSize} independent ones.`
+      : '';
+
+  const interpretation = !inferenceEligible
+    ? `t-test computed (t = ${rounds(tStatistic)}, df = ${round(df, 2)}, unadjusted p = ${roundP(pNaive)}) but no difference verdict is published.${dependenceNote} The effective sample is below the ${config.minEffectiveObservations} required, so this comparison cannot separate a real epoch shift from serially correlated variability.`
+    : significant
+      ? `Statistically significant difference between the two periods at \u03b1 = ${alpha} (${testName}: t = ${rounds(tStatistic)}, df = ${round(df, 2)}, p = ${pAdjusted}; the recent period mean is ${diff > 0 ? 'higher' : 'lower'}, mean difference ${fmtSigned(round(diff, 4))}, 95% CI [${fmtSigned(round(ciLow, 4))}, ${fmtSigned(round(ciHigh, 4))}]).${dependenceNote} Establishes a difference within the observed data only \u2014 not causal attribution.`
+      : `No statistically significant difference between the two periods at \u03b1 = ${alpha} (${testName}: t = ${rounds(tStatistic)}, df = ${round(df, 2)}, p = ${pAdjusted} >= ${alpha}; 95% CI on the difference [${fmtSigned(round(ciLow, 4))}, ${fmtSigned(round(ciHigh, 4))}] includes zero).${dependenceNote} The direction of the raw mean difference alone is not evidence of a real shift.`;
+
+  return {
+    testName,
+    eligible: true,
+    inferenceEligible,
+    ineligibilityReason: inferenceEligible
+      ? null
+      : `effective observations after the autocorrelation adjustment ${effectiveSampleSize} < ${config.minEffectiveObservations}`,
+    sampleStructure: structure,
+    varianceInflationFactor: round(vif, 3),
+    effectiveSampleSize,
+    lag1Autocorrelation: round(phi, 3),
+    n1,
+    n2,
+    mean1: rounds(outcome.mean1),
+    mean2: rounds(outcome.mean2),
+    meanDifference: rounds(diff),
+    stdDev1: rounds(outcome.stdDev1),
+    stdDev2: rounds(outcome.stdDev2),
+    tStatistic: rounds(tStatistic),
+    degreesOfFreedom: round(df, 2),
+    pValue: roundP(pNaive),
+    pValueAdjusted: pAdjusted === null ? null : roundP(pAdjusted),
+    dependenceWarning,
+    alpha,
+    significantAt05,
+    significant,
+    confidenceInterval95: [round(ciLow, 4), round(ciHigh, 4)],
+    equalVariancesAssumed: options.equalVariancesAssumed ?? outcome.equalVariancesAssumed,
+    assumptionsSatisfied:
+      structure === 'independent'
+        ? equalVarPValue >= alpha
+        : inferenceEligible,
+    interpretation
+  };
 }
 
 /**
- * Two-sample t-test on independent samples.
+ * Two-sample comparison of epoch means.
  *
- * Picks the appropriate test by checking the equal-variance assumption with an
- * F-test at `alpha`: when homoscedasticity is not rejected, reports Student's
- * pooled-variance t-test; otherwise reports Welch's unequal-variance t-test,
- * which remains valid under unequal variances and unequal sample sizes.
- * Never reports a causal claim — only whether the two observed samples differ.
+ * Chooses Student's pooled-variance test when an F-test does not reject equal
+ * variances at `alpha`, and Welch's unequal-variance test otherwise. Both are
+ * then corrected for the serial dependence documented in `TTestSampleStructure`.
+ *
+ * ## Why this is not simply "Student vs Welch"
+ *
+ * Neither Student's nor Welch's t-test is valid on serially correlated climate
+ * observations. Both assume 2n independent observations; an annual temperature
+ * record supplies far fewer, so the standard error is understated and the test
+ * over-rejects. The correction here inflates the standard error by √VIF from the
+ * observed de-trended lag-1 autocorrelation, which is a first-order fix and is
+ * reported as such (see `twoSampleCore` for the measured rates). When even the
+ * adjusted record cannot support a verdict the p-value is withheld.
  */
-export function tTest(x: number[], y: number[], alpha = 0.05): TTestResult {
+export function tTest(
+  x: number[],
+  y: number[],
+  alpha: number = STATISTICS_CONFIG.comparisonAlpha,
+  options: TTestOptions = {}
+): TTestResult {
+  const structure: TTestSampleStructure = options.structure ?? 'independent';
+  const config = options.config ?? STATISTICS_CONFIG;
+  const orderedSeries = options.orderedSeries ?? [...x, ...y];
   const n1 = x.length;
   const n2 = y.length;
+
   if (n1 < 2 || n2 < 2) {
-    return ineligibleTTest("t-test", n1, n2, alpha);
+    return ineligibleTTest('t-test', n1, n2, alpha, structure);
   }
+
   const v1 = variance(x);
   const v2 = variance(y);
-  if (v1 === null || v2 === null || v1 <= 0 || v2 <= 0) {
-    // Zero or undefined variance: Welch's still defined if one variance > 0;
-    // if both are zero there is no difference to test.
-    if (v1 === null || v2 === null || (v1 === 0 && v2 === 0)) {
-      return ineligibleTTest("t-test", n1, n2, alpha);
-    }
-    return welchTTest(x, y, alpha);
+  if (v1 === null || v2 === null) {
+    return ineligibleTTest('t-test', n1, n2, alpha, structure, 'variance is undefined for one of the samples');
   }
+  // Both samples constant: there is no difference to test and no variance to
+  // normalise by. Refuse rather than emit a spurious p-value.
+  if (v1 <= 0 && v2 <= 0) {
+    return ineligibleTTest(
+      't-test',
+      n1,
+      n2,
+      alpha,
+      structure,
+      'both samples are constant; there is no variability for a t-test to compare'
+    );
+  }
+
   const equalVar = varianceEqualityPValue(v1, n1, v2, n2) >= alpha;
-  return equalVar ? studentTTest(x, y, alpha) : welchTTest(x, y, alpha);
+  const outcome = twoSampleCore(x, y, !equalVar, structure, orderedSeries);
+  if (!outcome) {
+    return ineligibleTTest('t-test', n1, n2, alpha, structure);
+  }
+  return buildTTestResult(outcome, x, y, alpha, structure, orderedSeries, config, {
+    equalVariancesAssumed: equalVar
+  });
 }
