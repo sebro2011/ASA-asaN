@@ -7,6 +7,13 @@
 
 import { describeCoverage } from './domains';
 import { parameterMeta } from './power';
+import {
+  computeAnomalies,
+  computeDatasetHydrology,
+  computeExtendedStats,
+  computeSeasonalBreakdown,
+  detectUnusualObservations
+} from './climateEngine';
 import { describeSeries, seriesLimitations, type AnalystContext } from './analysis';
 import type { AvailabilityVerdict, GibsDomain, GibsLayerMeta, PowerDataset } from './types';
 
@@ -16,7 +23,14 @@ export interface SelectedArea {
   longitude: number;
   /** Optional bounding box `[south, west, north, east]` used for imagery comparisons. */
   bounds?: [number, number, number, number];
-  source: 'gazetteer' | 'search' | 'map-click' | 'preset';
+  source: 'gazetteer' | 'search' | 'map-click' | 'preset' | 'custom' | 'nominatim';
+}
+
+export interface ComparisonPowerEntry {
+  label: string;
+  power: PowerDataset;
+  sourceUrl?: string;
+  retrievedAt?: string;
 }
 
 export interface BundleInput {
@@ -27,6 +41,7 @@ export interface BundleInput {
   power: PowerDataset | null;
   powerProvenanceUrl?: string;
   powerRetrievedAt?: string;
+  comparisonPowers?: ComparisonPowerEntry[];
   probeNotes?: string[];
   renderedDifference?: {
     meanAbsoluteDifference: number;
@@ -100,6 +115,25 @@ export function buildAnalystContext(input: BundleInput): AnalystContext {
           }))
         }
       : null,
+    comparisonLocations: (input.comparisonPowers || [])
+      .filter((entry) => entry.power && entry.power.rows.length > 0)
+      .map((entry) => ({
+        label: entry.label,
+        latitude: entry.power.latitude,
+        longitude: entry.power.longitude,
+        rows: entry.power.rows.length,
+        firstMonth: entry.power.rows[0]?.date,
+        lastMonth: entry.power.rows[entry.power.rows.length - 1]?.date,
+        sourceUrl: entry.sourceUrl || 'https://power.larc.nasa.gov/api/temporal/monthly/point',
+        retrievedAt: entry.retrievedAt || new Date().toISOString(),
+        stats: entry.power.available.map((code) => entry.power.stats[code]).filter(Boolean),
+        series: entry.power.available.map((code) => ({
+          code,
+          unit: entry.power.stats[code]?.unit || '',
+          dates: entry.power.rows.map((r) => r.date),
+          values: entry.power.rows.map((r) => (typeof r.values[code] === 'number' ? r.values[code] : null))
+        }))
+      })),
     dataGaps
   };
 }
@@ -153,6 +187,21 @@ export function contextForRequest(context: AnalystContext, question: string) {
             series: context.power.series
           }
         : null,
+      ...(context.comparisonLocations?.length
+        ? {
+            comparisonLocations: context.comparisonLocations.map((loc) => ({
+              label: loc.label,
+              latitude: Number(loc.latitude.toFixed(3)),
+              longitude: Number(loc.longitude.toFixed(3)),
+              months: loc.rows,
+              from: loc.firstMonth,
+              to: loc.lastMonth,
+              sourceUrl: loc.sourceUrl,
+              retrievedAt: loc.retrievedAt,
+              series: loc.series
+            }))
+          }
+        : {}),
       dataGaps: context.dataGaps
     }
   };
@@ -253,6 +302,43 @@ export function buildMarkdownReport(bundle: ReportBundle): string {
       describeSeries(stats).forEach((line) => out.push(`- ${line}`));
     }
     out.push('');
+    if (bundle.power) {
+      out.push('### Climate Intelligence & Data Quality Summary');
+      out.push('');
+      for (const code of bundle.power.available.slice(0, 4)) {
+        const ext = computeExtendedStats(bundle.power, code);
+        const anom = computeAnomalies(bundle.power, code, 'earliest-5');
+        const seasons = computeSeasonalBreakdown(bundle.power, code).filter((s) => s.scheme === 'monsoon' && s.mean !== null);
+        const unusual = detectUnusualObservations(bundle.power, code, 2.0).slice(0, 3);
+        out.push(`- **${ext.label} (${code})**: Quality grade \`${ext.quality.grade}\` — ${ext.quality.summary}`);
+        if (ext.olsTrend && ext.senSlope) {
+          out.push(
+            `  - Decade slope (OLS): ${ext.olsTrend.slopePerDecade >= 0 ? '+' : ''}${ext.olsTrend.slopePerDecade} ${ext.unit}/decade (R² = ${ext.olsTrend.rSquared}); Theil–Sen median slope: ${ext.senSlope.slopePerDecade >= 0 ? '+' : ''}${ext.senSlope.slopePerDecade} ${ext.unit}/decade.`
+          );
+        }
+        if (ext.meanAnnualTotalMm !== null) {
+          out.push(`  - Mean complete-year precipitation total: ${ext.meanAnnualTotalMm} mm/year.`);
+        }
+        if (anom.available && anom.latest) {
+          out.push(
+            `  - Latest annual anomaly (${anom.latest.year}): ${anom.latest.anomaly >= 0 ? '+' : ''}${anom.latest.anomaly} ${anom.unit} relative to ${anom.baselineLabel}.`
+          );
+        }
+        if (seasons.length) {
+          out.push(
+            `  - Monsoon regime means: ${seasons.map((s) => `${s.label} (${s.monthsLabel}) ${s.mean} ${ext.unit}`).join(' · ')}.`
+          );
+        }
+        if (unusual.length) {
+          out.push(
+            `  - Unusual monthly observations (|z| ≥ 2σ vs same calendar month): ${unusual
+              .map((u) => `${u.date} (${u.value} ${u.unit}, ${u.zScore >= 0 ? '+' : ''}${u.zScore}σ)`)
+              .join(', ')}.`
+          );
+        }
+      }
+      out.push('');
+    }
     out.push('Limitations:');
     out.push('');
     context.power.stats.forEach((stats) => {
@@ -262,6 +348,23 @@ export function buildMarkdownReport(bundle: ReportBundle): string {
     out.push('No NASA POWER archive was retrieved for this selection, so no climate-series statements are included.');
   }
   out.push('');
+
+  if (bundle.comparisonPowers && bundle.comparisonPowers.length > 0 && bundle.power) {
+    out.push('## Multi-location climate comparison (NASA POWER)');
+    out.push('');
+    out.push('| Location | Coordinates | T2M Mean (°C) | Precip Mean (mm/day) | Complete Years |');
+    out.push('| --- | --- | --- | --- | --- |');
+    const allLocs = [{ label: `${bundle.area.label} (primary)`, power: bundle.power }, ...bundle.comparisonPowers];
+    for (const item of allLocs) {
+      const t2m = item.power.stats.T2M?.mean ?? '—';
+      const prec = item.power.stats.PRECTOTCORR?.mean ?? '—';
+      const cy = item.power.stats.T2M?.annual.filter((a) => a.complete).length ?? 0;
+      out.push(
+        `| ${item.label} | ${item.power.latitude.toFixed(3)}, ${item.power.longitude.toFixed(3)} | ${t2m} | ${prec} | ${cy} |`
+      );
+    }
+    out.push('');
+  }
 
   if (bundle.renderedDifference) {
     out.push('## Rendered-pixel difference (derived, two dates)');
@@ -275,6 +378,40 @@ export function buildMarkdownReport(bundle: ReportBundle): string {
     out.push(
       'This is a difference between two *renderings* of the imagery, not a calibrated physical change. Cloud cover, sun angle, aerosols, sensor and processing differences all contribute. It must not be reported as evidence of surface change on its own.'
     );
+    if (bundle.power) {
+      const hydro = computeDatasetHydrology(bundle.power);
+      if (hydro.eligible && hydro.points.length > 0) {
+        out.push('');
+        out.push('### Hydrological findings (SPI-12 & MERRA-2 soil wetness)');
+        out.push('');
+        out.push(`- Method: ${hydro.methodLabel}.`);
+        if (hydro.latest) {
+          out.push(
+            `- Latest SPI-12: ${hydro.latest.spi12 >= 0 ? '+' : ''}${hydro.latest.spi12.toFixed(2)} σ (${hydro.latest.regime}) on ${hydro.latest.date}, over ${hydro.latest.rolling12Mm.toFixed(0)} mm of trailing 12-month rainfall.`
+          );
+        }
+        out.push(
+          `- Extreme months in window: ${hydro.severeDroughtMonths} severely dry / ${hydro.severeWetMonths} severely wet (SPI-12 ≤ −1.5 / ≥ +1.5).`
+        );
+        if (hydro.soilSurfaceMean !== null) {
+          out.push(
+            `- Mean surface soil wetness (GWETTOP, 0–5 cm): ${hydro.soilSurfaceMean.toFixed(3)} (0–1 saturation).`
+          );
+        }
+        if (hydro.soilRootMean !== null) {
+          out.push(
+            `- Mean root-zone soil wetness (GWETROOT, 0–100 cm): ${hydro.soilRootMean.toFixed(3)} (0–1 saturation).`
+          );
+        }
+        if (hydro.soilRainfallCorrelationR !== null) {
+          out.push(
+            `- Rainfall–soil-wetness Pearson correlation: r = ${hydro.soilRainfallCorrelationR.toFixed(3)}.`
+          );
+        }
+        out.push(`- Caveat: ${hydro.caveat}`);
+      }
+    }
+
     out.push('');
   }
 

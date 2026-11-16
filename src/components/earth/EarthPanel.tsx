@@ -23,7 +23,7 @@ export function Panel({
   as?: React.ElementType;
 } & React.HTMLAttributes<HTMLElement>) {
   return (
-    <Tag className={cx('surface surface-highlight p-4 sm:p-5', className)} {...rest}>
+    <Tag className={cx('earth-glass-panel p-4 sm:p-5', className)} {...rest}>
       {children}
     </Tag>
   );
@@ -120,7 +120,7 @@ export function StatTile({
   icon?: React.ComponentType<{ className?: string }>;
 }) {
   return (
-    <div className="surface-inset flex flex-col gap-1.5 p-3.5">
+    <div className="earth-glass-inset flex flex-col gap-1.5 p-3.5">
       <div className="flex items-center gap-2">
         {Icon ? <Icon className="h-3.5 w-3.5 shrink-0 text-ink-4" /> : null}
         <p className="text-[10.5px] leading-tight text-ink-3">{label}</p>

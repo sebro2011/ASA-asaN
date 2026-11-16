@@ -21,7 +21,7 @@
  *    a fallback happened, and the timestamp — never a key.
  */
 
-export type ProviderId = 'gemini' | 'openrouter' | 'arena' | 'forge';
+export type ProviderId = 'gemini' | 'openrouter' | 'oss' | 'arena' | 'forge';
 
 export type ExecutionMode = 'remote' | 'local';
 

@@ -1,0 +1,283 @@
+/* =============================================================================
+   COSMORA EARTH INTELLIGENCE LAB — LIQUID GLASS MISSION CONTROL DESIGN SYSTEM
+   -----------------------------------------------------------------------------
+   Apple Liquid Glass-inspired optical refraction paired with NASA Mission
+   Control telemetry clarity. Built over tokens.css so WCAG AA contrast ratios,
+   focus rings, and reduced-motion invariants hold across every viewport.
+   ========================================================================== */
+
+.earth-lab-shell {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+/* ---------------- Mission Control Command Deck ---------------- */
+.earth-command-deck {
+  position: relative;
+  overflow: hidden;
+  border-radius: 20px;
+  border: 1px solid rgba(148, 178, 214, 0.18);
+  background:
+    radial-gradient(56rem 24rem at 92% -18%, rgba(94, 211, 242, 0.14), transparent 65%),
+    radial-gradient(42rem 22rem at 8% -10%, rgba(79, 141, 255, 0.12), transparent 60%),
+    linear-gradient(180deg, rgba(14, 26, 46, 0.84) 0%, rgba(6, 13, 25, 0.92) 100%);
+  box-shadow:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.15),
+    inset 0 -1px 0 0 rgba(94, 211, 242, 0.08),
+    0 28px 68px -34px rgba(0, 0, 0, 0.92);
+  backdrop-filter: blur(22px) saturate(135%);
+  -webkit-backdrop-filter: blur(22px) saturate(135%);
+}
+
+.earth-command-deck::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(167, 232, 250, 0.42) 32%,
+    rgba(255, 255, 255, 0.28) 50%,
+    rgba(79, 141, 255, 0.35) 68%,
+    transparent 100%
+  );
+  pointer-events: none;
+}
+
+/* ---------------- Liquid Glass Panels & Insets ---------------- */
+.earth-glass-panel {
+  position: relative;
+  border-radius: 18px;
+  border: 1px solid rgba(148, 178, 214, 0.14);
+  background: linear-gradient(180deg, rgba(14, 26, 44, 0.76) 0%, rgba(7, 15, 28, 0.86) 100%);
+  box-shadow:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.09),
+    0 22px 54px -30px rgba(0, 0, 0, 0.88);
+  backdrop-filter: blur(18px) saturate(125%);
+  -webkit-backdrop-filter: blur(18px) saturate(125%);
+  transition: border-color 180ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.earth-glass-panel::before {
+  content: "";
+  position: absolute;
+  inset: 0 1.25rem auto 1.25rem;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.14), transparent);
+  pointer-events: none;
+}
+
+.earth-glass-inset {
+  border-radius: 12px;
+  border: 1px solid rgba(148, 178, 214, 0.11);
+  background: linear-gradient(180deg, rgba(5, 11, 22, 0.72) 0%, rgba(3, 7, 15, 0.82) 100%);
+  box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.04);
+}
+
+/* ---------------- Telemetry KPI Strip ---------------- */
+.earth-kpi-strip {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.625rem;
+}
+
+@media (min-width: 640px) {
+  .earth-kpi-strip {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1024px) {
+  .earth-kpi-strip {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+}
+
+.earth-kpi-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 0.35rem;
+  padding: 0.75rem 0.875rem;
+  border-radius: 12px;
+  border: 1px solid rgba(148, 178, 214, 0.12);
+  background: linear-gradient(180deg, rgba(10, 20, 36, 0.74) 0%, rgba(5, 11, 22, 0.84) 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+/* ---------------- Segmented Liquid-Glass Mode Dock ---------------- */
+.earth-mode-dock {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  overflow-x: auto;
+  padding: 0.375rem;
+  border-radius: 14px;
+  border: 1px solid rgba(148, 178, 214, 0.15);
+  background: rgba(6, 13, 25, 0.82);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 12px 32px -20px rgba(0, 0, 0, 0.85);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+.earth-mode-tab {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.55rem 0.9rem;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  font-size: 0.78125rem;
+  font-weight: 500;
+  color: var(--color-ink-3);
+  transition:
+    color 160ms ease,
+    background-color 160ms ease,
+    border-color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.earth-mode-tab:hover {
+  color: var(--color-ink);
+  background: rgba(20, 36, 58, 0.45);
+}
+
+.earth-mode-tab[aria-selected="true"] {
+  color: var(--color-ink);
+  border-color: rgba(94, 211, 242, 0.36);
+  background: linear-gradient(180deg, rgba(22, 44, 72, 0.85) 0%, rgba(12, 26, 46, 0.92) 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(167, 232, 250, 0.22),
+    0 6px 18px -10px rgba(94, 211, 242, 0.4);
+}
+
+/* ---------------- Sub-workspace Pill Switcher ---------------- */
+.earth-subtab-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+  padding: 0.3rem;
+  border-radius: 11px;
+  border: 1px solid rgba(148, 178, 214, 0.12);
+  background: rgba(4, 9, 18, 0.72);
+}
+
+.earth-subtab-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.42rem 0.78rem;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--color-ink-3);
+  transition: all 150ms ease;
+}
+
+.earth-subtab-btn:hover {
+  color: var(--color-ink-2);
+}
+
+.earth-subtab-btn[aria-pressed="true"],
+.earth-subtab-btn[aria-selected="true"] {
+  color: var(--color-atmo-soft);
+  border-color: rgba(94, 211, 242, 0.35);
+  background: rgba(94, 211, 242, 0.11);
+  box-shadow: inset 0 1px 0 rgba(167, 232, 250, 0.16);
+}
+
+/* ---------------- Map HUD & Calibrated Legend ---------------- */
+.earth-map-hud-pill {
+  border-radius: 999px;
+  border: 1px solid rgba(148, 178, 214, 0.22);
+  background: rgba(5, 11, 22, 0.86);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 8px 20px -8px rgba(0, 0, 0, 0.85);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.earth-map-hud-btn {
+  border-radius: 8px;
+  border: 1px solid rgba(148, 178, 214, 0.22);
+  background: rgba(5, 11, 22, 0.88);
+  color: var(--color-ink-2);
+  box-shadow: 0 6px 16px -6px rgba(0, 0, 0, 0.85);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  transition: border-color 150ms ease, color 150ms ease, background-color 150ms ease;
+}
+
+.earth-map-hud-btn:hover:not(:disabled) {
+  border-color: rgba(94, 211, 242, 0.55);
+  color: var(--color-ink);
+  background: rgba(12, 25, 44, 0.94);
+}
+
+.earth-legend-ramp {
+  height: 10px;
+  width: 100%;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.35);
+}
+
+/* ---------------- Scientific Data Tables ---------------- */
+.earth-data-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 0.75rem;
+}
+
+.earth-data-table th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: rgba(6, 13, 25, 0.96);
+  border-bottom: 1px solid rgba(148, 178, 214, 0.18);
+  padding: 0.55rem 0.75rem;
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-ink-3);
+}
+
+.earth-data-table td {
+  border-bottom: 1px solid rgba(148, 178, 214, 0.08);
+  padding: 0.5rem 0.75rem;
+  color: var(--color-ink-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.earth-data-table tbody tr:hover td {
+  background: rgba(94, 211, 242, 0.04);
+}
+
+/* ---------------- Mobile GPU Performance Optimization ---------------- */
+@media (max-width: 768px) {
+  .earth-command-deck,
+  .earth-glass-panel,
+  .earth-mode-dock {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+  .earth-command-deck {
+    background: linear-gradient(180deg, rgba(13, 25, 44, 0.97) 0%, rgba(6, 13, 24, 0.99) 100%);
+  }
+  .earth-glass-panel {
+    background: linear-gradient(180deg, rgba(12, 23, 40, 0.96) 0%, rgba(6, 13, 24, 0.98) 100%);
+  }
+}

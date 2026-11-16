@@ -1,25 +1,24 @@
 /**
- * Earth Intelligence Lab — COSMORA (SYS.13)
+ * COSMORA Earth Intelligence Lab — Mission Control Research Platform (SYS.13)
  *
- * Upgraded in place: the previous NASA POWER monthly explorer is preserved as the
- * "Trend Detective" workspace (same service, same datasets, richer controls), and
- * three new workspaces are added:
+ * Unites two verified live NASA services with strict epistemic separation:
+ *   - NASA EOSDIS GIBS (WMTS / WMS / DescribeDomains) for satellite imagery
+ *   - NASA POWER (`temporal/monthly/point`) for gridded climate & solar series
  *
- *   1. Imagery Command  — NASA GIBS satellite imagery on a Leaflet map with a
- *                         verified layer catalog, date controls, side-by-side and
- *                         swipe comparison, 2D/3D views and availability reporting.
- *   2. Trend Detective  — NASA POWER monthly archive time series with descriptive
- *                         statistics and explicit limitations.
- *   3. Sri Lanka Watch  — island-focused study areas and datasets.
- *   4. AI Earth Analyst — grounded Q&A over the retrieved bundle, with a
- *                         deterministic non-AI fallback.
- *
- * Scientific-integrity rules enforced throughout: every value carries provider,
- * dataset, observation date and retrieval timestamp; dates outside a layer's
- * reported observation domain are refused rather than silently substituted; no
- * measurement is ever invented or interpolated.
- *
- * The heavy map and 3D globe modules are dynamically imported (React.lazy).
+ * Workspaces:
+ *   1. Imagery Command  — NASA GIBS satellite imagery on a Leaflet map or 3D
+ *                         WebGL globe with calibrated legends, click-to-inspect
+ *                         coordinates, side-by-side / swipe comparison & pixel diff.
+ *   2. Trend Detective  — NASA POWER monthly/annual series, OLS + Theil–Sen slopes,
+ *                         temperature & rainfall anomalies, monsoon seasonality,
+ *                         epoch split, data quality audit & historical explorer.
+ *   3. Location Compare — Parallel 2–4 location NASA POWER comparison & seasonal
+ *                         climatology contrast.
+ *   4. Sri Lanka Watch  — Island-focused study areas and environmental datasets.
+ *   5. AI Earth Analyst — Grounded Q&A over retrieved single & multi-location
+ *                         evidence in English, Sinhala, and Tamil.
+ *   6. AI Earth Viewer  — Standalone GIBS frame viewer with local canvas enhancement,
+ *                         isolated from the NASA POWER climate pipeline.
  */
 
 import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -28,7 +27,10 @@ import {
   Activity,
   Calendar,
   ChevronDown,
+  Crosshair,
+  GitCompare,
   Globe2,
+  Info,
   Layers,
   Leaf,
   Loader2,
@@ -37,6 +39,7 @@ import {
   Search,
   Satellite,
   Sparkles,
+  TrendingUp,
   WifiOff,
   Wand2
 } from 'lucide-react';
@@ -58,10 +61,19 @@ import { validateCoordinates } from '../lib/earth/geo';
 import { fetchCapabilities } from '../lib/earth/capabilities';
 import { useDevicePerformance } from '../hooks/useDevicePerformance';
 import { useOnlineStatus } from '../hooks/useOnlineStatus';
-import { daysInMonth, meanOf, parseParameter } from '../lib/earth/power';
+import {
+  daysInMonth,
+  fetchPowerDataset,
+  meanOf,
+  parseParameter,
+  POWER_PARAMETERS
+} from '../lib/earth/power';
+import { computeExtendedStats } from '../lib/earth/climateEngine';
 
-import { InfoNote, LoadingBlock, Panel, Pill, SectionHeading, StatusBadge, formatDateTime } from './earth/EarthPanel';
+import { InfoNote, LoadingBlock, Panel, Pill, SectionHeading, StatusBadge } from './earth/EarthPanel';
 import TrendDetective from './earth/TrendDetective';
+import LocationComparison from './earth/LocationComparison';
+import MultiSourceResearchHub from './earth/MultiSourceResearchHub';
 import SriLankaWatch from './earth/SriLankaWatch';
 import AnalystPanel from './earth/AnalystPanel';
 import ProvenancePanel from './earth/ProvenancePanel';
@@ -69,8 +81,6 @@ import ProvenancePanel from './earth/ProvenancePanel';
 /* Heavy map + 3D modules: separate chunks, loaded on demand. */
 const ImageryMap = React.lazy(() => import('./earth/ImageryMap'));
 const Globe3D = React.lazy(() => import('./earth/Globe3D'));
-// Standalone GIBS frame viewer with local canvas enhancement; isolated from
-// the NASA POWER pipeline and code-split into its own chunk.
 const AiEarthViewer = React.lazy(() => import('./earth/AiEarthViewer'));
 
 /* ------------------------------------------------------------------ */
@@ -78,10 +88,6 @@ const AiEarthViewer = React.lazy(() => import('./earth/AiEarthViewer'));
 /* ------------------------------------------------------------------ */
 export { daysInMonth, parseParameter, meanOf };
 
-/**
- * Legacy adapter kept so any external importer of the old Lab keeps working.
- * The Trend Detective uses `buildSeriesStats` from `lib/earth/power` directly.
- */
 export function buildSummaries(rows) {
   const byYear = new Map();
   for (const row of rows || []) {
@@ -118,9 +124,11 @@ export function buildSummaries(rows) {
 const MODES = [
   { key: 'overview', labelKey: 'earthModeOverview', icon: Satellite },
   { key: 'trends', labelKey: 'earthModeTrends', icon: Activity },
+  { key: 'compare', labelKey: 'earthModeCompare', icon: GitCompare },
   { key: 'srilanka', labelKey: 'earthModeSriLanka', icon: Leaf },
   { key: 'analyst', labelKey: 'earthModeAnalyst', icon: Sparkles },
-  { key: 'ai-viewer', labelKey: 'earthModeAiViewer', icon: Wand2 }
+  { key: 'ai-viewer', labelKey: 'earthModeAiViewer', icon: Wand2 },
+  { key: 'research', labelKey: 'earthModeResearch', icon: Layers }
 ];
 
 const CATEGORY_LABELS = {
@@ -137,6 +145,7 @@ const CATEGORY_LABELS = {
 const AREA_PRESETS = [
   { label: 'Sri Lanka (island-wide)', latitude: DEFAULT_VIEW.center[0], longitude: DEFAULT_VIEW.center[1], bounds: [5.9, 79.5, 9.9, 81.9] },
   { label: 'Sri Lanka (Colombo)', latitude: 6.9271, longitude: 79.8612, bounds: [6.75, 79.75, 7.1, 80.05] },
+  { label: 'Nuwara Eliya (Highlands)', latitude: 6.9497, longitude: 80.7891, bounds: [6.8, 80.65, 7.1, 80.95] },
   { label: 'Amazon Basin', latitude: -3.119, longitude: -60.0217, bounds: [-5.5, -64.0, -1.0, -57.0] },
   { label: 'Bay of Bengal', latitude: 15.0, longitude: 88.0, bounds: [5.0, 80.0, 22.0, 95.0] },
   { label: 'California', latitude: 36.7783, longitude: -119.4179, bounds: [32.5, -124.5, 42.0, -114.0] }
@@ -173,6 +182,7 @@ export default function EarthIntelligenceLab({ lang = 'en' }) {
   const [viewMode, setViewMode] = useState('single');
   const [opacity, setOpacity] = useState(1);
   const [useGlobe, setUseGlobe] = useState(false);
+  const [pickCoordsOnMap, setPickCoordsOnMap] = useState(false);
   const [area, setArea] = useState({
     label: 'Sri Lanka (island-wide)',
     latitude: DEFAULT_VIEW.center[0],
@@ -183,6 +193,15 @@ export default function EarthIntelligenceLab({ lang = 'en' }) {
   const [domainState, setDomainState] = useState({ layerId: null, domain: null, transport: null, error: null, loading: false });
   const [probeState, setProbeState] = useState({ key: null, ok: null, service: null, format: null, error: null });
   const [powerSourced, setPowerSourced] = useState(null);
+  const [externalProvenance, setExternalProvenance] = useState([]);
+  const [comparisonPowers, setComparisonPowers] = useState([]);
+
+  const handleExternalProvenance = useCallback((entry) => {
+    setExternalProvenance((prev) => {
+      const next = prev.filter((e) => e.key !== entry.key);
+      return [...next, entry].slice(-8);
+    });
+  }, []);
   const [capabilities, setCapabilities] = useState(null);
   const [difference, setDifference] = useState(null);
   const [differenceError, setDifferenceError] = useState(null);
@@ -207,6 +226,45 @@ export default function EarthIntelligenceLab({ lang = 'en' }) {
       .catch(() => setCapabilities(null));
     return () => controller.abort();
   }, []);
+
+  /* -------------------- auto-hydrated NASA POWER series ------------------- */
+  useEffect(() => {
+    const controller = new AbortController();
+    const nowYear = new Date().getFullYear();
+    fetchPowerDataset({
+      latitude: area.latitude,
+      longitude: area.longitude,
+      startYear: nowYear - 19,
+      endYear: nowYear,
+      placeLabel: area.label,
+      parameters: POWER_PARAMETERS.map((p) => p.code),
+      signal: controller.signal
+    })
+      .then((res) => {
+        if (!controller.signal.aborted && res?.data) {
+          setPowerSourced((prev) => {
+            if (
+              prev?.data &&
+              Math.abs(prev.data.latitude - area.latitude) < 0.01 &&
+              Math.abs(prev.data.longitude - area.longitude) < 0.01
+            ) {
+              return prev;
+            }
+            return res;
+          });
+        }
+      })
+      .catch(() => {});
+    return () => controller.abort();
+  }, [area.latitude, area.longitude, area.label]);
+
+  const climateOverview = useMemo(() => {
+    const data = powerSourced?.data;
+    if (!data) return null;
+    const t2m = data.available.includes('T2M') ? computeExtendedStats(data, 'T2M') : null;
+    const precip = data.available.includes('PRECTOTCORR') ? computeExtendedStats(data, 'PRECTOTCORR') : null;
+    return { data, t2m, precip };
+  }, [powerSourced]);
 
   /* --------------------------- layer domain + probe ----------------------- */
   const loadLayerState = useCallback(
@@ -257,7 +315,6 @@ export default function EarthIntelligenceLab({ lang = 'en' }) {
     [domainState.domain, layer.id, compareDate]
   );
 
-  // First load (or a new layer): snap to the most recent reported day instead of "yesterday".
   useEffect(() => {
     if (!latestAvailable) return;
     if (domainState.layerId !== layer.id) return;
@@ -339,6 +396,7 @@ export default function EarthIntelligenceLab({ lang = 'en' }) {
         power: powerSourced?.data || null,
         powerProvenanceUrl: powerSourced?.provenance?.sourceUrl,
         powerRetrievedAt: powerSourced?.provenance?.retrievedAt,
+        comparisonPowers,
         probeNotes: probeState.ok === false ? [`${layer.id} did not return a renderable image during the live probe.`] : [],
         renderedDifference: difference
           ? {
@@ -350,7 +408,7 @@ export default function EarthIntelligenceLab({ lang = 'en' }) {
             }
           : null
       }),
-    [area, date, compareDate, layer, domainState.domain, availability, probeState.ok, powerSourced, difference]
+    [area, date, compareDate, layer, domainState.domain, availability, probeState.ok, powerSourced, comparisonPowers, difference]
   );
 
   const provenanceEntries = useMemo(() => {
@@ -402,6 +460,23 @@ export default function EarthIntelligenceLab({ lang = 'en' }) {
       });
     }
 
+    for (const entry of externalProvenance) {
+      entries.push({
+        key: `external-${entry.dataset.replace(/[^a-z0-9]+/gi, '-')}-${entry.retrievedAt.slice(0, 16)}`,
+        title: entry.dataset,
+        status: 'live',
+        dataset: entry.dataset,
+        provider: entry.provider,
+        sourceUrl: entry.sourceUrl,
+        observation: entry.observationDate,
+        retrievedAt: entry.retrievedAt,
+        coverage: entry.coverage,
+        units: entry.unit,
+        resolution: entry.resolution,
+        note: entry.note
+      });
+    }
+
     if (difference) {
       entries.push({
         key: 'difference',
@@ -432,6 +507,7 @@ export default function EarthIntelligenceLab({ lang = 'en' }) {
       power: powerSourced?.data || null,
       powerProvenanceUrl: powerSourced?.provenance?.sourceUrl,
       powerRetrievedAt: powerSourced?.provenance?.retrievedAt,
+      comparisonPowers,
       renderedDifference: difference
         ? {
             meanAbsoluteDifference: difference.meanAbsoluteDifference,
@@ -449,6 +525,7 @@ export default function EarthIntelligenceLab({ lang = 'en' }) {
       markdown,
       json: JSON.stringify(
         {
+          schema: 'cosmora.earth-intelligence.report/v2',
           generatedAt,
           area,
           dates: [date, compareDate].filter(Boolean),
@@ -472,6 +549,7 @@ export default function EarthIntelligenceLab({ lang = 'en' }) {
               ? powerSourced.data.available.map((code) => ({ code, ...powerSourced.data.stats[code] }))
               : []
           },
+          comparisonLocations: context.comparisonLocations || [],
           renderedDifference: difference,
           dataGaps: context.dataGaps
         },
@@ -481,7 +559,7 @@ export default function EarthIntelligenceLab({ lang = 'en' }) {
       csv: powerSourced?.data ? powerSeriesCsv(powerSourced.data) : null,
       filenameBase
     };
-  }, [provenanceEntries.length, area, date, compareDate, layer, domainState.domain, availability, probeState, powerSourced, difference, context]);
+  }, [provenanceEntries.length, area, date, compareDate, layer, domainState.domain, availability, probeState, powerSourced, comparisonPowers, difference, context]);
 
   /* -------------------------- derived status lines ------------------------ */
   const probeLabel = useMemo(() => {
@@ -493,24 +571,29 @@ export default function EarthIntelligenceLab({ lang = 'en' }) {
   const coordinatesValid = validateCoordinates(area.latitude, area.longitude);
 
   return (
-    <div className="space-y-4 text-ink sm:space-y-5">
-      {/* ================= Lab briefing ================= */}
-      <section className="surface surface-highlight overflow-hidden">
+    <div className="earth-lab-shell text-ink">
+      {/* ====================================================================
+          MISSION CONTROL COMMAND DECK & CLIMATE OVERVIEW DASHBOARD
+         ==================================================================== */}
+      <section className="earth-command-deck">
         <div className="relative grid gap-5 p-5 sm:p-6 lg:grid-cols-[1.7fr_1fr]">
-          <div className="pointer-events-none absolute inset-0 grid-field opacity-40" aria-hidden="true" />
+          <div className="pointer-events-none absolute inset-0 grid-field opacity-30" aria-hidden="true" />
           <div className="relative min-w-0">
             <p className="eyebrow flex items-center gap-2">
               <Radar className="h-3.5 w-3.5 text-atmo" strokeWidth={1.8} />
               {t('earthLabBadge')}
             </p>
-            <h3 className="mt-2.5 text-[19px] font-semibold leading-snug tracking-[-0.02em] text-ink sm:text-[22px]">
+            <h3 className="mt-2 font-display text-[20px] font-semibold leading-snug tracking-[-0.02em] text-ink sm:text-[24px]">
               {t('earthLabBriefTitle')}
             </h3>
-            <p className="prose-measure mt-2.5 max-w-2xl text-[12px] leading-relaxed text-ink-2 sm:text-[12.5px]">
+            <p className="prose-measure mt-2 max-w-2xl text-[12px] leading-relaxed text-ink-2 sm:text-[13px]">
               {t('earthLabIntro')}
             </p>
           </div>
           <div className="relative flex flex-wrap content-start items-center gap-1.5 lg:justify-end">
+            <Pill tone="cyan">
+              <MapPin className="h-3 w-3" /> {area.label}
+            </Pill>
             {capabilities ? (
               <Pill tone={capabilities.serverReachable ? 'emerald' : 'slate'}>
                 {capabilities.serverReachable ? 'validated proxy' : 'direct NASA services'}
@@ -525,6 +608,73 @@ export default function EarthIntelligenceLab({ lang = 'en' }) {
             ) : null}
           </div>
         </div>
+
+        {/* Live Climate Overview Telemetry Ribbon */}
+        <div className="relative px-5 pb-4 sm:px-6">
+          <div className="earth-kpi-strip">
+            <div className="earth-kpi-card">
+              <span className="font-mono text-[10px] uppercase tracking-wider text-ink-4">Satellite Layer</span>
+              <p className="truncate text-xs font-semibold text-ink sm:text-sm">{layer.title}</p>
+              <span className="font-mono text-[10.5px] text-atmo">{date} · {layer.resolution}</span>
+            </div>
+
+            <div className="earth-kpi-card">
+              <span className="font-mono text-[10px] uppercase tracking-wider text-ink-4">2m Air Temp (20y Mean)</span>
+              <p className="font-mono text-base font-semibold text-ink sm:text-lg">
+                {climateOverview?.t2m?.mean != null ? `${climateOverview.t2m.mean.toFixed(2)} °C` : '—'}
+              </p>
+              <span className="font-mono text-[10.5px] text-ink-3">
+                {climateOverview?.t2m?.olsTrend
+                  ? `OLS: ${climateOverview.t2m.olsTrend.slopePerDecade >= 0 ? '+' : ''}${climateOverview.t2m.olsTrend.slopePerDecade.toFixed(2)} °C/dec`
+                  : 'NASA POWER point'}
+              </span>
+            </div>
+
+            <div className="earth-kpi-card">
+              <span className="font-mono text-[10px] uppercase tracking-wider text-ink-4">Annual Precipitation</span>
+              <p className="font-mono text-base font-semibold text-ink sm:text-lg">
+                {climateOverview?.precip?.meanAnnualTotalMm != null
+                  ? `${Math.round(climateOverview.precip.meanAnnualTotalMm)} mm/yr`
+                  : climateOverview?.precip?.mean != null
+                    ? `${climateOverview.precip.mean.toFixed(2)} mm/d`
+                    : '—'}
+              </p>
+              <span className="font-mono text-[10.5px] text-ink-3">
+                {climateOverview?.precip?.mean != null
+                  ? `Mean rate: ${climateOverview.precip.mean.toFixed(2)} mm/day`
+                  : 'MERRA-2 / GPCP'}
+              </span>
+            </div>
+
+            <div className="earth-kpi-card">
+              <span className="font-mono text-[10px] uppercase tracking-wider text-ink-4">Data Completeness</span>
+              <p className="font-mono text-base font-semibold text-signal sm:text-lg">
+                {climateOverview?.t2m ? `${climateOverview.t2m.quality.completenessPct}%` : '—'}
+              </p>
+              <span className="font-mono text-[10.5px] text-ink-3">
+                {climateOverview?.data ? `${climateOverview.data.rows.length} monthly records` : 'NASA POWER archive'}
+              </span>
+            </div>
+
+            <div className="earth-kpi-card">
+              <span className="font-mono text-[10px] uppercase tracking-wider text-ink-4">AI Earth Analyst 2.0</span>
+              <p className="text-xs font-semibold text-ink sm:text-sm">
+                {capabilities?.aiAnalyst ? 'Cloud + Local Ready' : 'Deterministic Engine'}
+              </p>
+              <span className="font-mono text-[10.5px] text-atmo-soft">EN · සිංහල · தமிழ்</span>
+            </div>
+          </div>
+
+          {/* Epistemic separation between GIBS imagery and POWER climate series */}
+          <div className="mt-3.5 flex items-start gap-2.5 rounded-[12px] border border-atmo/20 bg-atmo/[0.05] px-3.5 py-2.5 text-[11.5px] leading-relaxed text-ink-2">
+            <Info className="mt-0.5 h-4 w-4 shrink-0 text-atmo" aria-hidden="true" />
+            <p>
+              <strong className="font-semibold text-ink">{t('earthSeparationBannerTitle')}</strong>{' '}
+              {t('earthSeparationBannerBody')}
+            </p>
+          </div>
+        </div>
+
         <div className="relative flex flex-wrap items-center gap-x-5 gap-y-1.5 border-t border-line/70 px-5 py-2.5 font-mono text-[9.5px] uppercase tracking-[0.14em] text-ink-4 sm:px-6">
           <span>NASA POWER · monthly archive</span>
           <span className="h-2.5 w-px bg-line-strong" aria-hidden="true" />
@@ -538,31 +688,30 @@ export default function EarthIntelligenceLab({ lang = 'en' }) {
         <InfoNote tone="amber">{t('earthGlobeFallback')} ({hardwareReason})</InfoNote>
       ) : null}
 
-      {/* ============================ Workspaces ============================ */}
-      <div className="no-scrollbar -mx-4 flex gap-6 overflow-x-auto border-b border-line px-4 sm:mx-0 sm:px-0" role="tablist" aria-label={t('earthModesLabel')}>
-        {MODES.map((item) => {
-          const Icon = item.icon;
-          const active = mode === item.key;
-          return (
-            <button
-              key={item.key}
-              role="tab"
-              aria-selected={active}
-              type="button"
-              onClick={() => setMode(item.key)}
-              className={`relative flex shrink-0 items-center gap-2 pb-3 pt-1 text-[12.5px] font-medium transition-colors ${
-                active ? 'text-ink' : 'text-ink-3 hover:text-ink-2'
-              }`}
-            >
-              <Icon className={`h-3.5 w-3.5 ${active ? 'text-atmo' : ''}`} />
-              {t(item.labelKey)}
-              <span className={`absolute inset-x-0 -bottom-px h-px ${active ? 'bg-atmo' : 'bg-transparent'}`} />
-            </button>
-          );
-        })}
-      </div>
+      {/* ============================ Segmented Mode Dock ============================ */}
+      <nav aria-label={t('earthModesLabel')}>
+        <div className="earth-mode-dock no-scrollbar" role="tablist">
+          {MODES.map((item) => {
+            const Icon = item.icon;
+            const active = mode === item.key;
+            return (
+              <button
+                key={item.key}
+                role="tab"
+                aria-selected={active}
+                type="button"
+                onClick={() => setMode(item.key)}
+                className="earth-mode-tab focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-atmo"
+              >
+                <Icon className={`h-3.5 w-3.5 ${active ? 'text-atmo' : ''}`} />
+                {t(item.labelKey)}
+              </button>
+            );
+          })}
+        </div>
+      </nav>
 
-      {/* ============================ Search bar ============================ */}
+      {/* ============================ Global Geographic Navigation Bar ============================ */}
       <Panel className="space-y-3">
         <SectionHeading icon={Search} title={t('earthSearchLabel')} subtitle={t('earthSearchPlaceholder')} />
         <form
@@ -580,29 +729,53 @@ export default function EarthIntelligenceLab({ lang = 'en' }) {
             value={searchQuery}
             onChange={(event) => setSearchQuery(event.target.value)}
             placeholder={t('earthSearchPlaceholder')}
-            className="min-w-[180px] flex-1 rounded-[8px] border border-line bg-surface/60 px-3 py-2 text-sm text-ink placeholder:text-ink-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-atmo"
+            className="min-w-[180px] flex-1 rounded-[9px] border border-line bg-void/70 px-3 py-2 text-sm text-ink placeholder:text-ink-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-atmo"
           />
           <button
             type="submit"
             disabled={searchBusy}
-            className="flex items-center gap-2 rounded-[8px] border border-atmo/35 bg-atmo/[0.08] px-3 py-2 text-sm text-atmo-soft transition hover:bg-cyan-500/20 disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-atmo"
+            className="flex items-center gap-2 rounded-[9px] border border-atmo/35 bg-atmo/[0.1] px-3.5 py-2 text-sm text-atmo-soft transition hover:bg-cyan-500/20 disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-atmo"
           >
             {searchBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
             {searchBusy ? t('earthSearching') : t('earthSearchAction')}
           </button>
+          {mode === 'overview' && !useGlobe ? (
+            <button
+              type="button"
+              aria-pressed={pickCoordsOnMap}
+              onClick={() => setPickCoordsOnMap((v) => !v)}
+              className={`flex items-center gap-1.5 rounded-[9px] border px-3 py-2 text-xs transition ${
+                pickCoordsOnMap
+                  ? 'border-atmo/60 bg-atmo/15 text-atmo-soft'
+                  : 'border-line bg-surface/60 text-ink-2 hover:border-atmo/45 hover:text-ink'
+              }`}
+            >
+              <Crosshair className="h-3.5 w-3.5" />
+              <span>{pickCoordsOnMap ? t('earthMapClickActive') : t('earthMapClickInspect')}</span>
+            </button>
+          ) : null}
         </form>
 
         <div className="flex flex-wrap gap-1.5">
-          {AREA_PRESETS.map((preset) => (
-            <button
-              key={preset.label}
-              type="button"
-              onClick={() => setArea({ ...preset, source: 'preset' })}
-              className="rounded-full border border-line bg-surface/60 px-2.5 py-1 text-[11px] text-ink-2 transition hover:border-atmo/45 hover:text-ink"
-            >
-              {preset.label}
-            </button>
-          ))}
+          {AREA_PRESETS.map((preset) => {
+            const isSelected =
+              Math.abs(preset.latitude - area.latitude) < 0.02 && Math.abs(preset.longitude - area.longitude) < 0.02;
+            return (
+              <button
+                key={preset.label}
+                type="button"
+                aria-pressed={isSelected}
+                onClick={() => setArea({ ...preset, source: 'preset' })}
+                className={`rounded-full border px-2.5 py-1 text-[11px] transition ${
+                  isSelected
+                    ? 'border-atmo/55 bg-atmo/12 text-atmo-soft'
+                    : 'border-line bg-surface/60 text-ink-2 hover:border-atmo/45 hover:text-ink'
+                }`}
+              >
+                {preset.label}
+              </button>
+            );
+          })}
         </div>
 
         {searchNotice ? <InfoNote tone="amber">{searchNotice}</InfoNote> : null}
@@ -614,7 +787,7 @@ export default function EarthIntelligenceLab({ lang = 'en' }) {
                 <button
                   type="button"
                   onClick={() => applyPlace(place)}
-                  className="w-full rounded-[10px] border border-line bg-abyss/70 p-3 text-left transition hover:border-atmo/45 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-atmo"
+                  className="earth-glass-inset w-full p-3 text-left transition hover:border-atmo/45 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-atmo"
                 >
                   <p className="text-sm text-white">{place.label}</p>
                   <p className="mt-0.5 font-mono text-[10px] text-ink-4">
@@ -628,7 +801,7 @@ export default function EarthIntelligenceLab({ lang = 'en' }) {
         ) : null}
       </Panel>
 
-      {/* ============================ Overview mode ============================ */}
+      {/* ============================ Overview mode (NASA GIBS) ============================ */}
       {mode === 'overview' ? (
         <div className="space-y-4">
           <Panel className="space-y-4">
@@ -638,7 +811,9 @@ export default function EarthIntelligenceLab({ lang = 'en' }) {
               subtitle={`${visibleLayers.length} validated datasets · ${GIBS_ATTRIBUTION}`}
               badge={
                 <div className="flex flex-wrap items-center gap-2">
-                  <StatusBadge status={domainState.loading ? 'cached' : blocked ? 'unavailable' : probeState.ok === false ? 'unavailable' : 'live'} />
+                  <StatusBadge
+                    status={domainState.loading ? 'cached' : blocked ? 'unavailable' : probeState.ok === false ? 'unavailable' : 'live'}
+                  />
                   <button
                     type="button"
                     onClick={() => {
@@ -684,7 +859,7 @@ export default function EarthIntelligenceLab({ lang = 'en' }) {
                 <select
                   value={layerId}
                   onChange={(event) => setLayerId(event.target.value)}
-                  className="w-full appearance-none rounded-[8px] border border-line bg-surface/60 px-3 py-2 pr-9 text-sm text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-atmo"
+                  className="w-full appearance-none rounded-[9px] border border-line bg-void/75 px-3 py-2.5 pr-9 text-sm text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-atmo"
                 >
                   {visibleLayers.map((item) => (
                     <option key={item.id} value={item.id}>
@@ -706,13 +881,28 @@ export default function EarthIntelligenceLab({ lang = 'en' }) {
                   type="date"
                   value={date}
                   max={toIsoDate(new Date())}
-                  onChange={(event) => setDate(event.target.value)}
-                  className="rounded-[8px] border border-line bg-surface/60 px-2.5 py-2 text-sm text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-atmo"
+                  onChange={(event) => event.target.value && setDate(event.target.value)}
+                  className="rounded-[8px] border border-line bg-void/75 px-2.5 py-2 text-sm text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-atmo"
                 />
               </label>
-              <label className="flex flex-col gap-1 text-[11px] text-ink-3">
-                <span>{t('earthComparisonDate')}</span>
+
+              <div className="flex flex-col gap-1 text-[11px] text-ink-3">
+                <div className="flex items-center justify-between gap-2">
+                  <label htmlFor="earth-comparison-date-input">{t('earthComparisonDate')}</label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const prevYr = addDays(date, -365);
+                      setCompareDate(prevYr);
+                      if (viewMode === 'single') setViewMode('swipe');
+                    }}
+                    className="font-mono text-[10px] text-atmo hover:underline"
+                  >
+                    {t('earthComparePrevYear')}
+                  </button>
+                </div>
                 <input
+                  id="earth-comparison-date-input"
                   type="date"
                   value={compareDate || ''}
                   max={toIsoDate(new Date())}
@@ -721,9 +911,10 @@ export default function EarthIntelligenceLab({ lang = 'en' }) {
                     setCompareDate(next);
                     if (next && viewMode === 'single') setViewMode('side');
                   }}
-                  className="rounded-[8px] border border-line bg-surface/60 px-2.5 py-2 text-sm text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-atmo"
+                  className="rounded-[8px] border border-line bg-void/75 px-2.5 py-2 text-sm text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-atmo"
                 />
-              </label>
+              </div>
+
               <div className="flex flex-col gap-1 text-[11px] text-ink-3">
                 <span>{t('earthViewMode')}</span>
                 <div className="flex gap-1">
@@ -740,7 +931,7 @@ export default function EarthIntelligenceLab({ lang = 'en' }) {
                       disabled={option.key !== 'single' && !compareDate}
                       className={`flex-1 rounded-[8px] border px-2 py-2 text-[11px] transition disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-atmo ${
                         viewMode === option.key
-                          ? 'border-atmo/60 bg-atmo/10 text-atmo-soft'
+                          ? 'border-atmo/60 bg-atmo/12 text-atmo-soft'
                           : 'border-line bg-surface/60 text-ink-2 hover:border-atmo/45'
                       }`}
                     >
@@ -749,6 +940,7 @@ export default function EarthIntelligenceLab({ lang = 'en' }) {
                   ))}
                 </div>
               </div>
+
               <label className="flex flex-col gap-1 text-[11px] text-ink-3">
                 <span>
                   {t('earthLayerOpacity')} · {Math.round(opacity * 100)}%
@@ -834,6 +1026,16 @@ export default function EarthIntelligenceLab({ lang = 'en' }) {
                   verifiedService={probeState.ok ? probeState.service : null}
                   verifiedFormat={probeState.ok ? probeState.format : null}
                   blocked={blocked ? { reason: blockedReason } : null}
+                  pickMode={pickCoordsOnMap}
+                  onMapPick={({ latitude, longitude }) => {
+                    setArea({
+                      label: `${latitude.toFixed(3)}°, ${longitude.toFixed(3)}°`,
+                      latitude,
+                      longitude,
+                      source: 'map-click'
+                    });
+                    setPickCoordsOnMap(false);
+                  }}
                   onDateChange={(next) => setDate(next)}
                   onViewChange={setViewInfo}
                   labels={{
@@ -843,7 +1045,8 @@ export default function EarthIntelligenceLab({ lang = 'en' }) {
                     swipeHint: t('earthSwipeHint'),
                     primary: t('earthObservationDate'),
                     comparison: t('earthComparisonDate'),
-                    attribution: t('earthImageryAttribution')
+                    attribution: t('earthImageryAttribution'),
+                    legendTitle: t('earthLegendTitle')
                   }}
                 />
               )}
@@ -885,15 +1088,15 @@ export default function EarthIntelligenceLab({ lang = 'en' }) {
               </button>
               {difference ? (
                 <div className="grid gap-3 sm:grid-cols-3">
-                  <div className="rounded-[10px] border border-violet-500/30 bg-derived/[0.05] p-3">
+                  <div className="earth-glass-inset border-violet-500/30 p-3">
                     <p className="text-[11px] text-ink-3">{t('earthPixelCompareMean')}</p>
                     <p className="text-lg font-bold text-white">{difference.meanAbsoluteDifference}</p>
                   </div>
-                  <div className="rounded-[10px] border border-violet-500/30 bg-derived/[0.05] p-3">
+                  <div className="earth-glass-inset border-violet-500/30 p-3">
                     <p className="text-[11px] text-ink-3">{t('earthPixelCompareChanged')}</p>
                     <p className="text-lg font-bold text-white">{(difference.changedFraction * 100).toFixed(2)}%</p>
                   </div>
-                  <div className="rounded-[10px] border border-violet-500/30 bg-derived/[0.05] p-3">
+                  <div className="earth-glass-inset border-violet-500/30 p-3">
                     <p className="text-[11px] text-ink-3">{t('earthPixelCompareTransparent')}</p>
                     <p className="text-lg font-bold text-white">{(difference.transparentFraction * 100).toFixed(2)}%</p>
                   </div>
@@ -961,13 +1164,46 @@ export default function EarthIntelligenceLab({ lang = 'en' }) {
                     ))}
                   </ul>
                 </div>
-                <div className="rounded-[10px] border border-amber-500/25 bg-caution/[0.04] p-3">
+                <div className="earth-glass-inset border-amber-500/25 p-3">
                   <p className="text-[11px] uppercase tracking-wide text-caution/80">{t('earthDatasetLimitations')}</p>
                   <p className="mt-1 text-xs leading-relaxed text-caution">{layer.limitations}</p>
                 </div>
               </div>
             </div>
           </Panel>
+
+          {/* Direct Research Bridge to Climate Intelligence & Multi-Location Compare */}
+          <div className="earth-glass-panel flex flex-wrap items-center justify-between gap-3 p-4">
+            <div className="flex items-center gap-3">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] border border-atmo/30 bg-atmo/10 text-atmo">
+                <TrendingUp className="h-4 w-4" />
+              </span>
+              <div>
+                <p className="text-xs font-semibold text-ink">
+                  Analyze {area.label} in the Climate Intelligence Engine
+                </p>
+                <p className="text-[11px] text-ink-3">
+                  Explore temperature & rainfall anomalies, monsoon seasonality, 2–4 location comparisons, and AI Earth Analyst Q&A.
+                </p>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => setMode('trends')}
+                className="rounded-[9px] border border-atmo/45 bg-atmo/12 px-3 py-1.5 text-xs font-medium text-atmo-soft transition hover:bg-atmo/20"
+              >
+                {t('earthModeTrends')}
+              </button>
+              <button
+                type="button"
+                onClick={() => setMode('compare')}
+                className="rounded-[9px] border border-line bg-surface/70 px-3 py-1.5 text-xs font-medium text-ink-2 transition hover:border-atmo/45 hover:text-ink"
+              >
+                {t('earthModeCompare')}
+              </button>
+            </div>
+          </div>
         </div>
       ) : null}
 
@@ -975,8 +1211,35 @@ export default function EarthIntelligenceLab({ lang = 'en' }) {
       {mode === 'trends' ? (
         <TrendDetective
           area={{ ...area, source: area.source === 'preset' ? 'preset' : 'gazetteer' }}
-          onAreaChange={(next) => setArea({ ...next, source: 'custom' })}
+          onAreaChange={(next) => setArea({ ...next, source: next.source || 'custom' })}
           onPowerResolved={(sourced) => setPowerSourced(sourced)}
+          reducedMotion={reducedMotion}
+        />
+      ) : null}
+
+      {/* ============================ Multi-Agency Research Hub ============================ */}
+      {mode === 'research' ? (
+        <MultiSourceResearchHub
+          areaLabel={area.label}
+          latitude={area.latitude}
+          longitude={area.longitude}
+          bbox={{
+            west: area.bounds[0],
+            south: area.bounds[1],
+            east: area.bounds[2],
+            north: area.bounds[3]
+          }}
+          powerDataset={powerSourced?.data || null}
+          reducedMotion={reducedMotion}
+          onExternalProvenance={handleExternalProvenance}
+        />
+      ) : null}
+
+      {/* ============================ Multi-Location Compare ============================ */}
+      {mode === 'compare' ? (
+        <LocationComparison
+          primaryArea={{ ...area, source: area.source === 'preset' ? 'preset' : 'gazetteer' }}
+          onComparisonsResolved={setComparisonPowers}
           reducedMotion={reducedMotion}
         />
       ) : null}
@@ -1006,7 +1269,7 @@ export default function EarthIntelligenceLab({ lang = 'en' }) {
           />
           <Panel>
             <SectionHeading icon={Satellite} title={t('earthStatisticalSummary')} subtitle={t('earthTrendCaveat')} />
-            <div className="mt-3">
+            <div className="mt-3 flex flex-wrap gap-2">
               <button
                 type="button"
                 onClick={() => setMode('trends')}
@@ -1014,12 +1277,19 @@ export default function EarthIntelligenceLab({ lang = 'en' }) {
               >
                 {t('earthModeTrends')} →
               </button>
+              <button
+                type="button"
+                onClick={() => setMode('compare')}
+                className="rounded-[8px] border border-line bg-surface/60 px-3 py-2 text-xs text-ink-2 transition hover:border-atmo/45 hover:text-ink"
+              >
+                {t('earthModeCompare')} →
+              </button>
             </div>
           </Panel>
         </div>
       ) : null}
 
-      {/* ============================ AI Analyst ============================ */}
+      {/* ============================ AI Earth Analyst 2.0 ============================ */}
       {mode === 'analyst' ? <AnalystPanel context={context} lang={lang} aiCapable={Boolean(capabilities?.aiAnalyst)} /> : null}
 
       {/* ==================== AI-Enhanced Earth Viewer ===================== */}
@@ -1029,7 +1299,7 @@ export default function EarthIntelligenceLab({ lang = 'en' }) {
         </Suspense>
       ) : null}
 
-      {/* ============================ Provenance ============================ */}
+      {/* ============================ Provenance & Research Exports ============================ */}
       <ProvenancePanel entries={provenanceEntries} report={report} />
 
       {!isOnline ? <InfoNote tone="amber">{t('earthOffline')}</InfoNote> : null}

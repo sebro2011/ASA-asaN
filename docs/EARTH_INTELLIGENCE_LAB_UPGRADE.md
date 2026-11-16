@@ -101,7 +101,43 @@ Photosynthetic_Vegetation` (invalid), `SMAP_L3_Active_Passive_Soil_Moisture`
 6. No fabricated hotspots, alerts, measurements, or sources. FIRMS hotspot counts
    appear only when the operator configures `FIRMS_MAP_KEY`.
 
-## 5. Implementation steps
+## 5. Multi-Agency Space Apps Research Hub & validated statistical methods
+
+The Lab now exposes a Multi-Agency Research Hub that separates sources by agency
+and capability, never presenting a portal workflow as a live keyless API.
+
+| Resource | Agency category | Integration mode | Role |
+| --- | --- | --- | --- |
+| NASA POWER | Official NASA | Live keyless API | Monthly climate + MERRA-2 soil wetness (`GWETTOP` 0–5 cm, `GWETROOT` 0–100 cm) |
+| NASA GES DISC Hydrology Data Rods | Official NASA | Token proxy + file import | GLDAS-2.1 soil moisture / runoff / evapotranspiration (`asc2`) |
+| NASA Giovanni | Official NASA | Portal link + file import | Earthdata session deep-link; native CSV import |
+| NASA AppEEARS | Official NASA | Portal link + file import | API v1 point task JSON generator; native CSV import |
+| NOAA NCEI Climate Data Online | Partner agency | Token proxy + file import | GSOM station gauge series (`<4 req/s`, 10-year chunks) |
+| CSA / NASA / CNES SWOT | Partner agency | Live keyless API (CMR) | L2 Lake/River/SSH granule discovery over a bounding box |
+| KNMI Climate Explorer | Research institution | Cached polite proxy + `.dat` import | ENSO Niño 3.4 / Indian Ocean Dipole indices |
+
+Server routes (all rate-limited, degrade to `503` when the required server token is
+absent): `GET /api/earth/sources`, `/api/earth/swot/granules`, `/api/earth/noaa/cdo`,
+`/api/earth/hydrology/gesdisc`, `/api/earth/knmi/index`. The client imports exported
+CSV / `.dat` / `asc2` files when a token is not configured — no synthetic data is
+ever generated.
+
+Validated non-parametric statistics (`src/lib/earth/climateStatistics.ts`), exposed
+through `computeExtendedStats` / `computeDatasetHydrology`:
+- Mann–Kendall monotonic trend with Hamed & Rao (1998) lag-1 autocorrelation
+  variance correction; Gilbert (1987) distribution-free 95% CI on Theil–Sen slope;
+  gated to `n ≥ 10` complete years, WMO `≥30`-year window noted.
+- Seasonal Mann–Kendall & Seasonal Sen's slope (Hirsch, Slack & Smith 1982) for
+  monthly monsoon-affected records.
+- Pettitt (1979) non-parametric change-point test (`n ≥ 12` complete years).
+- SPI-12 standardized precipitation index (Thom 1958 Gamma MLE, zero-precip
+  handling) coupled to MERRA-2 `GWETTOP`/`GWETROOT` soil wetness.
+- Bretherton et al. (1999) effective-DOF cross-series correlation against NASA POWER.
+
+All hypothesis-test results are labelled descriptive and never used for attribution
+or causal claims; `ext.caveat` wording is preserved as descriptive-only.
+
+## 6. Implementation steps
 
 1. Data layer (`src/lib/earth/*`) + unit tests.
 2. Server router (`server/earthIntelligence.ts`), registered in `server.ts`.

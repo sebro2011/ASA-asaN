@@ -2,15 +2,22 @@
 import type { EarthIntelligenceStrings } from '../earthIntelligence';
 
 export const earthIntelligenceEn: EarthIntelligenceStrings = {
-  earthLabBadge: 'NASA Earth observation · live services',
+  earthLabBadge: 'COSMORA Earth Intelligence · NASA Live Telemetry',
+  earthLabBriefTitle: 'Earth Observation & Climate Research Mission Control',
   earthLabIntro:
-    'A scientific workspace over NASA GIBS satellite imagery and the NASA POWER archive. Every value shows its provider, dataset, observation date and retrieval time — and unavailable data is reported as unavailable, never estimated.',
+    'A scientific research platform uniting NASA EOSDIS GIBS satellite browse imagery with the NASA POWER climate archive. Every observation carries its provider, dataset, acquisition date, retrieval timestamp and explicit uncertainty — unavailable data is reported honestly, never fabricated.',
 
   earthModeOverview: 'Imagery Command',
   earthModeTrends: 'Trend Detective',
+  earthModeCompare: 'Location Compare',
   earthModeSriLanka: 'Sri Lanka Watch',
   earthModeAnalyst: 'AI Earth Analyst',
+  earthModeResearch: 'Multi-Agency Research Hub',
   earthModesLabel: 'Earth Intelligence workspace',
+
+  earthSeparationBannerTitle: 'Epistemic separation of sources:',
+  earthSeparationBannerBody:
+    'Satellite layers (NASA GIBS) render visual reflectance and browse palettes for specific dates; climate series (NASA POWER) report gridded ~0.5° × 0.625° monthly reanalysis estimates. Neither is a direct ground weather-station gauge.',
 
   earthSearchLabel: 'Search a place',
   earthSearchPlaceholder: 'District, city or place name…',
@@ -277,5 +284,76 @@ export const earthIntelligenceEn: EarthIntelligenceStrings = {
   earthAiIntegrityTitle: 'Scientific integrity:',
   earthAiIntegrityBody:
     'Adjustments only change how the verified GIBS frame is rendered. They do not measure temperature, rainfall, land cover or any other quantity, and AI-enhanced details must never be read as verified observations.',
-  earthAiAiNoteTitle: 'AI super-resolution:'
+  earthAiAiNoteTitle: 'AI super-resolution:',
+
+  // Missing legacy keys & Climate Intelligence 2.0 keys
+  earthAnnualMean: 'Annual mean (12-month)',
+  earthMonthlySeries: 'Monthly observation',
+  earthNoData: 'No plottable observations returned for this selection.',
+  earthTableYear: 'Calendar year',
+  earthLegendTitle: 'Calibrated layer legend',
+  earthMapClickInspect: 'Click map to set study point',
+  earthMapClickActive: 'Click any point on the map to target coordinates',
+  earthStepPrev: 'Step back ({{days}}d)',
+  earthStepNext: 'Step forward ({{days}}d)',
+  earthComparePrevYear: 'Compare 1 yr prior',
+
+  earthSubtabSeries: 'Trends & Series',
+  earthSubtabAnomalies: 'Temperature & Rain Anomalies',
+  earthSubtabSeasonality: 'Seasonality & Epochs',
+  earthSubtabStatistics: 'Hypothesis Tests & Hydrology',
+  earthSubtabExplorer: 'Data Explorer & Quality',
+
+  earthQualityGradeHigh: 'High completeness',
+  earthQualityGradeModerate: 'Moderate completeness',
+  earthQualityGradeLimited: 'Limited coverage',
+  earthQualityTitle: 'Data quality & missing-data audit',
+  earthStatMedian: 'Median',
+  earthStatStdDev: 'Std. deviation (s)',
+  earthStatDecadeOls: 'OLS linear slope / decade',
+  earthStatDecadeSen: 'Theil–Sen median slope / decade',
+  earthStatAnnualRainTotal: 'Mean annual rainfall total',
+  earthShowTrendLine: 'OLS trend overlay',
+
+  earthBaselineLabel: 'Anomaly reference baseline',
+  earthBaselineEarliest5: 'Earliest 5 complete yrs',
+  earthBaselineEarliest10: 'Earliest 10 complete yrs',
+  earthBaselineWmo: '1991–2020 overlap',
+  earthBaselineWindow: 'Full retrieved window',
+  earthAnomalyChartTitle: 'Annual departure from reference baseline',
+  earthAnomalyWarmWet: 'Above baseline',
+  earthAnomalyCoolDry: 'Below baseline',
+  earthAnomalyRainPctNote: 'Precipitation anomalies also show % departure and annual mm difference from baseline.',
+
+  earthClimatologyTitle: '12-month seasonal cycle (retrieved climatology)',
+  earthMonsoonRegimesTitle: 'South Asian Monsoon & meteorological regimes',
+  earthEpochSplitTitle: 'Historical period-over-period comparison',
+  earthEpochEarly: 'Earlier epoch',
+  earthEpochRecent: 'Recent epoch',
+  earthEpochDelta: 'Observed shift',
+
+  earthUnusualTitle: 'Unusual monthly observations (|z| ≥ 2.0σ vs calendar month)',
+  earthUnusualNone: 'No monthly observations exceeded ±2.0σ relative to their calendar-month mean in this window.',
+  earthExplorerFilterYear: 'Filter year…',
+  earthDownloadSeriesCsv: 'Download monthly CSV',
+
+  earthCompareWorkspaceTitle: 'Multi-Location Climate Comparison',
+  earthCompareWorkspaceSubtitle:
+    'Compare 2 to 4 locations side by side using retrieved NASA POWER monthly archives. Contrasts elevation, temperature, rainfall totals, seasonal cycles, and descriptive decade trends.',
+  earthCompareAddPlace: 'Add location to compare',
+  earthComparePresetsLabel: 'Scientific comparison presets',
+  earthComparePresetIslandZones: 'Sri Lanka Climate Zones (Colombo · Nuwara Eliya · Jaffna)',
+  earthComparePresetMonsoonCoast: 'West vs East Monsoon Coasts (Colombo · Trincomalee · Hambantota)',
+  earthComparePresetTropicalWorld: 'Tropical Benchmarks (Sri Lanka · Amazon · Kalimantan)',
+  earthCompareAnnualOverlay: 'Multi-location annual mean comparison',
+  earthCompareSeasonalOverlay: '12-month seasonal climatology overlay',
+  earthCompareMatrixTitle: 'Comparative statistical & quality matrix',
+  earthCompareExportCsv: 'Export comparison CSV',
+  earthCompareRemove: 'Remove location',
+
+  earthAnalystSummaryBadge: 'AI Earth Analyst 2.0 · Verified Data Grounding',
+  earthAnalystSuggestion5: 'Compare the climate patterns and anomalies across the active locations.',
+  earthAnalystSuggestion6: 'Were there any unusual monthly temperature or rainfall observations (≥2σ)?',
+
+  earthInspectStatsBtn: 'Inspect Mann–Kendall, Pettitt & SPI-12 →'
 };

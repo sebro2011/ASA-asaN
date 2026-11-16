@@ -9,15 +9,22 @@
 import type { EarthIntelligenceStrings } from '../earthIntelligence';
 
 export const earthIntelligenceTa: EarthIntelligenceStrings = {
-  earthLabBadge: 'NASA புவி கண்காணிப்பு · நேரடி சேவைகள்',
+  earthLabBadge: 'COSMORA புவி நுண்ணறிவு · NASA நேரடி தரவு',
+  earthLabBriefTitle: 'புவி கண்காணிப்பு மற்றும் காலநிலை ஆராய்ச்சி கட்டுப்பாட்டு மையம்',
   earthLabIntro:
     'NASA GIBS செயற்கைக்கோள் படங்கள் மற்றும் NASA POWER காப்பகத்தின் மேல் ஒரு அறிவியல் பணித்தளம். ஒவ்வொரு மதிப்பும் அதன் வழங்குநர், தரவுத்தொகுப்பு, கண்காணிப்பு தேதி மற்றும் பெறப்பட்ட நேரத்தைக் காட்டுகிறது; கிடைக்காத தரவு கிடைக்காததாகவே காட்டப்படும்.',
 
   earthModeOverview: 'பட தளபதி மையம்',
   earthModeTrends: 'போக்கு ஆய்வாளர்',
+  earthModeCompare: 'இட ஒப்பீடு',
   earthModeSriLanka: 'இலங்கை கண்காணிப்பு',
   earthModeAnalyst: 'AI புவி ஆய்வாளர்',
+  earthModeResearch: 'ஒருங்கிணைக்கப்பட்ட ஆராய்ச்சி மையம்',
   earthModesLabel: 'புவி நுண்ணறிவு பணித்தளம்',
+
+  earthSeparationBannerTitle: 'தரவு மூலங்களின் அறிவியல் பிரிப்பு:',
+  earthSeparationBannerBody:
+    'செயற்கைக்கோள் அடுக்குகள் (NASA GIBS) குறிப்பிட்ட தேதிகளுக்கான காட்சிப் படங்களை வழங்குகின்றன; காலநிலைத் தொடர்கள் (NASA POWER) ~0.5° × 0.625° கட்டச் செல் மாதாந்திர மதிப்பீடுகளை வழங்குகின்றன. இவை நேரடி தரை வானிலை நிலைய அளவீடுகள் அல்ல.',
 
   earthSearchLabel: 'ஓர் இடத்தைத் தேடுங்கள்',
   earthSearchPlaceholder: 'மாவட்டம், நகரம் அல்லது இடப்பெயர்…',
@@ -283,5 +290,75 @@ export const earthIntelligenceTa: EarthIntelligenceStrings = {
   earthAiIntegrityTitle: 'அறிவியல் ஒருமைப்பாடு:',
   earthAiIntegrityBody:
     'மேம்பாடுகள் சரிபார்க்கப்பட்ட GIBS சட்டம் காட்டப்படும் விதத்தை மட்டுமே மாற்றும். அவை வெப்பநிலை, மழைப்பொழிவு, நிலப் பரப்பு அல்லது பிற எந்த அளவீட்டையும் அளவிடாது; AI-மேம்படுத்தப்பட்ட விவரங்களைச் சரிபார்க்கப்பட்ட நோக்கீடுகளாகப் படிக்கக் கூடாது.',
-  earthAiAiNoteTitle: 'AI சூப்பர்-ரெசல்யூஷன்:'
+  earthAiAiNoteTitle: 'AI சூப்பர்-ரெசல்யூஷன்:',
+
+  earthAnnualMean: 'ஆண்டு சராசரி (12-மாதம்)',
+  earthMonthlySeries: 'மாதாந்திர பதிவு',
+  earthNoData: 'இந்தத் தேர்வுக்கு வரைபடமாக்கக்கூடிய தரவு எதுவும் பெறப்படவில்லை.',
+  earthTableYear: 'ஆண்டு',
+  earthLegendTitle: 'அளவீட்டு நிற அளவுகோல்',
+  earthMapClickInspect: 'புள்ளியைத் தேர்ந்தெடுக்க வரைபடத்தைச் சொடுக்கவும்',
+  earthMapClickActive: 'ஆயத்தொலைவுகளைத் தேர்ந்தெடுக்க வரைபடத்தில் சொடுக்கவும்',
+  earthStepPrev: 'முந்தைய படி ({{days}} நா)',
+  earthStepNext: 'அடுத்த படி ({{days}} நா)',
+  earthComparePrevYear: '1 ஆண்டு முன்பு ஒப்பிடு',
+
+  earthSubtabSeries: 'போக்குகள் மற்றும் தொடர்கள்',
+  earthSubtabAnomalies: 'வெப்பநிலை மற்றும் மழை மாறுபாடுகள்',
+  earthSubtabSeasonality: 'பருவமழை மற்றும் காலப்பகுதிகள்',
+  earthSubtabStatistics: 'கட்டற்ற அளவுரு சோதனைகள் மற்றும் நீரியல்கள்',
+  earthSubtabExplorer: 'தரவு ஆய்வாளர் மற்றும் தரம்',
+
+  earthQualityGradeHigh: 'உயர் தரவு முழுமை',
+  earthQualityGradeModerate: 'மிதமான தரவு முழுமை',
+  earthQualityGradeLimited: 'குறைந்த தரவுப் பரப்பு',
+  earthQualityTitle: 'தரவுத் தரம் மற்றும் விடுபட்ட தரவு தணிக்கை',
+  earthStatMedian: 'இடைநிலை (Median)',
+  earthStatStdDev: 'திட்ட விலக்கம் (s)',
+  earthStatDecadeOls: 'தசாப்தத்திற்கு OLS நேரியல் சாய்வு',
+  earthStatDecadeSen: 'தசாப்தத்திற்கு Theil–Sen இடைநிலை சாய்வு',
+  earthStatAnnualRainTotal: 'சராசரி ஆண்டு மொத்த மழை',
+  earthShowTrendLine: 'OLS போக்குக் கோடு',
+
+  earthBaselineLabel: 'மாறுபாட்டு அடிப்படை காலவரம்பு',
+  earthBaselineEarliest5: 'முதல் 5 முழு ஆண்டுகள்',
+  earthBaselineEarliest10: 'முதல் 10 முழு ஆண்டுகள்',
+  earthBaselineWmo: '1991–2020 மேற்பொருந்தல்',
+  earthBaselineWindow: 'முழு பெறப்பட்ட வரம்பு',
+  earthAnomalyChartTitle: 'அடிப்படை காலவரம்பிலிருந்து ஆண்டு விலகல்',
+  earthAnomalyWarmWet: 'அடிப்படைக்கு மேல்',
+  earthAnomalyCoolDry: 'அடிப்படைக்கு கீழ்',
+  earthAnomalyRainPctNote: 'மழை மாறுபாடுகளுக்கு சதவீத (%) மற்றும் ஆண்டு mm வேறுபாடும் காட்டப்படுகிறது.',
+
+  earthClimatologyTitle: '12-மாத பருவகால சுழற்சி (பெறப்பட்ட சராசரி)',
+  earthMonsoonRegimesTitle: 'தெற்காசிய பருவமழை மற்றும் வானிலை பருவங்கள்',
+  earthEpochSplitTitle: 'வரலாற்று காலப்பகுதி ஒப்பீடு',
+  earthEpochEarly: 'முந்தைய காலப்பகுதி',
+  earthEpochRecent: 'சமீபத்திய காலப்பகுதி',
+  earthEpochDelta: 'கண்காணிக்கப்பட்ட மாற்றம்',
+
+  earthUnusualTitle: 'வழக்கத்திற்கு மாறான மாதாந்திர பதிவுகள் (|z| ≥ 2.0σ)',
+  earthUnusualNone: 'இந்த காலவரம்பில் ±2.0σ வரம்பை மீறிய மாதாந்திர பதிவுகள் எதுவும் இல்லை.',
+  earthExplorerFilterYear: 'ஆண்டை வடிகட்டு…',
+  earthDownloadSeriesCsv: 'மாதாந்திர CSV பதிவிறக்கு',
+
+  earthCompareWorkspaceTitle: 'பல-இட காலநிலை ஒப்பீடு',
+  earthCompareWorkspaceSubtitle:
+    'பெறப்பட்ட NASA POWER மாதாந்திர காப்பகங்களைப் பயன்படுத்தி 2 முதல் 4 இடங்களை ஒப்பிடுங்கள். உயரம், வெப்பநிலை, ஆண்டு மழை, பருவச் சுழற்சி மற்றும் தசாப்தப் போக்குகளை ஒப்பிடலாம்.',
+  earthCompareAddPlace: 'ஒப்பிட இடத்தைச் சேர்',
+  earthComparePresetsLabel: 'அறிவியல் ஒப்பீட்டுத் தொகுப்புகள்',
+  earthComparePresetIslandZones: 'இலங்கை காலநிலை மண்டலங்கள் (கொழும்பு · நுவரெலியா · யாழ்ப்பாணம்)',
+  earthComparePresetMonsoonCoast: 'மேற்கு எதிர் கிழக்கு பருவமழை கடற்கரை (கொழும்பு · திருகோணமலை · அம்பாந்தோட்டை)',
+  earthComparePresetTropicalWorld: 'வெப்பமண்டல ஒப்பீடு (இலங்கை · அமேசான் · கலிமந்தன்)',
+  earthCompareAnnualOverlay: 'பல-இட ஆண்டு சராசரி ஒப்பீடு',
+  earthCompareSeasonalOverlay: '12-மாத பருவகால சுழற்சி ஒப்பீடு',
+  earthCompareMatrixTitle: 'ஒப்பீட்டு புள்ளிவிவர மற்றும் தர அட்டவணை',
+  earthCompareExportCsv: 'ஒப்பீட்டு CSV ஏற்றுமதி',
+  earthCompareRemove: 'இடத்தை நீக்கு',
+
+  earthAnalystSummaryBadge: 'AI புவி ஆய்வாளர் 2.0 · சரிபார்க்கப்பட்ட தரவு அடிப்படை',
+  earthAnalystSuggestion5: 'செயலில் உள்ள இடங்களின் காலநிலை வடிவங்களையும் மாறுபாடுகளையும் ஒப்பிடுக.',
+  earthAnalystSuggestion6: 'வழக்கத்திற்கு மாறான மாதாந்திர வெப்பநிலை அல்லது மழைப் பதிவுகள் (≥2σ) உள்ளதா?',
+
+  earthInspectStatsBtn: 'Mann–Kendall, Pettitt & SPI-12 சரிபார்க்க →'
 };

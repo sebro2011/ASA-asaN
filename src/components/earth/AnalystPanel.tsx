@@ -82,6 +82,12 @@ function buildEvidence(context: AnalystContext, answer: AnalystAnswer, t: (key: 
     rows.push({ label: 'NASA POWER', value: context.power.sourceUrl });
     rows.push({ label: t('earthProvenanceRetrieved'), value: formatDateTime(context.power.retrievedAt) });
   }
+  if (context.comparisonLocations?.length) {
+    rows.push({
+      label: 'Comparison Locations',
+      value: context.comparisonLocations.map((c) => `${c.label} (${c.rows}m)`).join(' · ')
+    });
+  }
   const computed = answer.localEvidence || [];
   return { rows, computed };
 }
@@ -94,11 +100,18 @@ export default function AnalystPanel({ context, lang, aiCapable }: AnalystPanelP
   const [notice, setNotice] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
-  const suggestions = [t('earthAnalystSuggestion1'), t('earthAnalystSuggestion2'), t('earthAnalystSuggestion3'), t('earthAnalystSuggestion4')];
+  const suggestions = [
+    t('earthAnalystSuggestion1'),
+    t('earthAnalystSuggestion2'),
+    t('earthAnalystSuggestion3'),
+    t('earthAnalystSuggestion4'),
+    t('earthAnalystSuggestion5'),
+    t('earthAnalystSuggestion6')
+  ];
 
   /** Deterministic answer computed in the browser — used only when the API itself is unreachable. */
   const runLocal = (asked: string, reason: string) => {
-    const local = buildLocalAnalystAnswer(asked, context);
+    const local = buildLocalAnalystAnswer(asked, context, lang);
     setAnswer({
       ...local,
       execution: {
@@ -207,6 +220,42 @@ export default function AnalystPanel({ context, lang, aiCapable }: AnalystPanelP
             </Pill>
           }
         />
+
+        {/* Grounded Evidence Telemetry Strip */}
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="earth-glass-inset px-3 py-2">
+            <p className="font-mono text-[9.5px] uppercase tracking-wider text-ink-4">{t('earthAnalystEvidenceLocation')}</p>
+            <p className="mt-0.5 truncate text-xs font-medium text-ink">{context.areaLabel}</p>
+            <p className="font-mono text-[10px] text-ink-3">
+              {context.latitude.toFixed(3)}°, {context.longitude.toFixed(3)}°
+            </p>
+          </div>
+          <div className="earth-glass-inset px-3 py-2">
+            <p className="font-mono text-[9.5px] uppercase tracking-wider text-ink-4">NASA GIBS Layer</p>
+            <p className="mt-0.5 truncate text-xs font-medium text-ink">{context.layers[0]?.title || '—'}</p>
+            <p className="font-mono text-[10px] text-ink-3">{context.dates.join(' · ') || '—'}</p>
+          </div>
+          <div className="earth-glass-inset px-3 py-2">
+            <p className="font-mono text-[9.5px] uppercase tracking-wider text-ink-4">NASA POWER Archive</p>
+            <p className="mt-0.5 truncate text-xs font-medium text-ink">
+              {context.power ? `${context.power.rows} monthly records` : 'Awaiting series'}
+            </p>
+            <p className="font-mono text-[10px] text-ink-3">
+              {context.power?.firstMonth && context.power?.lastMonth
+                ? `${context.power.firstMonth} → ${context.power.lastMonth}`
+                : '—'}
+            </p>
+          </div>
+          <div className="earth-glass-inset px-3 py-2">
+            <p className="font-mono text-[9.5px] uppercase tracking-wider text-ink-4">Scope & Language</p>
+            <p className="mt-0.5 truncate text-xs font-medium text-ink">
+              {context.comparisonLocations?.length
+                ? `${context.comparisonLocations.length + 1} locations compared`
+                : 'Primary study point'}
+            </p>
+            <p className="font-mono text-[10px] text-ink-3">Locale: {lang.toUpperCase()}</p>
+          </div>
+        </div>
 
         <form
           className="space-y-2"
