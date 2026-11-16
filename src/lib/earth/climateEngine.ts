@@ -20,9 +20,11 @@ import type { PowerDataset, PowerMonthlyRow } from './types';
 import {
   computeHydrologicalIndices,
   mannKendallTest,
+  oneSampleMeanCI95,
   pettittChangePointTest,
   seasonalMannKendallTest,
   tTest,
+  twoSampleMeanDiffCI95,
   type HydrologicalIndexSummary,
   type MannKendallResult,
   type PettittChangePointResult,
@@ -222,6 +224,10 @@ export interface LocationComparisonSummary {
   senSlopePerDecade: number | null;
   deltaFromPrimary: number | null;
   deltaAnnualTotalMmFromPrimary: number | null;
+  // 95% uncertainty interval around this location's own annual mean.
+  meanCI95: [number, number] | null;
+  // 95% uncertainty interval around the difference of annual means versus the primary location.
+  deltaFromPrimaryCI95: [number, number] | null;
 }
 
 export interface MultiLocationComparison {
@@ -439,27 +445,30 @@ interface CompleteYearRecord {
 }
 
 function extractCompleteYears(rows: PowerMonthlyRow[], code: string, ratePerDay: boolean): CompleteYearRecord[] {
-  const buckets = new Map<number, { values: number[]; totalMm: number }>();
+  const buckets = new Map<number, { values: number[]; daySum: number; valueDaySum: number }>();
   for (const row of rows) {
     const v = row.values[code];
     if (!isFiniteNumber(v)) continue;
-    if (!buckets.has(row.year)) buckets.set(row.year, { values: [], totalMm: 0 });
+    if (!buckets.has(row.year)) buckets.set(row.year, { values: [], daySum: 0, valueDaySum: 0 });
     const bucket = buckets.get(row.year)!;
+    const days = daysInMonth(row.year, row.month);
     bucket.values.push(v);
-    if (ratePerDay) {
-      bucket.totalMm += v * daysInMonth(row.year, row.month);
-    }
+    bucket.daySum += days;
+    bucket.valueDaySum += v * days;
   }
 
   const out: CompleteYearRecord[] = [];
   for (const [year, bucket] of [...buckets.entries()].sort((a, b) => a[0] - b[0])) {
     if (bucket.values.length === 12) {
-      const m = meanOf(bucket.values);
+      // Day-weighted annual mean: each month's value weighted by its exact
+      // calendar length (28–31 days), so leap-year February is weighted fairly
+      // and short months do not inflate the annual average.
+      const m = bucket.daySum > 0 ? bucket.valueDaySum / bucket.daySum : null;
       if (m !== null) {
         out.push({
           year,
           mean: round(m, 4),
-          totalMm: ratePerDay ? round(bucket.totalMm, 1) : null
+          totalMm: ratePerDay ? round(bucket.valueDaySum, 1) : null
         });
       }
     }
@@ -958,9 +967,15 @@ export function compareLocations(
 
   const primaryMean = perEntry[0]?.ext.mean ?? null;
   const primaryTotal = perEntry[0]?.ext.meanAnnualTotalMm ?? null;
+  const primaryAnnualMeans = perEntry[0]?.completeYears.map((y) => y.mean) ?? [];
 
-  const summaries: LocationComparisonSummary[] = perEntry.map(({ entry, ext, completeYears }) => ({
-    id: entry.id,
+  const summaries: LocationComparisonSummary[] = perEntry.map(({ entry, ext, completeYears }) => {
+    // Annual means are the unit of comparison: day-weighted complete-year means.
+    const annualMeans = completeYears.map((y) => y.mean);
+    const meanCI = oneSampleMeanCI95(annualMeans);
+    const deltaCI = twoSampleMeanDiffCI95(primaryAnnualMeans, annualMeans);
+    return {
+      id: entry.id,
     label: entry.label,
     latitude: entry.dataset.latitude,
     longitude: entry.dataset.longitude,
@@ -978,8 +993,11 @@ export function compareLocations(
     deltaFromPrimary:
       ext.mean !== null && primaryMean !== null ? round(ext.mean - primaryMean, 3) : null,
     deltaAnnualTotalMmFromPrimary:
-      ext.meanAnnualTotalMm !== null && primaryTotal !== null ? round(ext.meanAnnualTotalMm - primaryTotal, 1) : null
-  }));
+      ext.meanAnnualTotalMm !== null && primaryTotal !== null ? round(ext.meanAnnualTotalMm - primaryTotal, 1) : null,
+    meanCI95: meanCI ? [round(meanCI.ciLow, 3), round(meanCI.ciHigh, 3)] : null,
+    deltaFromPrimaryCI95: deltaCI ? [round(deltaCI.ciLow, 3), round(deltaCI.ciHigh, 3)] : null
+    };
+  });
 
   const allYearSets = perEntry.map(({ completeYears }) => new Set(completeYears.map((y) => y.year)));
   const unionYears = [...new Set(perEntry.flatMap(({ completeYears }) => completeYears.map((y) => y.year)))].sort(

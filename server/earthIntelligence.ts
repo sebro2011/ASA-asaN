@@ -80,6 +80,12 @@ async function fetchWithTimeout(url: string, options: RequestInit = {}, timeoutM
 
 const rateBuckets = new Map<string, { count: number; resetAt: number }>();
 
+// Fleet buckets are shared by every client for a given data provider: a burst
+// from one client cannot consume another provider's quota, and a popular
+// endpoint cannot starve the rest of the provider's fleet. Limits are requests
+// per window across ALL clients combined — tune per provider's documented quota.
+const fleetBuckets = new Map<string, { count: number; resetAt: number }>();
+
 function rateLimit(name: string, max: number, windowMs: number) {
   return (req: Request, res: Response, next: NextFunction) => {
     // Express only trusts forwarded addresses when the operator explicitly
@@ -102,6 +108,36 @@ function rateLimit(name: string, max: number, windowMs: number) {
         ok: false,
         code: 'rate-limited',
         message: `Too many Earth Intelligence requests. Try again in ${retryAfter} s.`,
+        retryAfter
+      });
+    }
+    return next();
+  };
+}
+
+/**
+ * Provider-fleet rate limit: one shared bucket per provider (all routes that
+ * call the same provider draw from it), regardless of client IP or endpoint.
+ * Use in addition to `rateLimit` for defense in depth.
+ */
+export function providerFleetRateLimit(provider: string, max: number, windowMs: number) {
+  return (req: Request, res: Response, next: NextFunction) => {
+    const key = `fleet:${provider}`;
+    const now = Date.now();
+    const bucket = fleetBuckets.get(key);
+    if (!bucket || now > bucket.resetAt) {
+      fleetBuckets.set(key, { count: 1, resetAt: now + windowMs });
+      return next();
+    }
+    bucket.count += 1;
+    if (bucket.count > max) {
+      const retryAfter = Math.ceil((bucket.resetAt - now) / 1000);
+      res.setHeader('Retry-After', String(retryAfter));
+      return res.status(429).json({
+        ok: false,
+        code: 'rate-limited',
+        message: `Provider fleet rate limit exceeded for ${provider}. Try again in ${retryAfter} s.`,
+        provider,
         retryAfter
       });
     }
@@ -172,7 +208,11 @@ earthRouter.get('/health', (_req, res) => {
 /* NASA POWER proxy                                                    */
 /* ------------------------------------------------------------------ */
 
-earthRouter.get('/power', rateLimit('power', 60, 60_000), async (req, res) => {
+earthRouter.get(
+  '/power',
+  rateLimit('power', 60, 60_000),
+  providerFleetRateLimit('nasa-power', 120, 60_000),
+  async (req, res) => {
   const latitude = numberParam(req.query.latitude, -90, 90);
   const longitude = numberParam(req.query.longitude, -180, 180);
   const start = numberParam(req.query.start, 1981, 2100);
@@ -282,7 +322,11 @@ earthRouter.get('/power', rateLimit('power', 60, 60_000), async (req, res) => {
 /* GIBS observation-date domain                                        */
 /* ------------------------------------------------------------------ */
 
-earthRouter.get('/gibs/domains', rateLimit('gibs-domains', 120, 60_000), async (req, res) => {
+earthRouter.get(
+  '/gibs/domains',
+  rateLimit('gibs-domains', 120, 60_000),
+  providerFleetRateLimit('nasa-gibs', 60, 60_000),
+  async (req, res) => {
   const layerId = String(req.query.layer || '').trim();
   if (!layerId || !/^[A-Za-z0-9_.\-]{3,80}$/.test(layerId)) {
     return res.status(400).json({ ok: false, code: 'invalid-layer', message: 'A valid GIBS layer identifier is required.' });
@@ -346,7 +390,11 @@ earthRouter.get('/gibs/domains', rateLimit('gibs-domains', 120, 60_000), async (
 /* GIBS tile probe (server side — no CORS involvement)                 */
 /* ------------------------------------------------------------------ */
 
-earthRouter.get('/gibs/probe', rateLimit('gibs-probe', 240, 60_000), async (req, res) => {
+earthRouter.get(
+  '/gibs/probe',
+  rateLimit('gibs-probe', 240, 60_000),
+  providerFleetRateLimit('nasa-gibs', 60, 60_000),
+  async (req, res) => {
   const layerId = String(req.query.layer || '').trim();
   const date = String(req.query.date || '').trim();
   if (!layerId || !/^[A-Za-z0-9_.\-]{3,80}$/.test(layerId)) {
@@ -413,7 +461,11 @@ const FIRMS_SOURCES = new Set([
   'VIIRS_SNPP_SP'
 ]);
 
-earthRouter.get('/firms/hotspots', rateLimit('firms', 30, 60_000), async (req, res) => {
+earthRouter.get(
+  '/firms/hotspots',
+  rateLimit('firms', 30, 60_000),
+  providerFleetRateLimit('nasa-firms', 30, 60_000),
+  async (req, res) => {
   const docsUrl = 'https://firms.modaps.eosdis.nasa.gov/api/area/';
   const mapKey = process.env.FIRMS_MAP_KEY;
   if (!mapKey) {
@@ -690,7 +742,11 @@ function analystLanguageName(lang: string): string {
   return ({ en: 'English', si: 'Sinhala (සිංහල)', ta: 'Tamil (தமிழ்)' } as Record<string, string>)[lang] || 'English';
 }
 
-earthRouter.post('/analyst', rateLimit('analyst', 20, 5 * 60_000), async (req, res) => {
+earthRouter.post(
+  '/analyst',
+  rateLimit('analyst', 20, 5 * 60_000),
+  providerFleetRateLimit('earth-analyst', 20, 5 * 60_000),
+  async (req, res) => {
   const startedAt = Date.now();
   const { question, context, lang = 'en' } = req.body || {};
   if (!question || typeof question !== 'string' || question.length > 800) {
@@ -906,7 +962,11 @@ const ALLOWED_SWOT_COLLECTIONS = new Set([
   'SWOT_L2_LR_SSH_Basic_2.0'
 ]);
 
-earthRouter.get('/swot/granules', rateLimit('swot-cmr', 20, 60_000), async (req, res) => {
+earthRouter.get(
+  '/swot/granules',
+  rateLimit('swot-cmr', 20, 60_000),
+  providerFleetRateLimit('nasa-cmr', 30, 60_000),
+  async (req, res) => {
   const west = numberParam(req.query.west, -180, 180);
   const south = numberParam(req.query.south, -90, 90);
   const east = numberParam(req.query.east, -180, 180);
@@ -995,7 +1055,11 @@ earthRouter.get('/swot/granules', rateLimit('swot-cmr', 20, 60_000), async (req,
 
 const ALLOWED_NOAA_DATATYPES = new Set(['TAVG', 'TMAX', 'TMIN', 'PRCP']);
 
-earthRouter.get('/noaa/cdo', rateLimit('noaa-cdo', 15, 60_000), async (req, res) => {
+earthRouter.get(
+  '/noaa/cdo',
+  rateLimit('noaa-cdo', 15, 60_000),
+  providerFleetRateLimit('noaa-cdo', 15, 60_000),
+  async (req, res) => {
   const latitude = numberParam(req.query.latitude, -90, 90);
   const longitude = numberParam(req.query.longitude, -180, 180);
   const start = numberParam(req.query.start, 1900, 2100);
@@ -1144,7 +1208,11 @@ const ALLOWED_GESDISC_VARIABLES: Record<string, string> = {
   Rainf_f_tavg: 'GLDAS2:GLDAS_NOAH025_M_v2.1:Rainf_f_tavg'
 };
 
-earthRouter.get('/hydrology/gesdisc', rateLimit('gesdisc-hydro', 12, 60_000), async (req, res) => {
+earthRouter.get(
+  '/hydrology/gesdisc',
+  rateLimit('gesdisc-hydro', 12, 60_000),
+  providerFleetRateLimit('nasa-gesdisc', 12, 60_000),
+  async (req, res) => {
   const latitude = numberParam(req.query.latitude, -60, 90);
   const longitude = numberParam(req.query.longitude, -180, 180);
   const start = numberParam(req.query.start, 2000, 2100);
@@ -1257,7 +1325,11 @@ const KNMI_ALLOWLIST: Record<
   }
 };
 
-earthRouter.get('/knmi/index', rateLimit('knmi-index', 6, 60_000), async (req, res) => {
+earthRouter.get(
+  '/knmi/index',
+  rateLimit('knmi-index', 6, 60_000),
+  providerFleetRateLimit('knmi', 6, 60_000),
+  async (req, res) => {
   const id = String(req.query.id || '').trim().toLowerCase();
   const entry = KNMI_ALLOWLIST[id];
   if (!entry) {

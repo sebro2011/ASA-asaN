@@ -276,26 +276,31 @@ export function buildSeriesStats(rows: PowerMonthlyRow[], code: string, unit: st
     if (!max || value > max.value) max = { value, date: row.date };
   });
 
-  const byYear = new Map<number, { values: number[]; months: number; total: number }>();
+  const byYear = new Map<number, { values: number[]; daySum: number; valueDaySum: number }>();
   rows.forEach((row) => {
-    if (!byYear.has(row.year)) byYear.set(row.year, { values: [], months: 0, total: 0 });
+    if (!byYear.has(row.year)) byYear.set(row.year, { values: [], daySum: 0, valueDaySum: 0 });
     const bucket = byYear.get(row.year)!;
-    bucket.months += 1;
     const value = row.values[code];
     if (typeof value === 'number') {
+      const days = daysInMonth(row.year, row.month);
       bucket.values.push(value);
-      bucket.total += value;
+      bucket.daySum += days;
+      bucket.valueDaySum += value * days;
     }
   });
 
   const annual = [...byYear.entries()]
     .sort((a, b) => a[0] - b[0])
-    .map(([year, bucket]) => ({
-      year,
-      mean: meanOf(bucket.values),
-      total: bucket.values.length === 12 ? Number(bucket.total.toFixed(1)) : null,
-      complete: bucket.values.length === 12
-    }));
+    .map(([year, bucket]) => {
+      const complete = bucket.values.length === 12;
+      // Day-weighted annual mean: each month weighted by its exact calendar
+      // length so leap-year February is weighted fairly across the year.
+      const mean = complete && bucket.daySum > 0 ? bucket.valueDaySum / bucket.daySum : null;
+      // Day-weighted annual total: sum of value × days-in-month, accurate for
+      // leap years (rate-per-day parameters such as PRECTOTCORR mm/day → mm).
+      const total = complete && bucket.daySum > 0 ? Number(bucket.valueDaySum.toFixed(1)) : null;
+      return { year, mean: mean === null ? null : Number(mean.toFixed(3)), total, complete };
+    });
 
   return {
     code,

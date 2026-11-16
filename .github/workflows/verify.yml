@@ -80,3 +80,9 @@ jobs:
 
       - name: Dependency audit (high and above)
         run: npm audit --audit-level=high
+
+      - name: Environment and secret audit
+        run: npm run audit:env
+
+      - name: i18n coverage audit
+        run: npm run i18n-audit

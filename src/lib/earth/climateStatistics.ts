@@ -1018,6 +1018,11 @@ export interface TTestResult {
   significantAt05: boolean | null;
   confidenceInterval95: [number, number] | null;
   equalVariancesAssumed: boolean;
+  // Independence: no significant lag-1 serial autocorrelation in either sample.
+  independenceSatisfied: boolean;
+  // Normality is assumed by the t-test; it cannot be verified from two small
+  // samples without a dedicated normality test, so it is flagged as assumed.
+  normalityAssumed: boolean;
   assumptionsSatisfied: boolean;
   interpretation: string;
 }
@@ -1040,6 +1045,12 @@ function varianceEqualityPValue(s1: number, n1: number, s2: number, n2: number):
   // Two-sided: put larger variance in numerator, double the one-sided upper tail.
   const upperTail = regularizedIncompleteBeta(df2 / 2, df1 / 2, df2 / (df2 + df1 * f));
   return Math.min(1, 2 * upperTail);
+}
+
+/** Independence check: no significant lag-1 serial autocorrelation in either sample. */
+function independenceAssumptionSatisfied(x: number[], y: number[]): boolean {
+  const bound = 1.96 / Math.sqrt(Math.max(x.length, y.length));
+  return Math.abs(lagAutocorrelation(x, 1)) <= bound && Math.abs(lagAutocorrelation(y, 1)) <= bound;
 }
 
 function welchTTest(x: number[], y: number[], alpha = 0.05): TTestResult {
@@ -1066,7 +1077,9 @@ function welchTTest(x: number[], y: number[], alpha = 0.05): TTestResult {
   const ciLow = diff - crit * se;
   const ciHigh = diff + crit * se;
   const sig = pVal < alpha;
-  const equalVar = varianceEqualityPValue(v1, n1, v2, n2) >= alpha;
+  const independence = independenceAssumptionSatisfied(x, y);
+  // Welch's test does not require equal variances, so only independence matters.
+  const assumptionsSatisfied = independence;
   return {
     testName: "Welch's t-test (unequal variances)",
     eligible: true,
@@ -1084,8 +1097,10 @@ function welchTTest(x: number[], y: number[], alpha = 0.05): TTestResult {
     significantAt05: sig,
     confidenceInterval95: [round(ciLow, 4), round(ciHigh, 4)],
     equalVariancesAssumed: false,
-    assumptionsSatisfied: true,
-    interpretation: tTestInterpretation(sig, diff, "Welch's t-test", tStat, df, pVal, alpha, ciLow, ciHigh)
+    independenceSatisfied: independence,
+    normalityAssumed: true,
+    assumptionsSatisfied,
+    interpretation: tTestInterpretation(sig, diff, "Welch's t-test", tStat, df, pVal, alpha, ciLow, ciHigh, independence)
   };
 }
 
@@ -1110,6 +1125,9 @@ function studentTTest(x: number[], y: number[], alpha = 0.05): TTestResult {
   const ciHigh = diff + crit * se;
   const sig = pVal < alpha;
   const equalVar = varianceEqualityPValue(v1, n1, v2, n2) >= alpha;
+  const independence = independenceAssumptionSatisfied(x, y);
+  // Student's pooled test requires both homoscedasticity and independence.
+  const assumptionsSatisfied = equalVar && independence;
   return {
     testName: "Student's t-test (equal variances)",
     eligible: true,
@@ -1127,8 +1145,10 @@ function studentTTest(x: number[], y: number[], alpha = 0.05): TTestResult {
     significantAt05: sig,
     confidenceInterval95: [round(ciLow, 4), round(ciHigh, 4)],
     equalVariancesAssumed: true,
-    assumptionsSatisfied: equalVar,
-    interpretation: tTestInterpretation(sig, diff, "Student's t-test", tStat, df, pVal, alpha, ciLow, ciHigh)
+    independenceSatisfied: independence,
+    normalityAssumed: true,
+    assumptionsSatisfied,
+    interpretation: tTestInterpretation(sig, diff, "Student's t-test", tStat, df, pVal, alpha, ciLow, ciHigh, independence)
   };
 }
 
@@ -1155,6 +1175,8 @@ function ineligibleTTest(
     significantAt05: null,
     confidenceInterval95: null,
     equalVariancesAssumed: false,
+    independenceSatisfied: false,
+    normalityAssumed: true,
     assumptionsSatisfied: false,
     interpretation: `Insufficient sample size (n₁ = ${n1}, n₂ = ${n2}; minimum n = 2 per group) — t-test withheld to prevent unreliable inference.`
   };
@@ -1169,13 +1191,20 @@ function tTestInterpretation(
   pVal: number,
   alpha: number,
   ciLow: number,
-  ciHigh: number
+  ciHigh: number,
+  independence: boolean
 ): string {
+  let assumptionNote = '';
+  if (!independence) {
+    assumptionNote = ` Serial autocorrelation was detected in at least one sample, so the independence assumption is not satisfied — treat the p-value as indicative, not confirmatory.`;
+  } else {
+    assumptionNote = ` Normality of residuals is assumed by the t-test (not verified from two small samples), and no significant serial autocorrelation was detected.`;
+  }
   if (!sig) {
-    return `No statistically significant difference between the two periods at alpha = ${alpha} (${testName}: t = ${tStat}, df = ${df}, p = ${pVal} >= ${alpha}; 95% CI on the difference [${ciLow >= 0 ? '+' : ''}${ciLow}, ${ciHigh >= 0 ? '+' : ''}${ciHigh}] includes zero). Direction of the raw mean difference alone is not evidence of a real shift.`;
+    return `No statistically significant difference between the two periods at alpha = ${alpha} (${testName}: t = ${tStat}, df = ${df}, p = ${pVal} >= ${alpha}; 95% CI on the difference [${ciLow >= 0 ? '+' : ''}${ciLow}, ${ciHigh >= 0 ? '+' : ''}${ciHigh}] includes zero). Direction of the raw mean difference alone is not evidence of a real shift.${assumptionNote}`;
   }
   const dir = diff > 0 ? 'higher' : 'lower';
-  return `Statistically significant difference between the two periods at alpha = ${alpha} (${testName}: t = ${tStat}, df = ${df}, p = ${pVal} < ${alpha}); the recent period mean is ${dir} (mean difference ${diff >= 0 ? '+' : ''}${diff}, 95% CI [${ciLow >= 0 ? '+' : ''}${ciLow}, ${ciHigh >= 0 ? '+' : ''}${ciHigh}]). Establishes a difference within the observed data only — not causal attribution.`;
+  return `Statistically significant difference between the two periods at alpha = ${alpha} (${testName}: t = ${tStat}, df = ${df}, p = ${pVal} < ${alpha}); the recent period mean is ${dir} (mean difference ${diff >= 0 ? '+' : ''}${diff}, 95% CI [${ciLow >= 0 ? '+' : ''}${ciLow}, ${ciHigh >= 0 ? '+' : ''}${ciHigh}]). Establishes a difference within the observed data only — not causal attribution.${assumptionNote}`;
 }
 
 /**
@@ -1205,4 +1234,84 @@ export function tTest(x: number[], y: number[], alpha = 0.05): TTestResult {
   }
   const equalVar = varianceEqualityPValue(v1, n1, v2, n2) >= alpha;
   return equalVar ? studentTTest(x, y, alpha) : welchTTest(x, y, alpha);
+}
+
+/** Result of a one-sample confidence interval for a mean. */
+export interface OneSampleMeanCI95 {
+  mean: number;
+  se: number;
+  df: number;
+  critical: number;
+  ciLow: number;
+  ciHigh: number;
+}
+
+/**
+ * (1 - alpha) confidence interval for a single mean from independent
+ * observations: mean ± t(1-alpha/2, df=n-1) * s/sqrt(n).
+ * Returns null when n < 2.
+ */
+export function oneSampleMeanCI95(values: number[], alpha = 0.05): OneSampleMeanCI95 | null {
+  const n = values.length;
+  if (n < 2) return null;
+  const mean = values.reduce((s, v) => s + v, 0) / n;
+  const v = variance(values);
+  if (v === null || v <= 0) {
+    // Zero variance: the CI collapses to the mean itself.
+    return { mean, se: 0, df: n - 1, critical: 0, ciLow: mean, ciHigh: mean };
+  }
+  const se = Math.sqrt(v / n);
+  const df = n - 1;
+  const critical = tInv(1 - alpha / 2, df);
+  if (!Number.isFinite(critical)) return null;
+  return {
+    mean,
+    se: round(se, 6),
+    df,
+    critical: round(critical, 6),
+    ciLow: round(mean - critical * se, 6),
+    ciHigh: round(mean + critical * se, 6)
+  };
+}
+
+/** Result of a Welch-style confidence interval for the difference of two means. */
+export interface TwoSampleMeanDiffCI95 {
+  diff: number;
+  se: number;
+  df: number;
+  critical: number;
+  ciLow: number;
+  ciHigh: number;
+}
+
+/**
+ * (1 - alpha) confidence interval for mean2 - mean1 from two independent
+ * samples (Welch-Satterthwaite degrees of freedom; no equal-variance
+ * assumption): diff ± t(1-alpha/2, df) * sqrt(v1/n1 + v2/n2).
+ * Returns null when either sample has n < 2.
+ */
+export function twoSampleMeanDiffCI95(x: number[], y: number[], alpha = 0.05): TwoSampleMeanDiffCI95 | null {
+  const n1 = x.length;
+  const n2 = y.length;
+  if (n1 < 2 || n2 < 2) return null;
+  const m1 = x.reduce((s, v) => s + v, 0) / n1;
+  const m2 = y.reduce((s, v) => s + v, 0) / n2;
+  const v1 = variance(x);
+  const v2 = variance(y);
+  if (v1 === null || v2 === null) return null;
+  const se = Math.sqrt(v1 / n1 + v2 / n2);
+  const num = (v1 / n1 + v2 / n2) ** 2;
+  const den = (v1 === 0 ? 0 : (v1 / n1) ** 2 / (n1 - 1)) + (v2 === 0 ? 0 : (v2 / n2) ** 2 / (n2 - 1));
+  const df = den === 0 ? 1 : num / den;
+  const critical = tInv(1 - alpha / 2, df);
+  if (!Number.isFinite(critical)) return null;
+  const diff = m2 - m1;
+  return {
+    diff: round(diff, 6),
+    se: round(se, 6),
+    df: round(df, 6),
+    critical: round(critical, 6),
+    ciLow: round(diff - critical * se, 6),
+    ciHigh: round(diff + critical * se, 6)
+  };
 }

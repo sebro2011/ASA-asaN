@@ -7,6 +7,7 @@
   "type": "module",
   "scripts": {
     "audit:env": "node scripts/audit-env.mjs",
+    "i18n-audit": "node --import tsx scripts/i18n-audit.mjs",
     "build": "npm run build:api && vite build && npm run check:pwa",
     "check:apis": "node scripts/check-apis.mjs",
     "check:deployment": "node scripts/check-deployment.mjs",

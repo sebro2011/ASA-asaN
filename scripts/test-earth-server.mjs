@@ -103,7 +103,7 @@ const mainStub = async (url, options = {}) => {
 let stubImpl = mainStub;
 globalThis.fetch = (url, options) => stubImpl(url, options);
 
-const { earthRouter } = await import('../server/earthIntelligence.ts');
+const { earthRouter, providerFleetRateLimit } = await import('../server/earthIntelligence.ts');
 
 const app = express();
 app.use(express.json());
@@ -440,6 +440,31 @@ test('Earth rate limiting ignores untrusted forwarded-for headers', async () => 
     if (response.status === 429) limited += 1;
   }
   assert.ok(limited > 0, 'changing a client-supplied header must not create new buckets');
+});
+
+test('providerFleetRateLimit shares one bucket across clients for a provider', () => {
+  const mw = providerFleetRateLimit('fleet-test-provider', 3, 60_000);
+  const outcomes = [];
+  const lastHeaders = {};
+  let lastPayload;
+  for (const ip of ['10.0.0.1', '10.0.0.2', '10.0.0.3', '10.0.0.4']) {
+    let statusCode;
+    const res = {
+      setHeader: (key, value) => { lastHeaders[key] = value; },
+      status(code) { statusCode = code; return res; },
+      json(o) { lastPayload = o; return res; }
+    };
+    // apply() is typed with `any` arguments, so no TypeScript cast is needed
+    // to feed a plain fake request/response into the middleware.
+    mw.apply(null, [{ ip }, res, () => { statusCode = 200; }]);
+    outcomes.push(statusCode);
+  }
+  // First three requests pass (shared fleet bucket), the fourth is fleet-limited
+  // even though it comes from a different client IP.
+  assert.deepEqual(outcomes, [200, 200, 200, 429]);
+  assert.ok(Number(lastHeaders['Retry-After']) > 0, 'Retry-After must be set on a fleet 429');
+  assert.ok(typeof lastPayload.message === 'string' && lastPayload.message.includes('fleet-test-provider'));
+  assert.equal(lastPayload.code, 'rate-limited');
 });
 
 test('POWER client separates nearby points and preserves upstream retrieval time on cache hits', async () => {

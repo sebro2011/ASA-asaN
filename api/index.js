@@ -2285,6 +2285,7 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = 2e4) {
   }
 }
 var rateBuckets = /* @__PURE__ */ new Map();
+var fleetBuckets = /* @__PURE__ */ new Map();
 function rateLimit(name, max, windowMs) {
   return (req, res, next) => {
     const ip = req.ip || req.socket.remoteAddress || "unknown";
@@ -2303,6 +2304,30 @@ function rateLimit(name, max, windowMs) {
         ok: false,
         code: "rate-limited",
         message: `Too many Earth Intelligence requests. Try again in ${retryAfter} s.`,
+        retryAfter
+      });
+    }
+    return next();
+  };
+}
+function providerFleetRateLimit(provider, max, windowMs) {
+  return (req, res, next) => {
+    const key2 = `fleet:${provider}`;
+    const now = Date.now();
+    const bucket = fleetBuckets.get(key2);
+    if (!bucket || now > bucket.resetAt) {
+      fleetBuckets.set(key2, { count: 1, resetAt: now + windowMs });
+      return next();
+    }
+    bucket.count += 1;
+    if (bucket.count > max) {
+      const retryAfter = Math.ceil((bucket.resetAt - now) / 1e3);
+      res.setHeader("Retry-After", String(retryAfter));
+      return res.status(429).json({
+        ok: false,
+        code: "rate-limited",
+        message: `Provider fleet rate limit exceeded for ${provider}. Try again in ${retryAfter} s.`,
+        provider,
         retryAfter
       });
     }
@@ -2353,195 +2378,210 @@ earthRouter.get("/health", (_req, res) => {
     }
   });
 });
-earthRouter.get("/power", rateLimit("power", 60, 6e4), async (req, res) => {
-  const latitude = numberParam(req.query.latitude, -90, 90);
-  const longitude = numberParam(req.query.longitude, -180, 180);
-  const start = numberParam(req.query.start, 1981, 2100);
-  const end = numberParam(req.query.end, 1981, 2100);
-  const requested = String(req.query.parameters || "").split(",").map((value) => value.trim().toUpperCase()).filter((value) => /^[A-Z0-9_]{2,24}$/.test(value));
-  if (latitude === null || longitude === null || start === null || end === null) {
-    return res.status(400).json({ ok: false, code: "invalid-arguments", message: "latitude, longitude, start and end are required and must be numeric." });
-  }
-  if (!Number.isInteger(start) || !Number.isInteger(end)) {
-    return res.status(400).json({ ok: false, code: "invalid-arguments", message: "start and end must be whole years." });
-  }
-  if (start > end) {
-    return res.status(400).json({ ok: false, code: "invalid-range", message: "start year must not be after end year." });
-  }
-  const parameters = requested.length ? requested.slice(0, 12) : CORE_PARAMETER_CODES;
-  const cacheKey2 = `power:${latitude.toFixed(4)}:${longitude.toFixed(4)}:${start}:${end}:${[...parameters].sort().join(",")}`;
-  const cached2 = cacheGet2(cacheKey2);
-  if (cached2) {
-    return res.json({ ...cached2, fromCache: true });
-  }
-  const buildUrl = (codes) => {
-    const community = codes.some((code) => code.startsWith("GWET") || code.startsWith("EVP")) ? "AG" : "RE";
-    const params = new URLSearchParams({
-      parameters: codes.join(","),
-      community,
-      longitude: longitude.toFixed(4),
-      latitude: latitude.toFixed(4),
-      start: String(start),
-      end: String(end),
-      format: "JSON"
-    });
-    return `${POWER_MONTHLY_POINT_URL}?${params.toString()}`;
-  };
-  const attempt = async (codes) => {
-    const url = buildUrl(codes);
-    const response = await fetchWithTimeout(url, { headers: { Accept: "application/json" } }, 25e3);
-    return { ok: response.ok, status: response.status, body: await response.text(), url };
-  };
-  try {
-    let codes = parameters;
-    let result2 = await attempt(codes);
-    let degraded = false;
-    if (!result2.ok && result2.status === 400 && codes.length > CORE_PARAMETER_CODES.length) {
-      codes = CORE_PARAMETER_CODES;
-      result2 = await attempt(codes);
-      degraded = true;
+earthRouter.get(
+  "/power",
+  rateLimit("power", 60, 6e4),
+  providerFleetRateLimit("nasa-power", 120, 6e4),
+  async (req, res) => {
+    const latitude = numberParam(req.query.latitude, -90, 90);
+    const longitude = numberParam(req.query.longitude, -180, 180);
+    const start = numberParam(req.query.start, 1981, 2100);
+    const end = numberParam(req.query.end, 1981, 2100);
+    const requested = String(req.query.parameters || "").split(",").map((value) => value.trim().toUpperCase()).filter((value) => /^[A-Z0-9_]{2,24}$/.test(value));
+    if (latitude === null || longitude === null || start === null || end === null) {
+      return res.status(400).json({ ok: false, code: "invalid-arguments", message: "latitude, longitude, start and end are required and must be numeric." });
     }
-    if (!result2.ok) {
-      return res.status(502).json({
-        ok: false,
-        code: "power-error",
-        message: `NASA POWER responded with HTTP ${result2.status}.`,
-        sourceUrl: result2.url
+    if (!Number.isInteger(start) || !Number.isInteger(end)) {
+      return res.status(400).json({ ok: false, code: "invalid-arguments", message: "start and end must be whole years." });
+    }
+    if (start > end) {
+      return res.status(400).json({ ok: false, code: "invalid-range", message: "start year must not be after end year." });
+    }
+    const parameters = requested.length ? requested.slice(0, 12) : CORE_PARAMETER_CODES;
+    const cacheKey2 = `power:${latitude.toFixed(4)}:${longitude.toFixed(4)}:${start}:${end}:${[...parameters].sort().join(",")}`;
+    const cached2 = cacheGet2(cacheKey2);
+    if (cached2) {
+      return res.json({ ...cached2, fromCache: true });
+    }
+    const buildUrl = (codes) => {
+      const community = codes.some((code) => code.startsWith("GWET") || code.startsWith("EVP")) ? "AG" : "RE";
+      const params = new URLSearchParams({
+        parameters: codes.join(","),
+        community,
+        longitude: longitude.toFixed(4),
+        latitude: latitude.toFixed(4),
+        start: String(start),
+        end: String(end),
+        format: "JSON"
       });
-    }
-    let payload;
-    try {
-      payload = JSON.parse(result2.body);
-    } catch {
-      return res.status(502).json({ ok: false, code: "power-unreadable", message: "NASA POWER returned a non-JSON body.", sourceUrl: result2.url });
-    }
-    const parameterBlock = payload?.properties?.parameter;
-    if (!parameterBlock || typeof parameterBlock !== "object" || Array.isArray(parameterBlock)) {
-      return res.status(502).json({ ok: false, code: "power-invalid-response", message: "NASA POWER returned an unexpected data structure.", sourceUrl: result2.url });
-    }
-    const envelope = {
-      ok: true,
-      provider: "NASA POWER",
-      sourceUrl: result2.url,
-      retrievedAt: (/* @__PURE__ */ new Date()).toISOString(),
-      requestedParameters: parameters,
-      usedParameters: codes,
-      degraded,
-      fromCache: false,
-      payload
+      return `${POWER_MONTHLY_POINT_URL}?${params.toString()}`;
     };
-    cacheSet2(cacheKey2, envelope, 12 * 60 * 60 * 1e3);
-    return res.json(envelope);
-  } catch (error) {
-    return res.status(504).json({
-      ok: false,
-      code: "power-timeout",
-      message: `NASA POWER request failed or timed out: ${error?.message || "unknown error"}`,
-      sourceUrl: buildUrl(parameters)
-    });
-  }
-});
-earthRouter.get("/gibs/domains", rateLimit("gibs-domains", 120, 6e4), async (req, res) => {
-  const layerId = String(req.query.layer || "").trim();
-  if (!layerId || !/^[A-Za-z0-9_.\-]{3,80}$/.test(layerId)) {
-    return res.status(400).json({ ok: false, code: "invalid-layer", message: "A valid GIBS layer identifier is required." });
-  }
-  const known = getGibsLayer(layerId);
-  const tileMatrixSet = String(req.query.tileMatrixSet || known?.tileMatrixSet || "GoogleMapsCompatible_Level9");
-  const url = known ? describeDomainsUrl(known) : `${GIBS_WMTS_BASE}/1.0.0/${layerId}/default/${tileMatrixSet}/all/all.xml`;
-  const cacheKey2 = `domains:${layerId}:${tileMatrixSet}`;
-  const cached2 = cacheGet2(cacheKey2);
-  if (cached2) return res.json({ ...cached2, fromCache: true });
-  try {
-    const response = await fetchWithTimeout(url, { headers: { Accept: "application/xml,text/xml,*/*" } }, 2e4);
-    const text2 = await response.text();
-    if (!response.ok && !/exceptionreport/i.test(text2)) {
-      return res.status(502).json({
-        ok: false,
-        code: "gibs-error",
-        message: `GIBS DescribeDomains responded with HTTP ${response.status}.`,
-        sourceUrl: url
-      });
-    }
+    const attempt = async (codes) => {
+      const url = buildUrl(codes);
+      const response = await fetchWithTimeout(url, { headers: { Accept: "application/json" } }, 25e3);
+      return { ok: response.ok, status: response.status, body: await response.text(), url };
+    };
     try {
-      const domain = buildDomain({ layerId, tileMatrixSet, xml: text2, sourceUrl: url });
+      let codes = parameters;
+      let result2 = await attempt(codes);
+      let degraded = false;
+      if (!result2.ok && result2.status === 400 && codes.length > CORE_PARAMETER_CODES.length) {
+        codes = CORE_PARAMETER_CODES;
+        result2 = await attempt(codes);
+        degraded = true;
+      }
+      if (!result2.ok) {
+        return res.status(502).json({
+          ok: false,
+          code: "power-error",
+          message: `NASA POWER responded with HTTP ${result2.status}.`,
+          sourceUrl: result2.url
+        });
+      }
+      let payload;
+      try {
+        payload = JSON.parse(result2.body);
+      } catch {
+        return res.status(502).json({ ok: false, code: "power-unreadable", message: "NASA POWER returned a non-JSON body.", sourceUrl: result2.url });
+      }
+      const parameterBlock = payload?.properties?.parameter;
+      if (!parameterBlock || typeof parameterBlock !== "object" || Array.isArray(parameterBlock)) {
+        return res.status(502).json({ ok: false, code: "power-invalid-response", message: "NASA POWER returned an unexpected data structure.", sourceUrl: result2.url });
+      }
       const envelope = {
         ok: true,
-        layerId,
-        tileMatrixSet,
-        ranges: domain.ranges,
-        minDate: domain.minDate,
-        maxDate: domain.maxDate,
-        coverage: describeCoverage(domain),
-        sourceUrl: url,
-        retrievedAt: domain.retrievedAt,
-        fromCache: false
+        provider: "NASA POWER",
+        sourceUrl: result2.url,
+        retrievedAt: (/* @__PURE__ */ new Date()).toISOString(),
+        requestedParameters: parameters,
+        usedParameters: codes,
+        degraded,
+        fromCache: false,
+        payload
       };
-      cacheSet2(cacheKey2, envelope, 6 * 60 * 60 * 1e3);
+      cacheSet2(cacheKey2, envelope, 12 * 60 * 60 * 1e3);
       return res.json(envelope);
     } catch (error) {
-      const typed = error;
-      return res.status(422).json({
+      return res.status(504).json({
         ok: false,
-        code: typed.code || "unparseable",
-        message: typed.message || "GIBS returned a response without an observation-date domain.",
+        code: "power-timeout",
+        message: `NASA POWER request failed or timed out: ${error?.message || "unknown error"}`,
+        sourceUrl: buildUrl(parameters)
+      });
+    }
+  }
+);
+earthRouter.get(
+  "/gibs/domains",
+  rateLimit("gibs-domains", 120, 6e4),
+  providerFleetRateLimit("nasa-gibs", 60, 6e4),
+  async (req, res) => {
+    const layerId = String(req.query.layer || "").trim();
+    if (!layerId || !/^[A-Za-z0-9_.\-]{3,80}$/.test(layerId)) {
+      return res.status(400).json({ ok: false, code: "invalid-layer", message: "A valid GIBS layer identifier is required." });
+    }
+    const known = getGibsLayer(layerId);
+    const tileMatrixSet = String(req.query.tileMatrixSet || known?.tileMatrixSet || "GoogleMapsCompatible_Level9");
+    const url = known ? describeDomainsUrl(known) : `${GIBS_WMTS_BASE}/1.0.0/${layerId}/default/${tileMatrixSet}/all/all.xml`;
+    const cacheKey2 = `domains:${layerId}:${tileMatrixSet}`;
+    const cached2 = cacheGet2(cacheKey2);
+    if (cached2) return res.json({ ...cached2, fromCache: true });
+    try {
+      const response = await fetchWithTimeout(url, { headers: { Accept: "application/xml,text/xml,*/*" } }, 2e4);
+      const text2 = await response.text();
+      if (!response.ok && !/exceptionreport/i.test(text2)) {
+        return res.status(502).json({
+          ok: false,
+          code: "gibs-error",
+          message: `GIBS DescribeDomains responded with HTTP ${response.status}.`,
+          sourceUrl: url
+        });
+      }
+      try {
+        const domain = buildDomain({ layerId, tileMatrixSet, xml: text2, sourceUrl: url });
+        const envelope = {
+          ok: true,
+          layerId,
+          tileMatrixSet,
+          ranges: domain.ranges,
+          minDate: domain.minDate,
+          maxDate: domain.maxDate,
+          coverage: describeCoverage(domain),
+          sourceUrl: url,
+          retrievedAt: domain.retrievedAt,
+          fromCache: false
+        };
+        cacheSet2(cacheKey2, envelope, 6 * 60 * 60 * 1e3);
+        return res.json(envelope);
+      } catch (error) {
+        const typed = error;
+        return res.status(422).json({
+          ok: false,
+          code: typed.code || "unparseable",
+          message: typed.message || "GIBS returned a response without an observation-date domain.",
+          sourceUrl: url
+        });
+      }
+    } catch (error) {
+      return res.status(504).json({
+        ok: false,
+        code: "gibs-timeout",
+        message: `GIBS request failed or timed out: ${error?.message || "unknown error"}`,
         sourceUrl: url
       });
     }
-  } catch (error) {
-    return res.status(504).json({
-      ok: false,
-      code: "gibs-timeout",
-      message: `GIBS request failed or timed out: ${error?.message || "unknown error"}`,
-      sourceUrl: url
-    });
   }
-});
-earthRouter.get("/gibs/probe", rateLimit("gibs-probe", 240, 6e4), async (req, res) => {
-  const layerId = String(req.query.layer || "").trim();
-  const date = String(req.query.date || "").trim();
-  if (!layerId || !/^[A-Za-z0-9_.\-]{3,80}$/.test(layerId)) {
-    return res.status(400).json({ ok: false, code: "invalid-layer", message: "A valid GIBS layer identifier is required." });
+);
+earthRouter.get(
+  "/gibs/probe",
+  rateLimit("gibs-probe", 240, 6e4),
+  providerFleetRateLimit("nasa-gibs", 60, 6e4),
+  async (req, res) => {
+    const layerId = String(req.query.layer || "").trim();
+    const date = String(req.query.date || "").trim();
+    if (!layerId || !/^[A-Za-z0-9_.\-]{3,80}$/.test(layerId)) {
+      return res.status(400).json({ ok: false, code: "invalid-layer", message: "A valid GIBS layer identifier is required." });
+    }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      return res.status(400).json({ ok: false, code: "invalid-date", message: "date must use the YYYY-MM-DD format." });
+    }
+    const known = getGibsLayer(layerId);
+    const tileMatrixSet = String(req.query.tileMatrixSet || known?.tileMatrixSet || "GoogleMapsCompatible_Level9");
+    const format2 = String(req.query.format || known?.format || "jpg") === "png" ? "png" : "jpg";
+    const url = known ? wmtsTileUrl(known, date, tileMatrixSet, format2, 1, 1, 1) : `${GIBS_WMTS_BASE}/${layerId}/default/${date}/${tileMatrixSet}/1/1/1.${format2}`;
+    const cacheKey2 = `probe:${layerId}:${tileMatrixSet}:${format2}:${date}`;
+    const cached2 = cacheGet2(cacheKey2);
+    if (cached2) return res.json({ ...cached2, fromCache: true });
+    try {
+      const response = await fetchWithTimeout(url, { method: "GET", headers: { Accept: "image/*" } }, 15e3);
+      const contentType = response.headers.get("content-type") || "";
+      const isImage = /^image\//i.test(contentType);
+      const envelope = {
+        ok: response.ok && isImage,
+        layerId,
+        date,
+        tileMatrixSet,
+        format: format2,
+        status: response.status,
+        contentType,
+        bytes: Number(response.headers.get("content-length") || 0) || null,
+        sourceUrl: url,
+        retrievedAt: (/* @__PURE__ */ new Date()).toISOString(),
+        fromCache: false,
+        note: response.ok && isImage ? "GIBS served an image for this layer/date combination. GIBS may substitute the nearest available day when the exact date is missing, so the observation-date domain is still checked separately." : `GIBS did not serve an image (HTTP ${response.status}).`
+      };
+      cacheSet2(cacheKey2, envelope, 30 * 60 * 1e3);
+      return res.json(envelope);
+    } catch (error) {
+      return res.status(504).json({
+        ok: false,
+        code: "gibs-timeout",
+        message: `GIBS tile probe failed or timed out: ${error?.message || "unknown error"}`,
+        sourceUrl: url
+      });
+    }
   }
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-    return res.status(400).json({ ok: false, code: "invalid-date", message: "date must use the YYYY-MM-DD format." });
-  }
-  const known = getGibsLayer(layerId);
-  const tileMatrixSet = String(req.query.tileMatrixSet || known?.tileMatrixSet || "GoogleMapsCompatible_Level9");
-  const format2 = String(req.query.format || known?.format || "jpg") === "png" ? "png" : "jpg";
-  const url = known ? wmtsTileUrl(known, date, tileMatrixSet, format2, 1, 1, 1) : `${GIBS_WMTS_BASE}/${layerId}/default/${date}/${tileMatrixSet}/1/1/1.${format2}`;
-  const cacheKey2 = `probe:${layerId}:${tileMatrixSet}:${format2}:${date}`;
-  const cached2 = cacheGet2(cacheKey2);
-  if (cached2) return res.json({ ...cached2, fromCache: true });
-  try {
-    const response = await fetchWithTimeout(url, { method: "GET", headers: { Accept: "image/*" } }, 15e3);
-    const contentType = response.headers.get("content-type") || "";
-    const isImage = /^image\//i.test(contentType);
-    const envelope = {
-      ok: response.ok && isImage,
-      layerId,
-      date,
-      tileMatrixSet,
-      format: format2,
-      status: response.status,
-      contentType,
-      bytes: Number(response.headers.get("content-length") || 0) || null,
-      sourceUrl: url,
-      retrievedAt: (/* @__PURE__ */ new Date()).toISOString(),
-      fromCache: false,
-      note: response.ok && isImage ? "GIBS served an image for this layer/date combination. GIBS may substitute the nearest available day when the exact date is missing, so the observation-date domain is still checked separately." : `GIBS did not serve an image (HTTP ${response.status}).`
-    };
-    cacheSet2(cacheKey2, envelope, 30 * 60 * 1e3);
-    return res.json(envelope);
-  } catch (error) {
-    return res.status(504).json({
-      ok: false,
-      code: "gibs-timeout",
-      message: `GIBS tile probe failed or timed out: ${error?.message || "unknown error"}`,
-      sourceUrl: url
-    });
-  }
-});
+);
 var FIRMS_SOURCES = /* @__PURE__ */ new Set([
   "VIIRS_SNPP_NRT",
   "VIIRS_NOAA20_NRT",
@@ -2550,126 +2590,131 @@ var FIRMS_SOURCES = /* @__PURE__ */ new Set([
   "MODIS_SP",
   "VIIRS_SNPP_SP"
 ]);
-earthRouter.get("/firms/hotspots", rateLimit("firms", 30, 6e4), async (req, res) => {
-  const docsUrl = "https://firms.modaps.eosdis.nasa.gov/api/area/";
-  const mapKey = process.env.FIRMS_MAP_KEY;
-  if (!mapKey) {
-    return res.json({
-      ok: false,
-      code: "not-configured",
-      status: "not-configured",
-      message: "NASA FIRMS hotspot counts require a free MAP_KEY, which is not configured on this deployment. The Lab never estimates hotspot counts, so this capability is reported as unavailable.",
-      docsUrl,
-      sourceUrl: docsUrl
-    });
-  }
-  const source = String(req.query.source || "VIIRS_SNPP_NRT");
-  if (!FIRMS_SOURCES.has(source)) {
-    return res.status(400).json({ ok: false, code: "invalid-source", message: `source must be one of ${[...FIRMS_SOURCES].join(", ")}` });
-  }
-  const west = numberParam(req.query.west, -180, 180);
-  const east = numberParam(req.query.east, -180, 180);
-  const south = numberParam(req.query.south, -90, 90);
-  const north = numberParam(req.query.north, -90, 90);
-  if (west === null || east === null || south === null || north === null || east <= west || north <= south) {
-    return res.status(400).json({ ok: false, code: "invalid-bbox", message: "west/east/south/north must form a valid bounding box." });
-  }
-  const dayRange = Math.min(5, Math.max(1, Math.round(numberParam(req.query.dayRange, 1, 5) || 1)));
-  const date = /^\d{4}-\d{2}-\d{2}$/.test(String(req.query.date || "")) ? String(req.query.date) : void 0;
-  const bbox = `${west},${south},${east},${north}`;
-  const url = `https://firms.modaps.eosdis.nasa.gov/api/area/csv/${mapKey}/${source}/${bbox}/${dayRange}${date ? `/${date}` : ""}`;
-  const cacheKey2 = `firms:${source}:${bbox}:${dayRange}:${date || "latest"}`;
-  const cached2 = cacheGet2(cacheKey2);
-  if (cached2) return res.json({ ...cached2, fromCache: true });
-  try {
-    const response = await fetchWithTimeout(url, { headers: { Accept: "text/csv,text/plain,*/*" } }, 25e3);
-    const text2 = await response.text();
-    if (!response.ok) {
-      return res.status(502).json({
+earthRouter.get(
+  "/firms/hotspots",
+  rateLimit("firms", 30, 6e4),
+  providerFleetRateLimit("nasa-firms", 30, 6e4),
+  async (req, res) => {
+    const docsUrl = "https://firms.modaps.eosdis.nasa.gov/api/area/";
+    const mapKey = process.env.FIRMS_MAP_KEY;
+    if (!mapKey) {
+      return res.json({
         ok: false,
-        code: "firms-error",
-        message: `NASA FIRMS responded with HTTP ${response.status}.`,
-        sourceUrl: "https://firms.modaps.eosdis.nasa.gov/api/area/"
+        code: "not-configured",
+        status: "not-configured",
+        message: "NASA FIRMS hotspot counts require a free MAP_KEY, which is not configured on this deployment. The Lab never estimates hotspot counts, so this capability is reported as unavailable.",
+        docsUrl,
+        sourceUrl: docsUrl
       });
     }
-    if (/Invalid MAP_KEY|Not Authorized/i.test(text2)) {
-      return res.status(401).json({ ok: false, code: "firms-key-rejected", message: "NASA FIRMS rejected the configured MAP_KEY.", docsUrl });
+    const source = String(req.query.source || "VIIRS_SNPP_NRT");
+    if (!FIRMS_SOURCES.has(source)) {
+      return res.status(400).json({ ok: false, code: "invalid-source", message: `source must be one of ${[...FIRMS_SOURCES].join(", ")}` });
     }
-    const lines = text2.trim().split(/\r?\n/);
-    const header = (lines.shift() || "").split(",");
-    const index = (name) => header.findIndex((column) => column.trim().toLowerCase() === name);
-    const latIdx = index("latitude");
-    const lonIdx = index("longitude");
-    const dateIdx = index("acq_date");
-    const timeIdx = index("acq_time");
-    const confIdx = index("confidence");
-    const frpIdx = index("frp");
-    const dayNightIdx = index("daynight");
-    const instrumentIdx = index("instrument");
-    const satelliteIdx = index("satellite");
-    if (latIdx < 0 || lonIdx < 0) {
-      return res.status(502).json({ ok: false, code: "firms-unexpected-format", message: "NASA FIRMS CSV did not contain latitude/longitude columns.", docsUrl });
+    const west = numberParam(req.query.west, -180, 180);
+    const east = numberParam(req.query.east, -180, 180);
+    const south = numberParam(req.query.south, -90, 90);
+    const north = numberParam(req.query.north, -90, 90);
+    if (west === null || east === null || south === null || north === null || east <= west || north <= south) {
+      return res.status(400).json({ ok: false, code: "invalid-bbox", message: "west/east/south/north must form a valid bounding box." });
     }
-    const detections = lines.map((line) => line.split(",")).filter((cells) => cells.length > Math.max(latIdx, lonIdx)).map((cells) => ({
-      latitude: Number(cells[latIdx]),
-      longitude: Number(cells[lonIdx]),
-      date: dateIdx >= 0 ? cells[dateIdx] : void 0,
-      time: timeIdx >= 0 ? cells[timeIdx] : void 0,
-      confidence: confIdx >= 0 ? cells[confIdx] : void 0,
-      frp: frpIdx >= 0 && cells[frpIdx] !== "" ? Number(cells[frpIdx]) : null,
-      dayNight: dayNightIdx >= 0 ? cells[dayNightIdx] : void 0,
-      instrument: instrumentIdx >= 0 ? cells[instrumentIdx] : void 0,
-      satellite: satelliteIdx >= 0 ? cells[satelliteIdx] : void 0
-    })).filter((item) => Number.isFinite(item.latitude) && Number.isFinite(item.longitude));
-    const byDay = {};
-    let frpSum = 0;
-    let frpCount = 0;
-    const confidenceCounts = {};
-    detections.forEach((item) => {
-      if (item.date) byDay[item.date] = (byDay[item.date] || 0) + 1;
-      if (typeof item.frp === "number" && Number.isFinite(item.frp)) {
-        frpSum += item.frp;
-        frpCount += 1;
+    const dayRange = Math.min(5, Math.max(1, Math.round(numberParam(req.query.dayRange, 1, 5) || 1)));
+    const date = /^\d{4}-\d{2}-\d{2}$/.test(String(req.query.date || "")) ? String(req.query.date) : void 0;
+    const bbox = `${west},${south},${east},${north}`;
+    const url = `https://firms.modaps.eosdis.nasa.gov/api/area/csv/${mapKey}/${source}/${bbox}/${dayRange}${date ? `/${date}` : ""}`;
+    const cacheKey2 = `firms:${source}:${bbox}:${dayRange}:${date || "latest"}`;
+    const cached2 = cacheGet2(cacheKey2);
+    if (cached2) return res.json({ ...cached2, fromCache: true });
+    try {
+      const response = await fetchWithTimeout(url, { headers: { Accept: "text/csv,text/plain,*/*" } }, 25e3);
+      const text2 = await response.text();
+      if (!response.ok) {
+        return res.status(502).json({
+          ok: false,
+          code: "firms-error",
+          message: `NASA FIRMS responded with HTTP ${response.status}.`,
+          sourceUrl: "https://firms.modaps.eosdis.nasa.gov/api/area/"
+        });
       }
-      const key2 = (item.confidence || "unknown").toString().toLowerCase();
-      confidenceCounts[key2] = (confidenceCounts[key2] || 0) + 1;
-    });
-    const maxFeatures = 3e3;
-    const envelope = {
-      ok: true,
-      provider: "NASA FIRMS (Fire Information for Resource Management System)",
-      source,
-      bbox: { west, south, east, north },
-      dayRange,
-      requestedDate: date || null,
-      retrievedAt: (/* @__PURE__ */ new Date()).toISOString(),
-      fromCache: false,
-      sourceUrl: `https://firms.modaps.eosdis.nasa.gov/api/area/csv/[MAP_KEY]/${source}/${bbox}/${dayRange}${date ? `/${date}` : ""}`,
-      attribution: "NASA FIRMS \u2014 Fire Information for Resource Management System",
-      detectionCount: detections.length,
-      byDay,
-      meanFrp: frpCount ? Number((frpSum / frpCount).toFixed(1)) : null,
-      frpUnit: "MW",
-      confidenceCounts,
-      truncated: detections.length > maxFeatures,
-      detections: detections.slice(0, maxFeatures),
-      limitations: [
-        "Each row is an individual thermal-anomaly detection with a confidence class, not a burned area, fire size or severity.",
-        "Gas flares, industrial heat sources and some hot land surfaces produce persistent detections.",
-        "Cloud cover and satellite overpass timing mean a fire can be missed entirely."
-      ]
-    };
-    cacheSet2(cacheKey2, envelope, 15 * 60 * 1e3);
-    return res.json(envelope);
-  } catch (error) {
-    return res.status(504).json({
-      ok: false,
-      code: "firms-timeout",
-      message: `NASA FIRMS request failed or timed out: ${error?.message || "unknown error"}`,
-      docsUrl
-    });
+      if (/Invalid MAP_KEY|Not Authorized/i.test(text2)) {
+        return res.status(401).json({ ok: false, code: "firms-key-rejected", message: "NASA FIRMS rejected the configured MAP_KEY.", docsUrl });
+      }
+      const lines = text2.trim().split(/\r?\n/);
+      const header = (lines.shift() || "").split(",");
+      const index = (name) => header.findIndex((column) => column.trim().toLowerCase() === name);
+      const latIdx = index("latitude");
+      const lonIdx = index("longitude");
+      const dateIdx = index("acq_date");
+      const timeIdx = index("acq_time");
+      const confIdx = index("confidence");
+      const frpIdx = index("frp");
+      const dayNightIdx = index("daynight");
+      const instrumentIdx = index("instrument");
+      const satelliteIdx = index("satellite");
+      if (latIdx < 0 || lonIdx < 0) {
+        return res.status(502).json({ ok: false, code: "firms-unexpected-format", message: "NASA FIRMS CSV did not contain latitude/longitude columns.", docsUrl });
+      }
+      const detections = lines.map((line) => line.split(",")).filter((cells) => cells.length > Math.max(latIdx, lonIdx)).map((cells) => ({
+        latitude: Number(cells[latIdx]),
+        longitude: Number(cells[lonIdx]),
+        date: dateIdx >= 0 ? cells[dateIdx] : void 0,
+        time: timeIdx >= 0 ? cells[timeIdx] : void 0,
+        confidence: confIdx >= 0 ? cells[confIdx] : void 0,
+        frp: frpIdx >= 0 && cells[frpIdx] !== "" ? Number(cells[frpIdx]) : null,
+        dayNight: dayNightIdx >= 0 ? cells[dayNightIdx] : void 0,
+        instrument: instrumentIdx >= 0 ? cells[instrumentIdx] : void 0,
+        satellite: satelliteIdx >= 0 ? cells[satelliteIdx] : void 0
+      })).filter((item) => Number.isFinite(item.latitude) && Number.isFinite(item.longitude));
+      const byDay = {};
+      let frpSum = 0;
+      let frpCount = 0;
+      const confidenceCounts = {};
+      detections.forEach((item) => {
+        if (item.date) byDay[item.date] = (byDay[item.date] || 0) + 1;
+        if (typeof item.frp === "number" && Number.isFinite(item.frp)) {
+          frpSum += item.frp;
+          frpCount += 1;
+        }
+        const key2 = (item.confidence || "unknown").toString().toLowerCase();
+        confidenceCounts[key2] = (confidenceCounts[key2] || 0) + 1;
+      });
+      const maxFeatures = 3e3;
+      const envelope = {
+        ok: true,
+        provider: "NASA FIRMS (Fire Information for Resource Management System)",
+        source,
+        bbox: { west, south, east, north },
+        dayRange,
+        requestedDate: date || null,
+        retrievedAt: (/* @__PURE__ */ new Date()).toISOString(),
+        fromCache: false,
+        sourceUrl: `https://firms.modaps.eosdis.nasa.gov/api/area/csv/[MAP_KEY]/${source}/${bbox}/${dayRange}${date ? `/${date}` : ""}`,
+        attribution: "NASA FIRMS \u2014 Fire Information for Resource Management System",
+        detectionCount: detections.length,
+        byDay,
+        meanFrp: frpCount ? Number((frpSum / frpCount).toFixed(1)) : null,
+        frpUnit: "MW",
+        confidenceCounts,
+        truncated: detections.length > maxFeatures,
+        detections: detections.slice(0, maxFeatures),
+        limitations: [
+          "Each row is an individual thermal-anomaly detection with a confidence class, not a burned area, fire size or severity.",
+          "Gas flares, industrial heat sources and some hot land surfaces produce persistent detections.",
+          "Cloud cover and satellite overpass timing mean a fire can be missed entirely."
+        ]
+      };
+      cacheSet2(cacheKey2, envelope, 15 * 60 * 1e3);
+      return res.json(envelope);
+    } catch (error) {
+      return res.status(504).json({
+        ok: false,
+        code: "firms-timeout",
+        message: `NASA FIRMS request failed or timed out: ${error?.message || "unknown error"}`,
+        docsUrl
+      });
+    }
   }
-});
+);
 var redact = (text2) => String(text2 || "").replace(/([?&](?:api_?key|key|token|access_token)=)[^&\s"']+/gi, "$1[redacted]").replace(/\b(AIza|sk-|or-|arena-)[A-Za-z0-9_\-]{8,}/g, "[redacted]").replace(/\bBearer\s+[A-Za-z0-9._\-]{8,}/gi, "Bearer [redacted]").slice(0, 240);
 function logAnalystEvent(event) {
   try {
@@ -2764,157 +2809,162 @@ function activeAnalystOrchestrator() {
 function analystLanguageName(lang) {
   return { en: "English", si: "Sinhala (\u0DC3\u0DD2\u0D82\u0DC4\u0DBD)", ta: "Tamil (\u0BA4\u0BAE\u0BBF\u0BB4\u0BCD)" }[lang] || "English";
 }
-earthRouter.post("/analyst", rateLimit("analyst", 20, 5 * 6e4), async (req, res) => {
-  const startedAt = Date.now();
-  const { question, context, lang = "en" } = req.body || {};
-  if (!question || typeof question !== "string" || question.length > 800) {
-    return res.status(400).json({ ok: false, code: "invalid-question", message: "A question of up to 800 characters is required." });
-  }
-  if (!context || typeof context !== "object") {
-    return res.status(400).json({ ok: false, code: "missing-context", message: "A retrieved-data context bundle is required." });
-  }
-  const languageName = analystLanguageName(String(lang));
-  const requestId = `an-${startedAt.toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
-  const bundle = context;
-  const analysis = analyseBundle(bundle);
-  const local = buildLocalAnalystAnswer(String(question), bundle, { analysis, lang: String(lang) });
-  const providerContext = buildProviderContext(bundle, analysis);
-  const controller = new AbortController();
-  let clientGone = false;
-  res.on("close", () => {
-    if (!res.writableEnded) {
-      clientGone = true;
-      controller.abort();
+earthRouter.post(
+  "/analyst",
+  rateLimit("analyst", 20, 5 * 6e4),
+  providerFleetRateLimit("earth-analyst", 20, 5 * 6e4),
+  async (req, res) => {
+    const startedAt = Date.now();
+    const { question, context, lang = "en" } = req.body || {};
+    if (!question || typeof question !== "string" || question.length > 800) {
+      return res.status(400).json({ ok: false, code: "invalid-question", message: "A question of up to 800 characters is required." });
     }
-  });
-  const dedupeKey = JSON.stringify([
-    String(question),
-    String(lang),
-    providerContext.location,
-    providerContext.dateRange,
-    analysis.series.map((entry) => [entry.code, entry.count, entry.lastMonth]),
-    analysis.comparisons.map((comp) => [comp.label, comp.series.length])
-  ]);
-  logAnalystEvent({
-    event: "earth.analyst.request",
-    requestId,
-    lang: String(lang),
-    questionLength: question.length,
-    series: analysis.series.length,
-    usableValues: analysis.coverage?.analysed ?? 0,
-    missingCells: analysis.coverage?.missingCells ?? 0
-  });
-  let run;
-  try {
-    run = await activeAnalystOrchestrator().run({
-      question: String(question),
-      context: providerContext,
-      lang: String(lang),
-      signal: controller.signal,
-      dedupeKey
-    });
-  } catch (error) {
-    logAnalystEvent({ event: "earth.analyst.orchestrator_error", requestId, message: redact(error?.message || "unknown") });
-    run = {
-      ok: false,
-      answer: null,
-      unparsable: void 0,
-      metadata: {
-        mode: "local",
-        provider: "local",
-        providerLabel: PROVIDER_LABELS.local,
-        attempts: 0,
-        retries: 0,
-        fallback: true,
-        fallbackReason: "ORCHESTRATOR_ERROR",
-        providerChain: [],
-        generatedAt: (/* @__PURE__ */ new Date()).toISOString(),
-        deduped: false,
-        durationMs: Date.now() - startedAt,
-        noticeCode: "all-providers-unavailable"
+    if (!context || typeof context !== "object") {
+      return res.status(400).json({ ok: false, code: "missing-context", message: "A retrieved-data context bundle is required." });
+    }
+    const languageName = analystLanguageName(String(lang));
+    const requestId = `an-${startedAt.toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+    const bundle = context;
+    const analysis = analyseBundle(bundle);
+    const local = buildLocalAnalystAnswer(String(question), bundle, { analysis, lang: String(lang) });
+    const providerContext = buildProviderContext(bundle, analysis);
+    const controller = new AbortController();
+    let clientGone = false;
+    res.on("close", () => {
+      if (!res.writableEnded) {
+        clientGone = true;
+        controller.abort();
       }
-    };
-  }
-  const { metadata } = run;
-  const chain = metadata.providerChain.map((entry) => ({
-    provider: entry.provider,
-    providerLabel: PROVIDER_LABELS[entry.provider] || entry.provider,
-    model: entry.model,
-    outcome: entry.outcome,
-    code: entry.code,
-    status: entry.status,
-    attempts: entry.attempts,
-    ms: entry.ms,
-    // Upstream messages are logged server-side only; the client gets the
-    // classification code, never the provider's own error text.
-    reason: entry.code ? `${PROVIDER_LABELS[entry.provider] || entry.provider}: ${entry.code}` : void 0
-  }));
-  const base = {
-    ok: true,
-    mode: metadata.mode,
-    provider: metadata.provider,
-    providerLabel: metadata.providerLabel,
-    model: metadata.model,
-    generatedAt: metadata.generatedAt,
-    attempts: metadata.attempts,
-    retries: metadata.retries,
-    fallback: metadata.fallback,
-    fallbackReason: metadata.fallbackReason,
-    providerChain: chain,
-    deduped: metadata.deduped,
-    durationMs: Date.now() - startedAt,
-    groundedInRetrievedData: true,
-    groundingMode: "retrieved-context-only",
-    sufficientData: local.sufficientData,
-    localEvidence: local.evidenceSummary.slice(0, 5)
-  };
-  if (clientGone) {
-    logAnalystEvent({ event: "earth.analyst.client_closed", requestId, ms: Date.now() - startedAt });
-    return void 0;
-  }
-  if (run.ok && run.answer) {
-    const answer = run.answer;
+    });
+    const dedupeKey = JSON.stringify([
+      String(question),
+      String(lang),
+      providerContext.location,
+      providerContext.dateRange,
+      analysis.series.map((entry) => [entry.code, entry.count, entry.lastMonth]),
+      analysis.comparisons.map((comp) => [comp.label, comp.series.length])
+    ]);
     logAnalystEvent({
-      event: "earth.analyst.answer",
+      event: "earth.analyst.request",
       requestId,
-      mode: "remote",
+      lang: String(lang),
+      questionLength: question.length,
+      series: analysis.series.length,
+      usableValues: analysis.coverage?.analysed ?? 0,
+      missingCells: analysis.coverage?.missingCells ?? 0
+    });
+    let run;
+    try {
+      run = await activeAnalystOrchestrator().run({
+        question: String(question),
+        context: providerContext,
+        lang: String(lang),
+        signal: controller.signal,
+        dedupeKey
+      });
+    } catch (error) {
+      logAnalystEvent({ event: "earth.analyst.orchestrator_error", requestId, message: redact(error?.message || "unknown") });
+      run = {
+        ok: false,
+        answer: null,
+        unparsable: void 0,
+        metadata: {
+          mode: "local",
+          provider: "local",
+          providerLabel: PROVIDER_LABELS.local,
+          attempts: 0,
+          retries: 0,
+          fallback: true,
+          fallbackReason: "ORCHESTRATOR_ERROR",
+          providerChain: [],
+          generatedAt: (/* @__PURE__ */ new Date()).toISOString(),
+          deduped: false,
+          durationMs: Date.now() - startedAt,
+          noticeCode: "all-providers-unavailable"
+        }
+      };
+    }
+    const { metadata } = run;
+    const chain = metadata.providerChain.map((entry) => ({
+      provider: entry.provider,
+      providerLabel: PROVIDER_LABELS[entry.provider] || entry.provider,
+      model: entry.model,
+      outcome: entry.outcome,
+      code: entry.code,
+      status: entry.status,
+      attempts: entry.attempts,
+      ms: entry.ms,
+      // Upstream messages are logged server-side only; the client gets the
+      // classification code, never the provider's own error text.
+      reason: entry.code ? `${PROVIDER_LABELS[entry.provider] || entry.provider}: ${entry.code}` : void 0
+    }));
+    const base = {
+      ok: true,
+      mode: metadata.mode,
       provider: metadata.provider,
+      providerLabel: metadata.providerLabel,
+      model: metadata.model,
+      generatedAt: metadata.generatedAt,
       attempts: metadata.attempts,
       retries: metadata.retries,
       fallback: metadata.fallback,
+      fallbackReason: metadata.fallbackReason,
+      providerChain: chain,
+      deduped: metadata.deduped,
+      durationMs: Date.now() - startedAt,
+      groundedInRetrievedData: true,
+      groundingMode: "retrieved-context-only",
+      sufficientData: local.sufficientData,
+      localEvidence: local.evidenceSummary.slice(0, 5)
+    };
+    if (clientGone) {
+      logAnalystEvent({ event: "earth.analyst.client_closed", requestId, ms: Date.now() - startedAt });
+      return void 0;
+    }
+    if (run.ok && run.answer) {
+      const answer = run.answer;
+      logAnalystEvent({
+        event: "earth.analyst.answer",
+        requestId,
+        mode: "remote",
+        provider: metadata.provider,
+        attempts: metadata.attempts,
+        retries: metadata.retries,
+        fallback: metadata.fallback,
+        ms: Date.now() - startedAt
+      });
+      return res.json({
+        ...base,
+        noticeCode: metadata.noticeCode ?? (metadata.fallback ? "primary-unavailable" : void 0),
+        sections: answer.sections,
+        sources: answer.sources,
+        droppedSources: answer.droppedSources
+      });
+    }
+    const noticeCode = local.sufficientData ? metadata.noticeCode || "local-mode" : "no-observations";
+    logAnalystEvent({
+      event: "earth.analyst.answer",
+      requestId,
+      mode: "local",
+      noticeCode,
+      attempts: metadata.attempts,
+      reason: metadata.fallbackReason,
       ms: Date.now() - startedAt
     });
     return res.json({
       ...base,
-      noticeCode: metadata.noticeCode ?? (metadata.fallback ? "primary-unavailable" : void 0),
-      sections: answer.sections,
-      sources: answer.sources,
-      droppedSources: answer.droppedSources
+      mode: "local",
+      provider: "local",
+      providerLabel: PROVIDER_LABELS.local,
+      model: void 0,
+      noticeCode,
+      sections: local.sections,
+      sources: local.sources,
+      droppedSources: 0,
+      groundingMode: "deterministic-local-analysis"
     });
   }
-  const noticeCode = local.sufficientData ? metadata.noticeCode || "local-mode" : "no-observations";
-  logAnalystEvent({
-    event: "earth.analyst.answer",
-    requestId,
-    mode: "local",
-    noticeCode,
-    attempts: metadata.attempts,
-    reason: metadata.fallbackReason,
-    ms: Date.now() - startedAt
-  });
-  return res.json({
-    ...base,
-    mode: "local",
-    provider: "local",
-    providerLabel: PROVIDER_LABELS.local,
-    model: void 0,
-    noticeCode,
-    sections: local.sections,
-    sources: local.sources,
-    droppedSources: 0,
-    groundingMode: "deterministic-local-analysis"
-  });
-});
+);
 var USER_AGENT_HEADER = "cosmora-earth-lab/2.0 (+https://github.com/sebro2011/ASA-asaN)";
 var providerLastCall = /* @__PURE__ */ new Map();
 async function enforceUpstreamSpacing(provider, minIntervalMs) {
@@ -2948,308 +2998,323 @@ var ALLOWED_SWOT_COLLECTIONS = /* @__PURE__ */ new Set([
   "SWOT_L2_LR_SSH_2.0",
   "SWOT_L2_LR_SSH_Basic_2.0"
 ]);
-earthRouter.get("/swot/granules", rateLimit("swot-cmr", 20, 6e4), async (req, res) => {
-  const west = numberParam(req.query.west, -180, 180);
-  const south = numberParam(req.query.south, -90, 90);
-  const east = numberParam(req.query.east, -180, 180);
-  const north = numberParam(req.query.north, -90, 90);
-  const collectionRaw = typeof req.query.collection === "string" && req.query.collection.trim() ? req.query.collection.trim() : "SWOT_L2_LR_SSH_Basic_2.0";
-  if (west === null || south === null || east === null || north === null || west >= east || south >= north) {
-    return res.status(400).json({
-      ok: false,
-      code: "invalid-bbox",
-      message: "Valid numeric bounding box parameters (west, south, east, north) with west < east and south < north are required."
-    });
-  }
-  if (!ALLOWED_SWOT_COLLECTIONS.has(collectionRaw)) {
-    return res.status(400).json({
-      ok: false,
-      code: "unsupported-collection",
-      message: `Unsupported SWOT collection "${collectionRaw}". Allowed: ${[...ALLOWED_SWOT_COLLECTIONS].join(", ")}.`
-    });
-  }
-  const bbox = {
-    west: Number(west.toFixed(3)),
-    south: Number(south.toFixed(3)),
-    east: Number(east.toFixed(3)),
-    north: Number(north.toFixed(3))
-  };
-  const cacheKey2 = `swot:${collectionRaw}:${bbox.west}:${bbox.south}:${bbox.east}:${bbox.north}`;
-  const cached2 = cacheGet2(cacheKey2);
-  if (cached2) {
-    return res.json({ ...cached2, fromCache: true });
-  }
-  const params = new URLSearchParams({
-    short_name: collectionRaw,
-    bounding_box: `${bbox.west},${bbox.south},${bbox.east},${bbox.north}`,
-    page_size: "15",
-    sort_key: "-start_date"
-  });
-  const cmrUrl = `https://cmr.earthdata.nasa.gov/search/granules.json?${params.toString()}`;
-  try {
-    await enforceUpstreamSpacing("nasa-cmr", 500);
-    const response = await fetchWithTimeout(
-      cmrUrl,
-      { headers: { Accept: "application/json", "User-Agent": USER_AGENT_HEADER } },
-      15e3
-    );
-    if (!response.ok) {
-      return res.status(502).json({
+earthRouter.get(
+  "/swot/granules",
+  rateLimit("swot-cmr", 20, 6e4),
+  providerFleetRateLimit("nasa-cmr", 30, 6e4),
+  async (req, res) => {
+    const west = numberParam(req.query.west, -180, 180);
+    const south = numberParam(req.query.south, -90, 90);
+    const east = numberParam(req.query.east, -180, 180);
+    const north = numberParam(req.query.north, -90, 90);
+    const collectionRaw = typeof req.query.collection === "string" && req.query.collection.trim() ? req.query.collection.trim() : "SWOT_L2_LR_SSH_Basic_2.0";
+    if (west === null || south === null || east === null || north === null || west >= east || south >= north) {
+      return res.status(400).json({
         ok: false,
-        code: "cmr-upstream-error",
-        status: response.status,
-        message: `NASA CMR SWOT search returned HTTP ${response.status}.`
+        code: "invalid-bbox",
+        message: "Valid numeric bounding box parameters (west, south, east, north) with west < east and south < north are required."
       });
     }
-    const rawPayload = await response.json();
-    const hitsHeader = Number(response.headers.get("cmr-hits") || "0");
-    const parsed = parseCmrSwotGranules({
-      cmrPayload: rawPayload,
-      bbox,
-      collection: collectionRaw,
-      totalHits: Number.isFinite(hitsHeader) && hitsHeader > 0 ? hitsHeader : 0,
-      sourceUrl: cmrUrl,
-      retrievedAt: (/* @__PURE__ */ new Date()).toISOString()
-    });
-    const out = {
-      ok: true,
-      fromCache: false,
-      ...parsed,
-      totalHits: parsed.totalHits || parsed.granules.length
+    if (!ALLOWED_SWOT_COLLECTIONS.has(collectionRaw)) {
+      return res.status(400).json({
+        ok: false,
+        code: "unsupported-collection",
+        message: `Unsupported SWOT collection "${collectionRaw}". Allowed: ${[...ALLOWED_SWOT_COLLECTIONS].join(", ")}.`
+      });
+    }
+    const bbox = {
+      west: Number(west.toFixed(3)),
+      south: Number(south.toFixed(3)),
+      east: Number(east.toFixed(3)),
+      north: Number(north.toFixed(3))
     };
-    cacheSet2(cacheKey2, out, 60 * 60 * 1e3);
-    return res.json(out);
-  } catch (error) {
-    const timedOut = error instanceof Error && error.name === "AbortError";
-    return res.status(timedOut ? 504 : 502).json({
-      ok: false,
-      code: timedOut ? "cmr-timeout" : "cmr-unreachable",
-      message: timedOut ? "NASA CMR SWOT search timed out." : "Unable to reach NASA CMR SWOT granule catalog."
+    const cacheKey2 = `swot:${collectionRaw}:${bbox.west}:${bbox.south}:${bbox.east}:${bbox.north}`;
+    const cached2 = cacheGet2(cacheKey2);
+    if (cached2) {
+      return res.json({ ...cached2, fromCache: true });
+    }
+    const params = new URLSearchParams({
+      short_name: collectionRaw,
+      bounding_box: `${bbox.west},${bbox.south},${bbox.east},${bbox.north}`,
+      page_size: "15",
+      sort_key: "-start_date"
     });
-  }
-});
-var ALLOWED_NOAA_DATATYPES = /* @__PURE__ */ new Set(["TAVG", "TMAX", "TMIN", "PRCP"]);
-earthRouter.get("/noaa/cdo", rateLimit("noaa-cdo", 15, 6e4), async (req, res) => {
-  const latitude = numberParam(req.query.latitude, -90, 90);
-  const longitude = numberParam(req.query.longitude, -180, 180);
-  const start = numberParam(req.query.start, 1900, 2100);
-  const end = numberParam(req.query.end, 1900, 2100);
-  const datatypeRaw = String(req.query.datatype || "TAVG").trim().toUpperCase();
-  if (latitude === null || longitude === null || start === null || end === null || start > end) {
-    return res.status(400).json({
-      ok: false,
-      code: "invalid-arguments",
-      message: "Valid numeric latitude, longitude, start year, and end year (start <= end) are required."
-    });
-  }
-  if (!ALLOWED_NOAA_DATATYPES.has(datatypeRaw)) {
-    return res.status(400).json({
-      ok: false,
-      code: "invalid-datatype",
-      message: "datatype must be one of TAVG, TMAX, TMIN, or PRCP."
-    });
-  }
-  const token = (process.env.NOAA_CDO_TOKEN || "").trim();
-  if (!token) {
-    return res.status(503).json({
-      ok: false,
-      code: "noaa-token-not-configured",
-      message: "NOAA_CDO_TOKEN is not configured on the server. Request a free token at https://www.ncei.noaa.gov/cdo-web/token or import a NOAA CDO station CSV directly in the Multi-Source Research Hub."
-    });
-  }
-  const clampedStart = Math.max(start, end - 19);
-  const cacheKey2 = `noaa:${latitude.toFixed(3)}:${longitude.toFixed(3)}:${clampedStart}:${end}:${datatypeRaw}`;
-  const cached2 = cacheGet2(cacheKey2);
-  if (cached2) {
-    return res.json({ ...cached2, fromCache: true });
-  }
-  try {
-    let chosenStation = null;
-    for (const halfDeg of [1.2, 2.5]) {
-      const extent = `${(latitude - halfDeg).toFixed(3)},${(longitude - halfDeg).toFixed(3)},${(latitude + halfDeg).toFixed(3)},${(longitude + halfDeg).toFixed(3)}`;
-      const stParams = new URLSearchParams({
-        datasetid: "GSOM",
-        datatypeid: datatypeRaw,
-        extent,
-        startdate: `${clampedStart}-01-01`,
-        enddate: `${end}-12-31`,
-        limit: "15"
-      });
-      await enforceUpstreamSpacing("noaa-cdo", 260);
-      const stResp = await fetchWithTimeout(
-        `https://www.ncei.noaa.gov/cdo-web/api/v2/stations?${stParams.toString()}`,
-        { headers: { token, Accept: "application/json", "User-Agent": USER_AGENT_HEADER } },
+    const cmrUrl = `https://cmr.earthdata.nasa.gov/search/granules.json?${params.toString()}`;
+    try {
+      await enforceUpstreamSpacing("nasa-cmr", 500);
+      const response = await fetchWithTimeout(
+        cmrUrl,
+        { headers: { Accept: "application/json", "User-Agent": USER_AGENT_HEADER } },
         15e3
       );
-      if (!stResp.ok) {
-        return res.status(stResp.status === 429 ? 429 : 502).json({
+      if (!response.ok) {
+        return res.status(502).json({
           ok: false,
-          code: "noaa-upstream-error",
-          status: stResp.status,
-          message: `NOAA CDO station lookup returned HTTP ${stResp.status}.`
+          code: "cmr-upstream-error",
+          status: response.status,
+          message: `NASA CMR SWOT search returned HTTP ${response.status}.`
         });
       }
-      const stBody = await stResp.json();
-      const candidates = Array.isArray(stBody.results) ? stBody.results : [];
-      if (candidates.length > 0) {
-        candidates.sort((a, b) => {
-          const da = Math.hypot(a.latitude - latitude, a.longitude - longitude) - (a.datacoverage ?? 0) * 0.3;
-          const db = Math.hypot(b.latitude - latitude, b.longitude - longitude) - (b.datacoverage ?? 0) * 0.3;
-          return da - db;
-        });
-        chosenStation = candidates[0];
-        break;
-      }
-    }
-    if (!chosenStation) {
-      return res.status(404).json({
+      const rawPayload = await response.json();
+      const hitsHeader = Number(response.headers.get("cmr-hits") || "0");
+      const parsed = parseCmrSwotGranules({
+        cmrPayload: rawPayload,
+        bbox,
+        collection: collectionRaw,
+        totalHits: Number.isFinite(hitsHeader) && hitsHeader > 0 ? hitsHeader : 0,
+        sourceUrl: cmrUrl,
+        retrievedAt: (/* @__PURE__ */ new Date()).toISOString()
+      });
+      const out = {
+        ok: true,
+        fromCache: false,
+        ...parsed,
+        totalHits: parsed.totalHits || parsed.granules.length
+      };
+      cacheSet2(cacheKey2, out, 60 * 60 * 1e3);
+      return res.json(out);
+    } catch (error) {
+      const timedOut = error instanceof Error && error.name === "AbortError";
+      return res.status(timedOut ? 504 : 502).json({
         ok: false,
-        code: "noaa-no-station-found",
-        message: "No NOAA GSOM ground weather station with active records was found within 2.5\xB0 of the selected coordinates."
+        code: timedOut ? "cmr-timeout" : "cmr-unreachable",
+        message: timedOut ? "NASA CMR SWOT search timed out." : "Unable to reach NASA CMR SWOT granule catalog."
       });
     }
-    const allRecords = [];
-    let lastDataUrl = "";
-    for (let chunkStart = clampedStart; chunkStart <= end; chunkStart += 10) {
-      const chunkEnd = Math.min(end, chunkStart + 9);
-      const dParams = new URLSearchParams({
-        datasetid: "GSOM",
-        datatypeid: datatypeRaw,
-        stationid: chosenStation.id,
-        startdate: `${chunkStart}-01-01`,
-        enddate: `${chunkEnd}-12-31`,
-        units: "metric",
-        limit: "1000"
+  }
+);
+var ALLOWED_NOAA_DATATYPES = /* @__PURE__ */ new Set(["TAVG", "TMAX", "TMIN", "PRCP"]);
+earthRouter.get(
+  "/noaa/cdo",
+  rateLimit("noaa-cdo", 15, 6e4),
+  providerFleetRateLimit("noaa-cdo", 15, 6e4),
+  async (req, res) => {
+    const latitude = numberParam(req.query.latitude, -90, 90);
+    const longitude = numberParam(req.query.longitude, -180, 180);
+    const start = numberParam(req.query.start, 1900, 2100);
+    const end = numberParam(req.query.end, 1900, 2100);
+    const datatypeRaw = String(req.query.datatype || "TAVG").trim().toUpperCase();
+    if (latitude === null || longitude === null || start === null || end === null || start > end) {
+      return res.status(400).json({
+        ok: false,
+        code: "invalid-arguments",
+        message: "Valid numeric latitude, longitude, start year, and end year (start <= end) are required."
       });
-      lastDataUrl = `https://www.ncei.noaa.gov/cdo-web/api/v2/data?${dParams.toString()}`;
-      await enforceUpstreamSpacing("noaa-cdo", 260);
-      const dResp = await fetchWithTimeout(
-        lastDataUrl,
-        { headers: { token, Accept: "application/json", "User-Agent": USER_AGENT_HEADER } },
-        15e3
-      );
-      if (!dResp.ok) {
-        return res.status(dResp.status === 429 ? 429 : 502).json({
+    }
+    if (!ALLOWED_NOAA_DATATYPES.has(datatypeRaw)) {
+      return res.status(400).json({
+        ok: false,
+        code: "invalid-datatype",
+        message: "datatype must be one of TAVG, TMAX, TMIN, or PRCP."
+      });
+    }
+    const token = (process.env.NOAA_CDO_TOKEN || "").trim();
+    if (!token) {
+      return res.status(503).json({
+        ok: false,
+        code: "noaa-token-not-configured",
+        message: "NOAA_CDO_TOKEN is not configured on the server. Request a free token at https://www.ncei.noaa.gov/cdo-web/token or import a NOAA CDO station CSV directly in the Multi-Source Research Hub."
+      });
+    }
+    const clampedStart = Math.max(start, end - 19);
+    const cacheKey2 = `noaa:${latitude.toFixed(3)}:${longitude.toFixed(3)}:${clampedStart}:${end}:${datatypeRaw}`;
+    const cached2 = cacheGet2(cacheKey2);
+    if (cached2) {
+      return res.json({ ...cached2, fromCache: true });
+    }
+    try {
+      let chosenStation = null;
+      for (const halfDeg of [1.2, 2.5]) {
+        const extent = `${(latitude - halfDeg).toFixed(3)},${(longitude - halfDeg).toFixed(3)},${(latitude + halfDeg).toFixed(3)},${(longitude + halfDeg).toFixed(3)}`;
+        const stParams = new URLSearchParams({
+          datasetid: "GSOM",
+          datatypeid: datatypeRaw,
+          extent,
+          startdate: `${clampedStart}-01-01`,
+          enddate: `${end}-12-31`,
+          limit: "15"
+        });
+        await enforceUpstreamSpacing("noaa-cdo", 260);
+        const stResp = await fetchWithTimeout(
+          `https://www.ncei.noaa.gov/cdo-web/api/v2/stations?${stParams.toString()}`,
+          { headers: { token, Accept: "application/json", "User-Agent": USER_AGENT_HEADER } },
+          15e3
+        );
+        if (!stResp.ok) {
+          return res.status(stResp.status === 429 ? 429 : 502).json({
+            ok: false,
+            code: "noaa-upstream-error",
+            status: stResp.status,
+            message: `NOAA CDO station lookup returned HTTP ${stResp.status}.`
+          });
+        }
+        const stBody = await stResp.json();
+        const candidates = Array.isArray(stBody.results) ? stBody.results : [];
+        if (candidates.length > 0) {
+          candidates.sort((a, b) => {
+            const da = Math.hypot(a.latitude - latitude, a.longitude - longitude) - (a.datacoverage ?? 0) * 0.3;
+            const db = Math.hypot(b.latitude - latitude, b.longitude - longitude) - (b.datacoverage ?? 0) * 0.3;
+            return da - db;
+          });
+          chosenStation = candidates[0];
+          break;
+        }
+      }
+      if (!chosenStation) {
+        return res.status(404).json({
           ok: false,
-          code: "noaa-data-error",
-          status: dResp.status,
-          message: `NOAA CDO GSOM data retrieval returned HTTP ${dResp.status}.`
+          code: "noaa-no-station-found",
+          message: "No NOAA GSOM ground weather station with active records was found within 2.5\xB0 of the selected coordinates."
         });
       }
-      const dBody = await dResp.json();
-      if (Array.isArray(dBody.results)) {
-        allRecords.push(...dBody.results);
+      const allRecords = [];
+      let lastDataUrl = "";
+      for (let chunkStart = clampedStart; chunkStart <= end; chunkStart += 10) {
+        const chunkEnd = Math.min(end, chunkStart + 9);
+        const dParams = new URLSearchParams({
+          datasetid: "GSOM",
+          datatypeid: datatypeRaw,
+          stationid: chosenStation.id,
+          startdate: `${chunkStart}-01-01`,
+          enddate: `${chunkEnd}-12-31`,
+          units: "metric",
+          limit: "1000"
+        });
+        lastDataUrl = `https://www.ncei.noaa.gov/cdo-web/api/v2/data?${dParams.toString()}`;
+        await enforceUpstreamSpacing("noaa-cdo", 260);
+        const dResp = await fetchWithTimeout(
+          lastDataUrl,
+          { headers: { token, Accept: "application/json", "User-Agent": USER_AGENT_HEADER } },
+          15e3
+        );
+        if (!dResp.ok) {
+          return res.status(dResp.status === 429 ? 429 : 502).json({
+            ok: false,
+            code: "noaa-data-error",
+            status: dResp.status,
+            message: `NOAA CDO GSOM data retrieval returned HTTP ${dResp.status}.`
+          });
+        }
+        const dBody = await dResp.json();
+        if (Array.isArray(dBody.results)) {
+          allRecords.push(...dBody.results);
+        }
       }
+      const series = parseNoaaGsomSeries({
+        station: chosenStation,
+        records: allRecords,
+        datatype: datatypeRaw,
+        sourceUrl: lastDataUrl,
+        retrievedAt: (/* @__PURE__ */ new Date()).toISOString()
+      });
+      const out = { ok: true, fromCache: false, station: chosenStation, series };
+      cacheSet2(cacheKey2, out, 6 * 60 * 60 * 1e3);
+      return res.json(out);
+    } catch (error) {
+      const timedOut = error instanceof Error && error.name === "AbortError";
+      return res.status(timedOut ? 504 : 502).json({
+        ok: false,
+        code: timedOut ? "noaa-timeout" : "noaa-unreachable",
+        message: timedOut ? "NOAA CDO request timed out." : "Unable to reach NOAA NCEI CDO service."
+      });
     }
-    const series = parseNoaaGsomSeries({
-      station: chosenStation,
-      records: allRecords,
-      datatype: datatypeRaw,
-      sourceUrl: lastDataUrl,
-      retrievedAt: (/* @__PURE__ */ new Date()).toISOString()
-    });
-    const out = { ok: true, fromCache: false, station: chosenStation, series };
-    cacheSet2(cacheKey2, out, 6 * 60 * 60 * 1e3);
-    return res.json(out);
-  } catch (error) {
-    const timedOut = error instanceof Error && error.name === "AbortError";
-    return res.status(timedOut ? 504 : 502).json({
-      ok: false,
-      code: timedOut ? "noaa-timeout" : "noaa-unreachable",
-      message: timedOut ? "NOAA CDO request timed out." : "Unable to reach NOAA NCEI CDO service."
-    });
   }
-});
+);
 var ALLOWED_GESDISC_VARIABLES = {
   SoilMoi0_10cm_inst: "GLDAS2:GLDAS_NOAH025_M_v2.1:SoilMoi0_10cm_inst",
   Qs_acc: "GLDAS2:GLDAS_NOAH025_M_v2.1:Qs_acc",
   Evap_tavg: "GLDAS2:GLDAS_NOAH025_M_v2.1:Evap_tavg",
   Rainf_f_tavg: "GLDAS2:GLDAS_NOAH025_M_v2.1:Rainf_f_tavg"
 };
-earthRouter.get("/hydrology/gesdisc", rateLimit("gesdisc-hydro", 12, 6e4), async (req, res) => {
-  const latitude = numberParam(req.query.latitude, -60, 90);
-  const longitude = numberParam(req.query.longitude, -180, 180);
-  const start = numberParam(req.query.start, 2e3, 2100);
-  const end = numberParam(req.query.end, 2e3, 2100);
-  const shortVar = typeof req.query.variable === "string" && req.query.variable.trim() ? req.query.variable.trim() : "SoilMoi0_10cm_inst";
-  if (latitude === null || longitude === null || start === null || end === null || start > end) {
-    return res.status(400).json({
-      ok: false,
-      code: "invalid-arguments",
-      message: "Valid numeric latitude (-60..90), longitude, start year (>=2000), and end year are required."
-    });
-  }
-  const fullVariable = ALLOWED_GESDISC_VARIABLES[shortVar];
-  if (!fullVariable) {
-    return res.status(400).json({
-      ok: false,
-      code: "unsupported-variable",
-      message: `Unsupported GES DISC variable "${shortVar}". Allowed: ${Object.keys(ALLOWED_GESDISC_VARIABLES).join(", ")}.`
-    });
-  }
-  const rodUrl = buildGesDiscDataRodUrl({
-    latitude,
-    longitude,
-    startYear: start,
-    endYear: end,
-    variable: fullVariable
-  });
-  const bearer2 = (process.env.EARTHDATA_BEARER_TOKEN || "").trim();
-  if (!bearer2) {
-    return res.status(503).json({
-      ok: false,
-      code: "earthdata-token-not-configured",
-      rodUrl,
-      message: "EARTHDATA_BEARER_TOKEN is not configured on the server. NASA GES DISC Data Rods require Earthdata Login; use the generated Data Rod URL in your browser and import the asc2 file, or use keyless NASA POWER MERRA-2 soil wetness (GWETTOP / GWETROOT)."
-    });
-  }
-  const cacheKey2 = `gesdisc:${shortVar}:${latitude.toFixed(3)}:${longitude.toFixed(3)}:${start}:${end}`;
-  const cached2 = cacheGet2(cacheKey2);
-  if (cached2) {
-    return res.json({ ...cached2, fromCache: true });
-  }
-  try {
-    await enforceUpstreamSpacing("gesdisc", 2e3);
-    const response = await fetchWithTimeout(
-      rodUrl,
-      {
-        headers: {
-          Authorization: `Bearer ${bearer2}`,
-          Accept: "text/plain",
-          "User-Agent": USER_AGENT_HEADER
-        }
-      },
-      2e4
-    );
-    if (!response.ok) {
-      return res.status(response.status === 401 || response.status === 403 ? 503 : 502).json({
+earthRouter.get(
+  "/hydrology/gesdisc",
+  rateLimit("gesdisc-hydro", 12, 6e4),
+  providerFleetRateLimit("nasa-gesdisc", 12, 6e4),
+  async (req, res) => {
+    const latitude = numberParam(req.query.latitude, -60, 90);
+    const longitude = numberParam(req.query.longitude, -180, 180);
+    const start = numberParam(req.query.start, 2e3, 2100);
+    const end = numberParam(req.query.end, 2e3, 2100);
+    const shortVar = typeof req.query.variable === "string" && req.query.variable.trim() ? req.query.variable.trim() : "SoilMoi0_10cm_inst";
+    if (latitude === null || longitude === null || start === null || end === null || start > end) {
+      return res.status(400).json({
         ok: false,
-        code: response.status === 401 || response.status === 403 ? "earthdata-auth-rejected" : "gesdisc-upstream-error",
-        status: response.status,
-        rodUrl,
-        message: `NASA GES DISC Data Rods returned HTTP ${response.status}.`
+        code: "invalid-arguments",
+        message: "Valid numeric latitude (-60..90), longitude, start year (>=2000), and end year are required."
       });
     }
-    const text2 = await response.text();
-    const series = parseGesDiscAsc2(text2, {
-      sourceUrl: rodUrl,
-      retrievedAt: (/* @__PURE__ */ new Date()).toISOString(),
+    const fullVariable = ALLOWED_GESDISC_VARIABLES[shortVar];
+    if (!fullVariable) {
+      return res.status(400).json({
+        ok: false,
+        code: "unsupported-variable",
+        message: `Unsupported GES DISC variable "${shortVar}". Allowed: ${Object.keys(ALLOWED_GESDISC_VARIABLES).join(", ")}.`
+      });
+    }
+    const rodUrl = buildGesDiscDataRodUrl({
       latitude,
-      longitude
+      longitude,
+      startYear: start,
+      endYear: end,
+      variable: fullVariable
     });
-    const out = { ok: true, fromCache: false, series };
-    cacheSet2(cacheKey2, out, 6 * 60 * 60 * 1e3);
-    return res.json(out);
-  } catch (error) {
-    const timedOut = error instanceof Error && error.name === "AbortError";
-    return res.status(timedOut ? 504 : 502).json({
-      ok: false,
-      code: timedOut ? "gesdisc-timeout" : "gesdisc-unreachable",
-      rodUrl,
-      message: timedOut ? "NASA GES DISC Hydrology request timed out." : "Unable to reach NASA GES DISC Hydrology Data Rods."
-    });
+    const bearer2 = (process.env.EARTHDATA_BEARER_TOKEN || "").trim();
+    if (!bearer2) {
+      return res.status(503).json({
+        ok: false,
+        code: "earthdata-token-not-configured",
+        rodUrl,
+        message: "EARTHDATA_BEARER_TOKEN is not configured on the server. NASA GES DISC Data Rods require Earthdata Login; use the generated Data Rod URL in your browser and import the asc2 file, or use keyless NASA POWER MERRA-2 soil wetness (GWETTOP / GWETROOT)."
+      });
+    }
+    const cacheKey2 = `gesdisc:${shortVar}:${latitude.toFixed(3)}:${longitude.toFixed(3)}:${start}:${end}`;
+    const cached2 = cacheGet2(cacheKey2);
+    if (cached2) {
+      return res.json({ ...cached2, fromCache: true });
+    }
+    try {
+      await enforceUpstreamSpacing("gesdisc", 2e3);
+      const response = await fetchWithTimeout(
+        rodUrl,
+        {
+          headers: {
+            Authorization: `Bearer ${bearer2}`,
+            Accept: "text/plain",
+            "User-Agent": USER_AGENT_HEADER
+          }
+        },
+        2e4
+      );
+      if (!response.ok) {
+        return res.status(response.status === 401 || response.status === 403 ? 503 : 502).json({
+          ok: false,
+          code: response.status === 401 || response.status === 403 ? "earthdata-auth-rejected" : "gesdisc-upstream-error",
+          status: response.status,
+          rodUrl,
+          message: `NASA GES DISC Data Rods returned HTTP ${response.status}.`
+        });
+      }
+      const text2 = await response.text();
+      const series = parseGesDiscAsc2(text2, {
+        sourceUrl: rodUrl,
+        retrievedAt: (/* @__PURE__ */ new Date()).toISOString(),
+        latitude,
+        longitude
+      });
+      const out = { ok: true, fromCache: false, series };
+      cacheSet2(cacheKey2, out, 6 * 60 * 60 * 1e3);
+      return res.json(out);
+    } catch (error) {
+      const timedOut = error instanceof Error && error.name === "AbortError";
+      return res.status(timedOut ? 504 : 502).json({
+        ok: false,
+        code: timedOut ? "gesdisc-timeout" : "gesdisc-unreachable",
+        rodUrl,
+        message: timedOut ? "NASA GES DISC Hydrology request timed out." : "Unable to reach NASA GES DISC Hydrology Data Rods."
+      });
+    }
   }
-});
+);
 var KNMI_ALLOWLIST = {
   nino34: {
     url: "https://climexp.knmi.nl/data/iersst_nino3.4a.dat",
@@ -3266,57 +3331,62 @@ var KNMI_ALLOWLIST = {
     spatialNote: "Tropical Indian Ocean (WTIO \u2212 SETIO) via KNMI Climate Explorer"
   }
 };
-earthRouter.get("/knmi/index", rateLimit("knmi-index", 6, 6e4), async (req, res) => {
-  const id = String(req.query.id || "").trim().toLowerCase();
-  const entry = KNMI_ALLOWLIST[id];
-  if (!entry) {
-    return res.status(400).json({
-      ok: false,
-      code: "invalid-knmi-index",
-      message: "Query parameter id is required and must be one of: nino34, dmi."
-    });
-  }
-  const cacheKey2 = `knmi:${id}`;
-  const cached2 = cacheGet2(cacheKey2);
-  if (cached2) {
-    return res.json({ ...cached2, fromCache: true });
-  }
-  try {
-    await enforceUpstreamSpacing("knmi-climexp", 1e4);
-    const response = await fetchWithTimeout(
-      entry.url,
-      { headers: { Accept: "text/plain", "User-Agent": USER_AGENT_HEADER } },
-      15e3
-    );
-    if (!response.ok) {
-      return res.status(502).json({
+earthRouter.get(
+  "/knmi/index",
+  rateLimit("knmi-index", 6, 6e4),
+  providerFleetRateLimit("knmi", 6, 6e4),
+  async (req, res) => {
+    const id = String(req.query.id || "").trim().toLowerCase();
+    const entry = KNMI_ALLOWLIST[id];
+    if (!entry) {
+      return res.status(400).json({
         ok: false,
-        code: "knmi-upstream-error",
-        status: response.status,
-        message: `KNMI Climate Explorer static index returned HTTP ${response.status}. You can also import a downloaded .dat file locally.`
+        code: "invalid-knmi-index",
+        message: "Query parameter id is required and must be one of: nino34, dmi."
       });
     }
-    const rawText = await response.text();
-    const series = parseKnmiAsciiSeries(rawText, {
-      title: entry.title,
-      variableLabel: entry.variableLabel,
-      unit: entry.unit,
-      sourceUrl: entry.url,
-      spatialNote: entry.spatialNote,
-      retrievedAt: (/* @__PURE__ */ new Date()).toISOString()
-    });
-    const out = { ok: true, fromCache: false, series };
-    cacheSet2(cacheKey2, out, 24 * 60 * 60 * 1e3);
-    return res.json(out);
-  } catch (error) {
-    const timedOut = error instanceof Error && error.name === "AbortError";
-    return res.status(timedOut ? 504 : 502).json({
-      ok: false,
-      code: timedOut ? "knmi-timeout" : "knmi-unreachable",
-      message: "KNMI Climate Explorer static index is unreachable from this network environment. Import a downloaded KNMI .dat series directly in the Multi-Source Research Hub."
-    });
+    const cacheKey2 = `knmi:${id}`;
+    const cached2 = cacheGet2(cacheKey2);
+    if (cached2) {
+      return res.json({ ...cached2, fromCache: true });
+    }
+    try {
+      await enforceUpstreamSpacing("knmi-climexp", 1e4);
+      const response = await fetchWithTimeout(
+        entry.url,
+        { headers: { Accept: "text/plain", "User-Agent": USER_AGENT_HEADER } },
+        15e3
+      );
+      if (!response.ok) {
+        return res.status(502).json({
+          ok: false,
+          code: "knmi-upstream-error",
+          status: response.status,
+          message: `KNMI Climate Explorer static index returned HTTP ${response.status}. You can also import a downloaded .dat file locally.`
+        });
+      }
+      const rawText = await response.text();
+      const series = parseKnmiAsciiSeries(rawText, {
+        title: entry.title,
+        variableLabel: entry.variableLabel,
+        unit: entry.unit,
+        sourceUrl: entry.url,
+        spatialNote: entry.spatialNote,
+        retrievedAt: (/* @__PURE__ */ new Date()).toISOString()
+      });
+      const out = { ok: true, fromCache: false, series };
+      cacheSet2(cacheKey2, out, 24 * 60 * 60 * 1e3);
+      return res.json(out);
+    } catch (error) {
+      const timedOut = error instanceof Error && error.name === "AbortError";
+      return res.status(timedOut ? 504 : 502).json({
+        ok: false,
+        code: timedOut ? "knmi-timeout" : "knmi-unreachable",
+        message: "KNMI Climate Explorer static index is unreachable from this network environment. Import a downloaded KNMI .dat series directly in the Multi-Source Research Hub."
+      });
+    }
   }
-});
+);
 
 // server/spaceVideos.ts
 import { Router } from "express";

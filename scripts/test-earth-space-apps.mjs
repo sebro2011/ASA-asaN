@@ -422,6 +422,62 @@ test('tTest picks Welch when variances differ and Student when equal', (t) => {
   assert.equal(tooSmall.significantAt05, null);
 });
 
+test('tTest trusted reference values (Welch / Student / significant)', (t) => {
+  // Reference values computed independently (means, variances, standard error,
+  // Welch df, confidence-interval endpoints); p-values rounded to 5 dp.
+  const unequal = tTest([1, 2, 3, 4, 5], [10, 11, 12, 13, 100], 0.05);
+  assert.equal(unequal.testName, "Welch's t-test (unequal variances)");
+  assert.equal(unequal.mean1, 3);
+  assert.equal(unequal.mean2, 29.2);
+  assert.equal(unequal.meanDifference, 26.2);
+  assert.equal(unequal.stdDev1, 1.5811);
+  assert.equal(unequal.tStatistic, 1.4785);
+  assert.equal(unequal.degreesOfFreedom, 4.01);
+  assert.ok(unequal.pValue > 0.2 && unequal.pValue < 0.23, `expected p ~0.213, got ${unequal.pValue}`);
+  assert.equal(unequal.significantAt05, false);
+  assert.deepEqual(unequal.confidenceInterval95, [-22.9402, 75.3402]);
+  assert.ok(typeof unequal.normalityAssumed === 'boolean');
+  assert.ok(typeof unequal.assumptionsSatisfied === 'boolean');
+  assert.ok(/No statistically significant difference/.test(unequal.interpretation));
+  assert.ok(/includes zero/.test(unequal.interpretation));
+
+  const equal = tTest([1, 2, 3, 4, 5], [2, 3, 4, 5, 6], 0.05);
+  assert.equal(equal.testName, "Student's t-test (equal variances)");
+  assert.equal(equal.equalVariancesAssumed, true);
+  assert.equal(equal.independenceSatisfied, true);
+  assert.equal(equal.normalityAssumed, true);
+  assert.equal(equal.tStatistic, 1);
+  assert.equal(equal.degreesOfFreedom, 8);
+  assert.ok(equal.pValue > 0.34 && equal.pValue < 0.36, `expected p ~0.347, got ${equal.pValue}`);
+  assert.equal(equal.significantAt05, false);
+  assert.deepEqual(equal.confidenceInterval95, [-1.306, 3.306]);
+  assert.ok(/includes zero/.test(equal.interpretation));
+
+  const shifted = tTest([1, 2, 3, 4, 5], [11, 12, 13, 14, 15], 0.05);
+  assert.equal(shifted.testName, "Student's t-test (equal variances)");
+  assert.equal(shifted.tStatistic, 10);
+  assert.equal(shifted.degreesOfFreedom, 8);
+  assert.ok(shifted.pValue < 0.001, `expected p << 0.001, got ${shifted.pValue}`);
+  assert.equal(shifted.significantAt05, true);
+  assert.ok(shifted.confidenceInterval95[0] > 0, `CI should exclude zero: ${shifted.confidenceInterval95}`);
+  assert.ok(/Statistically significant difference/.test(shifted.interpretation));
+  assert.ok(/not causal attribution/.test(shifted.interpretation));
+});
+
+test('tTest flags non-independence when serial autocorrelation is present', (t) => {
+  // Strongly autocorrelated samples: lag-1 correlation exceeds the
+  // 1.96/sqrt(n) bound, so independenceSatisfied must be false even though
+  // the means differ.
+  const x = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+  const y = [11, 12, 13, 14, 15, 16, 17, 18, 19, 20];
+  const res = tTest(x, y, 0.05);
+  assert.equal(res.equalVariancesAssumed, true);
+  assert.equal(res.independenceSatisfied, false);
+  assert.equal(res.assumptionsSatisfied, false);
+  assert.ok(/Serial autocorrelation was detected/.test(res.interpretation));
+  assert.ok(/indicative, not confirmatory/.test(res.interpretation));
+});
+
 test('computeHistoricalSplit reports a two-sample t-test on epoch means', (t) => {
   const dataset = makePowerDataset();
   const split = computeHistoricalSplit(dataset, 'PRECTOTCORR');

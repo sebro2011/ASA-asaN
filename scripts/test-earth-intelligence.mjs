@@ -33,6 +33,7 @@ import {
   parsePowerResponse,
   POWER_PARAMETERS
 } from '../src/lib/earth/power.ts';
+import { compareLocations } from '../src/lib/earth/climateEngine.ts';
 import { buildLocalAnalystAnswer, classifyQuestion, describeSeries } from '../src/lib/earth/analysis.ts';
 import { buildAnalystContext, buildMarkdownReport, contextForRequest, powerSeriesCsv } from '../src/lib/earth/context.ts';
 import {
@@ -182,6 +183,245 @@ test('buildSeriesStats computes mean, extremes, annual means and completeness', 
   assert.equal(stats.annual.find((entry) => entry.year === 2020)?.complete, true);
   assert.equal(stats.annual.find((entry) => entry.year === 2021)?.complete, false);
   assert.equal(stats.trend, null);
+});
+
+test('buildSeriesStats day-weights annual means and totals (leap-year fair)', () => {
+  // 2020 is a leap year (366 days); 2021 is a common year (365 days).
+  const rows = [];
+  for (let month = 1; month <= 12; month += 1) {
+    const days = new Date(2020, month, 0).getDate();
+    rows.push({ date: `2020-${String(month).padStart(2, '0')}`, year: 2020, month, values: { PRECTOTCORR: 2.0 } });
+  }
+  for (let month = 1; month <= 12; month += 1) {
+    rows.push({ date: `2021-${String(month).padStart(2, '0')}`, year: 2021, month, values: { PRECTOTCORR: 2.0 } });
+  }
+  const stats = buildSeriesStats(rows, 'PRECTOTCORR', 'mm/day');
+  const y2020 = stats.annual.find((entry) => entry.year === 2020);
+  const y2021 = stats.annual.find((entry) => entry.year === 2021);
+  assert.ok(y2020 && y2021);
+  assert.equal(y2020.complete, true);
+  assert.equal(y2021.complete, true);
+  // Constant 2 mm/day: day-weighted mean stays 2, but total must reflect exact
+  // calendar length — leap year 732 mm vs common year 730 mm.
+  assert.equal(y2020.mean, 2.0);
+  assert.equal(y2020.total, 732.0);
+  assert.equal(y2021.mean, 2.0);
+  assert.equal(y2021.total, 730.0);
+});
+
+test('buildSeriesStats day-weighting differs from a simple mean in a leap year', () => {
+  // Feb 2020 has 29 days with an off-value, so day-weighted mean != simple mean.
+  const rows = [];
+  const feb2020Days = 29;
+  for (let month = 1; month <= 12; month += 1) {
+    const value = month === 2 ? 20 : 30; // February is lower than the other months
+    rows.push({ date: `2020-${String(month).padStart(2, '0')}`, year: 2020, month, values: { PRECTOTCORR: value } });
+  }
+  const stats = buildSeriesStats(rows, 'PRECTOTCORR', 'mm/day');
+  const y2020 = stats.annual.find((entry) => entry.year === 2020);
+  assert.ok(y2020 && y2020.complete);
+  const simpleMean = (20 + 30 * 11) / 12; // 27.5
+  assert.notEqual(Number(y2020.mean.toFixed(3)), simpleMean, 'day-weighted mean should not equal the simple mean');
+  // Day weight pulls the mean toward 30 because most months are 30/31 days.
+  assert.ok(y2020.mean > simpleMean);
+  assert.equal(y2020.total, 10690.0); // verified day-weighted total: 30×366 − 290
+});
+
+test('buildSeriesStats excludes years with missing months from annual totals', () => {
+  const rows = [];
+  for (let month = 1; month <= 12; month += 1) {
+    if (month === 6) continue; // drop June — incomplete year
+    rows.push({ date: `2021-${String(month).padStart(2, '0')}`, year: 2021, month, values: { PRECTOTCORR: 5.0 } });
+  }
+  const stats = buildSeriesStats(rows, 'PRECTOTCORR', 'mm/day');
+  const y2021 = stats.annual.find((entry) => entry.year === 2021);
+  assert.ok(y2021);
+  assert.equal(y2021.complete, false);
+  assert.equal(y2021.mean, null);
+  assert.equal(y2021.total, null);
+});
+
+test('compareLocations reports 95% uncertainty intervals for location means vs primary', () => {
+  // 30 complete years of constant daily values -> zero standard error, so each
+  // CI collapses to the observed mean / difference itself.
+  const months = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+  const years = Array.from({ length: 30 }, (_, i) => 1995 + i);
+  const makeRows = (value) =>
+    years.flatMap((year) =>
+      months.map((month) => ({
+        date: `${year}-${String(month).padStart(2, '0')}`,
+        year,
+        month,
+        values: { PRECTOTCORR: value }
+      }))
+    );
+  const makeDataset = (id, label, value) => ({
+    latitude: 6.9271,
+    longitude: 79.8612,
+    placeLabel: label,
+    elevationMeters: 50,
+    rows: makeRows(value),
+    available: ['PRECTOTCORR'],
+    unavailable: [],
+    requestedParameters: ['PRECTOTCORR'],
+    startYear: 1995,
+    endYear: 2024,
+    gridNote: 'synthetic test fixture',
+    stats: {
+      PRECTOTCORR: {
+        unit: 'mm/day',
+        mean: value,
+        min: { value, date: '1995-01' },
+        max: { value, date: '1995-01' },
+        annual: []
+      }
+    }
+  });
+  const primary = makeDataset('LK-COLOMBO', 'Colombo', 3);
+  const other = makeDataset('LK-KANDY', 'Kandy', 4);
+  const comp = compareLocations(
+    [
+      { id: 'LK-COLOMBO', label: 'Colombo', dataset: primary },
+      { id: 'LK-KANDY', label: 'Kandy', dataset: other }
+    ],
+    'PRECTOTCORR'
+  );
+
+  assert.equal(comp.summaries.length, 2);
+  const colombo = comp.summaries.find((s) => s.id === 'LK-COLOMBO');
+  const kandy = comp.summaries.find((s) => s.id === 'LK-KANDY');
+  assert.ok(colombo);
+  assert.ok(kandy);
+
+  // Zero-variance series: CI collapses to the mean itself.
+  assert.deepEqual(colombo.meanCI95, [3, 3]);
+  assert.deepEqual(kandy.meanCI95, [4, 4]);
+
+  // Primary vs itself: zero difference, zero-width interval.
+  assert.equal(colombo.deltaFromPrimary, 0);
+  assert.deepEqual(colombo.deltaFromPrimaryCI95, [0, 0]);
+
+  // Kandy vs Colombo: difference of exactly 1 mm/day, zero-width interval.
+  assert.equal(kandy.deltaFromPrimary, 1);
+  assert.deepEqual(kandy.deltaFromPrimaryCI95, [1, 1]);
+});
+
+test('compareLocations uncertainty intervals are nonzero when annual means vary and contain the delta', () => {
+  const months = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+  const years = Array.from({ length: 30 }, (_, i) => 1995 + i);
+  const makeRows = (base) =>
+    years.flatMap((year, i) =>
+      months.map((month) => ({
+        date: `${year}-${String(month).padStart(2, '0')}`,
+        year,
+        month,
+        values: { PRECTOTCORR: base + 0.05 * i }
+      }))
+    );
+  const makeDataset = (id, label, base) => ({
+    latitude: 6.9271,
+    longitude: 79.8612,
+    placeLabel: label,
+    elevationMeters: 50,
+    rows: makeRows(base),
+    available: ['PRECTOTCORR'],
+    unavailable: [],
+    requestedParameters: ['PRECTOTCORR'],
+    startYear: 1995,
+    endYear: 2024,
+    gridNote: 'synthetic test fixture',
+    stats: {
+      PRECTOTCORR: {
+        unit: 'mm/day',
+        mean: base,
+        min: { value: base, date: '1995-01' },
+        max: { value: base, date: '1995-01' },
+        annual: []
+      }
+    }
+  });
+  const primary = makeDataset('LK-COLOMBO', 'Colombo', 3);
+  const other = makeDataset('LK-KANDY', 'Kandy', 4);
+  const comp = compareLocations(
+    [
+      { id: 'LK-COLOMBO', label: 'Colombo', dataset: primary },
+      { id: 'LK-KANDY', label: 'Kandy', dataset: other }
+    ],
+    'PRECTOTCORR'
+  );
+
+  const colombo = comp.summaries.find((s) => s.id === 'LK-COLOMBO');
+  const kandy = comp.summaries.find((s) => s.id === 'LK-KANDY');
+  assert.ok(colombo);
+  assert.ok(kandy);
+
+  // Varying annual means -> nonzero-width intervals.
+  assert.ok(colombo.meanCI95 !== null && colombo.meanCI95[0] < colombo.meanCI95[1]);
+  assert.ok(kandy.meanCI95 !== null && kandy.meanCI95[0] < kandy.meanCI95[1]);
+
+  // Same year-on-year shape, shifted by 1 mm/day: delta CI must contain 1.
+  assert.equal(kandy.deltaFromPrimary, 1);
+  assert.ok(kandy.deltaFromPrimaryCI95 !== null);
+  assert.ok(kandy.deltaFromPrimaryCI95[0] <= 1 && 1 <= kandy.deltaFromPrimaryCI95[1], `CI ${kandy.deltaFromPrimaryCI95} does not contain 1`);
+});
+
+test('compareLocations withholds uncertainty intervals below the two-year minimum', () => {
+  const months = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+  const primaryRows = months.flatMap((month) => ({
+    date: `2020-${String(month).padStart(2, '0')}`,
+    year: 2020,
+    month,
+    values: { PRECTOTCORR: 3 }
+  }));
+  const shortRows = months.flatMap((month) => ({
+    date: `2021-${String(month).padStart(2, '0')}`,
+    year: 2021,
+    month,
+    values: { PRECTOTCORR: 4 }
+  }));
+  const makeDataset = (id, rows) => ({
+    latitude: 6.9271,
+    longitude: 79.8612,
+    placeLabel: id,
+    elevationMeters: 50,
+    rows,
+    available: ['PRECTOTCORR'],
+    unavailable: [],
+    requestedParameters: ['PRECTOTCORR'],
+    startYear: 2020,
+    endYear: 2021,
+    gridNote: 'synthetic test fixture',
+    stats: {
+      PRECTOTCORR: {
+        unit: 'mm/day',
+        mean: 3.5,
+        min: { value: 3, date: '2020-01' },
+        max: { value: 4, date: '2021-01' },
+        annual: []
+      }
+    }
+  });
+  const primary = makeDataset('LK-COLOMBO', primaryRows);
+  const short = makeDataset('LK-KANDY', shortRows);
+  const comp = compareLocations(
+    [
+      { id: 'LK-COLOMBO', label: 'Colombo', dataset: primary },
+      { id: 'LK-KANDY', label: 'Kandy', dataset: short }
+    ],
+    'PRECTOTCORR'
+  );
+
+  const colombo = comp.summaries.find((s) => s.id === 'LK-COLOMBO');
+  const kandy = comp.summaries.find((s) => s.id === 'LK-KANDY');
+  assert.ok(colombo);
+  assert.ok(kandy);
+
+  assert.equal(colombo.completeYears, 1);
+  assert.equal(kandy.completeYears, 1);
+  assert.equal(colombo.meanCI95, null);
+  assert.equal(kandy.meanCI95, null);
+  assert.equal(colombo.deltaFromPrimaryCI95, null);
+  assert.equal(kandy.deltaFromPrimaryCI95, null);
 });
 
 test('parsePowerResponse separates returned from unreturned parameters', () => {
