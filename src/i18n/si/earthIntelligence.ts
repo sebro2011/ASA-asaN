@@ -9,15 +9,22 @@
 import type { EarthIntelligenceStrings } from '../earthIntelligence';
 
 export const earthIntelligenceSi: EarthIntelligenceStrings = {
-  earthLabBadge: 'NASA පෘථිවි නිරීක්ෂණ · සජීවී සේවා',
+  earthLabBadge: 'COSMORA පෘථිවි බුද්ධිය · NASA සජීවී ටෙලිමෙට්‍රි',
+  earthLabBriefTitle: 'පෘථිවි නිරීක්ෂණ සහ දේශගුණ පර්යේෂණ මෙහෙයුම් මැදිරිය',
   earthLabIntro:
     'NASA GIBS චන්ද්‍රිකා රූප සහ NASA POWER ලේඛනාගාරය මත විද්‍යාත්මක කාර්ය අවකාශයක්. සෑම අගයක් සමඟ එහි සැපයුම්කරු, දත්ත කට්ටලය, නිරීක්ෂණ දිනය සහ ලබා ගත් වේලාව පෙන්වන අතර, නොමැති දත්ත නොමැති ලෙසම දක්වයි.',
 
   earthModeOverview: 'රූප සැලසුම් මැදිරිය',
   earthModeTrends: 'ප්‍රවණතා ගවේෂකය',
+  earthModeCompare: 'ස්ථාන සංසන්දනය',
   earthModeSriLanka: 'ශ්‍රී ලංකා නිරීක්ෂණය',
   earthModeAnalyst: 'AI පෘථිවි විශ්ලේෂක',
+  earthModeResearch: 'අග්‍රාගමිණ ආයතන ගවේෂණ අංශය',
   earthModesLabel: 'පෘථිවි බුද්ධි කාර්ය අවකාශය',
+
+  earthSeparationBannerTitle: 'දත්ත මූලාශ්‍ර වෙන්කර හඳුනාගැනීම:',
+  earthSeparationBannerBody:
+    'චන්ද්‍රිකා ස්තර (NASA GIBS) නිශ්චිත දිනයන් සඳහා දෘශ්‍ය පරාවර්තන පෙන්වන අතර, දේශගුණ ශ්‍රේණි (NASA POWER) ~0.5° × 0.625° ග්‍රිඩ් සෛල මාසික ඇස්තමේන්තු දක්වයි. මේ දෙකම සෘජු භූමි කාලගුණ මධ්‍යස්ථාන මිනුම් නොවේ.',
 
   earthSearchLabel: 'ස්ථානයක් සොයන්න',
   earthSearchPlaceholder: 'දිස්ත්‍රික්කය, නගරය හෝ ස්ථාන නම…',
@@ -283,5 +290,75 @@ export const earthIntelligenceSi: EarthIntelligenceStrings = {
   earthAiIntegrityTitle: 'විද්‍යාත්මක අඛණ්ඩතාව:',
   earthAiIntegrityBody:
     'ගැලපීම් මඟින් වෙනස් වන්නේ සත්‍යාපිත GIBS රාමුව දර්ශනය වන ආකාරය පමණි. එය උෂ්ණත්වය, වර්ෂාපතනය, භූ-ආවරණය හෝ වෙනත් කිසිදු මාත්‍රාවක් මනින්නේ නැත; AI-වැඩිදියුණු කළ විස්තර සත්‍යාපිත නිරීක්ෂණ ලෙස නොසැලකිය යුතුය.',
-  earthAiAiNoteTitle: 'AI සුපිරි-විභේදනය:'
+  earthAiAiNoteTitle: 'AI සුපිරි-විභේදනය:',
+
+  earthAnnualMean: 'වාර්ෂික සාමාන්‍යය (මාස 12)',
+  earthMonthlySeries: 'මාසික නිරීක්ෂණය',
+  earthNoData: 'මෙම තේරීම සඳහා ප්‍රස්තාරගත කළ හැකි දත්ත ලැබී නැත.',
+  earthTableYear: 'දින දර්ශන වර්ෂය',
+  earthLegendTitle: 'ක්‍රමාංකනය කළ ස්තර වර්ණ පරිමාණය',
+  earthMapClickInspect: 'ස්ථානයක් තේරීමට සිතියම ක්ලික් කරන්න',
+  earthMapClickActive: 'ඛණ්ඩාංක තේරීමට සිතියම මත ඕනෑම තැනක් ක්ලික් කරන්න',
+  earthStepPrev: 'පසුපසට (දින {{days}})',
+  earthStepNext: 'ඉදිරියට (දින {{days}})',
+  earthComparePrevYear: 'වසරකට පෙර සසඳන්න',
+
+  earthSubtabSeries: 'ප්‍රවණතා සහ ශ්‍රේණි',
+  earthSubtabAnomalies: 'උෂ්ණත්ව සහ වර්ෂා අසාමාන්‍යතා',
+  earthSubtabSeasonality: 'මෝසම් සහ කාල පරිච්ඡේද',
+  earthSubtabStatistics: 'තේරුම් පරීක්සා සහ ජල විද්‍යාව',
+  earthSubtabExplorer: 'දත්ත ගවේෂකය සහ ගුණාත්මකභාවය',
+
+  earthQualityGradeHigh: 'ඉහළ දත්ත සම්පූර්ණත්වය',
+  earthQualityGradeModerate: 'මධ්‍යම දත්ත සම්පූර්ණත්වය',
+  earthQualityGradeLimited: 'සීමිත දත්ත ආවරණය',
+  earthQualityTitle: 'දත්ත ගුණාත්මකභාවය සහ අඩුපාඩු පරීක්ෂාව',
+  earthStatMedian: 'මධ්‍යස්ථය',
+  earthStatStdDev: 'සම්මත අපගමනය (s)',
+  earthStatDecadeOls: 'දශකයකට OLS රේඛීය බෑවුම',
+  earthStatDecadeSen: 'දශකයකට Theil–Sen මධ්‍යස්ථ බෑවුම',
+  earthStatAnnualRainTotal: 'සාමාන්‍ය වාර්ෂික මුළු වර්ෂාපතනය',
+  earthShowTrendLine: 'OLS ප්‍රවණතා රේඛාව',
+
+  earthBaselineLabel: 'අසාමාන්‍යතා සමුද්දේශ පදනම',
+  earthBaselineEarliest5: 'මුල් සම්පූර්ණ වසර 5',
+  earthBaselineEarliest10: 'මුල් සම්පූර්ණ වසර 10',
+  earthBaselineWmo: '1991–2020 අතිච්ඡාදනය',
+  earthBaselineWindow: 'සම්පූර්ණ ලබාගත් පරාසය',
+  earthAnomalyChartTitle: 'සමුද්දේශ පදනමේ සිට වාර්ෂික අපගමනය',
+  earthAnomalyWarmWet: 'පදනමට ඉහළින්',
+  earthAnomalyCoolDry: 'පදනමට පහළින්',
+  earthAnomalyRainPctNote: 'වර්ෂාපතන අසාමාන්‍යතා සඳහා ප්‍රතිශත (%) සහ වාර්ෂික mm වෙනසද පෙන්වයි.',
+
+  earthClimatologyTitle: 'මාස 12 සමයානුකූල චක්‍රය (ලබාගත් දේශගුණික සාමාන්‍යය)',
+  earthMonsoonRegimesTitle: 'දකුණු ආසියානු මෝසම් සහ කාලගුණික සෘතු',
+  earthEpochSplitTitle: 'ඓතිහාසික කාල පරිච්ඡේද සංසන්දනය',
+  earthEpochEarly: 'මුල් කාල පරිච්ඡේදය',
+  earthEpochRecent: 'මෑත කාල පරිච්ඡේදය',
+  earthEpochDelta: 'නිරීක්ෂිත වෙනස',
+
+  earthUnusualTitle: 'අසාමාන්‍ය මාසික නිරීක්ෂණ (|z| ≥ 2.0σ)',
+  earthUnusualNone: 'මෙම කාල පරාසය තුළ ±2.0σ ඉක්මවූ අසාමාන්‍ය මාසික අගයන් වාර්තා වී නැත.',
+  earthExplorerFilterYear: 'වර්ෂය පෙරහන් කරන්න…',
+  earthDownloadSeriesCsv: 'මාසික CSV බාගන්න',
+
+  earthCompareWorkspaceTitle: 'බහු-ස්ථාන දේශගුණ සංසන්දනය',
+  earthCompareWorkspaceSubtitle:
+    'NASA POWER මාසික ලේඛනාගාර භාවිතයෙන් ස්ථාන 2 සිට 4 දක්වා එකවර සංසන්දනය කරන්න. උස, උෂ්ණත්වය, වර්ෂාපතනය, මෝසම් රටා සහ දශක ප්‍රවණතා පරීක්ෂා කළ හැක.',
+  earthCompareAddPlace: 'සංසන්දනයට ස්ථානයක් එක් කරන්න',
+  earthComparePresetsLabel: 'විද්‍යාත්මක සංසන්දන කට්ටල',
+  earthComparePresetIslandZones: 'ශ්‍රී ලංකා දේශගුණ කලාප (කොළඹ · නුවරඑළිය · යාපනය)',
+  earthComparePresetMonsoonCoast: 'බටහිර සහ නැගෙනහිර මෝසම් වෙරළ (කොළඹ · ත්‍රිකුණාමලය · හම්බන්තොට)',
+  earthComparePresetTropicalWorld: 'නිවර්තන කලාප සංසන්දනය (ශ්‍රී ලංකාව · ඇමසන් · කලිමන්තන්)',
+  earthCompareAnnualOverlay: 'බහු-ස්ථාන වාර්ෂික සාමාන්‍ය සංසන්දනය',
+  earthCompareSeasonalOverlay: 'මාස 12 සමයානුකූල චක්‍ර සංසන්දනය',
+  earthCompareMatrixTitle: 'සංසන්දනාත්මක සංඛ්‍යාන සහ ගුණාත්මක වගුව',
+  earthCompareExportCsv: 'සංසන්දන CSV බාගන්න',
+  earthCompareRemove: 'ස්ථානය ඉවත් කරන්න',
+
+  earthAnalystSummaryBadge: 'AI පෘථිවි විශ්ලේෂක 2.0 · සත්‍යාපිත දත්ත පදනම',
+  earthAnalystSuggestion5: 'සක්‍රීය ස්ථාන අතර දේශගුණික රටා සහ අසාමාන්‍යතා සංසන්දනය කරන්න.',
+  earthAnalystSuggestion6: 'මෙම කාල පරාසයේ අසාමාන්‍ය මාසික උෂ්ණත්ව හෝ වර්ෂා නිරීක්ෂණ (≥2σ) තිබේද?',
+
+  earthInspectStatsBtn: 'Mann–Kendall, Pettitt & SPI-12 තේරුම් ගන්න →'
 };

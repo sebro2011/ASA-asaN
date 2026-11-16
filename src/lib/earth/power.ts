@@ -77,6 +77,22 @@ export const POWER_PARAMETERS: PowerParameterMeta[] = [
     kind: 'temperature',
     core: false,
     notes: 'Monthly mean of the daily minimum 2 m air temperature.'
+  },
+  {
+    code: 'GWETTOP',
+    label: 'Surface soil wetness (0–5 cm)',
+    unit: '0–1',
+    kind: 'soil',
+    core: false,
+    notes: 'MERRA-2 degree of soil moisture saturation in the top 5 cm layer (0 = completely dry, 1 = saturated).'
+  },
+  {
+    code: 'GWETROOT',
+    label: 'Root-zone soil wetness (0–100 cm)',
+    unit: '0–1',
+    kind: 'soil',
+    core: false,
+    notes: 'MERRA-2 degree of soil moisture saturation in the 0–100 cm root zone for hydrological drought and agricultural water-balance analysis.'
   }
 ];
 
@@ -103,9 +119,10 @@ export function buildPowerUrl(
   startYear: number,
   endYear: number
 ): string {
+  const community = parameters.some((code) => code.startsWith('GWET') || code.startsWith('EVP')) ? 'AG' : 'RE';
   const params = new URLSearchParams({
     parameters: parameters.join(','),
-    community: 'RE',
+    community,
     longitude: longitude.toFixed(4),
     latitude: latitude.toFixed(4),
     start: String(clampYear(startYear)),
@@ -414,9 +431,39 @@ async function fetchPowerViaServer(args: FetchPowerArgs, requested: string[]): P
   }
 }
 
+const inFlightPower = new Map<string, Promise<Sourced<PowerDataset>>>();
+
+function raceWithSignal<T>(promise: Promise<T>, signal?: AbortSignal): Promise<T> {
+  if (!signal) return promise;
+  if (signal.aborted) {
+    const err = new Error('Aborted');
+    err.name = 'AbortError';
+    return Promise.reject(err);
+  }
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = () => {
+      const err = new Error('Aborted');
+      err.name = 'AbortError';
+      reject(err);
+    };
+    signal.addEventListener('abort', onAbort, { once: true });
+    promise.then(
+      (val) => {
+        signal.removeEventListener('abort', onAbort);
+        resolve(val);
+      },
+      (err) => {
+        signal.removeEventListener('abort', onAbort);
+        reject(err);
+      }
+    );
+  });
+}
+
 /**
  * Preferred entry point for the UI: server proxy first (validated + cached
  * server-side), then the direct public POWER service, then the local cache.
+ * Deduplicates identical in-flight requests across concurrent components.
  */
 export async function fetchPowerDataset(args: FetchPowerArgs): Promise<Sourced<PowerDataset>> {
   const requested = args.parameters?.length ? args.parameters : POWER_PARAMETERS.map((p) => p.code);
@@ -435,17 +482,33 @@ export async function fetchPowerDataset(args: FetchPowerArgs): Promise<Sourced<P
         provenance: { ...cached.value.provenance, fromCache: true }
       };
     }
+    const existing = inFlightPower.get(cacheKey);
+    if (existing) {
+      return raceWithSignal(existing, args.signal);
+    }
   }
 
-  const viaServer = await fetchPowerViaServer(args, requested);
-  if (viaServer) {
-    cacheSet(cacheKey, viaServer, TTL.power);
-    return viaServer;
+  const unsharedArgs: FetchPowerArgs = { ...args, signal: undefined };
+  const task = (async (): Promise<Sourced<PowerDataset>> => {
+    const viaServer = await fetchPowerViaServer(unsharedArgs, requested);
+    if (viaServer) {
+      cacheSet(cacheKey, viaServer, TTL.power);
+      return viaServer;
+    }
+
+    const direct = await fetchPowerMonthly(unsharedArgs);
+    if (direct.data) cacheSet(cacheKey, direct, TTL.power);
+    return direct;
+  })();
+
+  if (!args.force) {
+    inFlightPower.set(cacheKey, task);
+    task.finally(() => {
+      if (inFlightPower.get(cacheKey) === task) inFlightPower.delete(cacheKey);
+    });
   }
 
-  const direct = await fetchPowerMonthly(args);
-  if (direct.data) cacheSet(cacheKey, direct, TTL.power);
-  return direct;
+  return raceWithSignal(task, args.signal);
 }
 
 /**

@@ -20,6 +20,16 @@ import express, { type Request, type Response, type NextFunction } from 'express
 import { buildDomain, describeCoverage, type DescribeDomainsError } from '../src/lib/earth/domains.ts';
 import { describeDomainsUrl, getGibsLayer, GIBS_WMTS_BASE, wmtsTileUrl } from '../src/lib/earth/gibsCatalog.ts';
 import { CORE_PARAMETER_CODES, POWER_MONTHLY_POINT_URL } from '../src/lib/earth/power.ts';
+import {
+  SPACE_APPS_RESOURCE_MATRIX,
+  buildGesDiscDataRodUrl,
+  parseCmrSwotGranules,
+  parseGesDiscAsc2,
+  parseKnmiAsciiSeries,
+  parseNoaaGsomSeries,
+  type NoaaGsomRecord,
+  type NoaaStationMeta
+} from '../src/lib/earth/spaceAppsResources.ts';
 import { analyseBundle, buildLocalAnalystAnswer, type EarthAnalystContext } from './earth/localAnalysis.ts';
 import { createOrchestrator } from './earth/providerOrchestrator.ts';
 import { createConfiguredProviders, extractJson, normaliseAnswer } from './earth/providers.ts';
@@ -118,14 +128,25 @@ earthRouter.get('/health', (_req, res) => {
     timestamp: new Date().toISOString(),
     capabilities: {
       powerProxy: true,
+      powerHydrology: true,
       gibsDomains: true,
       gibsProbe: true,
+      swotGranules: true,
+      knmiIndices: true,
+      noaaCdo: Boolean(process.env.NOAA_CDO_TOKEN),
+      gesDiscHydrology: Boolean(process.env.EARTHDATA_BEARER_TOKEN),
       firmsHotspots: Boolean(process.env.FIRMS_MAP_KEY),
       // This reports configuration, not a successful provider health probe.
-      aiAnalyst: Boolean(process.env.GEMINI_API_KEY || process.env.OPENROUTER_API_KEY || process.env.ARENA_API_KEY),
+      aiAnalyst: Boolean(
+        process.env.GEMINI_API_KEY ||
+          process.env.OPENROUTER_API_KEY ||
+          process.env.EARTH_ANALYST_OSS_BASE_URL ||
+          process.env.ARENA_API_KEY
+      ),
       aiAnalystProviders: [
         process.env.GEMINI_API_KEY ? 'gemini' : null,
         process.env.OPENROUTER_API_KEY ? 'openrouter' : null,
+        process.env.EARTH_ANALYST_OSS_BASE_URL ? 'oss' : null,
         process.env.ARENA_API_KEY ? 'arena' : null
       ].filter(Boolean),
       localAnalyst: true
@@ -181,9 +202,10 @@ earthRouter.get('/power', rateLimit('power', 60, 60_000), async (req, res) => {
   }
 
   const buildUrl = (codes: string[]) => {
+    const community = codes.some((code) => code.startsWith('GWET') || code.startsWith('EVP')) ? 'AG' : 'RE';
     const params = new URLSearchParams({
       parameters: codes.join(','),
-      community: 'RE',
+      community,
       longitude: longitude.toFixed(4),
       latitude: latitude.toFixed(4),
       start: String(start),
@@ -563,6 +585,7 @@ function logAnalystEvent(event: Record<string, unknown>) {
 const PROVIDER_LABELS: Record<string, string> = {
   gemini: 'Google Gemini',
   openrouter: 'OpenRouter',
+  oss: 'Open-Source Local Model',
   arena: 'Arena AI',
   local: 'Local Earth Intelligence',
 };
@@ -610,13 +633,32 @@ function buildProviderContext(context: EarthAnalystContext, analysis: ReturnType
         unit: entry.unit,
         usableValues: entry.count,
         mean: entry.mean,
+        stdDev: entry.stdDev,
         min: entry.min,
         max: entry.max,
+        olsSlopePerDecade: entry.olsSlopePerDecade,
+        senSlopePerDecade: entry.senSlopePerDecade,
         anomalyBaseline: entry.anomaly
           ? { label: entry.anomaly.baselineLabel, value: entry.anomaly.baselineValue, latest: entry.anomaly.latest }
           : null,
         periodComparison: entry.periodComparison,
         seasonal: entry.seasonal,
+        unusualMonths: entry.unusualMonths,
+      })),
+      comparisons: analysis.comparisons.map((comp) => ({
+        label: comp.label,
+        latitude: comp.latitude ?? null,
+        longitude: comp.longitude ?? null,
+        sourceUrl: comp.sourceUrl ?? null,
+        series: comp.series.map((s) => ({
+          code: s.code,
+          unit: s.unit,
+          usableValues: s.count,
+          mean: s.mean,
+          min: s.min,
+          max: s.max,
+          olsSlopePerDecade: s.olsSlopePerDecade,
+        })),
       })),
       coverage: analysis.coverage,
     },
@@ -667,7 +709,7 @@ earthRouter.post('/analyst', rateLimit('analyst', 20, 5 * 60_000), async (req, r
   // `Array.isArray(context.dates)`), so a malformed body degrades to "no data".
   const bundle = context as EarthAnalystContext;
   const analysis = analyseBundle(bundle);
-  const local = buildLocalAnalystAnswer(String(question), bundle, { analysis });
+  const local = buildLocalAnalystAnswer(String(question), bundle, { analysis, lang: String(lang) });
   const providerContext = buildProviderContext(bundle, analysis);
 
   // Cancellation: if the browser goes away, stop paying for tokens.
@@ -682,7 +724,14 @@ earthRouter.post('/analyst', rateLimit('analyst', 20, 5 * 60_000), async (req, r
     }
   });
 
-  const dedupeKey = JSON.stringify([String(question), String(lang), providerContext.location, providerContext.dateRange, analysis.series.map((entry) => [entry.code, entry.count, entry.lastMonth])]);
+  const dedupeKey = JSON.stringify([
+    String(question),
+    String(lang),
+    providerContext.location,
+    providerContext.dateRange,
+    analysis.series.map((entry) => [entry.code, entry.count, entry.lastMonth]),
+    analysis.comparisons.map((comp) => [comp.label, comp.series.length])
+  ]);
 
   logAnalystEvent({
     event: 'earth.analyst.request',
@@ -813,3 +862,453 @@ earthRouter.post('/analyst', rateLimit('analyst', 20, 5 * 60_000), async (req, r
     groundingMode: 'deterministic-local-analysis',
   });
 });
+
+/* ------------------------------------------------------------------ */
+/* Space Apps Multi-Agency Resource Registry & Validated Proxies      */
+/* ------------------------------------------------------------------ */
+
+const USER_AGENT_HEADER = 'cosmora-earth-lab/2.0 (+https://github.com/sebro2011/ASA-asaN)';
+
+/** Global per-provider polite-use spacing guards (shared across callers). */
+const providerLastCall = new Map<string, number>();
+
+async function enforceUpstreamSpacing(provider: string, minIntervalMs: number): Promise<void> {
+  const now = Date.now();
+  const prev = providerLastCall.get(provider) ?? 0;
+  const wait = prev + minIntervalMs - now;
+  if (wait > 0) {
+    providerLastCall.set(provider, prev + minIntervalMs);
+    await new Promise((resolve) => setTimeout(resolve, Math.min(wait, 4000)));
+  } else {
+    providerLastCall.set(provider, now);
+  }
+}
+
+earthRouter.get('/sources', (_req, res) => {
+  return res.json({
+    ok: true,
+    retrievedAt: new Date().toISOString(),
+    serverCapabilities: {
+      nasaPowerClimateAndHydrology: true,
+      swotCmrDiscovery: true,
+      knmiTeleconnectionProxy: true,
+      noaaCdoConfigured: Boolean(process.env.NOAA_CDO_TOKEN),
+      gesDiscEarthdataConfigured: Boolean(process.env.EARTHDATA_BEARER_TOKEN)
+    },
+    resources: SPACE_APPS_RESOURCE_MATRIX
+  });
+});
+
+const ALLOWED_SWOT_COLLECTIONS = new Set([
+  'SWOT_L2_HR_LakeSP_2.0',
+  'SWOT_L2_HR_RiverSP_2.0',
+  'SWOT_L2_LR_SSH_2.0',
+  'SWOT_L2_LR_SSH_Basic_2.0'
+]);
+
+earthRouter.get('/swot/granules', rateLimit('swot-cmr', 20, 60_000), async (req, res) => {
+  const west = numberParam(req.query.west, -180, 180);
+  const south = numberParam(req.query.south, -90, 90);
+  const east = numberParam(req.query.east, -180, 180);
+  const north = numberParam(req.query.north, -90, 90);
+  const collectionRaw = typeof req.query.collection === 'string' && req.query.collection.trim()
+    ? req.query.collection.trim()
+    : 'SWOT_L2_LR_SSH_Basic_2.0';
+
+  if (west === null || south === null || east === null || north === null || west >= east || south >= north) {
+    return res.status(400).json({
+      ok: false,
+      code: 'invalid-bbox',
+      message: 'Valid numeric bounding box parameters (west, south, east, north) with west < east and south < north are required.'
+    });
+  }
+  if (!ALLOWED_SWOT_COLLECTIONS.has(collectionRaw)) {
+    return res.status(400).json({
+      ok: false,
+      code: 'unsupported-collection',
+      message: `Unsupported SWOT collection "${collectionRaw}". Allowed: ${[...ALLOWED_SWOT_COLLECTIONS].join(', ')}.`
+    });
+  }
+
+  const bbox = {
+    west: Number(west.toFixed(3)),
+    south: Number(south.toFixed(3)),
+    east: Number(east.toFixed(3)),
+    north: Number(north.toFixed(3))
+  };
+  const cacheKey = `swot:${collectionRaw}:${bbox.west}:${bbox.south}:${bbox.east}:${bbox.north}`;
+  const cached = cacheGet<Record<string, unknown>>(cacheKey);
+  if (cached) {
+    return res.json({ ...cached, fromCache: true });
+  }
+
+  const params = new URLSearchParams({
+    short_name: collectionRaw,
+    bounding_box: `${bbox.west},${bbox.south},${bbox.east},${bbox.north}`,
+    page_size: '15',
+    sort_key: '-start_date'
+  });
+  const cmrUrl = `https://cmr.earthdata.nasa.gov/search/granules.json?${params.toString()}`;
+
+  try {
+    await enforceUpstreamSpacing('nasa-cmr', 500);
+    const response = await fetchWithTimeout(
+      cmrUrl,
+      { headers: { Accept: 'application/json', 'User-Agent': USER_AGENT_HEADER } },
+      15_000
+    );
+    if (!response.ok) {
+      return res.status(502).json({
+        ok: false,
+        code: 'cmr-upstream-error',
+        status: response.status,
+        message: `NASA CMR SWOT search returned HTTP ${response.status}.`
+      });
+    }
+    const rawPayload = await response.json();
+    const hitsHeader = Number(response.headers.get('cmr-hits') || '0');
+    const parsed = parseCmrSwotGranules({
+      cmrPayload: rawPayload,
+      bbox,
+      collection: collectionRaw,
+      totalHits: Number.isFinite(hitsHeader) && hitsHeader > 0 ? hitsHeader : 0,
+      sourceUrl: cmrUrl,
+      retrievedAt: new Date().toISOString()
+    });
+    const out = {
+      ok: true,
+      fromCache: false,
+      ...parsed,
+      totalHits: parsed.totalHits || parsed.granules.length
+    };
+    cacheSet(cacheKey, out, 60 * 60 * 1000);
+    return res.json(out);
+  } catch (error) {
+    const timedOut = error instanceof Error && error.name === 'AbortError';
+    return res.status(timedOut ? 504 : 502).json({
+      ok: false,
+      code: timedOut ? 'cmr-timeout' : 'cmr-unreachable',
+      message: timedOut ? 'NASA CMR SWOT search timed out.' : 'Unable to reach NASA CMR SWOT granule catalog.'
+    });
+  }
+});
+
+const ALLOWED_NOAA_DATATYPES = new Set(['TAVG', 'TMAX', 'TMIN', 'PRCP']);
+
+earthRouter.get('/noaa/cdo', rateLimit('noaa-cdo', 15, 60_000), async (req, res) => {
+  const latitude = numberParam(req.query.latitude, -90, 90);
+  const longitude = numberParam(req.query.longitude, -180, 180);
+  const start = numberParam(req.query.start, 1900, 2100);
+  const end = numberParam(req.query.end, 1900, 2100);
+  const datatypeRaw = String(req.query.datatype || 'TAVG').trim().toUpperCase();
+
+  if (latitude === null || longitude === null || start === null || end === null || start > end) {
+    return res.status(400).json({
+      ok: false,
+      code: 'invalid-arguments',
+      message: 'Valid numeric latitude, longitude, start year, and end year (start <= end) are required.'
+    });
+  }
+  if (!ALLOWED_NOAA_DATATYPES.has(datatypeRaw)) {
+    return res.status(400).json({
+      ok: false,
+      code: 'invalid-datatype',
+      message: 'datatype must be one of TAVG, TMAX, TMIN, or PRCP.'
+    });
+  }
+
+  const token = (process.env.NOAA_CDO_TOKEN || '').trim();
+  if (!token) {
+    return res.status(503).json({
+      ok: false,
+      code: 'noaa-token-not-configured',
+      message:
+        'NOAA_CDO_TOKEN is not configured on the server. Request a free token at https://www.ncei.noaa.gov/cdo-web/token or import a NOAA CDO station CSV directly in the Multi-Source Research Hub.'
+    });
+  }
+
+  const clampedStart = Math.max(start, end - 19); // Max 20-year window (2 x 10-year NOAA GSOM chunks)
+  const cacheKey = `noaa:${latitude.toFixed(3)}:${longitude.toFixed(3)}:${clampedStart}:${end}:${datatypeRaw}`;
+  const cached = cacheGet<Record<string, unknown>>(cacheKey);
+  if (cached) {
+    return res.json({ ...cached, fromCache: true });
+  }
+
+  try {
+    // 1. Discover nearest GSOM station within +/-1.2 deg box (widening to +/-2.5 deg if needed)
+    let chosenStation: NoaaStationMeta | null = null;
+    for (const halfDeg of [1.2, 2.5]) {
+      const extent = `${(latitude - halfDeg).toFixed(3)},${(longitude - halfDeg).toFixed(3)},${(latitude + halfDeg).toFixed(3)},${(longitude + halfDeg).toFixed(3)}`;
+      const stParams = new URLSearchParams({
+        datasetid: 'GSOM',
+        datatypeid: datatypeRaw,
+        extent,
+        startdate: `${clampedStart}-01-01`,
+        enddate: `${end}-12-31`,
+        limit: '15'
+      });
+      await enforceUpstreamSpacing('noaa-cdo', 260);
+      const stResp = await fetchWithTimeout(
+        `https://www.ncei.noaa.gov/cdo-web/api/v2/stations?${stParams.toString()}`,
+        { headers: { token, Accept: 'application/json', 'User-Agent': USER_AGENT_HEADER } },
+        15_000
+      );
+      if (!stResp.ok) {
+        return res.status(stResp.status === 429 ? 429 : 502).json({
+          ok: false,
+          code: 'noaa-upstream-error',
+          status: stResp.status,
+          message: `NOAA CDO station lookup returned HTTP ${stResp.status}.`
+        });
+      }
+      const stBody = (await stResp.json()) as { results?: NoaaStationMeta[] };
+      const candidates = Array.isArray(stBody.results) ? stBody.results : [];
+      if (candidates.length > 0) {
+        candidates.sort((a, b) => {
+          const da = Math.hypot(a.latitude - latitude, a.longitude - longitude) - (a.datacoverage ?? 0) * 0.3;
+          const db = Math.hypot(b.latitude - latitude, b.longitude - longitude) - (b.datacoverage ?? 0) * 0.3;
+          return da - db;
+        });
+        chosenStation = candidates[0];
+        break;
+      }
+    }
+
+    if (!chosenStation) {
+      return res.status(404).json({
+        ok: false,
+        code: 'noaa-no-station-found',
+        message: 'No NOAA GSOM ground weather station with active records was found within 2.5° of the selected coordinates.'
+      });
+    }
+
+    // 2. Retrieve GSOM monthly observations in <=10-year chunks (NOAA CDO v2 GSOM rule)
+    const allRecords: NoaaGsomRecord[] = [];
+    let lastDataUrl = '';
+    for (let chunkStart = clampedStart; chunkStart <= end; chunkStart += 10) {
+      const chunkEnd = Math.min(end, chunkStart + 9);
+      const dParams = new URLSearchParams({
+        datasetid: 'GSOM',
+        datatypeid: datatypeRaw,
+        stationid: chosenStation.id,
+        startdate: `${chunkStart}-01-01`,
+        enddate: `${chunkEnd}-12-31`,
+        units: 'metric',
+        limit: '1000'
+      });
+      lastDataUrl = `https://www.ncei.noaa.gov/cdo-web/api/v2/data?${dParams.toString()}`;
+      await enforceUpstreamSpacing('noaa-cdo', 260);
+      const dResp = await fetchWithTimeout(
+        lastDataUrl,
+        { headers: { token, Accept: 'application/json', 'User-Agent': USER_AGENT_HEADER } },
+        15_000
+      );
+      if (!dResp.ok) {
+        return res.status(dResp.status === 429 ? 429 : 502).json({
+          ok: false,
+          code: 'noaa-data-error',
+          status: dResp.status,
+          message: `NOAA CDO GSOM data retrieval returned HTTP ${dResp.status}.`
+        });
+      }
+      const dBody = (await dResp.json()) as { results?: NoaaGsomRecord[] };
+      if (Array.isArray(dBody.results)) {
+        allRecords.push(...dBody.results);
+      }
+    }
+
+    const series = parseNoaaGsomSeries({
+      station: chosenStation,
+      records: allRecords,
+      datatype: datatypeRaw as 'TAVG' | 'TMAX' | 'TMIN' | 'PRCP',
+      sourceUrl: lastDataUrl,
+      retrievedAt: new Date().toISOString()
+    });
+    const out = { ok: true, fromCache: false, station: chosenStation, series };
+    cacheSet(cacheKey, out, 6 * 60 * 60 * 1000);
+    return res.json(out);
+  } catch (error) {
+    const timedOut = error instanceof Error && error.name === 'AbortError';
+    return res.status(timedOut ? 504 : 502).json({
+      ok: false,
+      code: timedOut ? 'noaa-timeout' : 'noaa-unreachable',
+      message: timedOut ? 'NOAA CDO request timed out.' : 'Unable to reach NOAA NCEI CDO service.'
+    });
+  }
+});
+
+const ALLOWED_GESDISC_VARIABLES: Record<string, string> = {
+  SoilMoi0_10cm_inst: 'GLDAS2:GLDAS_NOAH025_M_v2.1:SoilMoi0_10cm_inst',
+  Qs_acc: 'GLDAS2:GLDAS_NOAH025_M_v2.1:Qs_acc',
+  Evap_tavg: 'GLDAS2:GLDAS_NOAH025_M_v2.1:Evap_tavg',
+  Rainf_f_tavg: 'GLDAS2:GLDAS_NOAH025_M_v2.1:Rainf_f_tavg'
+};
+
+earthRouter.get('/hydrology/gesdisc', rateLimit('gesdisc-hydro', 12, 60_000), async (req, res) => {
+  const latitude = numberParam(req.query.latitude, -60, 90);
+  const longitude = numberParam(req.query.longitude, -180, 180);
+  const start = numberParam(req.query.start, 2000, 2100);
+  const end = numberParam(req.query.end, 2000, 2100);
+  const shortVar = typeof req.query.variable === 'string' && req.query.variable.trim()
+    ? req.query.variable.trim()
+    : 'SoilMoi0_10cm_inst';
+
+  if (latitude === null || longitude === null || start === null || end === null || start > end) {
+    return res.status(400).json({
+      ok: false,
+      code: 'invalid-arguments',
+      message: 'Valid numeric latitude (-60..90), longitude, start year (>=2000), and end year are required.'
+    });
+  }
+  const fullVariable = ALLOWED_GESDISC_VARIABLES[shortVar];
+  if (!fullVariable) {
+    return res.status(400).json({
+      ok: false,
+      code: 'unsupported-variable',
+      message: `Unsupported GES DISC variable "${shortVar}". Allowed: ${Object.keys(ALLOWED_GESDISC_VARIABLES).join(', ')}.`
+    });
+  }
+
+  const rodUrl = buildGesDiscDataRodUrl({
+    latitude,
+    longitude,
+    startYear: start,
+    endYear: end,
+    variable: fullVariable
+  });
+
+  const bearer = (process.env.EARTHDATA_BEARER_TOKEN || '').trim();
+  if (!bearer) {
+    return res.status(503).json({
+      ok: false,
+      code: 'earthdata-token-not-configured',
+      rodUrl,
+      message:
+        'EARTHDATA_BEARER_TOKEN is not configured on the server. NASA GES DISC Data Rods require Earthdata Login; use the generated Data Rod URL in your browser and import the asc2 file, or use keyless NASA POWER MERRA-2 soil wetness (GWETTOP / GWETROOT).'
+    });
+  }
+
+  const cacheKey = `gesdisc:${shortVar}:${latitude.toFixed(3)}:${longitude.toFixed(3)}:${start}:${end}`;
+  const cached = cacheGet<Record<string, unknown>>(cacheKey);
+  if (cached) {
+    return res.json({ ...cached, fromCache: true });
+  }
+
+  try {
+    await enforceUpstreamSpacing('gesdisc', 2000);
+    const response = await fetchWithTimeout(
+      rodUrl,
+      {
+        headers: {
+          Authorization: `Bearer ${bearer}`,
+          Accept: 'text/plain',
+          'User-Agent': USER_AGENT_HEADER
+        }
+      },
+      20_000
+    );
+    if (!response.ok) {
+      return res.status(response.status === 401 || response.status === 403 ? 503 : 502).json({
+        ok: false,
+        code: response.status === 401 || response.status === 403 ? 'earthdata-auth-rejected' : 'gesdisc-upstream-error',
+        status: response.status,
+        rodUrl,
+        message: `NASA GES DISC Data Rods returned HTTP ${response.status}.`
+      });
+    }
+    const text = await response.text();
+    const series = parseGesDiscAsc2(text, {
+      sourceUrl: rodUrl,
+      retrievedAt: new Date().toISOString(),
+      latitude,
+      longitude
+    });
+    const out = { ok: true, fromCache: false, series };
+    cacheSet(cacheKey, out, 6 * 60 * 60 * 1000);
+    return res.json(out);
+  } catch (error) {
+    const timedOut = error instanceof Error && error.name === 'AbortError';
+    return res.status(timedOut ? 504 : 502).json({
+      ok: false,
+      code: timedOut ? 'gesdisc-timeout' : 'gesdisc-unreachable',
+      rodUrl,
+      message: timedOut ? 'NASA GES DISC Hydrology request timed out.' : 'Unable to reach NASA GES DISC Hydrology Data Rods.'
+    });
+  }
+});
+
+const KNMI_ALLOWLIST: Record<
+  string,
+  { url: string; title: string; variableLabel: string; unit: string; spatialNote: string }
+> = {
+  nino34: {
+    url: 'https://climexp.knmi.nl/data/iersst_nino3.4a.dat',
+    title: 'KNMI Climate Explorer · ENSO Niño 3.4 SST Anomaly (ERSSTv5)',
+    variableLabel: 'Niño 3.4 SST Anomaly Index',
+    unit: '°C',
+    spatialNote: 'Equatorial Pacific (5°N–5°S, 170°W–120°W) via KNMI Climate Explorer'
+  },
+  dmi: {
+    url: 'https://climexp.knmi.nl/data/idmi_ersst.dat',
+    title: 'KNMI Climate Explorer · Indian Ocean Dipole Mode Index (DMI)',
+    variableLabel: 'Dipole Mode Index (West minus East Tropical Indian Ocean SST)',
+    unit: '°C',
+    spatialNote: 'Tropical Indian Ocean (WTIO − SETIO) via KNMI Climate Explorer'
+  }
+};
+
+earthRouter.get('/knmi/index', rateLimit('knmi-index', 6, 60_000), async (req, res) => {
+  const id = String(req.query.id || '').trim().toLowerCase();
+  const entry = KNMI_ALLOWLIST[id];
+  if (!entry) {
+    return res.status(400).json({
+      ok: false,
+      code: 'invalid-knmi-index',
+      message: 'Query parameter id is required and must be one of: nino34, dmi.'
+    });
+  }
+
+  const cacheKey = `knmi:${id}`;
+  const cached = cacheGet<Record<string, unknown>>(cacheKey);
+  if (cached) {
+    return res.json({ ...cached, fromCache: true });
+  }
+
+  try {
+    await enforceUpstreamSpacing('knmi-climexp', 10_000);
+    const response = await fetchWithTimeout(
+      entry.url,
+      { headers: { Accept: 'text/plain', 'User-Agent': USER_AGENT_HEADER } },
+      15_000
+    );
+    if (!response.ok) {
+      return res.status(502).json({
+        ok: false,
+        code: 'knmi-upstream-error',
+        status: response.status,
+        message: `KNMI Climate Explorer static index returned HTTP ${response.status}. You can also import a downloaded .dat file locally.`
+      });
+    }
+    const rawText = await response.text();
+    const series = parseKnmiAsciiSeries(rawText, {
+      title: entry.title,
+      variableLabel: entry.variableLabel,
+      unit: entry.unit,
+      sourceUrl: entry.url,
+      spatialNote: entry.spatialNote,
+      retrievedAt: new Date().toISOString()
+    });
+    const out = { ok: true, fromCache: false, series };
+    cacheSet(cacheKey, out, 24 * 60 * 60 * 1000);
+    return res.json(out);
+  } catch (error) {
+    const timedOut = error instanceof Error && error.name === 'AbortError';
+    return res.status(timedOut ? 504 : 502).json({
+      ok: false,
+      code: timedOut ? 'knmi-timeout' : 'knmi-unreachable',
+      message:
+        'KNMI Climate Explorer static index is unreachable from this network environment. Import a downloaded KNMI .dat series directly in the Multi-Source Research Hub.'
+    });
+  }
+});
+

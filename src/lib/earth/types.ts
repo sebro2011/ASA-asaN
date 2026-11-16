@@ -7,6 +7,14 @@
  * without its provenance.
  */
 
+/** A geographic bounding box `[west, south, east, north]` in degrees. */
+export interface BoundingBox {
+  west: number;
+  south: number;
+  east: number;
+  north: number;
+}
+
 /** Where a value came from and how fresh it is. */
 export type DataStatus =
   | 'live' // retrieved from the provider during this session
