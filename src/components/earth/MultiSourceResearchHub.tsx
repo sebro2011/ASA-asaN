@@ -41,6 +41,7 @@ import {
 import { ChartFrame } from '../../ui/ChartFrame';
 import { downloadTextFile } from '../../lib/earth/context';
 import { parameterMeta } from '../../lib/earth/power';
+import { STATISTICS_CONFIG } from '../../lib/earth/statisticsConfig';
 import {
   SPACE_APPS_RESOURCE_MATRIX,
   analyzeExternalSeries,
@@ -954,14 +955,19 @@ export default function MultiSourceResearchHub({
               <Metric
                 label="Mann–Kendall (Hamed–Rao)"
                 value={
-                  externalAnalysis.mannKendall.eligible
+                  externalAnalysis.mannKendall.inferenceEligible
                     ? `p = ${externalAnalysis.mannKendall.pValue}`
-                    : `n = ${externalAnalysis.mannKendall.n} (<10y)`
+                    : externalAnalysis.mannKendall.eligible
+                      ? `n* = ${externalAnalysis.mannKendall.effectiveSampleSize} (<${STATISTICS_CONFIG.minEffectiveObservations})`
+                      : `n = ${externalAnalysis.mannKendall.n} (<${STATISTICS_CONFIG.minAnnualObservations}y)`
                 }
                 note={
-                  externalAnalysis.mannKendall.eligible && externalAnalysis.mannKendall.senSlopePerDecade !== null
-                    ? `Sen: ${formatSigned(externalAnalysis.mannKendall.senSlopePerDecade)} ${externalAnalysis.series.unit}/dec (${externalAnalysis.mannKendall.direction})`
-                    : 'Minimum 10 complete years required'
+                  externalAnalysis.mannKendall.inferenceEligible &&
+                  externalAnalysis.mannKendall.senSlopePerDecade !== null
+                    ? `Sen: ${formatSigned(externalAnalysis.mannKendall.senSlopePerDecade)} ${externalAnalysis.series.unit}/dec (${externalAnalysis.mannKendall.direction}, α = ${STATISTICS_CONFIG.trendAlpha})`
+                    : externalAnalysis.mannKendall.eligible
+                      ? 'Effective sample too small after autocorrelation adjustment'
+                      : `Minimum ${STATISTICS_CONFIG.minAnnualObservations} complete years required`
                 }
                 size="sm"
               />
@@ -976,9 +982,11 @@ export default function MultiSourceResearchHub({
                     : '—'
                 }
                 note={
-                  externalAnalysis.correlationWithPower?.eligible
+                  externalAnalysis.correlationWithPower?.inferenceEligible
                     ? `Spearman ρ = ${externalAnalysis.correlationWithPower.spearmanRho} · p = ${externalAnalysis.correlationWithPower.pValueAdjusted}`
-                    : 'Select overlapping NASA POWER parameter'
+                    : externalAnalysis.correlationWithPower?.eligible
+                      ? `N_eff too small for a p-value (${externalAnalysis.correlationWithPower.effectiveDof} df)`
+                      : 'Select overlapping NASA POWER parameter'
                 }
                 size="sm"
               />

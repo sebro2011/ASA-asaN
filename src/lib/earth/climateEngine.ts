@@ -18,6 +18,7 @@
 import { daysInMonth, meanOf, parameterMeta } from './power';
 import type { PowerDataset, PowerMonthlyRow } from './types';
 import {
+  STATISTICS_CONFIG,
   computeHydrologicalIndices,
   mannKendallTest,
   pettittChangePointTest,
@@ -27,10 +28,13 @@ import {
   type MannKendallResult,
   type PettittChangePointResult,
   type SeasonalMannKendallResult,
+  type StatisticsConfig,
+  type TrendConfidence,
   type TTestResult
 } from './climateStatistics';
 
 export {
+  STATISTICS_CONFIG,
   computeHydrologicalIndices,
   mannKendallTest,
   pettittChangePointTest,
@@ -40,6 +44,8 @@ export {
   type MannKendallResult,
   type PettittChangePointResult,
   type SeasonalMannKendallResult,
+  type StatisticsConfig,
+  type TrendConfidence,
   type TTestResult
 };
 
@@ -112,8 +118,43 @@ export interface ExtendedSeriesStats {
   mannKendall: MannKendallResult;
   seasonalMannKendall: SeasonalMannKendallResult;
   pettittChangePoint: PettittChangePointResult;
+  /**
+   * Single, dependence-aware trend verdict for this parameter, derived from the
+   * tests above. Withheld (`insufficient-data`) whenever either the annual or the
+   * seasonal test could not support inference. Never stronger than its weakest
+   * input: a significant annual test alongside an ineligible seasonal test is
+   * downgraded to `short-record`, not promoted to `strong`.
+   */
+  trendVerdict: TrendVerdict;
   quality: DataQualityReport;
   caveat: string;
+}
+
+/**
+ * Aggregated, reader-facing trend verdict.
+ *
+ * The point of this object is that the UI renders *one* conclusion and the
+ * disagreement between the underlying tests is visible rather than averaged
+ * away. `dissentingTests` names the tests that disagree with `direction`.
+ */
+export interface TrendVerdict {
+  /** `insufficient-data` means no conclusion may be published at all. */
+  direction: 'increasing' | 'decreasing' | 'no-trend' | 'insufficient-data';
+  significant: boolean | null;
+  confidence: TrendConfidence;
+  /** Threshold the `significant` flag was computed at. */
+  alpha: number;
+  /** Names of the tests that support the published direction. */
+  supportingTests: string[];
+  /** Names of the tests whose verdict differs from the published one. */
+  dissentingTests: string[];
+  /** Plain-language statement the UI may render verbatim. */
+  summary: string;
+  /** Why no verdict is published, when `direction` is `insufficient-data`. */
+  withheldReason: string | null;
+  /** The one number a reader should pair with the verdict. */
+  primaryPValue: number | null;
+  effectiveSampleSize: number | null;
 }
 
 export type BaselineMode = 'earliest-5' | 'earliest-10' | 'wmo-1991-2020' | 'window-mean';
@@ -545,6 +586,136 @@ export function computeSenSlope(completeYears: Array<{ year: number; mean: numbe
   };
 }
 
+/**
+ * Combine the annual Mann–Kendall, the seasonal Mann–Kendall and the Pettitt
+ * change-point test into one verdict a reader can act on.
+ *
+ * Rules, in order (all deliberate, all testable):
+ *
+ *   1. If the annual test cannot support inference, publish nothing. The annual
+ *      test is the primary evidence; a seasonal result computed over more, weaker
+ *      within-month tests is not a substitute for it.
+ *   2. Confidence is the *minimum* of the contributing confidences. A `strong`
+ *      annual verdict alongside a `short-record` seasonal verdict is reported as
+ *      `short-record`.
+ *   3. When the annual and seasonal tests both support inference and disagree
+ *      about whether a trend exists, the disagreement is named in
+ *      `dissentingTests` and the verdict falls back to `no-trend` — the
+ *      conservative choice, consistent with the specification's preference for
+ *      erring toward "no trend detected".
+ *   4. Pettitt tests a *step* change, not a monotonic trend, so it never votes on
+ *      `direction`. It is still reported as a dissenting observation when it
+ *      finds a significant shift that the monotonic tests do not, because that
+ *      pattern is diagnostic of a regime change rather than a trend.
+ */
+export function buildTrendVerdict(
+  mannKendall: MannKendallResult,
+  seasonalMannKendall: SeasonalMannKendallResult,
+  pettittChangePoint: PettittChangePointResult,
+  config: StatisticsConfig = STATISTICS_CONFIG
+): TrendVerdict {
+  const alpha = config.trendAlpha;
+
+  if (!mannKendall.inferenceEligible) {
+    return {
+      direction: 'insufficient-data',
+      significant: null,
+      confidence: 'insufficient-data',
+      alpha,
+      supportingTests: [],
+      dissentingTests: [],
+      summary:
+        'No trend conclusion is published for this parameter. ' +
+        (mannKendall.ineligibilityReason ?? 'The record does not meet the minimum requirements.') +
+        ' The slope may still be read as a description of this window, never as evidence about climate.',
+      withheldReason: mannKendall.ineligibilityReason,
+      primaryPValue: null,
+      effectiveSampleSize: mannKendall.effectiveSampleSize
+    };
+  }
+
+  const annualSignificant = mannKendall.significant === true;
+  const seasonalComparable = seasonalMannKendall.inferenceEligible;
+
+  const confidences: TrendConfidence[] = [mannKendall.confidence];
+  if (seasonalComparable) confidences.push(seasonalMannKendall.confidence);
+  const confidence: TrendConfidence = confidences.includes('insufficient-data')
+    ? 'insufficient-data'
+    : confidences.includes('short-record')
+      ? 'short-record'
+      : 'strong';
+
+  const supportingTests: string[] = [];
+  const dissentingTests: string[] = [];
+
+  // Does the seasonal test agree that a trend exists (or does not)?
+  const seasonalAgreesOnExistence = seasonalComparable
+    ? (seasonalMannKendall.significant === true) === annualSignificant
+    : true;
+  const seasonalAgreesOnDirection =
+    !seasonalComparable ||
+    !annualSignificant ||
+    seasonalMannKendall.direction === mannKendall.direction;
+
+  let direction: TrendVerdict['direction'];
+  if (!annualSignificant) {
+    direction = 'no-trend';
+  } else if (seasonalAgreesOnExistence && seasonalAgreesOnDirection) {
+    direction = mannKendall.direction;
+  } else {
+    // The two monotonic tests disagree. Do not average them and do not pick the
+    // more exciting one.
+    direction = 'no-trend';
+  }
+
+  if (annualSignificant && direction === mannKendall.direction) supportingTests.push('Mann–Kendall (annual)');
+  if (!annualSignificant) supportingTests.push('Mann–Kendall (annual, no trend)');
+  if (seasonalComparable) {
+    const seasonalSignificant = seasonalMannKendall.significant === true;
+    const sameDirection = !annualSignificant || seasonalMannKendall.direction === direction;
+    if (seasonalSignificant === annualSignificant && sameDirection) {
+      supportingTests.push('Seasonal Mann–Kendall');
+    } else {
+      dissentingTests.push('Seasonal Mann–Kendall');
+    }
+  }
+
+  if (pettittChangePoint.significant === true && !annualSignificant) {
+    dissentingTests.push('Pettitt change-point');
+  }
+
+  const significant = direction === 'no-trend' ? false : true;
+
+  const slopeText =
+    mannKendall.senSlopePerDecade !== null
+      ? ` Sen's slope ${mannKendall.senSlopePerDecade >= 0 ? '+' : ''}${mannKendall.senSlopePerDecade}/decade.`
+      : '';
+  const evidenceText =
+    mannKendall.pValue !== null ? ` p = ${mannKendall.pValue}, n = ${mannKendall.n} years (n* = ${mannKendall.effectiveSampleSize}).` : '';
+
+  const summary =
+    direction === 'insufficient-data'
+      ? 'No conclusion published.'
+      : direction === 'no-trend'
+        ? dissentingTests.includes('Seasonal Mann–Kendall')
+          ? `The annual and seasonal tests disagree: no monotonic trend is published at α = ${alpha}.${evidenceText}${slopeText} A disagreement of this kind usually means the change is confined to part of the seasonal cycle.`
+          : `No monotonic trend detected at α = ${alpha}.${evidenceText}${slopeText} "No trend detected" is not "no change" — it means this record cannot separate a trend from its own variability.`
+        : `Monotonic ${direction} trend detected at α = ${alpha}.${evidenceText}${slopeText} Within the observed window only; not causal attribution.`;
+
+  return {
+    direction,
+    significant,
+    confidence,
+    alpha,
+    supportingTests,
+    dissentingTests,
+    summary,
+    withheldReason: null,
+    primaryPValue: mannKendall.pValue,
+    effectiveSampleSize: mannKendall.effectiveSampleSize
+  };
+}
+
 /** Comprehensive statistical & data-quality intelligence for a single retrieved parameter. */
 export function computeExtendedStats(dataset: PowerDataset, code: string): ExtendedSeriesStats {
   const meta = parameterMeta(code);
@@ -588,6 +759,7 @@ export function computeExtendedStats(dataset: PowerDataset, code: string): Exten
     unit
   );
   const pettittChangePoint = pettittChangePointTest(annualSeries, unit);
+  const trendVerdict = buildTrendVerdict(mannKendall, seasonalMannKendall, pettittChangePoint);
   const quality = assessDataQuality(dataset, code);
 
   const caveat =
@@ -619,6 +791,7 @@ export function computeExtendedStats(dataset: PowerDataset, code: string): Exten
     mannKendall,
     seasonalMannKendall,
     pettittChangePoint,
+    trendVerdict,
     quality,
     caveat
   };
@@ -870,7 +1043,13 @@ export function computeHistoricalSplit(
 
   const earlyValues = early.map((y) => y.mean).filter((v): v is number => v !== null);
   const recentValues = recent.map((y) => y.mean).filter((v): v is number => v !== null);
-  const splitTTest = tTest(earlyValues, recentValues, 0.05);
+  // Epoch halves of ONE series are dependent in time. Hand the test the ordered
+  // annual values so it can estimate the lag-1 autocorrelation and inflate the
+  // standard error accordingly, rather than pretending 2n independent samples.
+  const splitTTest = tTest(earlyValues, recentValues, STATISTICS_CONFIG.comparisonAlpha, {
+    structure: 'serial-blocks',
+    orderedSeries: completeYears.map((y) => y.mean)
+  });
 
   return {
     code,
