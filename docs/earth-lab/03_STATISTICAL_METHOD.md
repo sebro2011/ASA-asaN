@@ -141,6 +141,40 @@ p      = 2(1 − Φ(|Z|))
 The `max(1, …)` clamp means the correction can only ever make the test more
 conservative. It cannot manufacture significance.
 
+> **Implementation note (added after the correction audit).** Steps 1–3 above are
+> now implemented exactly as written, which they previously were not: the shipped
+> code took ρ₁ from the raw values while ρ₂…ρ_k came from the ranks, summed
+> `|ρ_k|` instead of applying any gate or sign rule, and used a fixed 10-lag
+> window instead of `⌊n/3⌋`.
+>
+> Implementing the *literal* published recipe (significance gate, negative lags
+> retained, no clamp) turned out to be **anti-conservative** at n = 30. Measured
+> with 600 seeded AR(1) replicates, no trend, false-positive rate at α = 0.05:
+>
+> | recipe | φ = 0 | φ = 0.3 | φ = 0.6 | φ = 0.8 |
+> |---|---|---|---|---|
+> | literal published (gate, signed, no clamp) | 9.8 % | 18.0 % | 26.2 % | 30.0 % |
+> | **this document's rule (gate, negative lags zeroed, clamp)** | **1.3 %** | **5.3 %** | **12.2 %** | **17.7 %** |
+>
+> Reproduce both rows with `node --import tsx scripts/verify-statistics-report.mjs`,
+> which prints exactly this table from the shipped functions. The full audit trail,
+> including which of these rules the shipped code previously failed to implement, is
+> in [`06_SCIENTIFIC_CORRECTION_REPORT.md`](06_SCIENTIFIC_CORRECTION_REPORT.md). The shipped rule also
+> withholds inference outright in 33.5 % of the φ = 0.8 replicates because the
+> effective sample falls below 10, which is why its rate stops climbing as fast as
+> the unclamped recipe's.
+>
+> The reason is visible in the raw numbers: a strong negative lag is a genuine
+> signal in an AR(1) process, and retaining it shrinks Var(S) below its
+> independent value, so the test over-rejects. Zeroing negative lags leaves the
+> variance inflation factor ≥ 1 by construction, which is why the rule in this
+> document is the one shipped. Both factors are computed and exposed on the result
+> (`varianceInflationFactor` and `varianceInflationFactorPublished`) so the
+> difference is auditable rather than hidden.
+>
+> This does not make the correction calibrated — at φ = 0.6 it still rejects 12.2 %
+> at α = 0.05. That is why §4.3 ships α = 0.01 and why §9 adds the bootstrap.
+
 ### 4.3 Calibrated threshold: use α = 0.01, not 0.05
 
 Measured false-positive rate of the corrected test (600 seeded AR(1) replicates,
@@ -172,7 +206,8 @@ further reason to keep the threshold conservative rather than nominal.
 | n < 10 annual values | `insufficient data`, no p, no CI |
 | effN < 10 | `insufficient data` — the record cannot support inference |
 | 10 ≤ effN < 14 | test computed, flagged `confidence: 'short record'` |
-| all values identical | slope 0, p = 1, `no clear trend` |
+| all values identical | slope 0, p = 1, `no clear trend` (statistic is exactly at its null centre — this is *not* "insufficient data") |
+| duplicate year in the input | collapsed to the first record; never double-counted in S |
 | `Var*(S) = 0` | refuse, do not divide by zero |
 | any month missing in a year | year excluded, counted in `excludedYears` |
 
@@ -342,6 +377,53 @@ Scripts: `scripts/fixtures/*.json`, `scripts/test-trends.mjs`. Seeded RNG only.
 
 T11 is the test that matters most: it checks the test's *error rate*, not just
 that it returns a number. It is the reason this document has a §7.
+
+---
+
+## 8.1 A dependence-aware cross-check: circular block bootstrap on S
+
+The analytic correction in §4.2 is the primary test, but it is not calibrated at
+strong autocorrelation (§4.3). A second, resampling-based inference therefore runs
+alongside it, and the UI shows both.
+
+**What is bootstrapped, and what is deliberately not.** The bootstrap resamples
+the **Mann–Kendall S statistic**, not the Theil–Sen slope. This matters:
+
+| construction | false-positive rate at α = 0.05, n = 30 |
+|---|---|
+| percentile bootstrap CI on the Sen slope, block = √n | 16.8 % (φ = 0) · 23.3 % (φ = 0.6) |
+| inverted-null bootstrap CI on the Sen slope, block = 3 | 13.0 % (φ = 0) · 24.0 % (φ = 0.6) |
+| **circular block bootstrap on S, block = ⌈n^(1/3)⌉ (shipped)** | **4.0 % (φ = 0)** · 9.0 % (φ = 0.6) |
+
+A Sen-slope interval fails **at φ = 0**, where there is no autocorrelation at all
+to blame: the slope estimator's sampling distribution is too discrete at n = 30
+for a percentile interval to be honest. S is bounded, integer-valued and free of
+nuisance parameters, so bootstrapping it behaves. §7.3 recorded the slope-based
+failure; this section records that the *statistic* choice, not the block length,
+was the problem.
+
+The first two rows were measured in a scratch experiment during this audit and are
+not part of the shipped code path; the third row is reproduced by
+`npm run verify:stats` (200 replicates) and by `npm run test:stats`.
+
+**Procedure.** Centre the series (under H₀ there is no trend, so de-meaning is the
+null-preserving step — do **not** de-trend, which manufactures a spurious null
+centred away from zero). Resample with a circular moving block of length ⌈n^(1/3)⌉
+to retain serial dependence. Recompute S. Report
+`p = (1 + #{|S*| ≥ |S_obs|}) / (B + 1)` with B = 999 fixed-seed replicates.
+
+**Interpretation.** `inferenceAgreement` on the result says how the two p-values
+relate. `bootstrap-more-conservative` is the expected and welcome outcome for
+short autocorrelated records; `analytic-more-conservative` is rare and recorded
+rather than suppressed. The bootstrap is *not* used to upgrade a claim — it can
+only add doubt, never remove it, because the verdict is `significant` only when
+the analytic test passes at α.
+
+**Limitation stated plainly.** At φ = 0.6 the bootstrap still rejects 9.0 % of true
+nulls at α = 0.05 and 3.0 % at α = 0.01. It is a genuine improvement over an
+uncorrected test (30.8 % at α = 0.05) and roughly comparable to the analytic
+correction at the same threshold (12.2 %), not a solution. A 30-year
+autocorrelated record cannot fully identify its own trend; no method changes that.
 
 ---
 

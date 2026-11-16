@@ -584,11 +584,12 @@ function hamedRaoCorrection(
  * p-value is (1 + #{|S*| ≥ |S_obs|}) / (B + 1), which is exact-in-the-limit and
  * never returns zero.
  *
- * Measured false-positive rate (400 seeded AR(1) replicates, n = 30, no trend,
- * α = 0.05): 5.0 % at φ = 0, 8.5 % at φ = 0.3, 16.0 % at φ = 0.6. It is
- * correctly calibrated in the independent case and degrades gracefully under
- * strong autocorrelation, which is why it is reported *alongside* the analytic
- * correction and never used to inflate a claim.
+ * Measured false-positive rate (200 seeded AR(1) replicates, n = 30, no trend):
+ * 4.0 % at φ = 0 and 9.0 % at φ = 0.6 at α = 0.05; 0.0 % and 3.0 % at α = 0.01.
+ * Reproduce with `npm run verify:stats`. It is correctly calibrated in the
+ * independent case and degrades gracefully under strong autocorrelation, which is
+ * why it is reported *alongside* the analytic correction and never used to inflate
+ * a claim — the published verdict requires the analytic test to pass as well.
  */
 export function blockBootstrapMannKendall(
   values: number[],
@@ -635,8 +636,8 @@ export function blockBootstrapMannKendall(
     note:
       'Circular block bootstrap on the Mann–Kendall S statistic (block length ⌈n^(1/3)⌉, ' +
       `${reps} seeded replicates). Needs no variance estimator, so it remains valid where an ` +
-      'analytic correction is not calibrated: measured false-positive rate 5.0 % at φ = 0 ' +
-      'and 16.0 % at φ = 0.6 on n = 30 series with no trend.'
+      'analytic correction is not calibrated: measured false-positive rate 4.0 % at φ = 0 ' +
+      'and 9.0 % at φ = 0.6 on n = 30 series with no trend (alpha = 0.05).'
   };
 }
 

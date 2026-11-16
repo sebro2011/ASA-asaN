@@ -518,7 +518,8 @@ test('bootstrap: declines a degenerate (constant) series instead of resampling n
 
 test('bootstrap: measured false-positive rate with no autocorrelation is near nominal', () => {
   // 200 replicates, not 600: the bootstrap is 999 resamples each, so this is the
-  // slowest test in the suite. Measured ~5% at phi = 0 before the band was set.
+  // slowest test in the suite. Measured 4.0% at phi = 0 (npm run verify:stats)
+  // before the band was set.
   const RUNS = 200;
   let reject = 0;
   for (let run = 0; run < RUNS; run += 1) {

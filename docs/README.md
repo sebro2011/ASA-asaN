@@ -64,7 +64,8 @@ Start at the specification, then follow the track you need:
   [official brief](earth-lab/02_OFFICIAL_BRIEF.md),
   [statistical method](earth-lab/03_STATISTICAL_METHOD.md),
   [design and build plan](earth-lab/04_DESIGN_AND_BUILD_PLAN.md),
-  [test plan](earth-lab/05_TEST_PLAN.md)
+  [test plan](earth-lab/05_TEST_PLAN.md),
+  [scientific correction report](earth-lab/06_SCIENTIFIC_CORRECTION_REPORT.md)
 - [`UX_SIMPLIFICATION_AUDIT.md`](UX_SIMPLIFICATION_AUDIT.md) — the earlier UX pass
 - [`nova/`](nova/) — the earlier NOVA phase-1 audit and design notes
 
