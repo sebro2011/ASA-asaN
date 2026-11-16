@@ -31,7 +31,7 @@ export function LiquidGlassCard({
 
   const containerClasses = `
     bg-abyss/70
-    backdrop-blur-xl
+    glass-strong
     border border-line
     rounded-[14px]
     shadow-2xl

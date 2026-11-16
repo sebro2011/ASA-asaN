@@ -165,7 +165,7 @@ function SourceTooltip({
   );
   if (!rows.length) return null;
   return (
-    <div className="rounded-[10px] border border-line bg-abyss/95 px-3 py-2 shadow-2xl backdrop-blur-md">
+    <div className="rounded-[10px] border border-line bg-abyss/95 px-3 py-2 shadow-2xl glass">
       <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-atmo">
         {labelName} · {label}
       </p>
@@ -927,7 +927,7 @@ export default function TrendDetective({ area, onAreaChange, onPowerResolved, re
                           );
                           if (!rows.length) return null;
                           return (
-                            <div className="rounded-[10px] border border-line bg-abyss/95 px-3 py-2 shadow-2xl backdrop-blur-md">
+                            <div className="rounded-[10px] border border-line bg-abyss/95 px-3 py-2 shadow-2xl glass">
                               <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-atmo">{label}</p>
                               <ul className="mt-1.5 space-y-0.5">
                                 {rows.map((entry) => (
@@ -1376,7 +1376,7 @@ export default function TrendDetective({ area, onAreaChange, onPowerResolved, re
                                 | undefined;
                               if (!raw || typeof raw.anomaly !== 'number') return null;
                               return (
-                                <div className="rounded-[10px] border border-line bg-abyss/95 px-3 py-2 text-[11px] shadow-2xl backdrop-blur-md">
+                                <div className="rounded-[10px] border border-line bg-abyss/95 px-3 py-2 text-[11px] shadow-2xl glass">
                                   <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-atmo">
                                     {raw.year} · {anom.code}
                                   </p>

@@ -37,7 +37,7 @@ export const OfflineIndicator: React.FC<OfflineIndicatorProps> = ({ lang = 'en' 
           className="fixed bottom-44 lg:bottom-28 left-4 sm:left-6 z-50 max-w-[calc(100vw-2rem)] font-sans select-none"
         >
           {/* Offline Mode Active with Queued Request Counter */}
-          <div className="flex items-center gap-3 px-4 py-3 rounded-[14px] bg-amber-500/95 border border-amber-300 text-slate-950 shadow-2xl backdrop-blur-xl">
+          <div className="flex items-center gap-3 px-4 py-3 rounded-[14px] bg-amber-500/95 border border-amber-300 text-slate-950 shadow-2xl glass-strong">
             <div className="relative">
               <WifiOff className="w-5 h-5 text-slate-950" />
               <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-rose-600 animate-ping" />

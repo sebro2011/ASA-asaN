@@ -135,7 +135,7 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onDismiss }) => {
           <button
             type="button"
             onClick={dismiss}
-            className="inline-flex h-12 w-full items-center justify-center gap-1.5 rounded-[10px] border border-line-strong/80 bg-void/40 px-5 text-sm font-medium text-ink-2 backdrop-blur-md transition-colors hover:border-atmo/40 hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[var(--focus)] sm:w-auto"
+            className="inline-flex h-12 w-full items-center justify-center gap-1.5 rounded-[10px] border border-line-strong/80 bg-void/40 px-5 text-sm font-medium text-ink-2 glass transition-colors hover:border-atmo/40 hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[var(--focus)] sm:w-auto"
           >
             {t('welcomeSkip')}
             <ChevronRight className="h-3.5 w-3.5" strokeWidth={1.8} aria-hidden="true" />

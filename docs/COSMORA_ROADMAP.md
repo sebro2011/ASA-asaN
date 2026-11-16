@@ -57,7 +57,28 @@ Each phase ends with `npm test`, `npx tsc --noEmit`, `npm run build`,
 Phases are ordered so that correctness precedes styling: a beautiful page that
 lies about its data is worse than an ugly one that does not.
 
-### Phase 1 — Design foundation (no visual regressions)
+### Phase 1 — Design foundation · **done (2026-11-15)**
+
+Delivered: `--glass-blur{,-strong,-inset}` / `--glass-saturate` / `--glass-edge` and
+three motion durations in `tokens.css`; one definition of the surface language in
+`.glass`, `.glass-strong`, `.glass-inset` (components layer, so a caller can still
+override fill and edge with utilities); `src/ui/Glass.tsx` as the primitive, adopted
+by the header, the mobile tab bar and the home signal strip; 69 raw
+`backdrop-blur-*` utilities across 27 files migrated to the tones; a
+`@supports not (backdrop-filter)` opaque fallback; the phone rule extended to drop
+the blur pass on glass without flattening scrims; motion tokenised with the existing
+`prefers-reduced-motion` block honoured.
+
+Guarded by `scripts/test-design-tokens.mjs` (5 tests): no component picks its own
+blur strength, the tones and their fallback exist, phones skip the blur, motion is
+tokenised, and the primitive maps tone→class and is actually used.
+
+Note: the accessibility test that pinned the overlay backdrop to a literal
+`backdrop-blur` class was rewritten to accept a glass tone — the requirement is
+"decorative backdrop is aria-hidden", not "the class is spelled this way".
+
+Original plan follows.
+
 1. One glass primitive: `src/ui/Glass.tsx` + `.glass` / `.glass-inset` /
    `.glass-strong` in a single stylesheet, built from the existing tokens
    (`--surface`, `--line`, blur, specular highlight, 1 px inner border).

@@ -30,6 +30,7 @@ import type { SupportedLanguage } from '../i18n/translations';
 import { NAV_ENTRIES, NAV_GROUPS, type TabId } from './navigation';
 import { cx } from './primitives';
 import { useBodyScrollLock, useEscape, useFocusTrap } from '../app/hooks';
+import Glass from './Glass';
 
 const LANGUAGES: Array<{ code: SupportedLanguage; native: string; english: string; script: string }> = [
   { code: 'en', native: 'English', english: 'English', script: 'EN' },
@@ -133,9 +134,11 @@ export default function AppHeader({
   }, [mobileOpen]);
 
   return (
-    <header
+    <Glass
+      as="header"
+      tone="strong"
       ref={headerRef}
-      className="sticky top-0 z-50 border-b border-line/80 bg-void/80 backdrop-blur-2xl supports-[backdrop-filter]:bg-void/60"
+      className="sticky top-0 z-50 border-b border-line/80 bg-void/80 supports-[backdrop-filter]:bg-void/60"
     >
       <div className="mx-auto flex h-16 max-w-[1400px] items-center gap-3 px-4 sm:px-6 lg:h-[72px] lg:gap-5 lg:px-8">
         {/* Brand ------------------------------------------------------------ */}
@@ -228,7 +231,7 @@ export default function AppHeader({
                       animate={{ opacity: 1, y: 0, scale: 1 }}
                       exit={{ opacity: 0, y: 4, scale: 0.99 }}
                       transition={{ duration: 0.16, ease: [0.16, 1, 0.3, 1] }}
-                      className="absolute left-0 top-[calc(100%+10px)] w-[340px] overflow-hidden rounded-[14px] border border-line bg-abyss/95 p-1.5 shadow-[0_28px_70px_-30px_rgba(0,0,0,0.95)] backdrop-blur-2xl"
+                      className="absolute left-0 top-[calc(100%+10px)] w-[340px] overflow-hidden rounded-[14px] border border-line bg-abyss/95 p-1.5 shadow-[0_28px_70px_-30px_rgba(0,0,0,0.95)] glass-strong"
                     >
                       {items.map((item) => {
                         const Icon = item.icon;
@@ -292,7 +295,7 @@ export default function AppHeader({
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: 4 }}
                   transition={{ duration: 0.15 }}
-                  className="absolute right-0 top-[calc(100%+8px)] w-56 overflow-hidden rounded-[12px] border border-line bg-abyss/97 p-1.5 shadow-[0_24px_60px_-28px_rgba(0,0,0,0.95)] backdrop-blur-2xl"
+                  className="absolute right-0 top-[calc(100%+8px)] w-56 overflow-hidden rounded-[12px] border border-line bg-abyss/97 p-1.5 shadow-[0_24px_60px_-28px_rgba(0,0,0,0.95)] glass-strong"
                 >
                   <p className="px-2.5 pb-1 pt-1.5 font-mono text-[9.5px] uppercase tracking-[0.16em] text-ink-4">
                     Interface language
@@ -355,7 +358,7 @@ export default function AppHeader({
             aria-modal="true"
             aria-label="Navigation"
           >
-            <div aria-hidden="true" className="absolute inset-0 bg-void/80 backdrop-blur-sm" onClick={() => setMobileOpen(false)} />
+            <div aria-hidden="true" className="absolute inset-0 bg-void/80 glass-inset" onClick={() => setMobileOpen(false)} />
             <motion.div
               initial={{ y: -16, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
@@ -455,6 +458,6 @@ export default function AppHeader({
           </motion.div>
         ) : null}
       </AnimatePresence>
-    </header>
+    </Glass>
   );
 }

@@ -49,7 +49,7 @@ export const ExportHtmlModal: React.FC<ExportHtmlModalProps> = ({ isOpen, onClos
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 glass animate-in fade-in duration-200">
       <div className="relative w-full max-w-4xl max-h-[90vh] bg-abyss border border-cyan-500/30 rounded-[14px] shadow-2xl flex flex-col overflow-hidden">
         {/* Modal Header */}
         <div className="flex items-center justify-between p-5 border-b border-line bg-surface/60">

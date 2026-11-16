@@ -844,7 +844,7 @@ function ARStarMap({ lang = 'en', onSelectTarget = null }) {
     <div className="w-full space-y-5 select-none font-sans">
       
       {/* Top Banner & AR Mode Switcher */}
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-slate-950 via-indigo-950/80 to-slate-950 border border-line p-5 sm:p-6 shadow-2xl backdrop-blur-xl">
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-slate-950 via-indigo-950/80 to-slate-950 border border-line p-5 sm:p-6 shadow-2xl glass-strong">
         <div className="absolute top-0 right-0 w-80 h-80 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none -mr-20 -mt-20" />
         
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -895,7 +895,7 @@ function ARStarMap({ lang = 'en', onSelectTarget = null }) {
             <button
               type="button"
               onClick={toggleGyro}
-              className={`p-2.5 rounded-[14px] border backdrop-blur-md shadow-xl transition-all cursor-pointer flex items-center gap-1.5 text-xs font-mono font-bold ${
+              className={`p-2.5 rounded-[14px] border glass shadow-xl transition-all cursor-pointer flex items-center gap-1.5 text-xs font-mono font-bold ${
                 isGyroActive
                   ? 'bg-emerald-500/20 border-emerald-400 text-signal shadow-[0_0_15px_rgba(52,211,153,0.4)]'
                   : 'bg-surface/65 hover:bg-surface-2 border-line text-ink-2 hover:text-ink'
@@ -1128,7 +1128,7 @@ function ARStarMap({ lang = 'en', onSelectTarget = null }) {
                 </div>
 
                 {/* AR HUD Targeting Label Callout */}
-                <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 px-2.5 py-1 rounded-[10px] bg-abyss/85 backdrop-blur-md border border-cyan-400/60 shadow-2xl whitespace-nowrap text-center">
+                <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 px-2.5 py-1 rounded-[10px] bg-abyss/85 glass border border-cyan-400/60 shadow-2xl whitespace-nowrap text-center">
                   <div className="text-[11px] font-bold text-white font-display">
                     {body.name[lang] || body.name.en}
                   </div>
@@ -1178,7 +1178,7 @@ function ARStarMap({ lang = 'en', onSelectTarget = null }) {
                   if (isCameraActive) stopCamera();
                   else startCamera(cameraFacing);
                 }}
-                className={`p-2.5 rounded-[14px] border backdrop-blur-xl shadow-xl transition-all cursor-pointer flex items-center justify-center ${
+                className={`p-2.5 rounded-[14px] border glass-strong shadow-xl transition-all cursor-pointer flex items-center justify-center ${
                   isCameraActive
                     ? 'bg-emerald-500/20 border-emerald-400 text-signal shadow-[0_0_15px_rgba(52,211,153,0.4)]'
                     : 'bg-surface/65 border-line text-ink-2 hover:text-ink'
@@ -1203,7 +1203,7 @@ function ARStarMap({ lang = 'en', onSelectTarget = null }) {
                 <button
                   type="button"
                   onClick={toggleTorch}
-                  className={`p-2.5 rounded-[14px] border backdrop-blur-xl shadow-xl transition-all cursor-pointer flex items-center justify-center ${
+                  className={`p-2.5 rounded-[14px] border glass-strong shadow-xl transition-all cursor-pointer flex items-center justify-center ${
                     isTorchOn
                       ? 'bg-amber-500/20 border-amber-400 text-amber-300'
                       : 'bg-surface/65 border-line text-ink-2 hover:text-ink'
@@ -1240,7 +1240,7 @@ function ARStarMap({ lang = 'en', onSelectTarget = null }) {
 
         {/* Bottom Floating Telemetry Overlay Card */}
         <div className="absolute bottom-4 inset-x-4 z-30 pointer-events-none">
-          <div className="p-4 rounded-3xl bg-abyss/85 backdrop-blur-xl border border-line/90 shadow-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 pointer-events-auto">
+          <div className="p-4 rounded-3xl bg-abyss/85 glass-strong border border-line/90 shadow-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 pointer-events-auto">
             <div className="flex items-center gap-3">
               <div 
                 className="w-10 h-10 rounded-[14px] border flex items-center justify-center shadow-lg"
@@ -1293,7 +1293,7 @@ function ARStarMap({ lang = 'en', onSelectTarget = null }) {
       </div>
 
       {/* Target Selector Carousel Bar */}
-      <div className="rounded-3xl bg-surface/60 backdrop-blur-xl border border-line p-5 shadow-xl space-y-3">
+      <div className="rounded-3xl bg-surface/60 glass-strong border border-line p-5 shadow-xl space-y-3">
         <div className="flex items-center justify-between flex-wrap gap-2">
           <div className="flex items-center gap-2 text-xs font-mono font-bold text-ink-2">
             <Target className="w-4 h-4 text-cyan-400" />
@@ -1360,7 +1360,7 @@ function ARStarMap({ lang = 'en', onSelectTarget = null }) {
       {/* Snapshot Preview & Download Dialog */}
       <AnimatePresence>
         {snapshotDataUrl && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-abyss/85 backdrop-blur-md">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-abyss/85 glass">
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
@@ -1411,7 +1411,7 @@ function ARStarMap({ lang = 'en', onSelectTarget = null }) {
       {/* Deep Scientific Dossier Modal */}
       <AnimatePresence>
         {showDossierModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-abyss/85 backdrop-blur-md">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-abyss/85 glass">
             <motion.div
               initial={{ opacity: 0, scale: 0.95, y: 16 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}

@@ -78,7 +78,7 @@ export default function HomeHero({ onNavigate }: { onNavigate: (tab: TabId) => v
             </Button>
             <a
               href="#mission-overview"
-              className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-[10px] border border-line-strong/80 bg-void/40 px-5 text-sm font-medium text-ink backdrop-blur-md transition-colors hover:border-atmo/40 hover:bg-void/60 sm:w-auto"
+              className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-[10px] border border-line-strong/80 bg-void/40 px-5 text-sm font-medium text-ink glass transition-colors hover:border-atmo/40 hover:bg-void/60 sm:w-auto"
             >
               {t('heroCtaSecondary')}
             </a>

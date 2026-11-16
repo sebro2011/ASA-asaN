@@ -796,7 +796,7 @@ function CelestialLab3D({ lang = 'en' }) {
       {/* Top Header & Interactive Target Selector Bar */}
       <div className="relative z-10 p-4 sm:p-6 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 pointer-events-none">
         {/* Mission Telemetry Badge */}
-        <div className="pointer-events-auto bg-surface/60/85 backdrop-blur-xl border border-cyan-500/30 rounded-[14px] p-3 shadow-xl flex items-center gap-3">
+        <div className="pointer-events-auto bg-surface/60/85 glass-strong border border-cyan-500/30 rounded-[14px] p-3 shadow-xl flex items-center gap-3">
           <div 
             className="w-10 h-10 rounded-[10px] flex items-center justify-center shadow-lg transition-colors"
             style={{ 
@@ -822,7 +822,7 @@ function CelestialLab3D({ lang = 'en' }) {
         </div>
 
         {/* Target Selector Pill with Framer Motion layoutId */}
-        <div className="pointer-events-auto flex items-center gap-1.5 p-1.5 rounded-[14px] bg-surface/60/85 backdrop-blur-2xl border border-line shadow-2xl overflow-x-auto">
+        <div className="pointer-events-auto flex items-center gap-1.5 p-1.5 rounded-[14px] bg-surface/60/85 glass-strong border border-line shadow-2xl overflow-x-auto">
           {TARGETS.map((target) => {
             const isSelected = selectedTargetId === target.id;
             return (
@@ -850,7 +850,7 @@ function CelestialLab3D({ lang = 'en' }) {
       {/* Bottom Floating Area: Glassmorphic Telemetry HUD & Interactive Controls */}
       <div className="relative z-10 p-4 sm:p-6 flex flex-col lg:flex-row items-end justify-between gap-4 pointer-events-none">
         {/* Left: Futuristic Telemetry HUD */}
-        <div className="pointer-events-auto w-full lg:max-w-md bg-abyss/85 backdrop-blur-2xl border border-cyan-500/30 rounded-[14px] p-4 shadow-2xl space-y-3">
+        <div className="pointer-events-auto w-full lg:max-w-md bg-abyss/85 glass-strong border border-cyan-500/30 rounded-[14px] p-4 shadow-2xl space-y-3">
           <div className="flex items-center justify-between border-b border-line pb-2">
             <div className="flex items-center gap-2">
               <Gauge className="w-4 h-4 text-cyan-400" />
@@ -914,7 +914,7 @@ function CelestialLab3D({ lang = 'en' }) {
         </div>
 
         {/* Right: Interactive Controls Bar */}
-        <div className="pointer-events-auto flex flex-wrap items-center gap-2 p-2 rounded-[14px] bg-surface/60/85 backdrop-blur-xl border border-cyan-500/30 shadow-2xl">
+        <div className="pointer-events-auto flex flex-wrap items-center gap-2 p-2 rounded-[14px] bg-surface/60/85 glass-strong border border-cyan-500/30 shadow-2xl">
           {/* Auto-Rotation Toggle */}
           <button
             onClick={() => setAutoRotate(!autoRotate)}

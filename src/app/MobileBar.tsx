@@ -23,7 +23,7 @@ export default function MobileBar({
   return (
     <nav
       aria-label={t('wsMobileNavigation')}
-      className="fixed inset-x-0 bottom-0 z-40 border-t border-ws-line bg-[var(--ws-glass-strong)] backdrop-blur-xl lg:hidden"
+      className="fixed inset-x-0 bottom-0 z-40 border-t border-ws-line bg-[var(--ws-glass-strong)] glass-strong lg:hidden"
       style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 0.375rem)' }}
     >
       <ul className="mx-auto flex max-w-lg list-none items-stretch justify-between px-1.5 pt-1.5 pb-1">

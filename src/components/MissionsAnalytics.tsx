@@ -325,7 +325,7 @@ export const MissionsAnalytics: React.FC<MissionsAnalyticsProps> = ({ lang }) =>
   const CustomTooltip = ({ active, payload, label }: ChartTooltipProps) => {
     if (active && payload && payload.length) {
       return (
-        <div className="bg-abyss/95 border border-cyan-500/40 rounded-[10px] p-3 shadow-2xl backdrop-blur-xl font-mono text-xs space-y-1.5 z-50">
+        <div className="bg-abyss/95 border border-cyan-500/40 rounded-[10px] p-3 shadow-2xl glass-strong font-mono text-xs space-y-1.5 z-50">
           <div className="font-bold text-white border-b border-line pb-1 flex items-center gap-1.5">
             <span className="w-2 h-2 rounded-full bg-cyan-400" />
             <span>{label}</span>
@@ -356,7 +356,7 @@ export const MissionsAnalytics: React.FC<MissionsAnalyticsProps> = ({ lang }) =>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
         
         {/* Metric 1: Tracked Historical Missions */}
-        <div className="bg-abyss/70 backdrop-blur-xl border border-line rounded-[14px] p-4 shadow-xl hover:border-cyan-500/50 hover:shadow-[0_0_25px_rgba(34,211,238,0.15)] transition-all">
+        <div className="bg-abyss/70 glass-strong border border-line rounded-[14px] p-4 shadow-xl hover:border-cyan-500/50 hover:shadow-[0_0_25px_rgba(34,211,238,0.15)] transition-all">
           <div className="flex items-center justify-between text-ink-3 mb-2">
             <span className="text-[11px] font-mono uppercase tracking-wider">
               {lang === 'si' ? 'ඓතිහාසික මෙහෙයුම්' : lang === 'ta' ? 'வரலாற்றுப் பணிகள்' : 'Landmark Missions'}
@@ -374,7 +374,7 @@ export const MissionsAnalytics: React.FC<MissionsAnalyticsProps> = ({ lang }) =>
         </div>
 
         {/* Metric 2: Overall Mission Success Frequency */}
-        <div className="bg-abyss/70 backdrop-blur-xl border border-line rounded-[14px] p-4 shadow-xl hover:border-cyan-500/50 hover:shadow-[0_0_25px_rgba(34,211,238,0.15)] transition-all">
+        <div className="bg-abyss/70 glass-strong border border-line rounded-[14px] p-4 shadow-xl hover:border-cyan-500/50 hover:shadow-[0_0_25px_rgba(34,211,238,0.15)] transition-all">
           <div className="flex items-center justify-between text-ink-3 mb-2">
             <span className="text-[11px] font-mono uppercase tracking-wider">
               {lang === 'si' ? 'සාර්ථකත්ව අනුපාතය' : lang === 'ta' ? 'வெற்றி விகிதம்' : 'Success Frequency'}
@@ -393,7 +393,7 @@ export const MissionsAnalytics: React.FC<MissionsAnalyticsProps> = ({ lang }) =>
         </div>
 
         {/* Metric 3: Deepest Active Human Mission Distance */}
-        <div className="bg-abyss/70 backdrop-blur-xl border border-line rounded-[14px] p-4 shadow-xl hover:border-cyan-500/50 hover:shadow-[0_0_25px_rgba(34,211,238,0.15)] transition-all">
+        <div className="bg-abyss/70 glass-strong border border-line rounded-[14px] p-4 shadow-xl hover:border-cyan-500/50 hover:shadow-[0_0_25px_rgba(34,211,238,0.15)] transition-all">
           <div className="flex items-center justify-between text-ink-3 mb-2">
             <span className="text-[11px] font-mono uppercase tracking-wider">
               {lang === 'si' ? 'දුරම සක්‍රීය යානය' : lang === 'ta' ? 'மிக தொலைதூர விண்கலம்' : 'Farthest Active'}
@@ -411,7 +411,7 @@ export const MissionsAnalytics: React.FC<MissionsAnalyticsProps> = ({ lang }) =>
         </div>
 
         {/* Metric 4: Longest Continuous Mission Flight */}
-        <div className="bg-abyss/70 backdrop-blur-xl border border-line rounded-[14px] p-4 shadow-xl hover:border-cyan-500/50 hover:shadow-[0_0_25px_rgba(34,211,238,0.15)] transition-all">
+        <div className="bg-abyss/70 glass-strong border border-line rounded-[14px] p-4 shadow-xl hover:border-cyan-500/50 hover:shadow-[0_0_25px_rgba(34,211,238,0.15)] transition-all">
           <div className="flex items-center justify-between text-ink-3 mb-2">
             <span className="text-[11px] font-mono uppercase tracking-wider">
               {lang === 'si' ? 'දීර්ඝතම මෙහෙයුම් කාලය' : lang === 'ta' ? 'நீண்ட கால பயணம்' : 'Longest Flight'}
@@ -431,7 +431,7 @@ export const MissionsAnalytics: React.FC<MissionsAnalyticsProps> = ({ lang }) =>
       </div>
 
       {/* Sub-Metric Selector Navigation */}
-      <div className="bg-abyss/70 backdrop-blur-xl border border-line rounded-[14px] p-2.5 sm:p-3 flex items-center justify-between gap-2 flex-wrap shadow-xl">
+      <div className="bg-abyss/70 glass-strong border border-line rounded-[14px] p-2.5 sm:p-3 flex items-center justify-between gap-2 flex-wrap shadow-xl">
         <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 scrollbar-none w-full sm:w-auto">
           <button
             onClick={() => setActiveMetricTab('success')}
@@ -512,7 +512,7 @@ export const MissionsAnalytics: React.FC<MissionsAnalyticsProps> = ({ lang }) =>
 
       {/* TAB 1: Launch Success Frequency by Decade */}
       {activeMetricTab === 'success' && (
-        <div className="bg-abyss/70 backdrop-blur-xl border border-line rounded-[14px] p-5 sm:p-7 shadow-2xl space-y-6 hover:border-cyan-500/50 hover:shadow-[0_0_25px_rgba(34,211,238,0.15)] transition-all">
+        <div className="bg-abyss/70 glass-strong border border-line rounded-[14px] p-5 sm:p-7 shadow-2xl space-y-6 hover:border-cyan-500/50 hover:shadow-[0_0_25px_rgba(34,211,238,0.15)] transition-all">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-line pb-4">
             <div>
               <h3 className="text-base sm:text-lg font-bold text-white font-display flex items-center gap-2">
@@ -629,7 +629,7 @@ export const MissionsAnalytics: React.FC<MissionsAnalyticsProps> = ({ lang }) =>
 
       {/* TAB 2: Mission Duration Distribution */}
       {activeMetricTab === 'duration' && (
-        <div className="bg-abyss/70 backdrop-blur-xl border border-line rounded-[14px] p-5 sm:p-7 shadow-2xl space-y-6 hover:border-cyan-500/50 hover:shadow-[0_0_25px_rgba(34,211,238,0.15)] transition-all">
+        <div className="bg-abyss/70 glass-strong border border-line rounded-[14px] p-5 sm:p-7 shadow-2xl space-y-6 hover:border-cyan-500/50 hover:shadow-[0_0_25px_rgba(34,211,238,0.15)] transition-all">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-line pb-4">
             <div>
               <h3 className="text-base sm:text-lg font-bold text-white font-display flex items-center gap-2">
@@ -734,7 +734,7 @@ export const MissionsAnalytics: React.FC<MissionsAnalyticsProps> = ({ lang }) =>
 
       {/* TAB 3: Destination Breakdown */}
       {activeMetricTab === 'destinations' && (
-        <div className="bg-abyss/70 backdrop-blur-xl border border-line rounded-[14px] p-5 sm:p-7 shadow-2xl space-y-6 hover:border-cyan-500/50 hover:shadow-[0_0_25px_rgba(34,211,238,0.15)] transition-all">
+        <div className="bg-abyss/70 glass-strong border border-line rounded-[14px] p-5 sm:p-7 shadow-2xl space-y-6 hover:border-cyan-500/50 hover:shadow-[0_0_25px_rgba(34,211,238,0.15)] transition-all">
           <div className="border-b border-line pb-4">
             <h3 className="text-base sm:text-lg font-bold text-white font-display flex items-center gap-2">
               <Compass className="w-5 h-5 text-cyan-400" />
@@ -809,7 +809,7 @@ export const MissionsAnalytics: React.FC<MissionsAnalyticsProps> = ({ lang }) =>
 
       {/* TAB 4: Launcher Payload Capacities */}
       {activeMetricTab === 'launchers' && (
-        <div className="bg-abyss/70 backdrop-blur-xl border border-line rounded-[14px] p-5 sm:p-7 shadow-2xl space-y-6 hover:border-cyan-500/50 hover:shadow-[0_0_25px_rgba(34,211,238,0.15)] transition-all">
+        <div className="bg-abyss/70 glass-strong border border-line rounded-[14px] p-5 sm:p-7 shadow-2xl space-y-6 hover:border-cyan-500/50 hover:shadow-[0_0_25px_rgba(34,211,238,0.15)] transition-all">
           <div className="border-b border-line pb-4">
             <h3 className="text-base sm:text-lg font-bold text-white font-display flex items-center gap-2">
               <Rocket className="w-5 h-5 text-cyan-400" />

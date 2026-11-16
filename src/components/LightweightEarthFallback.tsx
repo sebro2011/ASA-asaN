@@ -199,7 +199,7 @@ export const LightweightEarthFallback: React.FC<LightweightEarthFallbackProps> =
   return (
     <div className="w-full space-y-6 select-none font-sans">
       {/* 1. Device Optimization Notification Banner */}
-      <div className="p-4 rounded-[14px] bg-abyss/70 backdrop-blur-xl border border-cyan-500/30 shadow-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+      <div className="p-4 rounded-[14px] bg-abyss/70 glass-strong border border-cyan-500/30 shadow-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-[10px] bg-cyan-500/20 border border-cyan-500/40 flex items-center justify-center text-cyan-300 shrink-0">
             <Zap className="w-4 h-4 text-cyan-400 animate-pulse" />

@@ -15,6 +15,7 @@ import { NAV_ENTRIES, NAV_GROUPS, type TabId } from './navigation';
 import type { SupportedLanguage } from '../i18n/translations';
 import { cx } from './primitives';
 import { useBodyScrollLock, useEscape, useFocusTrap } from '../app/hooks';
+import Glass from './Glass';
 
 const ITEMS: Array<{
   id: TabId | 'menu';
@@ -52,9 +53,11 @@ export default function MobileTabBar({
 
   return (
     <>
-      <nav
+      <Glass
+        as="nav"
+        tone="strong"
         aria-label="Primary mobile"
-        className="safe-bottom fixed inset-x-0 bottom-0 z-40 border-t border-line/80 bg-abyss/95 backdrop-blur-xl lg:hidden"
+        className="safe-bottom fixed inset-x-0 bottom-0 z-40 border-t border-line/80 bg-abyss/95 lg:hidden"
       >
         <div className="mx-auto flex max-w-lg items-stretch justify-between px-2 pt-1.5">
           {ITEMS.map((item) => {
@@ -90,7 +93,7 @@ export default function MobileTabBar({
             );
           })}
         </div>
-      </nav>
+      </Glass>
 
       <AnimatePresence>
         {menuOpen ? (
@@ -103,7 +106,7 @@ export default function MobileTabBar({
             aria-modal="true"
             aria-label="All destinations"
           >
-            <div aria-hidden="true" className="absolute inset-0 bg-void/85 backdrop-blur-sm" onClick={() => setMenuOpen(false)} />
+            <div aria-hidden="true" className="absolute inset-0 bg-void/85 glass-inset" onClick={() => setMenuOpen(false)} />
             <motion.div
               initial={{ y: 28, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}

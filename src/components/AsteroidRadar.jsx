@@ -922,7 +922,7 @@ function AsteroidRadar({ lang = 'en' }) {
             const isTargetActive = selectedAsteroid?.id === activeThreatAst.id;
 
             return (
-              <div className="bg-abyss/95 backdrop-blur-2xl border border-line z-20 relative shadow-2xl rounded-[14px] p-5 sm:p-6 space-y-4 hover:border-cyan-500/50 hover:shadow-[0_0_25px_rgba(34,211,238,0.15)] transition-all duration-300">
+              <div className="bg-abyss/95 glass-strong border border-line z-20 relative shadow-2xl rounded-[14px] p-5 sm:p-6 space-y-4 hover:border-cyan-500/50 hover:shadow-[0_0_25px_rgba(34,211,238,0.15)] transition-all duration-300">
                 {/* Header with Title and Target Status - Clean responsive flow */}
                 <div className="flex flex-col sm:flex-row sm:items-start md:items-center justify-between gap-3 border-b border-line pb-3.5">
                   <div className="flex items-start sm:items-center gap-3 min-w-0 flex-1">
@@ -1183,7 +1183,7 @@ function AsteroidRadar({ lang = 'en' }) {
       {/* Selected Asteroid Modal Dossier */}
       <AnimatePresence>
         {selectedAsteroid && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xl">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 glass-strong">
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
@@ -1219,7 +1219,7 @@ function AsteroidRadar({ lang = 'en' }) {
               {(() => {
                 const threat = getAsteroidThreatInfo(selectedAsteroid);
                 return (
-                  <div className={`p-4 sm:p-5 rounded-3xl bg-abyss/95 backdrop-blur-xl border border-line relative z-10 shadow-2xl space-y-3 ${threat.isRedThreat ? 'ring-1 ring-rose-500/50 shadow-[0_0_25px_rgba(244,63,94,0.25)]' : 'ring-1 ring-emerald-500/30'}`}>
+                  <div className={`p-4 sm:p-5 rounded-3xl bg-abyss/95 glass-strong border border-line relative z-10 shadow-2xl space-y-3 ${threat.isRedThreat ? 'ring-1 ring-rose-500/50 shadow-[0_0_25px_rgba(244,63,94,0.25)]' : 'ring-1 ring-emerald-500/30'}`}>
                     <div className="flex items-center justify-between flex-wrap gap-2">
                       <div className="flex items-center gap-2.5">
                         <div className={`p-2 rounded-[10px] ${threat.isRedThreat ? 'bg-rose-500/20 text-critical' : 'bg-emerald-500/20 text-signal'}`}>

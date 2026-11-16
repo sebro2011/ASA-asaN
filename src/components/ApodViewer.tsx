@@ -519,7 +519,7 @@ export const ApodViewer: React.FC<ApodViewerProps> = React.memo(({ lang, onOpenE
           role="dialog"
           aria-modal="true"
           aria-label={apod.title}
-          className="fixed inset-0 z-[70] flex items-center justify-center bg-void/95 p-4 backdrop-blur-sm"
+          className="fixed inset-0 z-[70] flex items-center justify-center bg-void/95 p-4 glass-inset"
           onClick={() => setHdOpen(false)}
         >
           <div className="relative max-h-[92vh] w-full max-w-[95vw]" onClick={(event) => event.stopPropagation()}>

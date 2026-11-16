@@ -900,7 +900,7 @@ function ISSTracker({ className = '' }) {
 
         {/* Top-Left Fleet HUD Badge */}
         <div className="absolute top-4 left-4 z-10 pointer-events-none">
-          <div className="p-3 rounded-[14px] bg-surface/65 backdrop-blur-xl border border-line/90 shadow-2xl space-y-1.5 pointer-events-auto">
+          <div className="p-3 rounded-[14px] bg-surface/65 glass-strong border border-line/90 shadow-2xl space-y-1.5 pointer-events-auto">
             <div className="flex items-center gap-2 text-xs font-mono font-bold text-white tracking-wider">
               <Crosshair className="w-4 h-4 text-cyan-400 animate-spin" style={{ animationDuration: '10s' }} />
               <span>{t.realMap}</span>
@@ -922,7 +922,7 @@ function ISSTracker({ className = '' }) {
           <button
             type="button"
             onClick={() => setAutoCenter(!autoCenter)}
-            className={`p-2.5 rounded-[10px] border backdrop-blur-xl shadow-xl transition-all cursor-pointer flex items-center gap-2 text-xs font-mono ${
+            className={`p-2.5 rounded-[10px] border glass-strong shadow-xl transition-all cursor-pointer flex items-center gap-2 text-xs font-mono ${
               autoCenter 
                 ? 'bg-cyan-500/20 border-cyan-400 text-cyan-300 shadow-[0_0_15px_rgba(6,182,212,0.4)] font-bold' 
                 : 'bg-surface/65 border-line text-ink-3 hover:text-ink-2'
@@ -965,7 +965,7 @@ function ISSTracker({ className = '' }) {
         </div>
 
         {/* Bottom Legend Overlay */}
-        <div className="absolute bottom-3 left-3 z-10 hidden sm:flex items-center gap-3 px-3 py-1.5 rounded-[10px] bg-abyss/85 backdrop-blur-md border border-line text-[10px] font-mono text-ink-3">
+        <div className="absolute bottom-3 left-3 z-10 hidden sm:flex items-center gap-3 px-3 py-1.5 rounded-[10px] bg-abyss/85 glass border border-line text-[10px] font-mono text-ink-3">
           <div className="flex items-center gap-1.5">
             <span className="w-2.5 h-1 rounded-full" style={{ backgroundColor: activeSat.color }} />
             <span>Orbit Trail</span>
@@ -1056,7 +1056,7 @@ function ISSTracker({ className = '' }) {
       {/* Mission Dossier Modal when clicking marker or "Mission Dossier" */}
       <AnimatePresence>
         {modalSat && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-abyss/70 backdrop-blur-md">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-abyss/70 glass">
             <motion.div
               initial={{ opacity: 0, scale: 0.95, y: 16 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}

@@ -270,7 +270,7 @@ export const VoiceSearchInput: React.FC<VoiceSearchInputProps> = ({
             initial={{ opacity: 0, y: -4 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -4 }}
-            className="absolute left-0 right-0 mt-2 p-2.5 rounded-[10px] bg-surface/60/95 border border-cyan-500/40 shadow-xl backdrop-blur-xl z-30 flex items-center justify-between"
+            className="absolute left-0 right-0 mt-2 p-2.5 rounded-[10px] bg-surface/60/95 border border-cyan-500/40 shadow-xl glass-strong z-30 flex items-center justify-between"
           >
             <div className="flex items-center gap-2">
               <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-ping" />

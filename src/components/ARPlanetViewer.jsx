@@ -92,7 +92,7 @@ export function ARPlanetViewer({ className = '', lang = 'en', ...props }) {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -12, scale: 0.96 }}
             transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
-            className="absolute top-20 right-4 sm:right-6 z-30 max-w-sm sm:max-w-md w-[calc(100%-2rem)] bg-surface/60/95 backdrop-blur-xl border border-cyan-500/40 rounded-[14px] p-4 shadow-2xl shadow-cyan-950/60 text-ink pointer-events-auto select-none"
+            className="absolute top-20 right-4 sm:right-6 z-30 max-w-sm sm:max-w-md w-[calc(100%-2rem)] bg-surface/60/95 glass-strong border border-cyan-500/40 rounded-[14px] p-4 shadow-2xl shadow-cyan-950/60 text-ink pointer-events-auto select-none"
             role="status"
             aria-live="polite"
           >
@@ -187,7 +187,7 @@ export function ARPlanetViewer({ className = '', lang = 'en', ...props }) {
           animate={{ opacity: 1, scale: 1 }}
           onClick={() => setShowGestureTip(true)}
           type="button"
-          className="absolute top-20 right-4 sm:right-6 z-20 px-3 py-1.5 rounded-[10px] bg-surface/60/85 hover:bg-surface-2/90 border border-cyan-500/40 text-cyan-300 text-[11px] font-mono flex items-center gap-1.5 backdrop-blur-md shadow-lg shadow-cyan-950/40 transition cursor-pointer hover:border-cyan-400 hover:text-ink"
+          className="absolute top-20 right-4 sm:right-6 z-20 px-3 py-1.5 rounded-[10px] bg-surface/60/85 hover:bg-surface-2/90 border border-cyan-500/40 text-cyan-300 text-[11px] font-mono flex items-center gap-1.5 glass shadow-lg shadow-cyan-950/40 transition cursor-pointer hover:border-cyan-400 hover:text-ink"
           title="Show Gesture Tip"
         >
           <HelpCircle className="w-3.5 h-3.5 text-cyan-400" />

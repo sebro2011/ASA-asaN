@@ -29,7 +29,7 @@ export default function AsteroidRiskBadge({ asteroid, className = '' }) {
   };
 
   return (
-    <div className={`rounded-3xl bg-abyss/70 border border-line p-5 backdrop-blur-xl shadow-2xl font-sans space-y-4 ${className}`}>
+    <div className={`rounded-3xl bg-abyss/70 border border-line p-5 glass-strong shadow-2xl font-sans space-y-4 ${className}`}>
       
       {/* Header Bar */}
       <div className="flex items-center justify-between gap-3 border-b border-line pb-3">

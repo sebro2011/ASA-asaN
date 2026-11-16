@@ -21,6 +21,7 @@ import { Activity, Aperture, Leaf, Satellite } from 'lucide-react';
 import { DataStateBadge, cx, type DataState } from '../../ui/primitives';
 import type { ResourcePhase } from '../../hooks/useApiResource';
 import type { Provenance, Sourced } from './homeData';
+import Glass from '../../ui/Glass';
 
 export interface Signal {
   phase: ResourcePhase;
@@ -148,7 +149,7 @@ export default function SignalStrip({
 
   return (
     <section aria-label={t('signalsTitle')} className="mx-auto max-w-[1400px] px-4 sm:px-6 lg:px-8">
-      <div className="surface surface-highlight grid grid-cols-1 overflow-hidden rounded-[16px] border border-line sm:grid-cols-2 lg:grid-cols-4">
+      <Glass specular className="grid grid-cols-1 overflow-hidden rounded-[16px] border-line bg-surface/40 sm:grid-cols-2 lg:grid-cols-4">
         <SignalTile icon={Aperture} title={t('signalApod')} detail="NASA APOD / NASA Science" {...apodTile} />
         <SignalTile
           icon={Satellite}
@@ -172,7 +173,7 @@ export default function SignalStrip({
           {...neoTile}
         />
         <SignalTile icon={Leaf} title={t('signalPower')} detail="power.larc.nasa.gov · monthly archive" {...earthTile} />
-      </div>
+      </Glass>
     </section>
   );
 }

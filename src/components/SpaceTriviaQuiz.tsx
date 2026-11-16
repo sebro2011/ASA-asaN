@@ -296,7 +296,7 @@ export const SpaceTriviaQuiz: React.FC<SpaceTriviaQuizProps> = ({
   };
 
   return (
-    <div className={`relative overflow-hidden rounded-3xl bg-gradient-to-b from-[#090D1A]/95 via-[#0D1326]/95 to-[#060812]/98 border border-line shadow-2xl p-6 sm:p-8 backdrop-blur-xl ${className}`}>
+    <div className={`relative overflow-hidden rounded-3xl bg-gradient-to-b from-[#090D1A]/95 via-[#0D1326]/95 to-[#060812]/98 border border-line shadow-2xl p-6 sm:p-8 glass-strong ${className}`}>
       
       {/* Celebratory Confetti Burst Animation on Correct Answer */}
       <CosmicConfetti triggerKey={confettiKey} count={60} originX={0.5} originY={0.4} />
