@@ -300,4 +300,14 @@ test('a failed tile prints the reason and offers its own retry', async () => {
   host.remove();
 });
 
+test('the hero credibility strip stays in flow above a frosted SignalStrip without bisecting borders', async () => {
+  const fs = await import('node:fs');
+  const heroSrc = fs.readFileSync(new URL('../src/pages/home/Hero.tsx', import.meta.url), 'utf8');
+  const stripSrc = fs.readFileSync(new URL('../src/pages/home/SignalStrip.tsx', import.meta.url), 'utf8');
+
+  assert.doesNotMatch(heroSrc, /lg:absolute\s+lg:inset-x-8\s+lg:bottom-8/, 'credibility strip must stay in normal flow so SignalStrip cannot collide with it');
+  assert.doesNotMatch(heroSrc, /<section[^>]*border-b/, 'hero section must not draw a bottom border through the docked SignalStrip');
+  assert.match(stripSrc, /\bsurface\b/, 'SignalStrip uses frosted surface backing instead of see-through fill');
+});
+
 test.after(() => { dom.window.close(); });

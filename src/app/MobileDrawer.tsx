@@ -55,7 +55,7 @@ export default function MobileDrawer({ open, route, onClose }: MobileDrawerProps
         style={{ animation: 'nova-drawer-in 200ms cubic-bezier(.16,1,.3,1)' }}
       >
         <div className="flex h-14 items-center justify-between gap-2 border-b border-ws-line px-3">
-          <Link to="/" className="rounded-lg" onClick={onClose} aria-label="NOVA AI — Home">
+          <Link to="/" className="rounded-lg" onClick={onClose} aria-label="COSMORA — Home">
             <NovaWordmark />
           </Link>
           <button

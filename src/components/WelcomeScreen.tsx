@@ -79,21 +79,35 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onDismiss }) => {
       <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(3,6,14,0.86)_0%,rgba(3,6,14,0.72)_45%,rgba(3,6,14,0.95)_100%)]" aria-hidden="true" />
 
       <div className="relative mx-auto flex min-h-full max-w-2xl flex-col justify-center px-5 py-14 sm:px-8">
-        {/* The site lockup replaces the eyebrow: it says "NASA SPACE EXPLORER"
-            itself, so the alt text carries the same sentence for screen readers
-            and nothing is announced twice. Intrinsic size is declared so the
-            overlay never shifts while the artwork decodes. */}
-        <picture>
-          <source srcSet="/brand/space-explorer-lockup.webp" type="image/webp" />
-          <img
-            src="/brand/space-explorer-lockup.png"
-            alt={t('welcomeEyebrow')}
-            width={1440}
-            height={385}
-            decoding="async"
-            className="block h-auto w-[min(320px,74vw)] select-none"
-          />
-        </picture>
+        {/* Typographic COSMORA lockup paired with the orbital mark so the brand
+            scales crisply on high-DPI displays without a raster decode shift. */}
+        <div className="flex items-center gap-3.5" data-testid="welcome-brand-lockup">
+          <span className="grid h-12 w-12 shrink-0 place-items-center rounded-full border border-line-strong bg-[radial-gradient(circle_at_30%_25%,#1a3a63,#040911_70%)] shadow-[0_0_32px_rgba(94,211,242,0.18)]">
+            <svg viewBox="0 0 32 32" className="h-6 w-6 text-atmo" aria-hidden="true">
+              <circle cx="16" cy="16" r="7.5" fill="none" stroke="currentColor" strokeWidth="1.4" />
+              <ellipse
+                cx="16"
+                cy="16"
+                rx="13"
+                ry="5"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.1"
+                opacity="0.75"
+                transform="rotate(-24 16 16)"
+              />
+              <circle cx="27.5" cy="9.5" r="1.6" fill="currentColor" />
+            </svg>
+          </span>
+          <div>
+            <p className="text-lg font-semibold leading-none tracking-[0.14em] text-ink sm:text-xl">
+              {t('welcomeEyebrow')}
+            </p>
+            <p className="mt-1.5 font-mono text-[10px] uppercase tracking-[0.18em] text-ink-4">
+              Earth · Missions · Deep Space
+            </p>
+          </div>
+        </div>
 
         <h1
           id="welcome-title"

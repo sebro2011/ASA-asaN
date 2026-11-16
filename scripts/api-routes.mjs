@@ -73,6 +73,7 @@ export const API_ROUTES = [
 
   /* -------------------------------------------------------------- Earth */
   { method: 'GET', path: '/api/earth/health', expect: [200], why: 'Earth suite capability report' },
+  { method: 'GET', path: '/api/earth/sources', expect: [200], why: 'Space Apps multi-agency resource matrix & capabilities' },
   { method: 'GET', path: '/api/earth/power?lat=6.9&lon=79.8', expect: [400], why: 'requires start and end dates' },
   { method: 'GET', path: '/api/earth/gibs/domains', expect: [400], why: 'requires a layer identifier' },
   {
@@ -82,6 +83,20 @@ export const API_ROUTES = [
     why: 'upstream tile probe; 504 is the documented timeout',
   },
   { method: 'GET', path: '/api/earth/firms/hotspots?lat=6.9&lon=79.8', expect: [200, 503], why: 'needs a free FIRMS MAP_KEY' },
+  { method: 'GET', path: '/api/earth/swot/granules', expect: [400], why: 'requires bounding box parameters' },
+  {
+    method: 'GET',
+    path: '/api/earth/noaa/cdo?latitude=6.9&longitude=79.8&start=2015&end=2024',
+    expect: [200, 503],
+    why: '503 until free NOAA_CDO_TOKEN is configured',
+  },
+  {
+    method: 'GET',
+    path: '/api/earth/hydrology/gesdisc?latitude=6.9&longitude=79.8&start=2015&end=2024',
+    expect: [200, 503],
+    why: '503 until EARTHDATA_BEARER_TOKEN is configured',
+  },
+  { method: 'GET', path: '/api/earth/knmi/index', expect: [400], why: 'requires allowlisted ?id=nino34|dmi' },
   { method: 'POST', path: '/api/earth/analyst', body: {}, expect: [400], why: 'requires a question' },
 
   /* ---------------------------------------------------- community uploads */

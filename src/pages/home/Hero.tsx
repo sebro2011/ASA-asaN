@@ -25,7 +25,7 @@ export default function HomeHero({ onNavigate }: { onNavigate: (tab: TabId) => v
 
   return (
     <section
-      className="relative isolate overflow-hidden border-b border-line/70"
+      className="relative isolate overflow-hidden"
       aria-labelledby="hero-title"
     >
       {/* Planet + atmosphere ------------------------------------------------ */}
@@ -42,9 +42,10 @@ export default function HomeHero({ onNavigate }: { onNavigate: (tab: TabId) => v
         aria-hidden="true"
       />
       <div className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-px bg-gradient-to-r from-transparent via-atmo/25 to-transparent" aria-hidden="true" />
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 -z-10 h-24 bg-gradient-to-t from-void to-transparent" aria-hidden="true" />
 
-      <div className="mx-auto flex min-h-[590px] max-w-[1400px] flex-col justify-end px-4 pb-12 pt-16 sm:px-6 sm:pb-16 lg:min-h-[calc(100svh-72px)] lg:justify-center lg:px-8 lg:pb-24 lg:pt-24">
-        <div className="max-w-[36rem]">
+      <div className="mx-auto flex min-h-[590px] max-w-[1400px] flex-col justify-end px-4 pb-16 pt-16 sm:px-6 sm:pb-20 lg:min-h-[calc(100svh-72px)] lg:justify-between lg:px-8 lg:pb-20 lg:pt-20">
+        <div className="max-w-[36rem] lg:my-auto">
           <p className="eyebrow flex items-center gap-2">
             <span className="h-1 w-1 rounded-full bg-atmo" />
             {t('heroEyebrow')}
@@ -94,8 +95,10 @@ export default function HomeHero({ onNavigate }: { onNavigate: (tab: TabId) => v
           </button>
         </div>
 
-        {/* Credibility strip: verifiable facts only, no invented counters. */}
-        <div className="mt-10 flex flex-col gap-4 border-t border-line/70 pt-5 sm:mt-14 lg:absolute lg:inset-x-8 lg:bottom-8 lg:mt-0 lg:flex-row lg:items-end lg:justify-between lg:border-t-0 lg:pt-0">
+        {/* Credibility strip: verifiable facts only, no invented counters.
+            Kept in normal flow so it aligns with the 1400px grid and can never
+            collide with the hero copy or the docked SignalStrip below. */}
+        <div className="mt-10 flex flex-col gap-4 border-t border-line/70 pt-5 sm:mt-14 lg:mt-12 lg:flex-row lg:items-center lg:justify-between lg:border-t-0 lg:pt-0">
           <div className="flex flex-wrap items-center gap-x-5 gap-y-2 font-mono text-[10px] uppercase tracking-[0.16em] text-ink-4">
             <span>{t('heroFact1')}</span>
             <span className="h-3 w-px bg-line-strong" aria-hidden="true" />

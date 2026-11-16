@@ -41,7 +41,7 @@ export default function HomePage({
     <div className="pb-4">
       <HomeHero onNavigate={onNavigate} />
 
-      <div className="relative z-10 -mt-8 sm:-mt-10">
+      <div className="relative z-10 -mt-6 sm:-mt-8">
         <SignalStrip apod={apod} iss={iss} neo={neo} earth={earth} />
       </div>
 

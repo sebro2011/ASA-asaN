@@ -1,4 +1,4 @@
-# NASA Space Explorer
+# COSMORA
 
 A trilingual (English · සිංහල · தமிழ்) space-exploration workspace built on real
 NASA data: APOD, Earth intelligence from NASA POWER and GIBS, missions, asteroids,

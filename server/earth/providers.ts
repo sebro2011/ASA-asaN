@@ -35,23 +35,24 @@ interface ChatCompletionResponse {
 export const ANALYST_MODEL = process.env.NOVA_ANALYST_MODEL || 'gemini-3.8-flash';
 export const OPENROUTER_MODEL = process.env.EARTH_ANALYST_OPENROUTER_MODEL || 'google/gemini-2.0-flash-001';
 export const ARENA_MODEL = process.env.EARTH_ANALYST_ARENA_MODEL || 'gemini-2.5-flash';
+export const OSS_MODEL = process.env.EARTH_ANALYST_OSS_MODEL || 'qwen2.5:7b-instruct';
 
-export const ANALYST_SYSTEM_INSTRUCTION = `You are the Earth Science Analyst inside the NASA Space Explorer Earth Intelligence Lab.
+export const ANALYST_SYSTEM_INSTRUCTION = `You are AI Earth Analyst 2.0 inside the COSMORA Earth Intelligence Lab.
 
 Absolute rules:
-1. You may ONLY use the numbers, dataset names, dates, coverage strings and URLs present in the JSON context supplied by the client. Never add measurements, hotspot counts, alerts, place names or sources from memory.
+1. You may ONLY use the numbers, dataset names, dates, coverage strings, comparison locations and URLs present in the JSON context supplied by the client. Never add measurements, hotspot counts, alerts, place names or sources from memory.
 2. If a value needed to answer is absent from the context, say it is not available in the retrieved data and name what would be required.
 3. Separate your answer into:
    - verified: statements that restate retrieved values or documented dataset metadata;
-   - derived: arithmetic or comparisons you performed on those retrieved values (show the calculation style, e.g. "mean of the 12 monthly values");
-   - interpretation: scientific reading, always hedged and clearly labelled as interpretation;
-   - limitations: dataset limitations, uncertainty, and what the data cannot establish;
-   - gaps: missing data.
-4. Never claim that two images prove a trend. Never claim statistical significance or attribution.
+   - derived: arithmetic, anomalies, seasonal means, unusual observations (|z| >= 2σ), decade slopes, historical period splits, or multi-location comparisons computed on those retrieved values (state the basis clearly);
+   - interpretation: clear, plain-language scientific explanation of what the patterns mean, always hedged and clearly labelled as interpretation;
+   - limitations: dataset limitations (≈0.5° × 0.625° grid estimates vs station gauges), uncertainty, and what the data cannot establish;
+   - gaps: missing months, unreturned parameters, or unverified date domains.
+4. Never claim that two images prove a trend. Never claim statistical significance or causal attribution without valid supporting tests in the context.
 5. Cite the source URLs exactly as they appear in the context, and only those.
-6. Be concise: at most 5 bullets per section, each under 45 words.
-7. Write in the requested language (English, Sinhala or Tamil) using correct scientific terminology.
-8. The context may contain a "localAnalysis" block of arithmetic already computed from the retrieved values. You may restate those results; you may not recompute them differently.`;
+6. Be concise and accessible: at most 5 bullets per section, each under 45 words, explaining trends in clear language while keeping exact numbers and units.
+7. Write in the requested language — English, Sinhala (සිංහල), or Tamil (தமிழ்) — using accurate scientific terminology.
+8. The context contains a "localAnalysis" block of verified arithmetic (means, anomalies, seasonal breakdowns, unusual months, multi-location comparisons) computed from the retrieved values. Restate those numbers faithfully; never recompute them differently.`;
 
 const ANALYST_RESPONSE_SCHEMA = {
   type: Type.OBJECT,
@@ -237,9 +238,9 @@ interface ChatProviderOptions {
 
 /** Exported so the Forge assistant can reuse the same transport with its own persona. */
 export function createChatCompletionsProvider(
-  id: 'openrouter' | 'arena' | 'forge',
+  id: 'openrouter' | 'arena' | 'forge' | 'oss',
   label: string,
-  options: ChatProviderOptions
+  options: ChatProviderOptions & { allowKeyless?: boolean }
 ): ProviderAdapter {
   const persona = options.persona ?? EARTH_ANALYST_PERSONA;
   const model = options.model || OPENROUTER_MODEL;
@@ -248,18 +249,21 @@ export function createChatCompletionsProvider(
     id,
     label,
     model,
-    isConfigured: () => Boolean(options.apiKey),
+    isConfigured: () => Boolean(options.apiKey || (options.allowKeyless && options.baseUrl)),
     async generate({ question, context, lang, signal, timeoutMs }: ProviderGenerateArgs) {
       const languageName = ({ en: 'English', si: 'Sinhala (සිංහල)', ta: 'Tamil (தமிழ்)' } as Record<string, string>)[lang] || 'English';
       let response: Response;
       try {
+        const headers: Record<string, string> = {
+          'Content-Type': 'application/json',
+          ...(options.extraHeaders || {}),
+        };
+        if (options.apiKey) {
+          headers.Authorization = `Bearer ${options.apiKey}`;
+        }
         response = await fetchImpl(`${options.baseUrl.replace(/\/$/, '')}/chat/completions`, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${options.apiKey}`,
-            ...(options.extraHeaders || {}),
-          },
+          headers,
           body: JSON.stringify({
             model,
             temperature: 0.2,
@@ -307,7 +311,7 @@ export function createOpenRouterProvider(options: { apiKey?: string; model?: str
     apiKey: options.apiKey,
     model: options.model || OPENROUTER_MODEL,
     baseUrl: 'https://openrouter.ai/api/v1',
-    extraHeaders: { 'HTTP-Referer': 'https://nasa-space-expolere.vercel.app', 'X-Title': 'NASA Space Explorer — Earth Lab' },
+    extraHeaders: { 'HTTP-Referer': 'https://nasa-space-expolere.vercel.app', 'X-Title': 'COSMORA — Earth Lab' },
     fetchImpl: options.fetchImpl,
   });
 }
@@ -322,22 +326,42 @@ export function createArenaProvider(options: { apiKey?: string; baseUrl?: string
   });
 }
 
+export function createOpenSourceProvider(options: {
+  baseUrl?: string;
+  apiKey?: string;
+  model?: string;
+  fetchImpl?: typeof fetch;
+}): ProviderAdapter {
+  const baseUrl = options.baseUrl || process.env.EARTH_ANALYST_OSS_BASE_URL || '';
+  return createChatCompletionsProvider('oss', 'Open-Source Local Model', {
+    apiKey: options.apiKey || process.env.EARTH_ANALYST_OSS_API_KEY,
+    allowKeyless: Boolean(baseUrl),
+    model: options.model || OSS_MODEL,
+    baseUrl,
+    fetchImpl: options.fetchImpl,
+  });
+}
+
 /** Builds the adapters from the environment. Missing keys simply skip. */
 export function createConfiguredProviders(options: { fetchImpl?: typeof fetch } = {}): ProviderAdapter[] {
   const gemini = createGeminiProvider({
     client: process.env.GEMINI_API_KEY
       ? new GoogleGenAI({
           apiKey: process.env.GEMINI_API_KEY,
-          httpOptions: { headers: { 'User-Agent': 'nasa-space-explorer-earth-lab' } },
+          httpOptions: { headers: { 'User-Agent': 'cosmora-earth-lab' } },
         })
       : (null as unknown as GoogleGenAI),
   });
 
-  return [
+  const chain: ProviderAdapter[] = [
     gemini,
     createOpenRouterProvider({ apiKey: process.env.OPENROUTER_API_KEY, fetchImpl: options.fetchImpl }),
-    createArenaProvider({ apiKey: process.env.ARENA_API_KEY, fetchImpl: options.fetchImpl }),
   ];
+  if (process.env.EARTH_ANALYST_OSS_BASE_URL?.trim()) {
+    chain.push(createOpenSourceProvider({ fetchImpl: options.fetchImpl }));
+  }
+  chain.push(createArenaProvider({ apiKey: process.env.ARENA_API_KEY, fetchImpl: options.fetchImpl }));
+  return chain;
 }
 
 /** Pulls the first JSON object out of a model reply (tolerates ``` fences). */

@@ -141,12 +141,10 @@ for (const lang of ['en', 'si', 'ta']) {
       assert.ok(flat.includes(value), `${lang}: renders ${key}`);
     }
 
-    // The site lockup is the eyebrow: WebP first, a PNG fallback, a translated
-    // alt and a declared intrinsic size so the overlay cannot shift on decode.
-    assert.match(html, /space-explorer-lockup\.webp/);
-    assert.match(html, /space-explorer-lockup\.png/);
-    assert.match(html, new RegExp(`alt="${i18n.t('welcomeEyebrow')}"`));
-    assert.match(html, /width="1440" height="385"/);
+    // Typographic COSMORA lockup renders cleanly without the retired raster lockup.
+    assert.match(html, /data-testid="welcome-brand-lockup"/);
+    assert.doesNotMatch(html, /space-explorer-lockup/);
+    assert.doesNotMatch(flat, /NASA Space Explorer/i);
 
     // One primary action, one visible skip, the preference checkbox, version.
     assert.match(html, /id="welcome-begin"/);

@@ -356,7 +356,7 @@ export const DATASETS: DatasetDescriptor[] = [
     id: 'nova-iss-tle',
     organisation: 'Other',
     programme: 'Existing ISS integration',
-    title: 'ISS orbital elements (existing Space Explorer feed)',
+    title: 'ISS orbital elements (existing COSMORA feed)',
     description:
       'Two-line elements already used by the app’s ISS tracker, served by wheretheiss.at. Provides orbital information, not measurements of any Earth phenomenon.',
     documentationUrl: 'https://wheretheiss.at/w/developer',
@@ -376,7 +376,7 @@ export const DATASETS: DatasetDescriptor[] = [
       'A propagated altitude is a derived quantity, not a direct measurement.',
       'Not a NASA API; attribution is shown wherever it is used.',
     ],
-    attribution: 'wheretheiss.at orbital data (existing NASA Space Explorer integration).',
+    attribution: 'wheretheiss.at orbital data (existing COSMORA integration).',
     keyRequired: false,
   },
 ];

@@ -112,10 +112,16 @@ export default function ExploreApp({ tab, onSelectTab, onExitToWorkspace, onOpen
   const [destinationRetry, setDestinationRetry] = useState<number>(0);
   const { totalCount } = useFavorites();
 
-  /* Keep the document language in sync for correct script rendering. */
+  /* Keep the document language and title in sync for the active destination. */
   useEffect(() => {
     document.documentElement.lang = lang;
-  }, [lang]);
+    const entry = NAV_ENTRIES.find((item) => item.id === activeTab);
+    const label = entry ? entry.labels[lang] || entry.labels.en : '';
+    document.title =
+      activeTab === 'home' || !label
+        ? 'COSMORA — Earth intelligence, missions & deep space'
+        : `${label} · COSMORA`;
+  }, [lang, activeTab]);
 
   /* First-visit welcome screen: storage rules live in lib/welcome. */
   useEffect(() => {

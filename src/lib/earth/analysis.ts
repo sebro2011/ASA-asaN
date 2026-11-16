@@ -102,6 +102,19 @@ export interface AnalystContext {
      */
     series?: Array<{ code: string; unit: string; dates: string[]; values: Array<number | null> }>;
   } | null;
+  /** Optional secondary locations retrieved in the Multi-Location workspace. */
+  comparisonLocations?: Array<{
+    label: string;
+    latitude: number;
+    longitude: number;
+    rows: number;
+    firstMonth?: string;
+    lastMonth?: string;
+    sourceUrl: string;
+    retrievedAt: string;
+    stats: PowerSeriesStats[];
+    series?: Array<{ code: string; unit: string; dates: string[]; values: Array<number | null> }>;
+  }>;
   /** Free-form notes about missing data (never fabricated values). */
   dataGaps: string[];
 }
@@ -160,17 +173,30 @@ export function layerCoverageLine(layer: GibsLayerMeta, domain: GibsDomain | nul
  * user explicitly selects "local analysis". It answers only what the retrieved
  * bundle supports and says so otherwise.
  */
-export function buildLocalAnalystAnswer(question: string, context: AnalystContext): AnalystAnswer {
+export function buildLocalAnalystAnswer(question: string, context: AnalystContext, lang = 'en'): AnalystAnswer {
+  const locale: 'en' | 'si' | 'ta' = lang === 'si' ? 'si' : lang === 'ta' ? 'ta' : 'en';
   const verified: string[] = [];
   const derived: string[] = [];
   const interpretation: string[] = [];
   const limitations: string[] = [];
   const gaps: string[] = [...context.dataGaps];
 
-  verified.push(
-    `Study area: ${context.areaLabel} at ${fmt(context.latitude, 4)}°, ${fmt(context.longitude, 4)}° (WGS84). ` +
-      `Date(s) in view: ${context.dates.length ? context.dates.join(', ') : 'none selected'}.`
-  );
+  if (locale === 'si') {
+    verified.push(
+      `අධ්‍යයන ප්‍රදේශය: ${context.areaLabel} (${fmt(context.latitude, 4)}°, ${fmt(context.longitude, 4)}° WGS84). ` +
+        `දර්ශනයේ ඇති දිනය(න්): ${context.dates.length ? context.dates.join(', ') : 'තෝරා නැත'}.`
+    );
+  } else if (locale === 'ta') {
+    verified.push(
+      `ஆய்வுப் பகுதி: ${context.areaLabel} (${fmt(context.latitude, 4)}°, ${fmt(context.longitude, 4)}° WGS84). ` +
+        `காட்சியில் உள்ள தேதி(கள்): ${context.dates.length ? context.dates.join(', ') : 'தேர்ந்தெடுக்கப்படவில்லை'}.`
+    );
+  } else {
+    verified.push(
+      `Study area: ${context.areaLabel} at ${fmt(context.latitude, 4)}°, ${fmt(context.longitude, 4)}° (WGS84). ` +
+        `Date(s) in view: ${context.dates.length ? context.dates.join(', ') : 'none selected'}.`
+    );
+  }
 
   if (context.layers.length) {
     for (const layer of context.layers) {
@@ -211,6 +237,23 @@ export function buildLocalAnalystAnswer(question: string, context: AnalystContex
     }
   } else {
     gaps.push('No POWER monthly archive was retrieved for this area, so no climate-series statement can be made.');
+  }
+
+  if (context.comparisonLocations?.length && context.power) {
+    for (const comp of context.comparisonLocations) {
+      verified.push(
+        `Comparison location retrieved: ${comp.label} (${fmt(comp.latitude, 3)}°, ${fmt(comp.longitude, 3)}°), ${comp.rows} monthly records.`
+      );
+      for (const compStat of comp.stats) {
+        const primaryStat = context.power.stats.find((s) => s.code === compStat.code);
+        if (primaryStat && primaryStat.mean !== null && compStat.mean !== null) {
+          const diff = compStat.mean - primaryStat.mean;
+          derived.push(
+            `${compStat.code} comparison: ${comp.label} mean ${fmt(compStat.mean, 2)} ${compStat.unit} vs ${context.power.placeLabel} ${fmt(primaryStat.mean, 2)} ${primaryStat.unit} (${diff >= 0 ? '+' : ''}${fmt(diff, 2)} ${compStat.unit}).`
+          );
+        }
+      }
+    }
   }
 
   const intent = classifyQuestion(question);
@@ -263,6 +306,16 @@ export function buildLocalAnalystAnswer(question: string, context: AnalystContex
         label: `GIBS reported coverage — ${entry.layerId}`,
         url: entry.domain.sourceUrl,
         retrievedAt: entry.domain.retrievedAt
+      });
+    }
+  }
+  if (context.comparisonLocations?.length) {
+    for (const comp of context.comparisonLocations) {
+      if (!comp.sourceUrl) continue;
+      sources.push({
+        label: `NASA POWER — ${comp.label}`,
+        url: comp.sourceUrl,
+        retrievedAt: comp.retrievedAt
       });
     }
   }

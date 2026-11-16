@@ -627,6 +627,22 @@ var POWER_PARAMETERS = [
     kind: "temperature",
     core: false,
     notes: "Monthly mean of the daily minimum 2 m air temperature."
+  },
+  {
+    code: "GWETTOP",
+    label: "Surface soil wetness (0\u20135 cm)",
+    unit: "0\u20131",
+    kind: "soil",
+    core: false,
+    notes: "MERRA-2 degree of soil moisture saturation in the top 5 cm layer (0 = completely dry, 1 = saturated)."
+  },
+  {
+    code: "GWETROOT",
+    label: "Root-zone soil wetness (0\u2013100 cm)",
+    unit: "0\u20131",
+    kind: "soil",
+    core: false,
+    notes: "MERRA-2 degree of soil moisture saturation in the 0\u2013100 cm root zone for hydrological drought and agricultural water-balance analysis."
   }
 ];
 var CORE_PARAMETER_CODES = POWER_PARAMETERS.filter((p) => p.core).map((p) => p.code);
@@ -638,9 +654,10 @@ function clampYear(year) {
   return year;
 }
 function buildPowerUrl(latitude, longitude, parameters, startYear, endYear) {
+  const community = parameters.some((code) => code.startsWith("GWET") || code.startsWith("EVP")) ? "AG" : "RE";
   const params = new URLSearchParams({
     parameters: parameters.join(","),
-    community: "RE",
+    community,
     longitude: longitude.toFixed(4),
     latitude: latitude.toFixed(4),
     start: String(clampYear(startYear)),
@@ -698,6 +715,431 @@ function parsePowerResponse(payload, requested) {
   };
 }
 
+// src/lib/earth/spaceAppsResources.ts
+var SPACE_APPS_RESOURCE_MATRIX = [
+  {
+    id: "nasa-power",
+    name: "NASA POWER (Climate & MERRA-2 Land Hydrology)",
+    agencyLabel: "NASA Langley Research Center (LaRC) / GMAO MERRA-2",
+    agencyCategory: "nasa",
+    officialUrl: "https://power.larc.nasa.gov/",
+    integrationMode: "live-keyless-api",
+    integrationBadge: "Live Keyless NASA API (Primary)",
+    usableApiSummary: "Public synchronous REST JSON endpoint (/api/temporal/monthly/point) providing historical temperature, bias-corrected precipitation, radiation, humidity, wind, and MERRA-2 surface & root-zone soil wetness.",
+    authRequirement: "None (keyless public NASA API)",
+    rateLimitPolicy: "Server-cached (6 h TTL) + 60 req/min proxy guard; progressive fallback to core parameters.",
+    spatialTemporalCoverage: "Global ~0.5\xB0 \xD7 0.625\xB0 grid \xB7 Monthly archive 1981\u2013present",
+    primaryVariables: [
+      "T2M (\xB0C)",
+      "T2M_MAX / T2M_MIN (\xB0C)",
+      "PRECTOTCORR (mm/day)",
+      "GWETTOP Surface Soil Wetness (0\u20131)",
+      "GWETROOT Root-Zone Soil Wetness (0\u20131)",
+      "RH2M (%)",
+      "ALLSKY_SFC_SW_DWN (kWh/m\xB2/day)"
+    ],
+    cosmoraCapabilities: [
+      "Live point time-series retrieval & caching",
+      "Mann\u2013Kendall (Hamed\u2013Rao), Seasonal Mann\u2013Kendall & Pettitt change-point tests",
+      "WMO/Gamma SPI-12 drought/wetness index & soil-moisture coupling",
+      "Multi-location comparison & AI Analyst grounding"
+    ],
+    limitationsNote: "Represents ~55 km grid-cell satellite/reanalysis averages rather than homogenized single-point rain-gauge readings."
+  },
+  {
+    id: "nasa-hydrology-rods",
+    name: "NASA GES DISC Hydrology Time Series (Data Rods)",
+    agencyLabel: "NASA Goddard Earth Sciences DISC (GLDAS / NLDAS / IMERG)",
+    agencyCategory: "nasa",
+    officialUrl: "https://disc.gsfc.nasa.gov/information/tools?title=Hydrology%20Time%20Series",
+    integrationMode: "live-token-api",
+    integrationBadge: "Server Proxy (Earthdata Token) + Native asc2 Importer",
+    usableApiSummary: "GES DISC timeseries.cgi serves GLDAS-2.1 / IMERG hydrological data rods in WaterML and ASCII (asc2). Modern EOSDIS endpoints enforce Earthdata Login bearer tokens on many collections.",
+    authRequirement: "Optional server EARTHDATA_BEARER_TOKEN for direct proxy retrieval; zero-auth URL generator & asc2 file import always available.",
+    rateLimitPolicy: "Strict 1 req / 2 s upstream throttle + 6 h server cache; never scrapes HTML.",
+    spatialTemporalCoverage: "Global land 0.25\xB0 \xD7 0.25\xB0 (GLDAS-2.1 Noah) \xB7 Monthly 2000\u2013present",
+    primaryVariables: [
+      "SoilMoi0_10cm_inst (kg/m\xB2)",
+      "Qs_acc Surface Runoff (kg/m\xB2)",
+      "Evap_tavg Evapotranspiration (kg/m\xB2/s)",
+      "Rainf_f_tavg Precipitation Rate (kg/m\xB2/s)"
+    ],
+    cosmoraCapabilities: [
+      "GET /api/earth/hydrology/gesdisc proxy with asc2 parser",
+      "Direct GES DISC Data Rod URL builder for active COSMORA coordinates",
+      "Client-side asc2 rod import into Mann\u2013Kendall & POWER cross-correlation"
+    ],
+    limitationsNote: "Direct server fetch returns 503/401 setup guidance when EARTHDATA_BEARER_TOKEN is not configured; keyless MERRA-2 soil wetness (GWETTOP/GWETROOT) remains live via NASA POWER."
+  },
+  {
+    id: "nasa-giovanni",
+    name: "NASA Giovanni Earth Science Portal",
+    agencyLabel: "NASA GES DISC",
+    agencyCategory: "nasa",
+    officialUrl: "https://giovanni.gsfc.nasa.gov/",
+    integrationMode: "portal-workflow-and-import",
+    integrationBadge: "Deep-Link Bookmark Builder + Giovanni CSV Importer",
+    usableApiSummary: "Interactive web analysis environment (GPM IMERG, MERRA-2, MODIS, GLDAS). Backend job submission requires an authenticated NASA Earthdata Login browser/session workflow rather than an anonymous public JSON API.",
+    authRequirement: "NASA Earthdata Login required on giovanni.gsfc.nasa.gov (external portal)",
+    rateLimitPolicy: "No automated background scraping; deterministic #service=ArAvTs deep-link handoff + user CSV import.",
+    spatialTemporalCoverage: "Global bounding-box area-averaged series \xB7 Mission-dependent (1979\u2013present)",
+    primaryVariables: [
+      "GPM_3IMERGDF_07_precipitation (mm/day)",
+      "M2TMNXSLV_5_12_4_T2M (K / \xB0C)",
+      "GLDAS_NOAH025_M_2_1_SoilMoi0_10cm_inst (kg/m\xB2)"
+    ],
+    cosmoraCapabilities: [
+      "1-click Giovanni Area-Averaged Time Series deep-link synced to COSMORA bbox & dates",
+      "Native Giovanni CSV parser (strips metadata preamble & fill flags) for local statistical testing"
+    ],
+    limitationsNote: "Not claimed as a background live API; Giovanni requires interactive Earthdata authentication."
+  },
+  {
+    id: "nasa-appeears",
+    name: "NASA AppEEARS (LP DAAC Analysis Ready Samples)",
+    agencyLabel: "NASA Land Processes DAAC (USGS EROS)",
+    agencyCategory: "nasa",
+    officialUrl: "https://appeears.earthdatacloud.nasa.gov/",
+    integrationMode: "portal-workflow-and-import",
+    integrationBadge: "API v1 Point-Task Spec Generator + Results CSV Importer",
+    usableApiSummary: "AppEEARS REST API (/api/v1/task) executes asynchronous batch extractions for MODIS, VIIRS, SMAP, and ECOSTRESS point/polygon samples and requires a 48-hour Earthdata Login token.",
+    authRequirement: "NASA Earthdata Login required to submit batch tasks on appeears.earthdatacloud.nasa.gov",
+    rateLimitPolicy: "Zero unauthenticated polling; generates compliant point-task JSON specs & parses exported *-results.csv files locally.",
+    spatialTemporalCoverage: "Global land 250 m \u2013 9 km (MODIS / VIIRS / SMAP) \xB7 2000\u2013present",
+    primaryVariables: [
+      "MOD13Q1.061 250m 16-day NDVI",
+      "MOD11A2.061 1km 8-day Land Surface Temperature (K)",
+      "SPL3SMP_E.006 9km SMAP Soil Moisture (cm\xB3/cm\xB3)"
+    ],
+    cosmoraCapabilities: [
+      "Downloadable AppEEARS API v1 point-sample task JSON prefilled with active coordinates & date window",
+      "Native AppEEARS point CSV importer with fill-value filtering and monthly aggregation"
+    ],
+    limitationsNote: "Asynchronous batch service (minutes per job); COSMORA generates valid task specs and analyzes exported CSVs rather than blocking the UI."
+  },
+  {
+    id: "noaa-cdo",
+    name: "NOAA Climate Data Online (CDO Web Services v2)",
+    agencyLabel: "Partner Agency \xB7 NOAA National Centers for Environmental Information (NCEI)",
+    agencyCategory: "partner-agency",
+    officialUrl: "https://www.ncei.noaa.gov/cdo-web/",
+    integrationMode: "live-token-api",
+    integrationBadge: "Live Partner-Agency REST Proxy (NOAA_CDO_TOKEN) + CSV Import",
+    usableApiSummary: "Official synchronous REST API v2 (/cdo-web/api/v2/stations & /data) serving quality-controlled Global Summary of the Month (GSOM) meteorological station observations (including Sri Lankan WMO stations).",
+    authRequirement: "Free server-side NOAA_CDO_TOKEN header (ncei.noaa.gov/cdo-web/token); CSV import works without token.",
+    rateLimitPolicy: "Enforced 4 req/s token-bucket (< NOAA 5 req/s cap, 10,000/day) + 10-year chunking + 6 h cache.",
+    spatialTemporalCoverage: "Global land weather stations (point gauges) \xB7 Historical 1880s\u2013present (station-dependent)",
+    primaryVariables: [
+      "TAVG Monthly Mean Station Temperature (\xB0C)",
+      "TMAX / TMIN Monthly Extreme Means (\xB0C)",
+      "PRCP Monthly Station Precipitation Total (mm)"
+    ],
+    cosmoraCapabilities: [
+      "GET /api/earth/noaa/cdo nearest-station discovery & GSOM multi-decade series retrieval",
+      "Side-by-side station-gauge (NOAA GSOM) vs gridded reanalysis (NASA POWER) comparison & correlation",
+      "NOAA CDO CSV file importer"
+    ],
+    limitationsNote: "Station records can contain missing observation months and instrument relocations; coverage fraction is surfaced per station."
+  },
+  {
+    id: "knmi-climexp",
+    name: "KNMI Climate Explorer",
+    agencyLabel: "Research Institution \xB7 Royal Netherlands Meteorological Institute (KNMI / WMO)",
+    agencyCategory: "research-institution",
+    officialUrl: "https://climexp.knmi.nl/",
+    integrationMode: "portal-workflow-and-import",
+    integrationBadge: "Allowlisted Teleconnection Index Fetch + Native KNMI .dat Parser",
+    usableApiSummary: "Academic climate research workbench publishing century-scale ENSO (Ni\xF1o 3.4), Indian Ocean Dipole (DMI), and station/gridded series in standard KNMI 12-month ASCII (.dat) format. Interactive CGI forms are not a commercial JSON API.",
+    authRequirement: "None for static reference .dat files & local .dat imports; polite academic fair-use.",
+    rateLimitPolicy: "Strict 1 req / 10 s throttle + 24 h server cache on allowlisted static .dat files only; zero CGI form scraping.",
+    spatialTemporalCoverage: "Basin-wide teleconnection indices (Pacific Ni\xF1o 3.4, Tropical Indian Ocean DMI) \xB7 1854\u2013present",
+    primaryVariables: [
+      "Ni\xF1o 3.4 SST Anomaly Index (\xB0C)",
+      "Indian Ocean Dipole Mode Index \u2014 DMI (\xB0C)",
+      "User-imported KNMI .dat monthly climate/hydrology tables"
+    ],
+    cosmoraCapabilities: [
+      "GET /api/earth/knmi/index polite cached fetcher for Ni\xF1o 3.4 & IOD DMI indices",
+      "Full client-side KNMI .dat ASCII parser (12-column & 2-column tables, -999.9 / 3e33 missing flags)",
+      "Autocorrelation-adjusted correlation (Bretherton N_eff) between ENSO/IOD and local rainfall/temperature"
+    ],
+    limitationsNote: "Statistical teleconnection correlation measures co-variability (e.g., IOD/ENSO phase vs Sri Lankan Maha rainfall) and does not imply deterministic seasonal forecasting."
+  },
+  {
+    id: "csa-swot",
+    name: "CSA / NASA / CNES SWOT Surface Water & Ocean Topography",
+    agencyLabel: "Partner Mission \xB7 Canadian Space Agency (CSA) / NASA / CNES / UKSA",
+    agencyCategory: "partner-agency",
+    officialUrl: "https://www.asc-csa.gc.ca/eng/satellites/swot/",
+    integrationMode: "live-keyless-api",
+    integrationBadge: "Live Keyless SWOT Granule Discovery (NASA CMR) + CSA Mission Context",
+    usableApiSummary: "SWOT Ka-band Radar Interferometer (KaRIn, launched Dec 2022) measures inland river/reservoir water-surface elevation and ocean SSH. CSA provides key KaRIn Extended Interaction Klystron (EIK) subsystem hardware; science granules are indexed publicly in NASA CMR.",
+    authRequirement: "None for NASA CMR granule discovery (/search/granules.json); Earthdata Login required only to download raw NetCDF/shapefiles from PO.DAAC.",
+    rateLimitPolicy: "2 req/s server rate limit + 1 h granule metadata cache.",
+    spatialTemporalCoverage: "78\xB0S\u201378\xB0N rivers (>100 m), lakes/reservoirs (>250 m)\xB2 & oceans \xB7 21-day orbit cycle (2023\u2013present)",
+    primaryVariables: [
+      "SWOT_L2_HR_LakeSP_2.0 (Inland Reservoir/Lake Polygons)",
+      "SWOT_L2_HR_RiverSP_2.0 (River Reach Slope & Width)",
+      "SWOT_L2_LR_SSH_2.0 (KaRIn Sea Surface Height)"
+    ],
+    cosmoraCapabilities: [
+      "GET /api/earth/swot/granules live satellite pass & granule search over the active COSMORA bounding box",
+      "Displays exact SWOT orbit cycle, pass number, acquisition timestamps, collection ID, and PO.DAAC / CSA links"
+    ],
+    limitationsNote: "CMR granule discovery confirms satellite pass coverage and metadata since 2023; short (<4 yr) SWOT records cannot support multi-decadal climate trend claims."
+  }
+];
+function round(val, digits = 4) {
+  const f = 10 ** digits;
+  return Math.round(val * f) / f;
+}
+function isMissingSentinel(v) {
+  if (!Number.isFinite(v)) return true;
+  if (v <= -900 && (Math.abs(v + 999.9) < 1 || Math.abs(v + 999) < 1 || Math.abs(v + 9999) < 2 || v <= -9990)) {
+    return true;
+  }
+  if (Math.abs(v) >= 1e19) return true;
+  return false;
+}
+function aggregateByMonth(raw) {
+  const buckets = /* @__PURE__ */ new Map();
+  for (const item of raw) {
+    if (item.month < 1 || item.month > 12 || item.year < 1700 || item.year > 2100) continue;
+    if (isMissingSentinel(item.value)) continue;
+    const key2 = `${item.year}-${String(item.month).padStart(2, "0")}`;
+    const prev = buckets.get(key2);
+    if (prev) {
+      prev.sum += item.value;
+      prev.count += 1;
+    } else {
+      buckets.set(key2, { year: item.year, month: item.month, sum: item.value, count: 1 });
+    }
+  }
+  return [...buckets.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([date, b]) => ({
+    date,
+    year: b.year,
+    month: b.month,
+    value: round(b.sum / b.count, 4)
+  }));
+}
+function parseGesDiscAsc2(rawText, metaOverride) {
+  const lines = rawText.split(/\r?\n/);
+  const headerMap = /* @__PURE__ */ new Map();
+  const samples = [];
+  let inData = false;
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (!line) continue;
+    if (/^data$/i.test(line) || /^date[\s,]+/i.test(line)) {
+      inData = true;
+      continue;
+    }
+    if (!inData && line.includes("=")) {
+      const eq = line.indexOf("=");
+      const k = line.slice(0, eq).trim().replace(/^#\s*/, "");
+      const v = line.slice(eq + 1).trim();
+      headerMap.set(k, v);
+      continue;
+    }
+    const match = /^(\d{4})-(\d{2})(?:-\d{2}(?:[T\s][\d:Z+-]+)?)?[\s,;]+([+-]?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)$/.exec(
+      line
+    );
+    if (match) {
+      inData = true;
+      samples.push({
+        year: Number(match[1]),
+        month: Number(match[2]),
+        value: Number(match[3])
+      });
+    }
+  }
+  const points = aggregateByMonth(samples);
+  const shortName = headerMap.get("param_short_name") || "GLDAS_Hydrology";
+  const paramName = headerMap.get("param_name") || shortName;
+  const unit = headerMap.get("unit") || headerMap.get("units") || "model units";
+  const lat = metaOverride?.latitude ?? Number(headerMap.get("lat"));
+  const lon = metaOverride?.longitude ?? Number(headerMap.get("lon"));
+  const spatialNote = Number.isFinite(lat) && Number.isFinite(lon) ? `GES DISC Data Rod point (${lat.toFixed(3)}\xB0, ${lon.toFixed(3)}\xB0)` : "GES DISC Hydrology Data Rod point";
+  return {
+    id: `gesdisc-${shortName}-${Date.now()}`,
+    sourceId: "nasa-hydrology-rods",
+    title: `NASA GES DISC Hydrology \xB7 ${paramName}`,
+    variableLabel: `${paramName} (${shortName})`,
+    unit,
+    agencyLabel: "NASA GES DISC (Hydrology Data Rods / GLDAS)",
+    agencyCategory: "nasa",
+    sourceUrl: metaOverride?.sourceUrl || "https://disc.gsfc.nasa.gov/information/tools?title=Hydrology%20Time%20Series",
+    retrievedAt: metaOverride?.retrievedAt || (/* @__PURE__ */ new Date()).toISOString(),
+    spatialNote,
+    coverageStart: points.length ? points[0].date : null,
+    coverageEnd: points.length ? points[points.length - 1].date : null,
+    points,
+    notes: "Aggregated to monthly means excluding fill/missing flags (-9999 / 9.999e20)."
+  };
+}
+function parseNoaaGsomSeries(args) {
+  const { station, records, datatype, sourceUrl } = args;
+  const metaByCode = {
+    TAVG: { label: "Station Monthly Mean Temperature (TAVG)", unit: "\xB0C" },
+    TMAX: { label: "Station Monthly Mean Maximum Temperature (TMAX)", unit: "\xB0C" },
+    TMIN: { label: "Station Monthly Mean Minimum Temperature (TMIN)", unit: "\xB0C" },
+    PRCP: { label: "Station Monthly Total Precipitation (PRCP)", unit: "mm/month" }
+  };
+  const info = metaByCode[datatype] || { label: datatype, unit: "" };
+  const samples = [];
+  for (const rec of records) {
+    if (rec.datatype !== datatype || typeof rec.value !== "number" || !Number.isFinite(rec.value)) continue;
+    const m = /^(\d{4})-(\d{2})/.exec(rec.date || "");
+    if (!m) continue;
+    samples.push({ year: Number(m[1]), month: Number(m[2]), value: rec.value });
+  }
+  const points = aggregateByMonth(samples);
+  const elevText = typeof station.elevation === "number" ? `, ${station.elevation} m` : "";
+  const covText = typeof station.datacoverage === "number" ? ` \xB7 reported coverage ${Math.round(station.datacoverage * 100)}%` : "";
+  return {
+    id: `noaa-${station.id}-${datatype}`,
+    sourceId: "noaa-cdo",
+    title: `NOAA NCEI GSOM \xB7 ${station.name} (${station.id})`,
+    variableLabel: info.label,
+    unit: info.unit,
+    agencyLabel: "Partner Agency \xB7 NOAA National Centers for Environmental Information (NCEI)",
+    agencyCategory: "partner-agency",
+    sourceUrl,
+    retrievedAt: args.retrievedAt || (/* @__PURE__ */ new Date()).toISOString(),
+    spatialNote: `Ground station ${station.id} (${station.latitude.toFixed(3)}\xB0, ${station.longitude.toFixed(3)}\xB0${elevText}${covText})`,
+    coverageStart: points.length ? points[0].date : null,
+    coverageEnd: points.length ? points[points.length - 1].date : null,
+    points,
+    notes: "In-situ weather station gauge observations from NOAA Global Summary of the Month (GSOM, metric units)."
+  };
+}
+function parseKnmiAsciiSeries(rawText, metaOverride) {
+  const lines = rawText.split(/\r?\n/);
+  let detectedTitle = "";
+  let detectedUnit = "";
+  const samples = [];
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (!line) continue;
+    if (line.startsWith("#") || line.startsWith("%")) {
+      const comment = line.replace(/^[#%]\s*/, "").trim();
+      const unitMatch = /\[([^\]]+)\]/.exec(comment);
+      if (unitMatch && !detectedUnit) detectedUnit = unitMatch[1].trim();
+      if (!detectedTitle && comment.length > 4 && !/^(institution|source|history|references|climexp|contact|file)/i.test(comment)) {
+        detectedTitle = comment.slice(0, 90);
+      }
+      continue;
+    }
+    const tokens = line.split(/\s+/).map(Number);
+    if (tokens.some((n) => Number.isNaN(n))) continue;
+    if (tokens.length >= 13 && Number.isInteger(tokens[0]) && tokens[0] >= 1700 && tokens[0] <= 2100) {
+      const year = tokens[0];
+      for (let m = 1; m <= 12; m += 1) {
+        const val = tokens[m];
+        if (!isMissingSentinel(val)) {
+          samples.push({ year, month: m, value: val });
+        }
+      }
+    } else if (tokens.length === 3 && Number.isInteger(tokens[0]) && tokens[0] >= 1700 && tokens[0] <= 2100 && tokens[1] >= 1 && tokens[1] <= 12) {
+      if (!isMissingSentinel(tokens[2])) {
+        samples.push({ year: tokens[0], month: tokens[1], value: tokens[2] });
+      }
+    } else if (tokens.length === 2 && tokens[0] >= 170001 && tokens[0] <= 210012) {
+      const ym = Math.trunc(tokens[0]);
+      const year = Math.floor(ym / 100);
+      const month = ym % 100;
+      if (month >= 1 && month <= 12 && !isMissingSentinel(tokens[1])) {
+        samples.push({ year, month, value: tokens[1] });
+      }
+    }
+  }
+  const points = aggregateByMonth(samples);
+  const title = metaOverride?.title || (detectedTitle ? `KNMI Climate Explorer \xB7 ${detectedTitle}` : "KNMI Climate Explorer Series");
+  return {
+    id: `knmi-${Date.now()}`,
+    sourceId: "knmi-climexp",
+    title,
+    variableLabel: metaOverride?.variableLabel || detectedTitle || "KNMI Monthly Index",
+    unit: metaOverride?.unit || detectedUnit || "index / anomaly",
+    agencyLabel: "Research Institution \xB7 KNMI (Royal Netherlands Meteorological Institute)",
+    agencyCategory: "research-institution",
+    sourceUrl: metaOverride?.sourceUrl || "https://climexp.knmi.nl/",
+    retrievedAt: metaOverride?.retrievedAt || (/* @__PURE__ */ new Date()).toISOString(),
+    spatialNote: metaOverride?.spatialNote || "KNMI Climate Explorer basin/station monthly series",
+    coverageStart: points.length ? points[0].date : null,
+    coverageEnd: points.length ? points[points.length - 1].date : null,
+    points,
+    notes: "Parsed from KNMI ASCII (.dat) monthly format with missing-sentinel (-999.9 / 3e33) filtering."
+  };
+}
+function parseCmrSwotGranules(args) {
+  const feedObj = typeof args.cmrPayload === "object" && args.cmrPayload !== null && "feed" in args.cmrPayload ? args.cmrPayload.feed : void 0;
+  const entries = Array.isArray(feedObj?.entry) ? feedObj.entry : [];
+  const productLabels = {
+    "SWOT_L2_HR_LakeSP_2.0": "SWOT Level-2 High-Rate Lake/Reservoir Single-Pass Vector Product v2.0",
+    "SWOT_L2_HR_RiverSP_2.0": "SWOT Level-2 High-Rate River Single-Pass Vector Product v2.0",
+    "SWOT_L2_LR_SSH_2.0": "SWOT Level-2 Low-Rate KaRIn Sea Surface Height v2.0",
+    "SWOT_L2_LR_SSH_Basic_2.0": "SWOT Level-2 Low-Rate KaRIn SSH Basic v2.0"
+  };
+  const granules = entries.slice(0, 20).map((raw, idx) => {
+    const rec = typeof raw === "object" && raw !== null ? raw : {};
+    const title = String(rec.producer_granule_id || rec.title || `SWOT-granule-${idx + 1}`);
+    const shortName = String(rec.dataset_id || args.collection);
+    const timeStart = String(rec.time_start || "");
+    const timeEnd = rec.time_end ? String(rec.time_end) : null;
+    const cpMatch = /_(\d{3})_(\d{3})_\d{8}T/.exec(title);
+    const cycleNumber = cpMatch ? Number(cpMatch[1]) : null;
+    const passNumber = cpMatch ? Number(cpMatch[2]) : null;
+    let downloadUrl = null;
+    if (Array.isArray(rec.links)) {
+      for (const link of rec.links) {
+        if (typeof link === "object" && link !== null) {
+          const href = String(link.href || "");
+          if (href.startsWith("https://")) {
+            downloadUrl = href;
+            break;
+          }
+        }
+      }
+    }
+    const boxes = Array.isArray(rec.boxes) && rec.boxes.length ? String(rec.boxes[0]) : "";
+    return {
+      id: String(rec.id || title),
+      title,
+      collectionShortName: args.collection,
+      productLabel: productLabels[args.collection] || shortName,
+      timeStart,
+      timeEnd,
+      cycleNumber,
+      passNumber,
+      downloadUrl,
+      spatialSummary: boxes ? `CMR footprint [${boxes}]` : `Intersects [${args.bbox.west}, ${args.bbox.south}, ${args.bbox.east}, ${args.bbox.north}]`
+    };
+  });
+  return {
+    bbox: args.bbox,
+    collection: args.collection,
+    totalHits: args.totalHits,
+    granules,
+    agencyAttribution: "Joint Mission: NASA / CNES with contributions from the Canadian Space Agency (CSA) and UK Space Agency (UKSA) \xB7 Archived at NASA PO.DAAC",
+    csaReferenceUrl: "https://www.asc-csa.gc.ca/eng/satellites/swot/",
+    sourceUrl: args.sourceUrl,
+    retrievedAt: args.retrievedAt || (/* @__PURE__ */ new Date()).toISOString()
+  };
+}
+function buildGesDiscDataRodUrl(args) {
+  const variable = args.variable || "GLDAS2:GLDAS_NOAH025_M_v2.1:SoilMoi0_10cm_inst";
+  const location = `GEOM:POINT(${args.longitude.toFixed(4)}, ${args.latitude.toFixed(4)})`;
+  const params = new URLSearchParams({
+    variable,
+    location,
+    startDate: `${args.startYear}-01-01T00`,
+    endDate: `${args.endYear}-12-31T23`,
+    type: "asc2"
+  });
+  return `https://hydro1.gesdisc.eosdis.nasa.gov/daac-bin/access/timeseries.cgi?${params.toString()}`;
+}
+
 // server/earth/localAnalysis.ts
 var SEASONS = [
   { season: "DJF (Dec\u2013Feb)", months: [12, 1, 2] },
@@ -706,13 +1148,26 @@ var SEASONS = [
   { season: "SON (Sep\u2013Nov)", months: [9, 10, 11] }
 ];
 var ANOMALY_BASELINE_YEARS = 5;
-function round(value, digits = 2) {
+function round2(value, digits = 2) {
   const factor = 10 ** digits;
   return Math.round(value * factor) / factor;
 }
 function mean(values2) {
   if (!values2.length) return null;
   return values2.reduce((total, value) => total + value, 0) / values2.length;
+}
+function sampleSd(values2) {
+  if (values2.length < 2) return null;
+  const avg = mean(values2);
+  if (avg === null) return null;
+  const sq = values2.reduce((acc, v) => acc + (v - avg) * (v - avg), 0);
+  return Math.sqrt(sq / (values2.length - 1));
+}
+function medianOf(values2) {
+  if (!values2.length) return null;
+  const sorted = [...values2].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 1 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
 }
 function isUsable(value) {
   return typeof value === "number" && Number.isFinite(value) && value > -900;
@@ -724,6 +1179,31 @@ function daysInMonth(month) {
 }
 function isRatePerDay(unit) {
   return Boolean(unit && /\/\s*day/i.test(unit));
+}
+function computeOlsDecadeSlope(complete) {
+  if (complete.length < 2) return null;
+  const n = complete.length;
+  const xm = complete.reduce((s, p) => s + p.year, 0) / n;
+  const ym = complete.reduce((s, p) => s + p.mean, 0) / n;
+  let sxx = 0;
+  let sxy = 0;
+  for (const p of complete) {
+    sxx += (p.year - xm) * (p.year - xm);
+    sxy += (p.year - xm) * (p.mean - ym);
+  }
+  return sxx === 0 ? null : round2(sxy / sxx * 10, 3);
+}
+function computeSenDecadeSlope(complete) {
+  if (complete.length < 2) return null;
+  const slopes = [];
+  for (let i = 0; i < complete.length; i += 1) {
+    for (let j = i + 1; j < complete.length; j += 1) {
+      const dx = complete[j].year - complete[i].year;
+      if (dx !== 0) slopes.push((complete[j].mean - complete[i].mean) / dx);
+    }
+  }
+  const med = medianOf(slopes);
+  return med === null ? null : round2(med * 10, 3);
 }
 function analyseSeries(series) {
   const unit = series.unit || "";
@@ -738,6 +1218,7 @@ function analyseSeries(series) {
   });
   const numbers = usable.map((entry) => entry.value);
   const overallMean = mean(numbers);
+  const overallSd = sampleSd(numbers);
   let min = null;
   let max = null;
   for (const entry of usable) {
@@ -753,32 +1234,37 @@ function analyseSeries(series) {
   }
   const annual = [...byYear.entries()].sort((a, b) => a[0] - b[0]).map(([year, entries]) => ({
     year,
-    mean: entries.length === 12 ? round(mean(entries.map((entry) => entry.value)), 3) : null,
+    mean: entries.length === 12 ? round2(mean(entries.map((entry) => entry.value)), 3) : null,
     complete: entries.length === 12
   }));
   const complete = annual.filter((entry) => entry.complete && entry.mean !== null);
+  const olsSlopePerDecade = computeOlsDecadeSlope(complete);
+  const senSlopePerDecade = computeSenDecadeSlope(complete);
   const baselineCount = Math.min(ANOMALY_BASELINE_YEARS, Math.max(0, complete.length - 1));
   const baselineYears = complete.slice(0, baselineCount).map((entry) => entry.year);
-  const baselineValue = baselineCount ? round(mean(complete.slice(0, baselineCount).map((entry) => entry.mean)), 3) : null;
+  const baselineValue = baselineCount ? round2(mean(complete.slice(0, baselineCount).map((entry) => entry.mean)), 3) : null;
   const comparison = baselineValue !== null ? complete.slice(baselineCount) : [];
   const spanText = baselineYears.length === 1 ? `${baselineYears[0]}` : `${baselineYears[0]}\u2013${baselineYears[baselineYears.length - 1]}`;
   const anomaly = baselineValue !== null && comparison.length ? {
     baselineLabel: `mean of the ${baselineCount === 1 ? "single" : `first ${baselineCount}`} complete year${baselineCount === 1 ? "" : "s"} in the retrieved window (${spanText}); this is not the WMO 1991\u20132020 normal`,
     baselineYears,
     baselineValue,
-    points: comparison.map((entry) => ({ year: entry.year, anomaly: round(entry.mean - baselineValue, 3) })),
-    latest: { year: comparison[comparison.length - 1].year, anomaly: round(comparison[comparison.length - 1].mean - baselineValue, 3) }
+    points: comparison.map((entry) => ({ year: entry.year, anomaly: round2(entry.mean - baselineValue, 3) })),
+    latest: {
+      year: comparison[comparison.length - 1].year,
+      anomaly: round2(comparison[comparison.length - 1].mean - baselineValue, 3)
+    }
   } : null;
   const seasonal = SEASONS.map(({ season, months }) => {
     const entries = usable.filter((entry) => months.includes(Number(entry.month.slice(5, 7))));
     return {
       season,
       months,
-      mean: entries.length ? round(mean(entries.map((entry) => entry.value)), 3) : null,
+      mean: entries.length ? round2(mean(entries.map((entry) => entry.value)), 3) : null,
       count: entries.length
     };
   });
-  const monthlyTotals = isRatePerDay(unit) ? usable.map((entry) => ({ month: entry.month, total: round(entry.value * daysInMonth(entry.month), 2) })) : null;
+  const monthlyTotals = isRatePerDay(unit) ? usable.map((entry) => ({ month: entry.month, total: round2(entry.value * daysInMonth(entry.month), 2) })) : null;
   let periodComparison = null;
   if (usable.length >= 4) {
     const midpoint = Math.ceil(usable.length / 2);
@@ -790,15 +1276,39 @@ function analyseSeries(series) {
       periodComparison = {
         firstLabel: `${first[0].month} \u2192 ${first[first.length - 1].month}`,
         secondLabel: `${second[0].month} \u2192 ${second[second.length - 1].month}`,
-        firstMean: round(firstMean, 3),
-        secondMean: round(secondMean, 3),
-        absoluteChange: round(secondMean - firstMean, 3),
-        // A percentage change from a near-zero baseline is meaningless, so it is
-        // withheld rather than printed as an enormous number.
-        percentChange: Math.abs(firstMean) < 1e-6 ? null : round((secondMean - firstMean) / Math.abs(firstMean) * 100, 2)
+        firstMean: round2(firstMean, 3),
+        secondMean: round2(secondMean, 3),
+        absoluteChange: round2(secondMean - firstMean, 3),
+        percentChange: Math.abs(firstMean) < 1e-6 ? null : round2((secondMean - firstMean) / Math.abs(firstMean) * 100, 2)
       };
     }
   }
+  const byCalMonth = /* @__PURE__ */ new Map();
+  for (const entry of usable) {
+    const calMonth = Number(entry.month.slice(5, 7));
+    if (!byCalMonth.has(calMonth)) byCalMonth.set(calMonth, []);
+    byCalMonth.get(calMonth).push(entry.value);
+  }
+  const unusualMonths = [];
+  for (const entry of usable) {
+    const calMonth = Number(entry.month.slice(5, 7));
+    const peers = byCalMonth.get(calMonth) || [];
+    if (peers.length < 5) continue;
+    const cm = mean(peers);
+    const csd = sampleSd(peers);
+    if (cm === null || csd === null || csd <= 1e-6) continue;
+    const z = (entry.value - cm) / csd;
+    if (Math.abs(z) >= 2) {
+      unusualMonths.push({
+        month: entry.month,
+        value: round2(entry.value, 3),
+        climatologyMean: round2(cm, 3),
+        zScore: round2(z, 2),
+        direction: z > 0 ? "high" : "low"
+      });
+    }
+  }
+  unusualMonths.sort((a, b) => Math.abs(b.zScore) - Math.abs(a.zScore));
   return {
     code: series.code,
     unit,
@@ -807,19 +1317,31 @@ function analyseSeries(series) {
     missingMonths,
     firstMonth: usable[0]?.month ?? null,
     lastMonth: usable[usable.length - 1]?.month ?? null,
-    mean: overallMean === null ? null : round(overallMean, 3),
-    min: min ? { value: round(min.value, 3), month: min.month } : null,
-    max: max ? { value: round(max.value, 3), month: max.month } : null,
+    mean: overallMean === null ? null : round2(overallMean, 3),
+    stdDev: overallSd === null ? null : round2(overallSd, 3),
+    min: min ? { value: round2(min.value, 3), month: min.month } : null,
+    max: max ? { value: round2(max.value, 3), month: max.month } : null,
     annual,
+    olsSlopePerDecade,
+    senSlopePerDecade,
     anomaly,
     seasonal,
     monthlyTotals,
-    periodComparison
+    periodComparison,
+    unusualMonths: unusualMonths.slice(0, 6)
   };
 }
 function analyseBundle(context) {
   const raw = Array.isArray(context.power?.series) ? context.power.series : [];
   const series = raw.filter((entry) => entry && typeof entry.code === "string").map((entry) => analyseSeries({ code: entry.code, unit: entry.unit, dates: entry.dates || [], values: entry.values || [] }));
+  const comparisons = (Array.isArray(context.comparisonLocations) ? context.comparisonLocations : []).filter((loc) => loc && Array.isArray(loc.series) && loc.series.length > 0).slice(0, 4).map((loc) => ({
+    label: String(loc.label || "Comparison location"),
+    latitude: loc.latitude,
+    longitude: loc.longitude,
+    sourceUrl: loc.sourceUrl,
+    retrievedAt: loc.retrievedAt,
+    series: loc.series.filter((s) => s && typeof s.code === "string").map((s) => analyseSeries({ code: s.code, unit: s.unit, dates: s.dates || [], values: s.values || [] }))
+  }));
   const analysed = series.reduce((total, entry) => total + entry.count, 0);
   const missingCells = series.reduce((total, entry) => total + entry.missing, 0);
   const notes = [];
@@ -827,6 +1349,7 @@ function analyseBundle(context) {
   if (missingCells > 0) notes.push(`${missingCells} month/parameter cells had no usable value and were excluded from every statistic.`);
   return {
     series,
+    comparisons,
     coverage: raw.length ? { requested: analysed + missingCells, analysed, missingCells } : null,
     notes
   };
@@ -846,7 +1369,36 @@ function seriesLabel(code) {
 function fmt(value, digits = 2) {
   return typeof value === "number" && Number.isFinite(value) ? value.toFixed(digits) : "not available";
 }
+function localizeSectionTitles(lang) {
+  if (lang === "si") {
+    return {
+      verified: "\u0DAD\u0DC4\u0DC0\u0DD4\u0DBB\u0DD4 \u0D9A\u0DC5 \u0DB1\u0DD2\u0DBB\u0DD3\u0D9A\u0DCA\u0DC2\u0DAB",
+      derived: "\u0DBD\u0DB6\u0DCF\u0D9C\u0DAD\u0DCA \u0DAF\u0DAD\u0DCA\u0DAD\u0DC0\u0DBD\u0DD2\u0DB1\u0DCA \u0D9C\u0DAB\u0DB1\u0DBA \u0D9A\u0DC5 \u0DB4\u0DCA\u200D\u0DBB\u0DAD\u0DD2\u0DB5\u0DBD",
+      interpretation: "\u0DC0\u0DD2\u0DAF\u0DCA\u200D\u0DBA\u0DCF\u0DAD\u0DCA\u0DB8\u0D9A \u0DC0\u0DD2\u0D9C\u0DCA\u200D\u0DBB\u0DC4\u0DBA",
+      limitations: "\u0DC3\u0DD3\u0DB8\u0DCF\u0DC0\u0DB1\u0DCA \u0DC3\u0DC4 \u0D85\u0DC0\u0DD2\u0DB1\u0DD2\u0DC1\u0DCA\u0DA0\u0DD2\u0DAD\u0DAD\u0DCF\u0DC0",
+      gaps: "\u0DB1\u0DDC\u0DB8\u0DD0\u0DAD\u0DD2 \u0DAF\u0DAD\u0DCA\u0DAD"
+    };
+  }
+  if (lang === "ta") {
+    return {
+      verified: "\u0B89\u0BB1\u0BC1\u0BA4\u0BBF\u0BAA\u0BCD\u0BAA\u0B9F\u0BC1\u0BA4\u0BCD\u0BA4\u0BAA\u0BCD\u0BAA\u0B9F\u0BCD\u0B9F \u0B95\u0BA3\u0BCD\u0B95\u0BBE\u0BA3\u0BBF\u0BAA\u0BCD\u0BAA\u0BC1\u0B95\u0BB3\u0BCD",
+      derived: "\u0B95\u0BA3\u0B95\u0BCD\u0B95\u0BBF\u0B9F\u0BAA\u0BCD\u0BAA\u0B9F\u0BCD\u0B9F \u0BAE\u0BC1\u0B9F\u0BBF\u0BB5\u0BC1\u0B95\u0BB3\u0BCD",
+      interpretation: "\u0B85\u0BB1\u0BBF\u0BB5\u0BBF\u0BAF\u0BB2\u0BCD \u0BB5\u0BBF\u0BB3\u0B95\u0BCD\u0B95\u0BAE\u0BCD",
+      limitations: "\u0BB5\u0BB0\u0BAE\u0BCD\u0BAA\u0BC1\u0B95\u0BB3\u0BCD \u0BAE\u0BB1\u0BCD\u0BB1\u0BC1\u0BAE\u0BCD \u0BA8\u0BBF\u0B9A\u0BCD\u0B9A\u0BAF\u0BAE\u0BB1\u0BCD\u0BB1 \u0BA4\u0BA9\u0BCD\u0BAE\u0BC8",
+      gaps: "\u0B95\u0BBF\u0B9F\u0BC8\u0B95\u0BCD\u0B95\u0BBE\u0BA4 \u0BA4\u0BB0\u0BB5\u0BC1"
+    };
+  }
+  return {
+    verified: "Verified observations",
+    derived: "Calculated results",
+    interpretation: "Scientific interpretation",
+    limitations: "Limitations and uncertainty",
+    gaps: "Missing data"
+  };
+}
 function buildLocalAnalystAnswer(question, context, options = {}) {
+  const lang = options.lang === "si" ? "si" : options.lang === "ta" ? "ta" : "en";
+  const titles = localizeSectionTitles(lang);
   const analysis = options.analysis || analyseBundle(context);
   const verified = [];
   const derived = [];
@@ -857,99 +1409,215 @@ function buildLocalAnalystAnswer(question, context, options = {}) {
   const place = context.power?.place || context.area?.label || "the selected point";
   const lat = context.power?.latitude ?? context.area?.latitude;
   const lon = context.power?.longitude ?? context.area?.longitude;
-  verified.push(
-    `Study area: ${place}${typeof lat === "number" && typeof lon === "number" ? ` at ${lat.toFixed(4)}\xB0, ${lon.toFixed(4)}\xB0 (WGS84)` : ""}. Observation date(s) in view: ${Array.isArray(context.dates) && context.dates.length ? context.dates.join(", ") : "none selected"}.`
-  );
-  if (context.power) {
+  const coordsText = typeof lat === "number" && typeof lon === "number" ? `${lat.toFixed(4)}\xB0, ${lon.toFixed(4)}\xB0 (WGS84)` : "";
+  const datesText = Array.isArray(context.dates) && context.dates.length ? context.dates.join(", ") : "none selected";
+  if (lang === "si") {
     verified.push(
-      `NASA POWER monthly archive retrieved through ${context.power.from || "unknown"} \u2192 ${context.power.to || "unknown"} (${context.power.months ?? "unknown"} monthly records; dataset ${context.power.sourceUrl || "not reported"}).`
+      `\u0D85\u0DB0\u0DCA\u200D\u0DBA\u0DBA\u0DB1 \u0DB4\u0DCA\u200D\u0DBB\u0DAF\u0DDA\u0DC1\u0DBA: ${place}${coordsText ? ` (${coordsText})` : ""}. \u0DB1\u0DD2\u0DBB\u0DD3\u0D9A\u0DCA\u0DC2\u0DAB \u0DAF\u0DD2\u0DB1\u0DBA(\u0DB1\u0DCA): ${datesText === "none selected" ? "\u0DAD\u0DDD\u0DBB\u0DCF \u0DB1\u0DD0\u0DAD" : datesText}.`
     );
+    if (context.power) {
+      verified.push(
+        `NASA POWER \u0DB8\u0DCF\u0DC3\u0DD2\u0D9A \u0DBD\u0DDA\u0D9B\u0DB1\u0DCF\u0D9C\u0DCF\u0DBB\u0DBA ${context.power.from || "\u0DB1\u0DDC\u0DAF\u0DB1\u0DCA\u0DB1\u0DCF"} \u0DC3\u0DD2\u0DA7 ${context.power.to || "\u0DB1\u0DDC\u0DAF\u0DB1\u0DCA\u0DB1\u0DCF"} \u0DAF\u0D9A\u0DCA\u0DC0\u0DCF \u0DBD\u0DB6\u0DCF\u0D9C\u0DD9\u0DB1 \u0D87\u0DAD (\u0DB8\u0DCF\u0DC3\u0DD2\u0D9A \u0DC0\u0DCF\u0DBB\u0DCA\u0DAD\u0DCF ${context.power.months ?? "\u0DB1\u0DDC\u0DAF\u0DB1\u0DCA\u0DB1\u0DCF"}; \u0DB8\u0DD6\u0DBD\u0DCF\u0DC1\u0DCA\u200D\u0DBB\u0DBA ${context.power.sourceUrl || "\u0DC0\u0DCF\u0DBB\u0DCA\u0DAD\u0DCF \u0D9A\u0DBB \u0DB1\u0DD0\u0DAD"}).`
+      );
+    }
+  } else if (lang === "ta") {
+    verified.push(
+      `\u0B86\u0BAF\u0BCD\u0BB5\u0BC1\u0BAA\u0BCD \u0BAA\u0B95\u0BC1\u0BA4\u0BBF: ${place}${coordsText ? ` (${coordsText})` : ""}. \u0B95\u0BA3\u0BCD\u0B95\u0BBE\u0BA3\u0BBF\u0BAA\u0BCD\u0BAA\u0BC1 \u0BA4\u0BC7\u0BA4\u0BBF(\u0B95\u0BB3\u0BCD): ${datesText === "none selected" ? "\u0BA4\u0BC7\u0BB0\u0BCD\u0BA8\u0BCD\u0BA4\u0BC6\u0B9F\u0BC1\u0B95\u0BCD\u0B95\u0BAA\u0BCD\u0BAA\u0B9F\u0BB5\u0BBF\u0BB2\u0BCD\u0BB2\u0BC8" : datesText}.`
+    );
+    if (context.power) {
+      verified.push(
+        `NASA POWER \u0BAE\u0BBE\u0BA4\u0BBE\u0BA8\u0BCD\u0BA4\u0BBF\u0BB0 \u0B95\u0BBE\u0BAA\u0BCD\u0BAA\u0B95\u0BAE\u0BCD ${context.power.from || "\u0B85\u0BB1\u0BBF\u0BAF\u0BAA\u0BCD\u0BAA\u0B9F\u0BBE\u0BA4\u0BA4\u0BC1"} \u0BAE\u0BC1\u0BA4\u0BB2\u0BCD ${context.power.to || "\u0B85\u0BB1\u0BBF\u0BAF\u0BAA\u0BCD\u0BAA\u0B9F\u0BBE\u0BA4\u0BA4\u0BC1"} \u0BB5\u0BB0\u0BC8 \u0BAA\u0BC6\u0BB1\u0BAA\u0BCD\u0BAA\u0B9F\u0BCD\u0B9F\u0BA4\u0BC1 (${context.power.months ?? "\u0B85\u0BB1\u0BBF\u0BAF\u0BAA\u0BCD\u0BAA\u0B9F\u0BBE\u0BA4"} \u0BAE\u0BBE\u0BA4\u0BBE\u0BA8\u0BCD\u0BA4\u0BBF\u0BB0 \u0BAA\u0BA4\u0BBF\u0BB5\u0BC1\u0B95\u0BB3\u0BCD; \u0BAE\u0BC2\u0BB2\u0BAE\u0BCD ${context.power.sourceUrl || "\u0B85\u0BB1\u0BBF\u0BB5\u0BBF\u0B95\u0BCD\u0B95\u0BAA\u0BCD\u0BAA\u0B9F\u0BB5\u0BBF\u0BB2\u0BCD\u0BB2\u0BC8"}).`
+      );
+    }
+  } else {
+    verified.push(
+      `Study area: ${place}${coordsText ? ` at ${coordsText}` : ""}. Observation date(s) in view: ${datesText}.`
+    );
+    if (context.power) {
+      verified.push(
+        `NASA POWER monthly archive retrieved through ${context.power.from || "unknown"} \u2192 ${context.power.to || "unknown"} (${context.power.months ?? "unknown"} monthly records; dataset ${context.power.sourceUrl || "not reported"}).`
+      );
+    }
   }
   if (Array.isArray(context.power?.unavailable) && context.power.unavailable.length) {
-    gaps.push(
-      `POWER returned no usable values for ${context.power.unavailable.join(", ")}. These are reported as unavailable rather than estimated.`
-    );
+    const list = context.power.unavailable.join(", ");
+    if (lang === "si") {
+      gaps.push(`POWER \u0DC0\u0DD2\u0DC3\u0DD2\u0DB1\u0DCA ${list} \u0DC3\u0DB3\u0DC4\u0DCF \u0DB7\u0DCF\u0DC0\u0DD2\u0DAD \u0D9A\u0DC5 \u0DC4\u0DD0\u0D9A\u0DD2 \u0D85\u0D9C\u0DBA\u0DB1\u0DCA \u0DBD\u0DB6\u0DCF \u0DAF\u0DD4\u0DB1\u0DCA\u0DB1\u0DDA \u0DB1\u0DD0\u0DAD. \u0D92\u0DC0\u0DCF \u0D87\u0DC3\u0DCA\u0DAD\u0DB8\u0DDA\u0DB1\u0DCA\u0DAD\u0DD4 \u0DB1\u0DDC\u0D9A\u0DBB \u0DB1\u0DDC\u0DB8\u0DD0\u0DAD\u0DD2 \u0DBD\u0DD9\u0DC3 \u0DC0\u0DCF\u0DBB\u0DCA\u0DAD\u0DCF \u0D9A\u0DBB \u0D87\u0DAD.`);
+    } else if (lang === "ta") {
+      gaps.push(`POWER \u0B9A\u0BC7\u0BB5\u0BC8 ${list} \u0B85\u0BB3\u0BB5\u0BC1\u0BB0\u0BC1\u0B95\u0BCD\u0B95\u0BB3\u0BC1\u0B95\u0BCD\u0B95\u0BC1 \u0BAA\u0BAF\u0BA9\u0BCD\u0BAA\u0B9F\u0BC1\u0BAE\u0BCD \u0BAE\u0BA4\u0BBF\u0BAA\u0BCD\u0BAA\u0BC1\u0B95\u0BB3\u0BC8 \u0BB5\u0BB4\u0B99\u0BCD\u0B95\u0BB5\u0BBF\u0BB2\u0BCD\u0BB2\u0BC8. \u0B87\u0BB5\u0BC8 \u0BAE\u0BA4\u0BBF\u0BAA\u0BCD\u0BAA\u0BBF\u0B9F\u0BAA\u0BCD\u0BAA\u0B9F\u0BBE\u0BAE\u0BB2\u0BCD \u0B95\u0BBF\u0B9F\u0BC8\u0B95\u0BCD\u0B95\u0BBE\u0BA4\u0BA4\u0BBE\u0B95 \u0B85\u0BB1\u0BBF\u0BB5\u0BBF\u0B95\u0BCD\u0B95\u0BAA\u0BCD\u0BAA\u0B9F\u0BC1\u0B95\u0BBF\u0BA9\u0BCD\u0BB1\u0BA9.`);
+    } else {
+      gaps.push(
+        `POWER returned no usable values for ${list}. These are reported as unavailable rather than estimated.`
+      );
+    }
   }
   for (const entry of analysis.series) {
     const name = `${seriesLabel(entry.code)} (${entry.code})`;
     const unit = entry.unit || "unit not reported";
     if (!entry.count) {
-      gaps.push(`${name}: no usable monthly values were retrieved, so no statistic is reported.`);
+      gaps.push(
+        lang === "si" ? `${name}: \u0DB7\u0DCF\u0DC0\u0DD2\u0DAD \u0D9A\u0DC5 \u0DC4\u0DD0\u0D9A\u0DD2 \u0DB8\u0DCF\u0DC3\u0DD2\u0D9A \u0D85\u0D9C\u0DBA\u0DB1\u0DCA \u0DBD\u0DB6\u0DCF\u0D9C\u0DD9\u0DB1 \u0DB1\u0DDC\u0DB8\u0DD0\u0DAD\u0DD2 \u0DB6\u0DD0\u0DC0\u0DD2\u0DB1\u0DCA \u0DC3\u0D82\u0D9B\u0DCA\u200D\u0DBA\u0DCF\u0DB1 \u0DC0\u0DCF\u0DBB\u0DCA\u0DAD\u0DCF \u0DB1\u0DDC\u0D9A\u0DD9\u0DBB\u0DDA.` : lang === "ta" ? `${name}: \u0BAA\u0BAF\u0BA9\u0BCD\u0BAA\u0B9F\u0BC1\u0BAE\u0BCD \u0BAE\u0BBE\u0BA4\u0BBE\u0BA8\u0BCD\u0BA4\u0BBF\u0BB0 \u0BAE\u0BA4\u0BBF\u0BAA\u0BCD\u0BAA\u0BC1\u0B95\u0BB3\u0BCD \u0B8E\u0BA4\u0BC1\u0BB5\u0BC1\u0BAE\u0BCD \u0BAA\u0BC6\u0BB1\u0BAA\u0BCD\u0BAA\u0B9F\u0BBE\u0BA4\u0BA4\u0BBE\u0BB2\u0BCD \u0BAA\u0BC1\u0BB3\u0BCD\u0BB3\u0BBF\u0BB5\u0BBF\u0BB5\u0BB0\u0BAE\u0BCD \u0B85\u0BB1\u0BBF\u0BB5\u0BBF\u0B95\u0BCD\u0B95\u0BAA\u0BCD\u0BAA\u0B9F\u0BB5\u0BBF\u0BB2\u0BCD\u0BB2\u0BC8.` : `${name}: no usable monthly values were retrieved, so no statistic is reported.`
+      );
       continue;
     }
-    verified.push(
-      `${name}: ${entry.count} usable monthly values, ${entry.firstMonth} \u2192 ${entry.lastMonth}` + (entry.missing ? `, ${entry.missing} month(s) without a value.` : ".")
-    );
-    derived.push(
-      `${name}: mean ${fmt(entry.mean)} ${unit}; minimum ${fmt(entry.min?.value)} ${unit}` + (entry.min ? ` (${entry.min.month})` : "") + `; maximum ${fmt(entry.max?.value)} ${unit}` + (entry.max ? ` (${entry.max.month})` : "") + " \u2014 computed from the retrieved monthly values only."
-    );
-    if (entry.anomaly) {
-      derived.push(
-        `${name}: reference baseline ${fmt(entry.anomaly.baselineValue)} ${unit} \u2014 the ${entry.anomaly.baselineLabel}. The most recent complete year (${entry.anomaly.latest.year}) sits ${entry.anomaly.latest.anomaly >= 0 ? "+" : ""}${fmt(entry.anomaly.latest.anomaly)} ${unit} from it.`
+    if (lang === "si") {
+      verified.push(
+        `${name}: \u0DB7\u0DCF\u0DC0\u0DD2\u0DAD \u0D9A\u0DC5 \u0DC4\u0DD0\u0D9A\u0DD2 \u0DB8\u0DCF\u0DC3\u0DD2\u0D9A \u0D85\u0D9C\u0DBA\u0DB1\u0DCA ${entry.count} (${entry.firstMonth} \u2192 ${entry.lastMonth})` + (entry.missing ? `, \u0D85\u0D9C\u0DBA\u0DB1\u0DCA \u0DB1\u0DDC\u0DB8\u0DD0\u0DAD\u0DD2 \u0DB8\u0DCF\u0DC3 ${entry.missing}.` : ".")
       );
+      derived.push(
+        `${name}: \u0DC3\u0DCF\u0DB8\u0DCF\u0DB1\u0DCA\u200D\u0DBA\u0DBA ${fmt(entry.mean)} ${unit}; \u0D85\u0DC0\u0DB8\u0DBA ${fmt(entry.min?.value)} ${unit}` + (entry.min ? ` (${entry.min.month})` : "") + `; \u0D8B\u0DB4\u0DBB\u0DD2\u0DB8\u0DBA ${fmt(entry.max?.value)} ${unit}` + (entry.max ? ` (${entry.max.month})` : "") + (entry.olsSlopePerDecade !== null ? `; \u0DC0\u0DCF\u0DBB\u0DCA\u0DC2\u0DD2\u0D9A OLS \u0DB4\u0DCA\u200D\u0DBB\u0DC0\u0DAB\u0DAD\u0DCF\u0DC0 \u0DAF\u0DC1\u0D9A\u0DBA\u0D9A\u0DA7 ${entry.olsSlopePerDecade >= 0 ? "+" : ""}${fmt(entry.olsSlopePerDecade)} ${unit}/decade.` : ".")
+      );
+    } else if (lang === "ta") {
+      verified.push(
+        `${name}: \u0BAA\u0BAF\u0BA9\u0BCD\u0BAA\u0B9F\u0BC1\u0BAE\u0BCD \u0BAE\u0BBE\u0BA4\u0BBE\u0BA8\u0BCD\u0BA4\u0BBF\u0BB0 \u0BAE\u0BA4\u0BBF\u0BAA\u0BCD\u0BAA\u0BC1\u0B95\u0BB3\u0BCD ${entry.count} (${entry.firstMonth} \u2192 ${entry.lastMonth})` + (entry.missing ? `, \u0BAE\u0BA4\u0BBF\u0BAA\u0BCD\u0BAA\u0BC1 \u0B87\u0BB2\u0BCD\u0BB2\u0BBE\u0BA4 \u0BAE\u0BBE\u0BA4\u0B99\u0BCD\u0B95\u0BB3\u0BCD ${entry.missing}.` : ".")
+      );
+      derived.push(
+        `${name}: \u0B9A\u0BB0\u0BBE\u0B9A\u0BB0\u0BBF ${fmt(entry.mean)} ${unit}; \u0B95\u0BC1\u0BB1\u0BC8\u0BA8\u0BCD\u0BA4\u0BAA\u0B9F\u0BCD\u0B9A\u0BAE\u0BCD ${fmt(entry.min?.value)} ${unit}` + (entry.min ? ` (${entry.min.month})` : "") + `; \u0B85\u0BA4\u0BBF\u0B95\u0BAA\u0B9F\u0BCD\u0B9A\u0BAE\u0BCD ${fmt(entry.max?.value)} ${unit}` + (entry.max ? ` (${entry.max.month})` : "") + (entry.olsSlopePerDecade !== null ? `; \u0B86\u0BA3\u0BCD\u0B9F\u0BC1 OLS \u0BAA\u0BCB\u0B95\u0BCD\u0B95\u0BC1 \u0BA4\u0B9A\u0BBE\u0BAA\u0BCD\u0BA4\u0BA4\u0BCD\u0BA4\u0BBF\u0BB1\u0BCD\u0B95\u0BC1 ${entry.olsSlopePerDecade >= 0 ? "+" : ""}${fmt(entry.olsSlopePerDecade)} ${unit}/decade.` : ".")
+      );
+    } else {
+      verified.push(
+        `${name}: ${entry.count} usable monthly values, ${entry.firstMonth} \u2192 ${entry.lastMonth}` + (entry.missing ? `, ${entry.missing} month(s) without a value.` : ".")
+      );
+      derived.push(
+        `${name}: mean ${fmt(entry.mean)} ${unit}; minimum ${fmt(entry.min?.value)} ${unit}` + (entry.min ? ` (${entry.min.month})` : "") + `; maximum ${fmt(entry.max?.value)} ${unit}` + (entry.max ? ` (${entry.max.month})` : "") + (entry.olsSlopePerDecade !== null ? `; linear annual-mean slope ${entry.olsSlopePerDecade >= 0 ? "+" : ""}${fmt(entry.olsSlopePerDecade, 3)} ${unit}/decade` + (entry.senSlopePerDecade !== null ? ` (Theil\u2013Sen ${entry.senSlopePerDecade >= 0 ? "+" : ""}${fmt(entry.senSlopePerDecade, 3)} ${unit}/decade)` : "") : "") + " \u2014 computed from the retrieved monthly values only."
+      );
+    }
+    if (entry.anomaly) {
+      const sign = entry.anomaly.latest.anomaly >= 0 ? "+" : "";
+      if (lang === "si") {
+        derived.push(
+          `${name}: \u0DC3\u0DB8\u0DD4\u0DAF\u0DCA\u0DAF\u0DDA\u0DC1 \u0DB4\u0DAF\u0DB1\u0DB8\u0DCA \u0DC3\u0DCF\u0DB8\u0DCF\u0DB1\u0DCA\u200D\u0DBA\u0DBA ${fmt(entry.anomaly.baselineValue)} ${unit} (${entry.anomaly.baselineYears.join("\u2013")} \u0DB4\u0DAF\u0DB1\u0DB8; WMO 1991\u20132020 \u0DC3\u0DB8\u0DCA\u0DB8\u0DAD\u0DBA \u0DB1\u0DDC\u0DC0\u0DDA). \u0DB8\u0DD1\u0DAD\u0DB8 \u0DC3\u0DB8\u0DCA\u0DB4\u0DD6\u0DBB\u0DCA\u0DAB \u0DC0\u0DBB\u0DCA\u0DC2\u0DBA (${entry.anomaly.latest.year}) \u0DB4\u0DAF\u0DB1\u0DB8\u0DDA \u0DC3\u0DD2\u0DA7 ${sign}${fmt(entry.anomaly.latest.anomaly)} ${unit} \u0DC0\u0DD9\u0DB1\u0DC3\u0D9A\u0DCA \u0DB4\u0DD9\u0DB1\u0DCA\u0DC0\u0DBA\u0DD2.`
+        );
+      } else if (lang === "ta") {
+        derived.push(
+          `${name}: \u0B85\u0B9F\u0BBF\u0BAA\u0BCD\u0BAA\u0B9F\u0BC8 \u0B9A\u0BB0\u0BBE\u0B9A\u0BB0\u0BBF ${fmt(entry.anomaly.baselineValue)} ${unit} (${entry.anomaly.baselineYears.join("\u2013")} \u0B85\u0B9F\u0BBF\u0BAA\u0BCD\u0BAA\u0B9F\u0BC8; WMO 1991\u20132020 \u0B9A\u0BB0\u0BBE\u0B9A\u0BB0\u0BBF \u0B85\u0BB2\u0BCD\u0BB2). \u0B9A\u0BAE\u0BC0\u0BAA\u0BA4\u0BCD\u0BA4\u0BBF\u0BAF \u0BAE\u0BC1\u0BB4\u0BC1 \u0B86\u0BA3\u0BCD\u0B9F\u0BC1 (${entry.anomaly.latest.year}) \u0B85\u0B9F\u0BBF\u0BAA\u0BCD\u0BAA\u0B9F\u0BC8\u0BAF\u0BBF\u0BB2\u0BBF\u0BB0\u0BC1\u0BA8\u0BCD\u0BA4\u0BC1 ${sign}${fmt(entry.anomaly.latest.anomaly)} ${unit} \u0BAE\u0BBE\u0BB1\u0BC1\u0BAA\u0BBE\u0B9F\u0BCD\u0B9F\u0BC8\u0B95\u0BCD \u0B95\u0BBE\u0B9F\u0BCD\u0B9F\u0BC1\u0B95\u0BBF\u0BB1\u0BA4\u0BC1.`
+        );
+      } else {
+        derived.push(
+          `${name}: reference baseline ${fmt(entry.anomaly.baselineValue)} ${unit} \u2014 the ${entry.anomaly.baselineLabel}. The most recent complete year (${entry.anomaly.latest.year}) sits ${sign}${fmt(entry.anomaly.latest.anomaly)} ${unit} from it.`
+        );
+      }
       evidence.push(
         `${entry.code} anomalies vs ${entry.anomaly.baselineYears.join("/")} baseline (${unit}): ` + entry.anomaly.points.map((point) => `${point.year}:${point.anomaly >= 0 ? "+" : ""}${point.anomaly}`).join(", ")
       );
     } else if (entry.annual.filter((year) => year.complete).length < 2) {
+      const cy = entry.annual.filter((year) => year.complete).length;
       gaps.push(
-        `${name}: ${entry.annual.filter((year) => year.complete).length} complete year(s) retrieved, so an anomaly against a reference period cannot be formed. A longer window is required.`
+        lang === "si" ? `${name}: \u0DC3\u0DB8\u0DCA\u0DB4\u0DD6\u0DBB\u0DCA\u0DAB \u0DC0\u0DBB\u0DCA\u0DC2 ${cy} \u0D9A\u0DCA \u0DB4\u0DB8\u0DAB\u0D9A\u0DCA \u0DBD\u0DB6\u0DCF\u0D9C\u0DD9\u0DB1 \u0D87\u0DAD\u0DD2 \u0DB6\u0DD0\u0DC0\u0DD2\u0DB1\u0DCA \u0D85\u0DC3\u0DCF\u0DB8\u0DCF\u0DB1\u0DCA\u200D\u0DBA\u0DAD\u0DCF (anomaly) \u0D9C\u0DAB\u0DB1\u0DBA\u0DA7 \u0DAF\u0DD2\u0D9C\u0DD4 \u0D9A\u0DCF\u0DBD \u0DB4\u0DBB\u0DCF\u0DC3\u0DBA\u0D9A\u0DCA \u0D85\u0DC0\u0DC1\u0DCA\u200D\u0DBA \u0DC0\u0DDA.` : lang === "ta" ? `${name}: ${cy} \u0BAE\u0BC1\u0BB4\u0BC1 \u0B86\u0BA3\u0BCD\u0B9F\u0BC1(\u0B95\u0BB3\u0BCD) \u0BAE\u0B9F\u0BCD\u0B9F\u0BC1\u0BAE\u0BC7 \u0BAA\u0BC6\u0BB1\u0BAA\u0BCD\u0BAA\u0B9F\u0BCD\u0B9F\u0BC1\u0BB3\u0BCD\u0BB3\u0BA4\u0BBE\u0BB2\u0BCD \u0BAE\u0BBE\u0BB1\u0BC1\u0BAA\u0BBE\u0B9F\u0BC1 (anomaly) \u0B95\u0BA3\u0B95\u0BCD\u0B95\u0BBF\u0B9F \u0BA8\u0BC0\u0BA3\u0BCD\u0B9F \u0B95\u0BBE\u0BB2\u0BB5\u0BB0\u0BAE\u0BCD\u0BAA\u0BC1 \u0BA4\u0BC7\u0BB5\u0BC8.` : `${name}: ${cy} complete year(s) retrieved, so an anomaly against a reference period cannot be formed. A longer window is required.`
       );
     }
     if (entry.periodComparison) {
-      derived.push(
-        `${name}: first half of the window (${entry.periodComparison.firstLabel}) mean ${fmt(entry.periodComparison.firstMean)} ${unit} versus second half (${entry.periodComparison.secondLabel}) ${fmt(entry.periodComparison.secondMean)} ${unit} \u2014 difference ${entry.periodComparison.absoluteChange >= 0 ? "+" : ""}${fmt(entry.periodComparison.absoluteChange)} ${unit}` + (entry.periodComparison.percentChange === null ? " (percentage withheld: the first-half mean is effectively zero)." : `, ${entry.periodComparison.percentChange >= 0 ? "+" : ""}${fmt(entry.periodComparison.percentChange)} %.`)
-      );
+      const sign = entry.periodComparison.absoluteChange >= 0 ? "+" : "";
+      if (lang === "si") {
+        derived.push(
+          `${name}: \u0DB8\u0DD4\u0DBD\u0DCA \u0DB7\u0DCF\u0D9C\u0DBA (${entry.periodComparison.firstLabel}) ${fmt(entry.periodComparison.firstMean)} ${unit} \u0DC3\u0DC4 \u0DAF\u0DD9\u0DC0\u0DB1 \u0DB7\u0DCF\u0D9C\u0DBA (${entry.periodComparison.secondLabel}) ${fmt(entry.periodComparison.secondMean)} ${unit} \u2014 \u0DC0\u0DD9\u0DB1\u0DC3 ${sign}${fmt(entry.periodComparison.absoluteChange)} ${unit}` + (entry.periodComparison.percentChange === null ? "." : ` (${entry.periodComparison.percentChange >= 0 ? "+" : ""}${fmt(entry.periodComparison.percentChange)} %).`)
+        );
+      } else if (lang === "ta") {
+        derived.push(
+          `${name}: \u0BAE\u0BC1\u0BA4\u0BB2\u0BCD \u0BAA\u0BBE\u0BA4\u0BBF (${entry.periodComparison.firstLabel}) ${fmt(entry.periodComparison.firstMean)} ${unit} \u0B8E\u0BA4\u0BBF\u0BB0\u0BCD \u0B87\u0BB0\u0BA3\u0BCD\u0B9F\u0BBE\u0BAE\u0BCD \u0BAA\u0BBE\u0BA4\u0BBF (${entry.periodComparison.secondLabel}) ${fmt(entry.periodComparison.secondMean)} ${unit} \u2014 \u0BB5\u0BC7\u0BB1\u0BC1\u0BAA\u0BBE\u0B9F\u0BC1 ${sign}${fmt(entry.periodComparison.absoluteChange)} ${unit}` + (entry.periodComparison.percentChange === null ? "." : ` (${entry.periodComparison.percentChange >= 0 ? "+" : ""}${fmt(entry.periodComparison.percentChange)} %).`)
+        );
+      } else {
+        derived.push(
+          `${name}: first half of the window (${entry.periodComparison.firstLabel}) mean ${fmt(entry.periodComparison.firstMean)} ${unit} versus second half (${entry.periodComparison.secondLabel}) ${fmt(entry.periodComparison.secondMean)} ${unit} \u2014 difference ${sign}${fmt(entry.periodComparison.absoluteChange)} ${unit}` + (entry.periodComparison.percentChange === null ? " (percentage withheld: the first-half mean is effectively zero)." : `, ${entry.periodComparison.percentChange >= 0 ? "+" : ""}${fmt(entry.periodComparison.percentChange)} %.`)
+        );
+      }
     }
     if (entry.seasonal.some((season) => season.count)) {
+      const seasonStr = entry.seasonal.filter((season) => season.mean !== null).map((season) => `${season.season} ${fmt(season.mean)} ${unit}`).join("; ");
       derived.push(
-        `${name} seasonal means: ` + entry.seasonal.filter((season) => season.mean !== null).map((season) => `${season.season} ${fmt(season.mean)} ${unit}`).join("; ") + "."
+        lang === "si" ? `${name} \u0DC3\u0DB8\u0DBA\u0DCF\u0DB1\u0DD4\u0D9A\u0DD6\u0DBD \u0DC3\u0DCF\u0DB8\u0DCF\u0DB1\u0DCA\u200D\u0DBA: ${seasonStr}.` : lang === "ta" ? `${name} \u0BAA\u0BB0\u0BC1\u0BB5\u0B95\u0BBE\u0BB2 \u0B9A\u0BB0\u0BBE\u0B9A\u0BB0\u0BBF\u0B95\u0BB3\u0BCD: ${seasonStr}.` : `${name} seasonal means: ${seasonStr}.`
       );
     }
     if (entry.monthlyTotals) {
       const totals = entry.monthlyTotals;
-      const wettest = totals.reduce((best, entry2) => best === null || entry2.total > best.total ? entry2 : best, null);
-      const driest = totals.reduce((best, entry2) => best === null || entry2.total < best.total ? entry2 : best, null);
+      const wettest = totals.reduce(
+        (best, entry2) => best === null || entry2.total > best.total ? entry2 : best,
+        null
+      );
+      const driest = totals.reduce(
+        (best, entry2) => best === null || entry2.total < best.total ? entry2 : best,
+        null
+      );
       if (wettest && driest) {
         derived.push(
-          `${name} monthly totals (rate \xD7 days in month): wettest ${wettest.month} ${fmt(wettest.total)} mm, driest ${driest.month} ${fmt(driest.total)} mm.`
+          lang === "si" ? `${name} \u0DB8\u0DCF\u0DC3\u0DD2\u0D9A \u0DB8\u0DD4\u0DC5\u0DD4 \u0DC0\u0DBB\u0DCA\u0DC2\u0DCF\u0DB4\u0DAD\u0DB1\u0DBA (\u0DAF\u0DD2\u0DB1\u0D9A \u0D85\u0DB1\u0DD4\u0DB4\u0DCF\u0DAD\u0DBA \xD7 \u0DB8\u0DCF\u0DC3\u0DBA\u0DDA \u0DAF\u0DD2\u0DB1 \u0D9C\u0DAB\u0DB1): \u0DC0\u0DD0\u0DA9\u0DD2\u0DB8 ${wettest.month} (${fmt(wettest.total)} mm), \u0D85\u0DA9\u0DD4\u0DB8 ${driest.month} (${fmt(driest.total)} mm).` : lang === "ta" ? `${name} \u0BAE\u0BBE\u0BA4\u0BBE\u0BA8\u0BCD\u0BA4\u0BBF\u0BB0 \u0BAE\u0BCA\u0BA4\u0BCD\u0BA4 \u0BAE\u0BB4\u0BC8 (\u0BA8\u0BBE\u0BB3\u0BCA\u0BA9\u0BCD\u0BB1\u0BC1 \u0BB5\u0BC0\u0BA4\u0BAE\u0BCD \xD7 \u0BAE\u0BBE\u0BA4 \u0BA8\u0BBE\u0B9F\u0BCD\u0B95\u0BB3\u0BCD): \u0B85\u0BA4\u0BBF\u0B95\u0BAA\u0B9F\u0BCD\u0B9A\u0BAE\u0BCD ${wettest.month} (${fmt(wettest.total)} mm), \u0B95\u0BC1\u0BB1\u0BC8\u0BA8\u0BCD\u0BA4\u0BAA\u0B9F\u0BCD\u0B9A\u0BAE\u0BCD ${driest.month} (${fmt(driest.total)} mm).` : `${name} monthly totals (rate \xD7 days in month): wettest ${wettest.month} ${fmt(wettest.total)} mm, driest ${driest.month} ${fmt(driest.total)} mm.`
         );
       }
     }
+    if (entry.unusualMonths.length) {
+      const top = entry.unusualMonths.slice(0, 3);
+      const formatted = top.map((u) => `${u.month} (${fmt(u.value)} ${unit}, ${u.zScore >= 0 ? "+" : ""}${u.zScore}\u03C3 vs calendar month)`).join("; ");
+      derived.push(
+        lang === "si" ? `${name} \u0D85\u0DC3\u0DCF\u0DB8\u0DCF\u0DB1\u0DCA\u200D\u0DBA \u0DB8\u0DCF\u0DC3\u0DD2\u0D9A \u0DB1\u0DD2\u0DBB\u0DD3\u0D9A\u0DCA\u0DC2\u0DAB (|z| \u2265 2\u03C3): ${formatted}.` : lang === "ta" ? `${name} \u0BB5\u0BB4\u0B95\u0BCD\u0B95\u0BA4\u0BCD\u0BA4\u0BBF\u0BB1\u0BCD\u0B95\u0BC1 \u0BAE\u0BBE\u0BB1\u0BBE\u0BA9 \u0BAE\u0BBE\u0BA4\u0BBE\u0BA8\u0BCD\u0BA4\u0BBF\u0BB0 \u0BAA\u0BA4\u0BBF\u0BB5\u0BC1\u0B95\u0BB3\u0BCD (|z| \u2265 2\u03C3): ${formatted}.` : `${name} unusual monthly observations (|z| \u2265 2\u03C3 vs same calendar month): ${formatted}.`
+      );
+      evidence.push(`${entry.code} deseasonalized |z|>=2 months: ${formatted}`);
+    }
     if (entry.missingMonths.length) {
+      const sample = entry.missingMonths.slice(0, 6).join(", ");
+      const rest = entry.missingMonths.length > 6 ? `, +${entry.missingMonths.length - 6}` : "";
       gaps.push(
-        `${name}: no usable value for ${entry.missingMonths.length} month(s) \u2014 ${entry.missingMonths.slice(0, 6).join(", ")}${entry.missingMonths.length > 6 ? `, and ${entry.missingMonths.length - 6} more` : ""}. These months are excluded from every statistic.`
+        lang === "si" ? `${name}: \u0DB8\u0DCF\u0DC3 ${entry.missingMonths.length} \u0D9A \u0D85\u0D9C\u0DBA\u0DB1\u0DCA \u0DB1\u0DDC\u0DB8\u0DD0\u0DAD (${sample}${rest}). \u0DB8\u0DD9\u0DB8 \u0DB8\u0DCF\u0DC3 \u0DC3\u0DD1\u0DB8 \u0D9C\u0DAB\u0DB1\u0DBA\u0D9A\u0DD2\u0DB1\u0DCA\u0DB8 \u0DB6\u0DD0\u0DC4\u0DD0\u0DBB \u0D9A\u0DBB \u0D87\u0DAD.` : lang === "ta" ? `${name}: ${entry.missingMonths.length} \u0BAE\u0BBE\u0BA4\u0B99\u0BCD\u0B95\u0BB3\u0BC1\u0B95\u0BCD\u0B95\u0BC1 \u0BAE\u0BA4\u0BBF\u0BAA\u0BCD\u0BAA\u0BC1 \u0B87\u0BB2\u0BCD\u0BB2\u0BC8 (${sample}${rest}). \u0B87\u0BB5\u0BC8 \u0B85\u0BA9\u0BC8\u0BA4\u0BCD\u0BA4\u0BC1 \u0B95\u0BA3\u0B95\u0BCD\u0B95\u0BC0\u0B9F\u0BC1\u0B95\u0BB3\u0BBF\u0BB2\u0BBF\u0BB0\u0BC1\u0BA8\u0BCD\u0BA4\u0BC1\u0BAE\u0BCD \u0BB5\u0BBF\u0BB2\u0B95\u0BCD\u0B95\u0BAA\u0BCD\u0BAA\u0B9F\u0BCD\u0B9F\u0BC1\u0BB3\u0BCD\u0BB3\u0BA9.` : `${name}: no usable value for ${entry.missingMonths.length} month(s) \u2014 ${sample}${entry.missingMonths.length > 6 ? `, and ${entry.missingMonths.length - 6} more` : ""}. These months are excluded from every statistic.`
       );
     }
     limitations2.push(
-      `${name}: POWER values are satellite/re-analysis estimates for a \u22480.5\xB0 \xD7 0.625\xB0 grid cell, not station measurements. This is a descriptive statistic of the retrieved series; no significance test, homogenisation or attribution has been applied.`
+      lang === "si" ? `${name}: POWER \u0D85\u0D9C\u0DBA\u0DB1\u0DCA \u22480.5\xB0 \xD7 0.625\xB0 \u0D9C\u0DCA\u200D\u0DBB\u0DD2\u0DA9\u0DCA \u0DC3\u0DDB\u0DBD\u0DBA\u0D9A \u0DA0\u0DB1\u0DCA\u0DAF\u0DCA\u200D\u0DBB\u0DD2\u0D9A\u0DCF/\u0DB4\u0DCA\u200D\u0DBB\u0DAD\u0DD2-\u0DC0\u0DD2\u0DC1\u0DCA\u0DBD\u0DDA\u0DC2\u0DAB \u0D87\u0DC3\u0DCA\u0DAD\u0DB8\u0DDA\u0DB1\u0DCA\u0DAD\u0DD4 \u0DB8\u0DD2\u0DC3 \u0DC3\u0DD8\u0DA2\u0DD4 \u0D9A\u0DCF\u0DBD\u0D9C\u0DD4\u0DAB \u0DB8\u0DB0\u0DCA\u200D\u0DBA\u0DC3\u0DCA\u0DAE\u0DCF\u0DB1 \u0DB8\u0DD2\u0DB1\u0DD4\u0DB8\u0DCA \u0DB1\u0DDC\u0DC0\u0DDA; \u0DC3\u0D82\u0D9B\u0DCA\u200D\u0DBA\u0DCF\u0DB1\u0DB8\u0DBA \u0DC3\u0DD4\u0DC0\u0DD2\u0DC1\u0DDA\u0DC2\u0DD3\u0DAD\u0DCF \u0DB4\u0DBB\u0DD3\u0D9A\u0DCA\u0DC2\u0DAB \u0DC4\u0DDD \u0DC4\u0DDA\u0DAD\u0DD4 \u0DB1\u0DD2\u0D9C\u0DB8\u0DB1\u0DBA \u0DC3\u0DD2\u0DAF\u0DD4 \u0D9A\u0DBB \u0DB1\u0DD0\u0DAD.` : lang === "ta" ? `${name}: POWER \u0BAE\u0BA4\u0BBF\u0BAA\u0BCD\u0BAA\u0BC1\u0B95\u0BB3\u0BCD \u22480.5\xB0 \xD7 0.625\xB0 \u0B95\u0B9F\u0BCD\u0B9F\u0B9A\u0BCD \u0B9A\u0BC6\u0BB2\u0BCD\u0BB2\u0BBF\u0BA9\u0BCD \u0B9A\u0BC6\u0BAF\u0BB1\u0BCD\u0B95\u0BC8\u0B95\u0BCD\u0B95\u0BCB\u0BB3\u0BCD/\u0BAE\u0BB1\u0BC1\u0B86\u0BAF\u0BCD\u0BB5\u0BC1 \u0BAE\u0BA4\u0BBF\u0BAA\u0BCD\u0BAA\u0BC0\u0B9F\u0BC1\u0B95\u0BB3\u0BCD, \u0BA8\u0BC7\u0BB0\u0B9F\u0BBF \u0BB5\u0BBE\u0BA9\u0BBF\u0BB2\u0BC8 \u0BA8\u0BBF\u0BB2\u0BC8\u0BAF \u0B85\u0BB3\u0BB5\u0BC0\u0B9F\u0BC1\u0B95\u0BB3\u0BCD \u0B85\u0BB2\u0BCD\u0BB2; \u0BAE\u0BC1\u0B95\u0BCD\u0B95\u0BBF\u0BAF\u0BA4\u0BCD\u0BA4\u0BC1\u0BB5\u0B9A\u0BCD \u0B9A\u0BCB\u0BA4\u0BA9\u0BC8 \u0B85\u0BB2\u0BCD\u0BB2\u0BA4\u0BC1 \u0B95\u0BBE\u0BB0\u0BA3 \u0B89\u0BB1\u0BC1\u0BA4\u0BBF\u0BAA\u0BCD\u0BAA\u0BBE\u0B9F\u0BC1 \u0B9A\u0BC6\u0BAF\u0BCD\u0BAF\u0BAA\u0BCD\u0BAA\u0B9F\u0BB5\u0BBF\u0BB2\u0BCD\u0BB2\u0BC8.` : `${name}: POWER values are satellite/re-analysis estimates for a \u22480.5\xB0 \xD7 0.625\xB0 grid cell, not station measurements. This is a descriptive statistic of the retrieved series; no significance test, homogenisation or attribution has been applied.`
     );
+  }
+  if (analysis.comparisons.length > 0 && analysis.series.length > 0) {
+    verified.push(
+      lang === "si" ? `\u0DC3\u0D82\u0DC3\u0DB1\u0DCA\u0DAF\u0DB1\u0DCF\u0DAD\u0DCA\u0DB8\u0D9A \u0DC3\u0DCA\u0DAE\u0DCF\u0DB1 \u0DAF\u0DAD\u0DCA\u0DAD \u0DBD\u0DB6\u0DCF\u0D9C\u0DB1\u0DCA\u0DB1\u0DCF \u0DBD\u0DAF\u0DD3: ${analysis.comparisons.map((c) => c.label).join(", ")}.` : lang === "ta" ? `\u0B92\u0BAA\u0BCD\u0BAA\u0BC0\u0B9F\u0BCD\u0B9F\u0BC1 \u0B87\u0B9F\u0BA4\u0BCD \u0BA4\u0BB0\u0BB5\u0BC1 \u0BAA\u0BC6\u0BB1\u0BAA\u0BCD\u0BAA\u0B9F\u0BCD\u0B9F\u0BA4\u0BC1: ${analysis.comparisons.map((c) => c.label).join(", ")}.` : `Comparison location archive(s) retrieved: ${analysis.comparisons.map((c) => c.label).join(", ")}.`
+    );
+    for (const comp of analysis.comparisons) {
+      for (const compSeries of comp.series) {
+        const primarySeries = analysis.series.find((s) => s.code === compSeries.code);
+        if (!primarySeries || primarySeries.mean === null || compSeries.mean === null) continue;
+        const diff = round2(compSeries.mean - primarySeries.mean, 2);
+        const sign = diff >= 0 ? "+" : "";
+        const unit = primarySeries.unit || compSeries.unit || "";
+        if (lang === "si") {
+          derived.push(
+            `\u0DC3\u0DCA\u0DAE\u0DCF\u0DB1 \u0DC3\u0D82\u0DC3\u0DB1\u0DCA\u0DAF\u0DB1\u0DBA (${compSeries.code}): ${comp.label} \u0DC3\u0DCF\u0DB8\u0DCF\u0DB1\u0DCA\u200D\u0DBA\u0DBA ${fmt(compSeries.mean)} ${unit} vs ${place} ${fmt(primarySeries.mean)} ${unit} (\u0DC0\u0DD9\u0DB1\u0DC3 ${sign}${fmt(diff)} ${unit}).`
+          );
+        } else if (lang === "ta") {
+          derived.push(
+            `\u0B87\u0B9F \u0B92\u0BAA\u0BCD\u0BAA\u0BC0\u0B9F\u0BC1 (${compSeries.code}): ${comp.label} \u0B9A\u0BB0\u0BBE\u0B9A\u0BB0\u0BBF ${fmt(compSeries.mean)} ${unit} \u0B8E\u0BA4\u0BBF\u0BB0\u0BCD ${place} ${fmt(primarySeries.mean)} ${unit} (\u0BB5\u0BC7\u0BB1\u0BC1\u0BAA\u0BBE\u0B9F\u0BC1 ${sign}${fmt(diff)} ${unit}).`
+          );
+        } else {
+          derived.push(
+            `Location comparison (${compSeries.code}): ${comp.label} mean ${fmt(compSeries.mean)} ${unit} versus ${place} ${fmt(primarySeries.mean)} ${unit} (difference ${sign}${fmt(diff)} ${unit}).`
+          );
+        }
+      }
+    }
   }
   if (!analysis.series.length && !context.power) {
-    gaps.push("No NASA POWER archive was retrieved for this selection, so no climate-series statement can be made.");
+    gaps.push(
+      lang === "si" ? "\u0DB8\u0DD9\u0DB8 \u0DAD\u0DDA\u0DBB\u0DD3\u0DB8 \u0DC3\u0DB3\u0DC4\u0DCF NASA POWER \u0DBD\u0DDA\u0D9B\u0DB1\u0DCF\u0D9C\u0DCF\u0DBB \u0DAF\u0DAD\u0DCA\u0DAD \u0DBD\u0DB6\u0DCF\u0D9C\u0DD9\u0DB1 \u0DB1\u0DDC\u0DB8\u0DD0\u0DAD\u0DD2 \u0DB6\u0DD0\u0DC0\u0DD2\u0DB1\u0DCA \u0DAF\u0DDA\u0DC1\u0D9C\u0DD4\u0DAB\u0DD2\u0D9A \u0DC1\u0DCA\u200D\u0DBB\u0DDA\u0DAB\u0DD2 \u0DB4\u0DCA\u200D\u0DBB\u0D9A\u0DCF\u0DC1 \u0D9A\u0DC5 \u0DB1\u0DDC\u0DC4\u0DD0\u0D9A." : lang === "ta" ? "\u0B87\u0BA8\u0BCD\u0BA4\u0BA4\u0BCD \u0BA4\u0BC7\u0BB0\u0BCD\u0BB5\u0BC1\u0B95\u0BCD\u0B95\u0BC1 NASA POWER \u0B95\u0BBE\u0BAA\u0BCD\u0BAA\u0B95\u0BAE\u0BCD \u0BAA\u0BC6\u0BB1\u0BAA\u0BCD\u0BAA\u0B9F\u0BBE\u0BA4\u0BA4\u0BBE\u0BB2\u0BCD \u0B95\u0BBE\u0BB2\u0BA8\u0BBF\u0BB2\u0BC8\u0BA4\u0BCD \u0BA4\u0BCA\u0B9F\u0BB0\u0BCD \u0B95\u0BC2\u0BB1\u0BCD\u0BB1\u0BC1\u0B95\u0BB3\u0BC8 \u0BB5\u0BB4\u0B99\u0BCD\u0B95 \u0BAE\u0BC1\u0B9F\u0BBF\u0BAF\u0BBE\u0BA4\u0BC1." : "No NASA POWER archive was retrieved for this selection, so no climate-series statement can be made."
+    );
   }
   const question2 = String(question || "");
-  if (/trend|warming|increase|decrease|change/i.test(question2)) {
+  if (/trend|warming|increase|decrease|change|ප්‍රවණතා|උණුසුම්|වෙනස්|போக்கு|வெப்ப/i.test(question2)) {
     interpretation.push(
-      "A slope or a difference between two periods describes the retrieved window only. Without a longer baseline, a significance test and a change-point analysis, it must not be reported as a verified climate trend."
+      lang === "si" ? "\u0DB6\u0DD1\u0DC0\u0DD4\u0DB8\u0D9A\u0DCA \u0DC4\u0DDD \u0D9A\u0DCF\u0DBD \u0DB4\u0DBB\u0DD2\u0DA0\u0DCA\u0DA1\u0DDA\u0DAF \u0DAF\u0DD9\u0D9A\u0D9A\u0DCA \u0D85\u0DAD\u0DBB \u0DC0\u0DD9\u0DB1\u0DC3\u0D9A\u0DCA \u0DC0\u0DD2\u0DC3\u0DCA\u0DAD\u0DBB \u0D9A\u0DBB\u0DB1\u0DCA\u0DB1\u0DDA \u0DBD\u0DB6\u0DCF\u0D9C\u0DAD\u0DCA \u0D9A\u0DCF\u0DBD \u0DB4\u0DBB\u0DCF\u0DC3\u0DBA \u0DB4\u0DB8\u0DAB\u0DD2. \u0DAF\u0DD2\u0D9C\u0DD4\u0D9A\u0DCF\u0DBD\u0DD3\u0DB1 \u0DB4\u0DAF\u0DB1\u0DB8\u0D9A\u0DCA \u0DC3\u0DC4 \u0DC3\u0D82\u0D9B\u0DCA\u200D\u0DBA\u0DCF\u0DB1 \u0DB4\u0DBB\u0DD3\u0D9A\u0DCA\u0DC2\u0DAB \u0DB1\u0DDC\u0DB8\u0DD0\u0DAD\u0DD2\u0DC0 \u0D91\u0DBA \u0DAD\u0DC4\u0DC0\u0DD4\u0DBB\u0DD4 \u0D9A\u0DC5 \u0DAF\u0DDA\u0DC1\u0D9C\u0DD4\u0DAB\u0DD2\u0D9A \u0DB4\u0DCA\u200D\u0DBB\u0DC0\u0DAB\u0DAD\u0DCF\u0DC0\u0D9A\u0DCA \u0DBD\u0DD9\u0DC3 \u0D89\u0DAF\u0DD2\u0DBB\u0DD2\u0DB4\u0DAD\u0DCA \u0DB1\u0DDC\u0D9A\u0DC5 \u0DBA\u0DD4\u0DAD\u0DD4\u0DBA." : lang === "ta" ? "\u0B9A\u0BBE\u0BAF\u0BCD\u0BB5\u0BC1 \u0B85\u0BB2\u0BCD\u0BB2\u0BA4\u0BC1 \u0B87\u0BB0\u0BC1 \u0B95\u0BBE\u0BB2\u0BAA\u0BCD\u0BAA\u0B95\u0BC1\u0BA4\u0BBF\u0B95\u0BB3\u0BBF\u0BA9\u0BCD \u0BB5\u0BC7\u0BB1\u0BC1\u0BAA\u0BBE\u0B9F\u0BC1 \u0BAA\u0BC6\u0BB1\u0BAA\u0BCD\u0BAA\u0B9F\u0BCD\u0B9F \u0B95\u0BBE\u0BB2\u0BB5\u0BB0\u0BAE\u0BCD\u0BAA\u0BC8 \u0BAE\u0B9F\u0BCD\u0B9F\u0BC1\u0BAE\u0BC7 \u0BB5\u0BBF\u0BB5\u0BB0\u0BBF\u0B95\u0BCD\u0B95\u0BBF\u0BB1\u0BA4\u0BC1. \u0BA8\u0BC0\u0BA3\u0BCD\u0B9F \u0B95\u0BBE\u0BB2 \u0B85\u0B9F\u0BBF\u0BAA\u0BCD\u0BAA\u0B9F\u0BC8 \u0BAE\u0BB1\u0BCD\u0BB1\u0BC1\u0BAE\u0BCD \u0BAA\u0BC1\u0BB3\u0BCD\u0BB3\u0BBF\u0BB5\u0BBF\u0BB5\u0BB0 \u0B9A\u0BCB\u0BA4\u0BA9\u0BC8 \u0B87\u0BA9\u0BCD\u0BB1\u0BBF \u0B87\u0BA4\u0BC8 \u0B89\u0BB1\u0BC1\u0BA4\u0BBF\u0BAA\u0BCD\u0BAA\u0B9F\u0BC1\u0BA4\u0BCD\u0BA4\u0BAA\u0BCD\u0BAA\u0B9F\u0BCD\u0B9F \u0B95\u0BBE\u0BB2\u0BA8\u0BBF\u0BB2\u0BC8\u0BAA\u0BCD \u0BAA\u0BCB\u0B95\u0BCD\u0B95\u0BBE\u0B95\u0B95\u0BCD \u0B95\u0BC2\u0BB1\u0B95\u0BCD\u0B95\u0BC2\u0B9F\u0BBE\u0BA4\u0BC1." : "A slope or a difference between two periods describes the retrieved window only. Without a longer baseline, a significance test and a change-point analysis, it must not be presented as a verified climate trend."
     );
   }
-  if (/correlat|because|cause|due to/i.test(question2)) {
+  if (/correlat|because|cause|due to|හේතු|සම්බන්ධ|காரண|தொடர்பு/i.test(question2)) {
     interpretation.push(
-      "The retrieved series can show that two quantities move together over this window; that is not evidence that one causes the other. No attribution is claimed."
+      lang === "si" ? "\u0DC0\u0DD2\u0DA0\u0DBD\u0DCA\u200D\u0DBA \u0DAF\u0DD9\u0D9A\u0D9A\u0DCA \u0D91\u0D9A\u0DA7 \u0DC0\u0DD2\u0DA0\u0DBD\u0DB1\u0DBA \u0DC0\u0DD3\u0DB8 \u0D91\u0D9A\u0D9A\u0DCA \u0D85\u0DB1\u0DD9\u0D9A\u0DA7 \u0DC4\u0DDA\u0DAD\u0DD4 \u0DC0\u0DB1 \u0DB6\u0DC0\u0DA7 \u0DC3\u0DCF\u0D9A\u0DCA\u0DC2\u0DD2\u0DBA\u0D9A\u0DCA \u0DB1\u0DDC\u0DC0\u0DDA; \u0DC4\u0DDA\u0DAD\u0DD4 \u0DB1\u0DD2\u0D9C\u0DB8\u0DB1\u0DBA\u0D9A\u0DCA \u0DB4\u0DCA\u200D\u0DBB\u0D9A\u0DCF\u0DC1 \u0DB1\u0DDC\u0D9A\u0DD9\u0DBB\u0DDA." : lang === "ta" ? "\u0B87\u0BB0\u0BC1 \u0B85\u0BB3\u0BB5\u0BC1\u0BB0\u0BC1\u0B95\u0BCD\u0B95\u0BB3\u0BCD \u0B92\u0BA9\u0BCD\u0BB1\u0BBE\u0B95 \u0BAE\u0BBE\u0BB1\u0BC1\u0BB5\u0BA4\u0BC1 \u0B92\u0BA9\u0BCD\u0BB1\u0BC1 \u0BAE\u0BB1\u0BCD\u0BB1\u0BCA\u0BA9\u0BCD\u0BB1\u0BC1\u0B95\u0BCD\u0B95\u0BC1\u0B95\u0BCD \u0B95\u0BBE\u0BB0\u0BA3\u0BAE\u0BCD \u0B8E\u0BA9\u0BCD\u0BAA\u0BA4\u0BB1\u0BCD\u0B95\u0BBE\u0BA9 \u0B9A\u0BBE\u0BA9\u0BCD\u0BB1\u0BC1 \u0B85\u0BB2\u0BCD\u0BB2; \u0B95\u0BBE\u0BB0\u0BA3 \u0B89\u0BB0\u0BBF\u0BAE\u0BC8 \u0B95\u0BCB\u0BB0\u0BAA\u0BCD\u0BAA\u0B9F\u0BB5\u0BBF\u0BB2\u0BCD\u0BB2\u0BC8." : "The retrieved series can show that two quantities move together over this window; that is not evidence that one causes the other. No attribution is claimed."
     );
   }
-  if (/image|imagery|satellite picture|compare dates/i.test(question2)) {
+  if (/image|imagery|satellite picture|compare dates|රූප|චන්ද්‍රිකා|படம்|செயற்கைக்கோள்/i.test(question2)) {
     interpretation.push(
-      "Two images are not proof of a trend: cloud, sun angle, aerosols, sensor changes and processing can all produce a difference between dates."
+      lang === "si" ? "\u0DA0\u0DB1\u0DCA\u0DAF\u0DCA\u200D\u0DBB\u0DD2\u0D9A\u0DCF \u0DBB\u0DD6\u0DB4 \u0DAF\u0DD9\u0D9A\u0D9A\u0DCA \u0DB4\u0DCA\u200D\u0DBB\u0DC0\u0DAB\u0DAD\u0DCF\u0DC0\u0D9A\u0DCA \u0D94\u0DB4\u0DCA\u0DB4\u0DD4 \u0DB1\u0DDC\u0D9A\u0DBB\u0DBA\u0DD2: \u0DC0\u0DBD\u0DCF\u0D9A\u0DD4\u0DC5\u0DD4, \u0DC4\u0DD2\u0DBB\u0DD4 \u0D9A\u0DDD\u0DAB\u0DBA, \u0D92\u0DBB\u0DDC\u0DC3\u0DDD\u0DBD\u0DCA \u0DC3\u0DC4 \u0DC3\u0D82\u0DC0\u0DDA\u0DAF\u0D9A \u0DC0\u0DD9\u0DB1\u0DC3\u0DCA\u0D9A\u0DB8\u0DCA \u0DAF\u0DD2\u0DB1 \u0DAF\u0DD9\u0D9A\u0D9A\u0DCA \u0D85\u0DAD\u0DBB \u0DAF\u0DD8\u0DC1\u0DCA\u200D\u0DBA \u0DC0\u0DD9\u0DB1\u0DC3\u0D9A\u0DCA \u0D87\u0DAD\u0DD2 \u0D9A\u0DC5 \u0DC4\u0DD0\u0D9A." : lang === "ta" ? "\u0B87\u0BB0\u0BC1 \u0B9A\u0BC6\u0BAF\u0BB1\u0BCD\u0B95\u0BC8\u0B95\u0BCD\u0B95\u0BCB\u0BB3\u0BCD \u0BAA\u0B9F\u0B99\u0BCD\u0B95\u0BB3\u0BCD \u0B92\u0BB0\u0BC1 \u0BAA\u0BCB\u0B95\u0BCD\u0B95\u0BC8 \u0BA8\u0BBF\u0BB0\u0BC2\u0BAA\u0BBF\u0B95\u0BCD\u0B95\u0BBE\u0BA4\u0BC1: \u0BAE\u0BC7\u0B95\u0BAE\u0BC2\u0B9F\u0BCD\u0B9F\u0BAE\u0BCD, \u0B9A\u0BC2\u0BB0\u0BBF\u0BAF\u0B95\u0BCD \u0B95\u0BCB\u0BA3\u0BAE\u0BCD, \u0B8F\u0BB0\u0BCB\u0B9A\u0BCB\u0BB2\u0BCD\u0B95\u0BB3\u0BCD \u0BAE\u0BB1\u0BCD\u0BB1\u0BC1\u0BAE\u0BCD \u0B89\u0BA3\u0BB0\u0BBF \u0BAE\u0BBE\u0BB1\u0BCD\u0BB1\u0B99\u0BCD\u0B95\u0BB3\u0BCD \u0BB5\u0BC7\u0BB1\u0BC1\u0BAA\u0BBE\u0B9F\u0BCD\u0B9F\u0BC8 \u0B8F\u0BB1\u0BCD\u0BAA\u0B9F\u0BC1\u0BA4\u0BCD\u0BA4\u0BB2\u0BBE\u0BAE\u0BCD." : "Two images are not proof of a trend: cloud, sun angle, aerosols, sensor changes and processing can all produce a difference between dates."
     );
   }
   if (!interpretation.length) {
     interpretation.push(
-      "Interpretation is limited to reasoning over the values listed above. The Lab does not add external claims about this area."
+      lang === "si" ? "\u0DC0\u0DD2\u0D9C\u0DCA\u200D\u0DBB\u0DC4\u0DBA \u0D89\u0DC4\u0DAD \u0DAF\u0DD0\u0D9A\u0DCA\u0DC0\u0DD9\u0DB1 \u0DBD\u0DB6\u0DCF\u0D9C\u0DAD\u0DCA \u0D85\u0D9C\u0DBA\u0DB1\u0DCA \u0DB8\u0DAD \u0DB4\u0DB8\u0DAB\u0D9A\u0DCA \u0DC3\u0DD3\u0DB8\u0DCF \u0DC0\u0DDA; \u0DB6\u0DCF\u0DC4\u0DD2\u0DBB \u0D85\u0DB1\u0DD4\u0DB8\u0DCF\u0DB1 \u0D91\u0D9A\u0DAD\u0DD4 \u0D9A\u0DBB \u0DB1\u0DDC\u0DB8\u0DD0\u0DAD." : lang === "ta" ? "\u0BB5\u0BBF\u0BB3\u0B95\u0BCD\u0B95\u0BAE\u0BCD \u0BAE\u0BC7\u0BB2\u0BC7 \u0BAA\u0B9F\u0BCD\u0B9F\u0BBF\u0BAF\u0BB2\u0BBF\u0B9F\u0BAA\u0BCD\u0BAA\u0B9F\u0BCD\u0B9F \u0BAA\u0BC6\u0BB1\u0BAA\u0BCD\u0BAA\u0B9F\u0BCD\u0B9F \u0BAE\u0BA4\u0BBF\u0BAA\u0BCD\u0BAA\u0BC1\u0B95\u0BB3\u0BC1\u0B95\u0BCD\u0B95\u0BC1\u0BB3\u0BCD \u0BAE\u0B9F\u0BCD\u0B9F\u0BC1\u0BAE\u0BC7 \u0BB5\u0BB0\u0BC8\u0BAF\u0BB1\u0BC1\u0B95\u0BCD\u0B95\u0BAA\u0BCD\u0BAA\u0B9F\u0BCD\u0B9F\u0BC1\u0BB3\u0BCD\u0BB3\u0BA4\u0BC1; \u0BB5\u0BC6\u0BB3\u0BBF\u0BAA\u0BCD\u0BAA\u0BC1\u0BB1 \u0B8A\u0B95\u0B99\u0BCD\u0B95\u0BB3\u0BCD \u0B9A\u0BC7\u0BB0\u0BCD\u0B95\u0BCD\u0B95\u0BAA\u0BCD\u0BAA\u0B9F\u0BB5\u0BBF\u0BB2\u0BCD\u0BB2\u0BC8." : "Interpretation is limited to reasoning over the values listed above. The Lab does not add external claims about this area."
     );
   }
   limitations2.push(
-    "This answer was produced by the deterministic Local Earth Intelligence engine without a language model: it restates retrieved values and computes arithmetic on them only."
+    lang === "si" ? "\u0DB8\u0DD9\u0DB8 \u0DB4\u0DD2\u0DC5\u0DD2\u0DAD\u0DD4\u0DBB \u0DB7\u0DCF\u0DC2\u0DCF \u0D86\u0D9A\u0DD8\u0DAD\u0DD2\u0DBA\u0D9A\u0DCA \u0DB1\u0DDC\u0DB8\u0DD0\u0DAD\u0DD2\u0DC0 \u0DAF\u0DDA\u0DC1\u0DD3\u0DBA \u0DB4\u0DD8\u0DAE\u0DD2\u0DC0\u0DD2 \u0DB6\u0DD4\u0DAF\u0DCA\u0DB0\u0DD2 \u0D91\u0DB1\u0DCA\u0DA2\u0DD2\u0DB8 \u0DB8\u0D9C\u0DD2\u0DB1\u0DCA \u0DBD\u0DB6\u0DCF\u0D9C\u0DAD\u0DCA \u0DAF\u0DAD\u0DCA\u0DAD \u0DB8\u0DAD \u0D9C\u0DAB\u0DD2\u0DAD\u0DB8\u0DBA \u0DC0\u0DC1\u0DBA\u0DD9\u0DB1\u0DCA \u0DC3\u0DD8\u0DA2\u0DD4\u0DC0\u0DB8 \u0D9C\u0DAB\u0DB1\u0DBA \u0D9A\u0DBB\u0DB1 \u0DBD\u0DAF\u0DD3." : lang === "ta" ? "\u0B87\u0BA8\u0BCD\u0BA4\u0BAA\u0BCD \u0BAA\u0BA4\u0BBF\u0BB2\u0BCD \u0BAE\u0BCA\u0BB4\u0BBF \u0BAE\u0BBE\u0BA4\u0BBF\u0BB0\u0BBF \u0B87\u0BA9\u0BCD\u0BB1\u0BBF \u0B89\u0BB3\u0BCD\u0BB3\u0BC2\u0BB0\u0BCD \u0BAA\u0BC1\u0BB5\u0BBF \u0BA8\u0BC1\u0BA3\u0BCD\u0BA3\u0BB1\u0BBF\u0BB5\u0BC1 \u0B87\u0BAF\u0BA8\u0BCD\u0BA4\u0BBF\u0BB0\u0BA4\u0BCD\u0BA4\u0BBE\u0BB2\u0BCD \u0BAA\u0BC6\u0BB1\u0BAA\u0BCD\u0BAA\u0B9F\u0BCD\u0B9F \u0BA4\u0BB0\u0BB5\u0BBF\u0BA9\u0BCD \u0B95\u0BA3\u0BBF\u0BA4\u0B95\u0BCD \u0B95\u0BA3\u0B95\u0BCD\u0B95\u0BC0\u0B9F\u0BC1\u0B95\u0BB3\u0BCD \u0BAE\u0BC2\u0BB2\u0BAE\u0BCD \u0B89\u0BB0\u0BC1\u0BB5\u0BBE\u0B95\u0BCD\u0B95\u0BAA\u0BCD\u0BAA\u0B9F\u0BCD\u0B9F\u0BA4\u0BC1." : "This answer was produced by the deterministic Local Earth Intelligence engine without a language model: it restates retrieved values and computes arithmetic on them only."
   );
   const sources = [];
   if (context.power?.sourceUrl) {
@@ -959,6 +1627,16 @@ function buildLocalAnalystAnswer(question, context, options = {}) {
       retrievedAt: context.power.retrievedAt,
       detail: `Monthly archive for ${place}`
     });
+  }
+  for (const comp of analysis.comparisons) {
+    if (comp.sourceUrl) {
+      sources.push({
+        label: `NASA POWER \u2014 ${comp.label}`,
+        url: comp.sourceUrl,
+        retrievedAt: comp.retrievedAt,
+        detail: `Comparison series for ${comp.label}`
+      });
+    }
   }
   for (const layer2 of Array.isArray(context.layers) ? context.layers : []) {
     if (layer2?.serviceUrl) {
@@ -970,13 +1648,16 @@ function buildLocalAnalystAnswer(question, context, options = {}) {
     }
   }
   const rawSections = [
-    { kind: "verified", title: "Verified observations", bullets: verified.slice(0, 6) },
-    { kind: "derived", title: "Calculated results", bullets: derived.slice(0, 8) },
-    { kind: "interpretation", title: "Scientific interpretation", bullets: interpretation.slice(0, 4) },
-    { kind: "limitations", title: "Limitations and uncertainty", bullets: limitations2.slice(0, 5) },
-    { kind: "gaps", title: "Missing data", bullets: gaps.slice(0, 6) }
+    { kind: "verified", title: titles.verified, bullets: verified.slice(0, 9) },
+    { kind: "derived", title: titles.derived, bullets: derived.slice(0, 18) },
+    { kind: "interpretation", title: titles.interpretation, bullets: interpretation.slice(0, 5) },
+    { kind: "limitations", title: titles.limitations, bullets: limitations2.slice(0, 6) },
+    { kind: "gaps", title: titles.gaps, bullets: gaps.slice(0, 8) }
   ];
-  const sections = rawSections.map((section) => ({ ...section, bullets: section.bullets.filter(Boolean) }));
+  const sections = rawSections.map((section) => ({
+    ...section,
+    bullets: section.bullets.filter(Boolean)
+  }));
   const sufficientData = analysis.series.some((entry) => entry.count > 0);
   return { sections, sources, analysis, evidenceSummary: evidence, sufficientData };
 }
@@ -1302,22 +1983,23 @@ function readResponseText(response) {
 var ANALYST_MODEL = process.env.NOVA_ANALYST_MODEL || "gemini-3.8-flash";
 var OPENROUTER_MODEL = process.env.EARTH_ANALYST_OPENROUTER_MODEL || "google/gemini-2.0-flash-001";
 var ARENA_MODEL = process.env.EARTH_ANALYST_ARENA_MODEL || "gemini-2.5-flash";
-var ANALYST_SYSTEM_INSTRUCTION = `You are the Earth Science Analyst inside the NASA Space Explorer Earth Intelligence Lab.
+var OSS_MODEL = process.env.EARTH_ANALYST_OSS_MODEL || "qwen2.5:7b-instruct";
+var ANALYST_SYSTEM_INSTRUCTION = `You are AI Earth Analyst 2.0 inside the COSMORA Earth Intelligence Lab.
 
 Absolute rules:
-1. You may ONLY use the numbers, dataset names, dates, coverage strings and URLs present in the JSON context supplied by the client. Never add measurements, hotspot counts, alerts, place names or sources from memory.
+1. You may ONLY use the numbers, dataset names, dates, coverage strings, comparison locations and URLs present in the JSON context supplied by the client. Never add measurements, hotspot counts, alerts, place names or sources from memory.
 2. If a value needed to answer is absent from the context, say it is not available in the retrieved data and name what would be required.
 3. Separate your answer into:
    - verified: statements that restate retrieved values or documented dataset metadata;
-   - derived: arithmetic or comparisons you performed on those retrieved values (show the calculation style, e.g. "mean of the 12 monthly values");
-   - interpretation: scientific reading, always hedged and clearly labelled as interpretation;
-   - limitations: dataset limitations, uncertainty, and what the data cannot establish;
-   - gaps: missing data.
-4. Never claim that two images prove a trend. Never claim statistical significance or attribution.
+   - derived: arithmetic, anomalies, seasonal means, unusual observations (|z| >= 2\u03C3), decade slopes, historical period splits, or multi-location comparisons computed on those retrieved values (state the basis clearly);
+   - interpretation: clear, plain-language scientific explanation of what the patterns mean, always hedged and clearly labelled as interpretation;
+   - limitations: dataset limitations (\u22480.5\xB0 \xD7 0.625\xB0 grid estimates vs station gauges), uncertainty, and what the data cannot establish;
+   - gaps: missing months, unreturned parameters, or unverified date domains.
+4. Never claim that two images prove a trend. Never claim statistical significance or causal attribution without valid supporting tests in the context.
 5. Cite the source URLs exactly as they appear in the context, and only those.
-6. Be concise: at most 5 bullets per section, each under 45 words.
-7. Write in the requested language (English, Sinhala or Tamil) using correct scientific terminology.
-8. The context may contain a "localAnalysis" block of arithmetic already computed from the retrieved values. You may restate those results; you may not recompute them differently.`;
+6. Be concise and accessible: at most 5 bullets per section, each under 45 words, explaining trends in clear language while keeping exact numbers and units.
+7. Write in the requested language \u2014 English, Sinhala (\u0DC3\u0DD2\u0D82\u0DC4\u0DBD), or Tamil (\u0BA4\u0BAE\u0BBF\u0BB4\u0BCD) \u2014 using accurate scientific terminology.
+8. The context contains a "localAnalysis" block of verified arithmetic (means, anomalies, seasonal breakdowns, unusual months, multi-location comparisons) computed from the retrieved values. Restate those numbers faithfully; never recompute them differently.`;
 var ANALYST_RESPONSE_SCHEMA = {
   type: Type.OBJECT,
   properties: {
@@ -1433,18 +2115,21 @@ function createChatCompletionsProvider(id, label, options) {
     id,
     label,
     model,
-    isConfigured: () => Boolean(options.apiKey),
+    isConfigured: () => Boolean(options.apiKey || options.allowKeyless && options.baseUrl),
     async generate({ question, context, lang, signal, timeoutMs }) {
       const languageName = { en: "English", si: "Sinhala (\u0DC3\u0DD2\u0D82\u0DC4\u0DBD)", ta: "Tamil (\u0BA4\u0BAE\u0BBF\u0BB4\u0BCD)" }[lang] || "English";
       let response;
       try {
+        const headers = {
+          "Content-Type": "application/json",
+          ...options.extraHeaders || {}
+        };
+        if (options.apiKey) {
+          headers.Authorization = `Bearer ${options.apiKey}`;
+        }
         response = await fetchImpl(`${options.baseUrl.replace(/\/$/, "")}/chat/completions`, {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${options.apiKey}`,
-            ...options.extraHeaders || {}
-          },
+          headers,
           body: JSON.stringify({
             model,
             temperature: 0.2,
@@ -1489,7 +2174,7 @@ function createOpenRouterProvider(options) {
     apiKey: options.apiKey,
     model: options.model || OPENROUTER_MODEL,
     baseUrl: "https://openrouter.ai/api/v1",
-    extraHeaders: { "HTTP-Referer": "https://nasa-space-expolere.vercel.app", "X-Title": "NASA Space Explorer \u2014 Earth Lab" },
+    extraHeaders: { "HTTP-Referer": "https://nasa-space-expolere.vercel.app", "X-Title": "COSMORA \u2014 Earth Lab" },
     fetchImpl: options.fetchImpl
   });
 }
@@ -1502,18 +2187,32 @@ function createArenaProvider(options) {
     fetchImpl: options.fetchImpl
   });
 }
+function createOpenSourceProvider(options) {
+  const baseUrl = options.baseUrl || process.env.EARTH_ANALYST_OSS_BASE_URL || "";
+  return createChatCompletionsProvider("oss", "Open-Source Local Model", {
+    apiKey: options.apiKey || process.env.EARTH_ANALYST_OSS_API_KEY,
+    allowKeyless: Boolean(baseUrl),
+    model: options.model || OSS_MODEL,
+    baseUrl,
+    fetchImpl: options.fetchImpl
+  });
+}
 function createConfiguredProviders(options = {}) {
   const gemini = createGeminiProvider({
     client: process.env.GEMINI_API_KEY ? new GoogleGenAI({
       apiKey: process.env.GEMINI_API_KEY,
-      httpOptions: { headers: { "User-Agent": "nasa-space-explorer-earth-lab" } }
+      httpOptions: { headers: { "User-Agent": "cosmora-earth-lab" } }
     }) : null
   });
-  return [
+  const chain = [
     gemini,
-    createOpenRouterProvider({ apiKey: process.env.OPENROUTER_API_KEY, fetchImpl: options.fetchImpl }),
-    createArenaProvider({ apiKey: process.env.ARENA_API_KEY, fetchImpl: options.fetchImpl })
+    createOpenRouterProvider({ apiKey: process.env.OPENROUTER_API_KEY, fetchImpl: options.fetchImpl })
   ];
+  if (process.env.EARTH_ANALYST_OSS_BASE_URL?.trim()) {
+    chain.push(createOpenSourceProvider({ fetchImpl: options.fetchImpl }));
+  }
+  chain.push(createArenaProvider({ apiKey: process.env.ARENA_API_KEY, fetchImpl: options.fetchImpl }));
+  return chain;
 }
 function extractJson(text2) {
   const trimmed = String(text2 || "").trim().replace(/^```(?:json)?/i, "").replace(/```$/i, "").trim();
@@ -1624,14 +2323,22 @@ earthRouter.get("/health", (_req, res) => {
     timestamp: (/* @__PURE__ */ new Date()).toISOString(),
     capabilities: {
       powerProxy: true,
+      powerHydrology: true,
       gibsDomains: true,
       gibsProbe: true,
+      swotGranules: true,
+      knmiIndices: true,
+      noaaCdo: Boolean(process.env.NOAA_CDO_TOKEN),
+      gesDiscHydrology: Boolean(process.env.EARTHDATA_BEARER_TOKEN),
       firmsHotspots: Boolean(process.env.FIRMS_MAP_KEY),
       // This reports configuration, not a successful provider health probe.
-      aiAnalyst: Boolean(process.env.GEMINI_API_KEY || process.env.OPENROUTER_API_KEY || process.env.ARENA_API_KEY),
+      aiAnalyst: Boolean(
+        process.env.GEMINI_API_KEY || process.env.OPENROUTER_API_KEY || process.env.EARTH_ANALYST_OSS_BASE_URL || process.env.ARENA_API_KEY
+      ),
       aiAnalystProviders: [
         process.env.GEMINI_API_KEY ? "gemini" : null,
         process.env.OPENROUTER_API_KEY ? "openrouter" : null,
+        process.env.EARTH_ANALYST_OSS_BASE_URL ? "oss" : null,
         process.env.ARENA_API_KEY ? "arena" : null
       ].filter(Boolean),
       localAnalyst: true
@@ -1668,9 +2375,10 @@ earthRouter.get("/power", rateLimit("power", 60, 6e4), async (req, res) => {
     return res.json({ ...cached2, fromCache: true });
   }
   const buildUrl = (codes) => {
+    const community = codes.some((code) => code.startsWith("GWET") || code.startsWith("EVP")) ? "AG" : "RE";
     const params = new URLSearchParams({
       parameters: codes.join(","),
-      community: "RE",
+      community,
       longitude: longitude.toFixed(4),
       latitude: latitude.toFixed(4),
       start: String(start),
@@ -1972,6 +2680,7 @@ function logAnalystEvent(event) {
 var PROVIDER_LABELS = {
   gemini: "Google Gemini",
   openrouter: "OpenRouter",
+  oss: "Open-Source Local Model",
   arena: "Arena AI",
   local: "Local Earth Intelligence"
 };
@@ -2013,11 +2722,30 @@ function buildProviderContext(context, analysis) {
         unit: entry.unit,
         usableValues: entry.count,
         mean: entry.mean,
+        stdDev: entry.stdDev,
         min: entry.min,
         max: entry.max,
+        olsSlopePerDecade: entry.olsSlopePerDecade,
+        senSlopePerDecade: entry.senSlopePerDecade,
         anomalyBaseline: entry.anomaly ? { label: entry.anomaly.baselineLabel, value: entry.anomaly.baselineValue, latest: entry.anomaly.latest } : null,
         periodComparison: entry.periodComparison,
-        seasonal: entry.seasonal
+        seasonal: entry.seasonal,
+        unusualMonths: entry.unusualMonths
+      })),
+      comparisons: analysis.comparisons.map((comp) => ({
+        label: comp.label,
+        latitude: comp.latitude ?? null,
+        longitude: comp.longitude ?? null,
+        sourceUrl: comp.sourceUrl ?? null,
+        series: comp.series.map((s) => ({
+          code: s.code,
+          unit: s.unit,
+          usableValues: s.count,
+          mean: s.mean,
+          min: s.min,
+          max: s.max,
+          olsSlopePerDecade: s.olsSlopePerDecade
+        }))
       })),
       coverage: analysis.coverage
     },
@@ -2049,7 +2777,7 @@ earthRouter.post("/analyst", rateLimit("analyst", 20, 5 * 6e4), async (req, res)
   const requestId = `an-${startedAt.toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
   const bundle = context;
   const analysis = analyseBundle(bundle);
-  const local = buildLocalAnalystAnswer(String(question), bundle, { analysis });
+  const local = buildLocalAnalystAnswer(String(question), bundle, { analysis, lang: String(lang) });
   const providerContext = buildProviderContext(bundle, analysis);
   const controller = new AbortController();
   let clientGone = false;
@@ -2059,7 +2787,14 @@ earthRouter.post("/analyst", rateLimit("analyst", 20, 5 * 6e4), async (req, res)
       controller.abort();
     }
   });
-  const dedupeKey = JSON.stringify([String(question), String(lang), providerContext.location, providerContext.dateRange, analysis.series.map((entry) => [entry.code, entry.count, entry.lastMonth])]);
+  const dedupeKey = JSON.stringify([
+    String(question),
+    String(lang),
+    providerContext.location,
+    providerContext.dateRange,
+    analysis.series.map((entry) => [entry.code, entry.count, entry.lastMonth]),
+    analysis.comparisons.map((comp) => [comp.label, comp.series.length])
+  ]);
   logAnalystEvent({
     event: "earth.analyst.request",
     requestId,
@@ -2179,6 +2914,408 @@ earthRouter.post("/analyst", rateLimit("analyst", 20, 5 * 6e4), async (req, res)
     droppedSources: 0,
     groundingMode: "deterministic-local-analysis"
   });
+});
+var USER_AGENT_HEADER = "cosmora-earth-lab/2.0 (+https://github.com/sebro2011/ASA-asaN)";
+var providerLastCall = /* @__PURE__ */ new Map();
+async function enforceUpstreamSpacing(provider, minIntervalMs) {
+  const now = Date.now();
+  const prev = providerLastCall.get(provider) ?? 0;
+  const wait = prev + minIntervalMs - now;
+  if (wait > 0) {
+    providerLastCall.set(provider, prev + minIntervalMs);
+    await new Promise((resolve) => setTimeout(resolve, Math.min(wait, 4e3)));
+  } else {
+    providerLastCall.set(provider, now);
+  }
+}
+earthRouter.get("/sources", (_req, res) => {
+  return res.json({
+    ok: true,
+    retrievedAt: (/* @__PURE__ */ new Date()).toISOString(),
+    serverCapabilities: {
+      nasaPowerClimateAndHydrology: true,
+      swotCmrDiscovery: true,
+      knmiTeleconnectionProxy: true,
+      noaaCdoConfigured: Boolean(process.env.NOAA_CDO_TOKEN),
+      gesDiscEarthdataConfigured: Boolean(process.env.EARTHDATA_BEARER_TOKEN)
+    },
+    resources: SPACE_APPS_RESOURCE_MATRIX
+  });
+});
+var ALLOWED_SWOT_COLLECTIONS = /* @__PURE__ */ new Set([
+  "SWOT_L2_HR_LakeSP_2.0",
+  "SWOT_L2_HR_RiverSP_2.0",
+  "SWOT_L2_LR_SSH_2.0",
+  "SWOT_L2_LR_SSH_Basic_2.0"
+]);
+earthRouter.get("/swot/granules", rateLimit("swot-cmr", 20, 6e4), async (req, res) => {
+  const west = numberParam(req.query.west, -180, 180);
+  const south = numberParam(req.query.south, -90, 90);
+  const east = numberParam(req.query.east, -180, 180);
+  const north = numberParam(req.query.north, -90, 90);
+  const collectionRaw = typeof req.query.collection === "string" && req.query.collection.trim() ? req.query.collection.trim() : "SWOT_L2_LR_SSH_Basic_2.0";
+  if (west === null || south === null || east === null || north === null || west >= east || south >= north) {
+    return res.status(400).json({
+      ok: false,
+      code: "invalid-bbox",
+      message: "Valid numeric bounding box parameters (west, south, east, north) with west < east and south < north are required."
+    });
+  }
+  if (!ALLOWED_SWOT_COLLECTIONS.has(collectionRaw)) {
+    return res.status(400).json({
+      ok: false,
+      code: "unsupported-collection",
+      message: `Unsupported SWOT collection "${collectionRaw}". Allowed: ${[...ALLOWED_SWOT_COLLECTIONS].join(", ")}.`
+    });
+  }
+  const bbox = {
+    west: Number(west.toFixed(3)),
+    south: Number(south.toFixed(3)),
+    east: Number(east.toFixed(3)),
+    north: Number(north.toFixed(3))
+  };
+  const cacheKey2 = `swot:${collectionRaw}:${bbox.west}:${bbox.south}:${bbox.east}:${bbox.north}`;
+  const cached2 = cacheGet2(cacheKey2);
+  if (cached2) {
+    return res.json({ ...cached2, fromCache: true });
+  }
+  const params = new URLSearchParams({
+    short_name: collectionRaw,
+    bounding_box: `${bbox.west},${bbox.south},${bbox.east},${bbox.north}`,
+    page_size: "15",
+    sort_key: "-start_date"
+  });
+  const cmrUrl = `https://cmr.earthdata.nasa.gov/search/granules.json?${params.toString()}`;
+  try {
+    await enforceUpstreamSpacing("nasa-cmr", 500);
+    const response = await fetchWithTimeout(
+      cmrUrl,
+      { headers: { Accept: "application/json", "User-Agent": USER_AGENT_HEADER } },
+      15e3
+    );
+    if (!response.ok) {
+      return res.status(502).json({
+        ok: false,
+        code: "cmr-upstream-error",
+        status: response.status,
+        message: `NASA CMR SWOT search returned HTTP ${response.status}.`
+      });
+    }
+    const rawPayload = await response.json();
+    const hitsHeader = Number(response.headers.get("cmr-hits") || "0");
+    const parsed = parseCmrSwotGranules({
+      cmrPayload: rawPayload,
+      bbox,
+      collection: collectionRaw,
+      totalHits: Number.isFinite(hitsHeader) && hitsHeader > 0 ? hitsHeader : 0,
+      sourceUrl: cmrUrl,
+      retrievedAt: (/* @__PURE__ */ new Date()).toISOString()
+    });
+    const out = {
+      ok: true,
+      fromCache: false,
+      ...parsed,
+      totalHits: parsed.totalHits || parsed.granules.length
+    };
+    cacheSet2(cacheKey2, out, 60 * 60 * 1e3);
+    return res.json(out);
+  } catch (error) {
+    const timedOut = error instanceof Error && error.name === "AbortError";
+    return res.status(timedOut ? 504 : 502).json({
+      ok: false,
+      code: timedOut ? "cmr-timeout" : "cmr-unreachable",
+      message: timedOut ? "NASA CMR SWOT search timed out." : "Unable to reach NASA CMR SWOT granule catalog."
+    });
+  }
+});
+var ALLOWED_NOAA_DATATYPES = /* @__PURE__ */ new Set(["TAVG", "TMAX", "TMIN", "PRCP"]);
+earthRouter.get("/noaa/cdo", rateLimit("noaa-cdo", 15, 6e4), async (req, res) => {
+  const latitude = numberParam(req.query.latitude, -90, 90);
+  const longitude = numberParam(req.query.longitude, -180, 180);
+  const start = numberParam(req.query.start, 1900, 2100);
+  const end = numberParam(req.query.end, 1900, 2100);
+  const datatypeRaw = String(req.query.datatype || "TAVG").trim().toUpperCase();
+  if (latitude === null || longitude === null || start === null || end === null || start > end) {
+    return res.status(400).json({
+      ok: false,
+      code: "invalid-arguments",
+      message: "Valid numeric latitude, longitude, start year, and end year (start <= end) are required."
+    });
+  }
+  if (!ALLOWED_NOAA_DATATYPES.has(datatypeRaw)) {
+    return res.status(400).json({
+      ok: false,
+      code: "invalid-datatype",
+      message: "datatype must be one of TAVG, TMAX, TMIN, or PRCP."
+    });
+  }
+  const token = (process.env.NOAA_CDO_TOKEN || "").trim();
+  if (!token) {
+    return res.status(503).json({
+      ok: false,
+      code: "noaa-token-not-configured",
+      message: "NOAA_CDO_TOKEN is not configured on the server. Request a free token at https://www.ncei.noaa.gov/cdo-web/token or import a NOAA CDO station CSV directly in the Multi-Source Research Hub."
+    });
+  }
+  const clampedStart = Math.max(start, end - 19);
+  const cacheKey2 = `noaa:${latitude.toFixed(3)}:${longitude.toFixed(3)}:${clampedStart}:${end}:${datatypeRaw}`;
+  const cached2 = cacheGet2(cacheKey2);
+  if (cached2) {
+    return res.json({ ...cached2, fromCache: true });
+  }
+  try {
+    let chosenStation = null;
+    for (const halfDeg of [1.2, 2.5]) {
+      const extent = `${(latitude - halfDeg).toFixed(3)},${(longitude - halfDeg).toFixed(3)},${(latitude + halfDeg).toFixed(3)},${(longitude + halfDeg).toFixed(3)}`;
+      const stParams = new URLSearchParams({
+        datasetid: "GSOM",
+        datatypeid: datatypeRaw,
+        extent,
+        startdate: `${clampedStart}-01-01`,
+        enddate: `${end}-12-31`,
+        limit: "15"
+      });
+      await enforceUpstreamSpacing("noaa-cdo", 260);
+      const stResp = await fetchWithTimeout(
+        `https://www.ncei.noaa.gov/cdo-web/api/v2/stations?${stParams.toString()}`,
+        { headers: { token, Accept: "application/json", "User-Agent": USER_AGENT_HEADER } },
+        15e3
+      );
+      if (!stResp.ok) {
+        return res.status(stResp.status === 429 ? 429 : 502).json({
+          ok: false,
+          code: "noaa-upstream-error",
+          status: stResp.status,
+          message: `NOAA CDO station lookup returned HTTP ${stResp.status}.`
+        });
+      }
+      const stBody = await stResp.json();
+      const candidates = Array.isArray(stBody.results) ? stBody.results : [];
+      if (candidates.length > 0) {
+        candidates.sort((a, b) => {
+          const da = Math.hypot(a.latitude - latitude, a.longitude - longitude) - (a.datacoverage ?? 0) * 0.3;
+          const db = Math.hypot(b.latitude - latitude, b.longitude - longitude) - (b.datacoverage ?? 0) * 0.3;
+          return da - db;
+        });
+        chosenStation = candidates[0];
+        break;
+      }
+    }
+    if (!chosenStation) {
+      return res.status(404).json({
+        ok: false,
+        code: "noaa-no-station-found",
+        message: "No NOAA GSOM ground weather station with active records was found within 2.5\xB0 of the selected coordinates."
+      });
+    }
+    const allRecords = [];
+    let lastDataUrl = "";
+    for (let chunkStart = clampedStart; chunkStart <= end; chunkStart += 10) {
+      const chunkEnd = Math.min(end, chunkStart + 9);
+      const dParams = new URLSearchParams({
+        datasetid: "GSOM",
+        datatypeid: datatypeRaw,
+        stationid: chosenStation.id,
+        startdate: `${chunkStart}-01-01`,
+        enddate: `${chunkEnd}-12-31`,
+        units: "metric",
+        limit: "1000"
+      });
+      lastDataUrl = `https://www.ncei.noaa.gov/cdo-web/api/v2/data?${dParams.toString()}`;
+      await enforceUpstreamSpacing("noaa-cdo", 260);
+      const dResp = await fetchWithTimeout(
+        lastDataUrl,
+        { headers: { token, Accept: "application/json", "User-Agent": USER_AGENT_HEADER } },
+        15e3
+      );
+      if (!dResp.ok) {
+        return res.status(dResp.status === 429 ? 429 : 502).json({
+          ok: false,
+          code: "noaa-data-error",
+          status: dResp.status,
+          message: `NOAA CDO GSOM data retrieval returned HTTP ${dResp.status}.`
+        });
+      }
+      const dBody = await dResp.json();
+      if (Array.isArray(dBody.results)) {
+        allRecords.push(...dBody.results);
+      }
+    }
+    const series = parseNoaaGsomSeries({
+      station: chosenStation,
+      records: allRecords,
+      datatype: datatypeRaw,
+      sourceUrl: lastDataUrl,
+      retrievedAt: (/* @__PURE__ */ new Date()).toISOString()
+    });
+    const out = { ok: true, fromCache: false, station: chosenStation, series };
+    cacheSet2(cacheKey2, out, 6 * 60 * 60 * 1e3);
+    return res.json(out);
+  } catch (error) {
+    const timedOut = error instanceof Error && error.name === "AbortError";
+    return res.status(timedOut ? 504 : 502).json({
+      ok: false,
+      code: timedOut ? "noaa-timeout" : "noaa-unreachable",
+      message: timedOut ? "NOAA CDO request timed out." : "Unable to reach NOAA NCEI CDO service."
+    });
+  }
+});
+var ALLOWED_GESDISC_VARIABLES = {
+  SoilMoi0_10cm_inst: "GLDAS2:GLDAS_NOAH025_M_v2.1:SoilMoi0_10cm_inst",
+  Qs_acc: "GLDAS2:GLDAS_NOAH025_M_v2.1:Qs_acc",
+  Evap_tavg: "GLDAS2:GLDAS_NOAH025_M_v2.1:Evap_tavg",
+  Rainf_f_tavg: "GLDAS2:GLDAS_NOAH025_M_v2.1:Rainf_f_tavg"
+};
+earthRouter.get("/hydrology/gesdisc", rateLimit("gesdisc-hydro", 12, 6e4), async (req, res) => {
+  const latitude = numberParam(req.query.latitude, -60, 90);
+  const longitude = numberParam(req.query.longitude, -180, 180);
+  const start = numberParam(req.query.start, 2e3, 2100);
+  const end = numberParam(req.query.end, 2e3, 2100);
+  const shortVar = typeof req.query.variable === "string" && req.query.variable.trim() ? req.query.variable.trim() : "SoilMoi0_10cm_inst";
+  if (latitude === null || longitude === null || start === null || end === null || start > end) {
+    return res.status(400).json({
+      ok: false,
+      code: "invalid-arguments",
+      message: "Valid numeric latitude (-60..90), longitude, start year (>=2000), and end year are required."
+    });
+  }
+  const fullVariable = ALLOWED_GESDISC_VARIABLES[shortVar];
+  if (!fullVariable) {
+    return res.status(400).json({
+      ok: false,
+      code: "unsupported-variable",
+      message: `Unsupported GES DISC variable "${shortVar}". Allowed: ${Object.keys(ALLOWED_GESDISC_VARIABLES).join(", ")}.`
+    });
+  }
+  const rodUrl = buildGesDiscDataRodUrl({
+    latitude,
+    longitude,
+    startYear: start,
+    endYear: end,
+    variable: fullVariable
+  });
+  const bearer2 = (process.env.EARTHDATA_BEARER_TOKEN || "").trim();
+  if (!bearer2) {
+    return res.status(503).json({
+      ok: false,
+      code: "earthdata-token-not-configured",
+      rodUrl,
+      message: "EARTHDATA_BEARER_TOKEN is not configured on the server. NASA GES DISC Data Rods require Earthdata Login; use the generated Data Rod URL in your browser and import the asc2 file, or use keyless NASA POWER MERRA-2 soil wetness (GWETTOP / GWETROOT)."
+    });
+  }
+  const cacheKey2 = `gesdisc:${shortVar}:${latitude.toFixed(3)}:${longitude.toFixed(3)}:${start}:${end}`;
+  const cached2 = cacheGet2(cacheKey2);
+  if (cached2) {
+    return res.json({ ...cached2, fromCache: true });
+  }
+  try {
+    await enforceUpstreamSpacing("gesdisc", 2e3);
+    const response = await fetchWithTimeout(
+      rodUrl,
+      {
+        headers: {
+          Authorization: `Bearer ${bearer2}`,
+          Accept: "text/plain",
+          "User-Agent": USER_AGENT_HEADER
+        }
+      },
+      2e4
+    );
+    if (!response.ok) {
+      return res.status(response.status === 401 || response.status === 403 ? 503 : 502).json({
+        ok: false,
+        code: response.status === 401 || response.status === 403 ? "earthdata-auth-rejected" : "gesdisc-upstream-error",
+        status: response.status,
+        rodUrl,
+        message: `NASA GES DISC Data Rods returned HTTP ${response.status}.`
+      });
+    }
+    const text2 = await response.text();
+    const series = parseGesDiscAsc2(text2, {
+      sourceUrl: rodUrl,
+      retrievedAt: (/* @__PURE__ */ new Date()).toISOString(),
+      latitude,
+      longitude
+    });
+    const out = { ok: true, fromCache: false, series };
+    cacheSet2(cacheKey2, out, 6 * 60 * 60 * 1e3);
+    return res.json(out);
+  } catch (error) {
+    const timedOut = error instanceof Error && error.name === "AbortError";
+    return res.status(timedOut ? 504 : 502).json({
+      ok: false,
+      code: timedOut ? "gesdisc-timeout" : "gesdisc-unreachable",
+      rodUrl,
+      message: timedOut ? "NASA GES DISC Hydrology request timed out." : "Unable to reach NASA GES DISC Hydrology Data Rods."
+    });
+  }
+});
+var KNMI_ALLOWLIST = {
+  nino34: {
+    url: "https://climexp.knmi.nl/data/iersst_nino3.4a.dat",
+    title: "KNMI Climate Explorer \xB7 ENSO Ni\xF1o 3.4 SST Anomaly (ERSSTv5)",
+    variableLabel: "Ni\xF1o 3.4 SST Anomaly Index",
+    unit: "\xB0C",
+    spatialNote: "Equatorial Pacific (5\xB0N\u20135\xB0S, 170\xB0W\u2013120\xB0W) via KNMI Climate Explorer"
+  },
+  dmi: {
+    url: "https://climexp.knmi.nl/data/idmi_ersst.dat",
+    title: "KNMI Climate Explorer \xB7 Indian Ocean Dipole Mode Index (DMI)",
+    variableLabel: "Dipole Mode Index (West minus East Tropical Indian Ocean SST)",
+    unit: "\xB0C",
+    spatialNote: "Tropical Indian Ocean (WTIO \u2212 SETIO) via KNMI Climate Explorer"
+  }
+};
+earthRouter.get("/knmi/index", rateLimit("knmi-index", 6, 6e4), async (req, res) => {
+  const id = String(req.query.id || "").trim().toLowerCase();
+  const entry = KNMI_ALLOWLIST[id];
+  if (!entry) {
+    return res.status(400).json({
+      ok: false,
+      code: "invalid-knmi-index",
+      message: "Query parameter id is required and must be one of: nino34, dmi."
+    });
+  }
+  const cacheKey2 = `knmi:${id}`;
+  const cached2 = cacheGet2(cacheKey2);
+  if (cached2) {
+    return res.json({ ...cached2, fromCache: true });
+  }
+  try {
+    await enforceUpstreamSpacing("knmi-climexp", 1e4);
+    const response = await fetchWithTimeout(
+      entry.url,
+      { headers: { Accept: "text/plain", "User-Agent": USER_AGENT_HEADER } },
+      15e3
+    );
+    if (!response.ok) {
+      return res.status(502).json({
+        ok: false,
+        code: "knmi-upstream-error",
+        status: response.status,
+        message: `KNMI Climate Explorer static index returned HTTP ${response.status}. You can also import a downloaded .dat file locally.`
+      });
+    }
+    const rawText = await response.text();
+    const series = parseKnmiAsciiSeries(rawText, {
+      title: entry.title,
+      variableLabel: entry.variableLabel,
+      unit: entry.unit,
+      sourceUrl: entry.url,
+      spatialNote: entry.spatialNote,
+      retrievedAt: (/* @__PURE__ */ new Date()).toISOString()
+    });
+    const out = { ok: true, fromCache: false, series };
+    cacheSet2(cacheKey2, out, 24 * 60 * 60 * 1e3);
+    return res.json(out);
+  } catch (error) {
+    const timedOut = error instanceof Error && error.name === "AbortError";
+    return res.status(timedOut ? 504 : 502).json({
+      ok: false,
+      code: timedOut ? "knmi-timeout" : "knmi-unreachable",
+      message: "KNMI Climate Explorer static index is unreachable from this network environment. Import a downloaded KNMI .dat series directly in the Multi-Source Research Hub."
+    });
+  }
 });
 
 // server/spaceVideos.ts
@@ -4978,7 +6115,7 @@ function validUrl(value, host) {
   }
 }
 async function readJson(url, fetchImpl) {
-  const response = await fetchImpl(url, { signal: AbortSignal.timeout(3e3), redirect: "error", headers: { Accept: "application/json" } });
+  const response = await fetchImpl(url, { signal: AbortSignal.timeout(4500), redirect: "error", headers: { Accept: "application/json" } });
   if (!response.ok) throw new Error("NASA Science unavailable");
   const size = Number(response.headers.get("content-length"));
   if (size > 15e5) throw new Error("NASA Science response too large");
@@ -5248,6 +6385,24 @@ var translationCache = /* @__PURE__ */ new Map();
 var apodCache = /* @__PURE__ */ new Map();
 var APOD_TODAY_TTL_MS = 15 * 6e4;
 var apodTodayCachedAt = 0;
+var apodTodayNote;
+function currentApodDateEastern(now = /* @__PURE__ */ new Date()) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/New_York",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).formatToParts(now);
+  const get = (type) => parts.find((part) => part.type === type)?.value || "";
+  const formatted = `${get("year")}-${get("month")}-${get("day")}`;
+  return /^\d{4}-\d{2}-\d{2}$/.test(formatted) ? formatted : now.toISOString().slice(0, 10);
+}
+function previousApodDate(isoDate2) {
+  const parsed = /* @__PURE__ */ new Date(`${isoDate2}T12:00:00Z`);
+  if (Number.isNaN(parsed.getTime())) return isoDate2;
+  parsed.setUTCDate(parsed.getUTCDate() - 1);
+  return parsed.toISOString().slice(0, 10);
+}
 var SATELLITE_REGISTRY = [
   {
     id: "iss",
@@ -5493,12 +6648,18 @@ function setupNasaRoutes(app2, ai2) {
       return res.json({ success: true, data: apodCache.get(date), cached: true });
     }
     if (!date && apodCache.has("today") && Date.now() - apodTodayCachedAt < APOD_TODAY_TTL_MS) {
-      return res.json({ success: true, data: apodCache.get("today"), cached: true });
+      return res.json({
+        success: true,
+        data: apodCache.get("today"),
+        cached: true,
+        ...apodTodayNote ? { note: apodTodayNote } : {}
+      });
     }
     const nasaApiKey = process.env.NEXT_PUBLIC_NASA_API_KEY || process.env.NASA_API_KEY || "DEMO_KEY";
     const url = date ? `https://api.nasa.gov/planetary/apod?api_key=${nasaApiKey}&date=${date}` : `https://api.nasa.gov/planetary/apod?api_key=${nasaApiKey}`;
     let timeout;
     let upstreamStatus = 0;
+    let upstreamDate = "";
     let degradeReason = null;
     let failureKind = "network";
     try {
@@ -5513,13 +6674,18 @@ function setupNasaRoutes(app2, ai2) {
       upstreamStatus = nasaRes.status;
       if (nasaRes.ok) {
         const data = normaliseApodMedia(redactApiKeys(await nasaRes.json()));
+        if (typeof data?.date === "string" && isValidApodDate(data.date)) {
+          upstreamDate = data.date;
+        }
         if (isDegradedApodRecord(data)) {
           degradeReason = "degraded";
         } else if (data && data.title && data.url && (!date || data.date === date)) {
           if (date) apodCache.set(date, data);
           else {
             apodCache.set("today", data);
+            if (typeof data.date === "string") apodCache.set(data.date, data);
             apodTodayCachedAt = Date.now();
+            apodTodayNote = void 0;
           }
           return res.json({ success: true, data });
         }
@@ -5533,15 +6699,55 @@ function setupNasaRoutes(app2, ai2) {
       if (timeout) clearTimeout(timeout);
     }
     if (degradeReason) failureKind = degradeReason;
-    const scienceDate = date || (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+    const scienceDate = date || upstreamDate || currentApodDateEastern();
     const scienceRecord = await fetchScienceApod(scienceDate);
     if (scienceRecord) {
       if (date) apodCache.set(date, scienceRecord);
       else {
         apodCache.set("today", scienceRecord);
+        apodCache.set(scienceDate, scienceRecord);
         apodTodayCachedAt = Date.now();
+        apodTodayNote = void 0;
       }
       return res.json({ success: true, data: scienceRecord });
+    }
+    if (!date) {
+      const prevDate = previousApodDate(scienceDate);
+      const recentNote = `Today\u2019s APOD (${scienceDate}) is not yet available from NASA, so the most recent published APOD (${prevDate}) is shown.`;
+      if (apodCache.has(prevDate)) {
+        const cachedPrev = apodCache.get(prevDate);
+        apodCache.set("today", cachedPrev);
+        apodTodayCachedAt = Date.now();
+        apodTodayNote = recentNote;
+        return res.json({ success: true, data: cachedPrev, cached: true, note: recentNote });
+      }
+      if (failureKind !== "network" && failureKind !== "rate-limited") {
+        try {
+          const prevRes = await fetch(
+            `https://api.nasa.gov/planetary/apod?api_key=${nasaApiKey}&date=${prevDate}`,
+            { signal: AbortSignal.timeout(3500) }
+          );
+          if (prevRes.ok) {
+            const prevData = normaliseApodMedia(redactApiKeys(await prevRes.json()));
+            if (!isDegradedApodRecord(prevData) && prevData?.title && prevData?.url && prevData.date === prevDate) {
+              apodCache.set(prevDate, prevData);
+              apodCache.set("today", prevData);
+              apodTodayCachedAt = Date.now();
+              apodTodayNote = recentNote;
+              return res.json({ success: true, data: prevData, cached: true, note: recentNote });
+            }
+          }
+        } catch {
+        }
+      }
+      const prevScience = await fetchScienceApod(prevDate);
+      if (prevScience) {
+        apodCache.set(prevDate, prevScience);
+        apodCache.set("today", prevScience);
+        apodTodayCachedAt = Date.now();
+        apodTodayNote = recentNote;
+        return res.json({ success: true, data: prevScience, cached: true, note: recentNote });
+      }
     }
     const usingDemoKey = nasaApiKey === "DEMO_KEY";
     return res.status(503).json({
@@ -6834,7 +8040,7 @@ var DATASETS = [
     id: "nova-iss-tle",
     organisation: "Other",
     programme: "Existing ISS integration",
-    title: "ISS orbital elements (existing Space Explorer feed)",
+    title: "ISS orbital elements (existing COSMORA feed)",
     description: "Two-line elements already used by the app\u2019s ISS tracker, served by wheretheiss.at. Provides orbital information, not measurements of any Earth phenomenon.",
     documentationUrl: "https://wheretheiss.at/w/developer",
     endpoint: "https://api.wheretheiss.at/v1/satellites/25544/tles",
@@ -6853,7 +8059,7 @@ var DATASETS = [
       "A propagated altitude is a derived quantity, not a direct measurement.",
       "Not a NASA API; attribution is shown wherever it is used."
     ],
-    attribution: "wheretheiss.at orbital data (existing NASA Space Explorer integration).",
+    attribution: "wheretheiss.at orbital data (existing COSMORA integration).",
     keyRequired: false
   }
 ];
@@ -8923,7 +10129,7 @@ function effectMagnitude(r) {
   if (magnitude >= 0.3) return "weak";
   return "none";
 }
-function round2(value, digits = 4) {
+function round3(value, digits = 4) {
   if (value === null || !Number.isFinite(value)) return null;
   const factor = 10 ** digits;
   return Math.round(value * factor) / factor;
@@ -9655,7 +10861,7 @@ function runAnalyses(request, datasets, language = request.language) {
     analysis.results = Object.fromEntries(
       Object.entries(analysis.results).map(([key2, value]) => [
         key2,
-        typeof value === "number" ? round2(value, 6) : value
+        typeof value === "number" ? round3(value, 6) : value
       ])
     );
     analyses.push(analysis);
@@ -10726,7 +11932,7 @@ async function fetchText(url, options, cacheKey2, ttlMs) {
       headers: {
         Accept: "application/json",
         // NASA asks clients to identify themselves; no secret is included.
-        "User-Agent": "NOVA-Hypothesis-Forge/1.0 (NASA Space Explorer scientific investigation)"
+        "User-Agent": "COSMORA-Hypothesis-Forge/1.0 (COSMORA scientific investigation)"
       }
     });
     const text2 = await response.text();
@@ -12545,10 +13751,10 @@ function detectHardware({
   loadavg = () => os.loadavg()
 } = {}) {
   const cpuList = safe(cpus, []) || [];
-  const totalRamGb = round3(safe(totalmem, 0) / GB);
-  const freeRamGb = round3(safe(freemem, 0) / GB);
+  const totalRamGb = round4(safe(totalmem, 0) / GB);
+  const freeRamGb = round4(safe(freemem, 0) / GB);
   const gpu = gpuFromEnv(env);
-  const load1 = round3((safe(loadavg, [0]) || [0])[0] ?? 0);
+  const load1 = round4((safe(loadavg, [0]) || [0])[0] ?? 0);
   const cpuCount = cpuList.length || 1;
   const forced = envProfile(env);
   const reported = {
@@ -12557,7 +13763,7 @@ function detectHardware({
     totalRamGb,
     freeRamGb,
     load1,
-    loadPerCpu: round3(load1 / cpuCount),
+    loadPerCpu: round4(load1 / cpuCount),
     gpu,
     platform: process.platform,
     arch: process.arch,
@@ -12590,7 +13796,7 @@ function safe(fn, fallback) {
     return fallback;
   }
 }
-function round3(value) {
+function round4(value) {
   return Math.round(Number(value || 0) * 10) / 10;
 }
 
@@ -18535,7 +19741,7 @@ async function startServer() {
     app.use(vite.middlewares);
   }
   const server = app.listen(PORT, "0.0.0.0", () => {
-    console.log(`NASA Space Exploration Server running at http://0.0.0.0:${PORT}`);
+    console.log(`COSMORA server running at http://0.0.0.0:${PORT}`);
   });
   const handleShutdown = (signal) => {
     console.log(`[Lifecycle] Received ${signal}. Gracefully closing HTTP server...`);

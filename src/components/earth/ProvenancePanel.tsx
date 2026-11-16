@@ -51,7 +51,7 @@ export default function ProvenancePanel({ entries, report }: ProvenancePanelProp
       ) : (
         <div className="space-y-3">
           {entries.map((entry) => (
-            <div key={entry.key} className="rounded-[10px] border border-line bg-abyss/70 p-3">
+            <div key={entry.key} className="earth-glass-inset p-3.5">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <p className="text-sm font-semibold text-white">{entry.title}</p>
                 <StatusBadge status={entry.status} note={entry.note} />

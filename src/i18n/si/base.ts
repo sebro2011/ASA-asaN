@@ -7,7 +7,7 @@
  */
 
 export const baseSi: Record<string, string> = {
-      appName: 'නාසා විශ්ව ගවේෂකය',
+      appName: 'COSMORA',
       appSubtitle: 'තුන්භාෂා අභ්‍යවකාශ ද්වාරය (සිංහල • தமிழ் • English)',
       navApod: 'දවසේ තාරකා ඡායාරූපය',
       nav3D: '3D අභ්‍යවකාශගාරය',

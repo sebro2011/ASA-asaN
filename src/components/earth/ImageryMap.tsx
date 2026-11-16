@@ -1,22 +1,35 @@
 /**
- * Leaflet imagery map for the Earth Intelligence Lab.
+ * Leaflet satellite imagery map for the COSMORA Earth Intelligence Lab.
  *
- * This module is intentionally lazy-loaded by the Lab (React.lazy), so Leaflet
- * and the map logic live in their own chunk and never block the rest of the site.
+ * Lazy-loaded (`React.lazy`) so Leaflet lives in its own chunk.
  *
- * View modes
- *  - `single`  : one map, one observation date
+ * View modes:
+ *  - `single`  : one map, primary observation date
  *  - `side`    : two synced maps, primary date | comparison date
- *  - `swipe`   : two synced maps stacked, comparison date revealed by a divider
+ *  - `swipe`   : two synced maps stacked, comparison date revealed by a keyboard-operable divider
  *
- * Every tile URL is built from the verified GIBS catalog entry, so the
- * projection, matrix set and format are explicit and auditable.
+ * Includes:
+ *  - Cadence-aware date stepping (clamped against future dates)
+ *  - Tile loading & error telemetry HUD
+ *  - Active study-point target reticle + optional Click-to-Inspect coordinate picker
+ *  - Calibrated scientific layer legend (continuous ramps & categorical swatches)
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import L from 'leaflet';
-import { ChevronLeft, ChevronRight, Minus, Move, Plus, RotateCcw } from 'lucide-react';
+import {
+  ChevronLeft,
+  ChevronRight,
+  Crosshair,
+  Loader2,
+  Minus,
+  Move,
+  Palette,
+  Plus,
+  RotateCcw
+} from 'lucide-react';
 import { imagerySource } from '../../lib/earth/gibsClient';
+import { getLayerLegend } from '../../lib/earth/gibsLegends';
 import type { GibsLayerMeta } from '../../lib/earth/types';
 
 export interface MapArea {
@@ -41,6 +54,9 @@ export interface ImageryMapProps {
   verifiedService?: 'wmts' | 'wms' | null;
   verifiedFormat?: 'jpg' | 'png' | null;
   tileTemplateOverride?: string | null;
+  /** Optional interactive click-to-set-coordinates mode. */
+  pickMode?: boolean;
+  onMapPick?: (coords: { latitude: number; longitude: number }) => void;
   onViewChange?: (info: { bounds: [number, number, number, number]; center: [number, number]; zoom: number }) => void;
   /** Optional callback when the user navigates to a different date. */
   onDateChange?: (date: string) => void;
@@ -52,6 +68,7 @@ export interface ImageryMapProps {
     primary: string;
     comparison: string;
     attribution: string;
+    legendTitle?: string;
   };
 }
 
@@ -70,7 +87,7 @@ function buildTileLayer(
   attribution: string,
   reducedMotion: boolean,
   override?: string | null
-): L.Layer {
+): L.TileLayer {
   const native = nativeZoomOf(layer);
   const common: L.TileLayerOptions = {
     opacity,
@@ -79,7 +96,6 @@ function buildTileLayer(
     maxNativeZoom: native,
     minZoom: 1,
     crossOrigin: false,
-    // Reduced motion: skip Leaflet's zoom/fade animations entirely.
     updateWhenZooming: !reducedMotion,
     keepBuffer: 1
   };
@@ -114,6 +130,8 @@ export default function ImageryMap({
   verifiedService,
   verifiedFormat,
   tileTemplateOverride,
+  pickMode = false,
+  onMapPick,
   onDateChange,
   onViewChange,
   labels
@@ -122,46 +140,56 @@ export default function ImageryMap({
   const secondaryRef = useRef<HTMLDivElement | null>(null);
   const mapPrimary = useRef<L.Map | null>(null);
   const mapSecondary = useRef<L.Map | null>(null);
+  const markerPrimary = useRef<L.CircleMarker | null>(null);
   const syncing = useRef(false);
   const [divider, setDivider] = useState(50);
   const [tileErrors, setTileErrors] = useState(0);
+  const [tilesPending, setTilesPending] = useState(0);
+  const [centerReadout, setCenterReadout] = useState<{ lat: number; lng: number; zoom: number }>({
+    lat: area.latitude,
+    lng: area.longitude,
+    zoom: 6
+  });
   const containerRef = useRef<HTMLDivElement | null>(null);
 
-  /** Date the user has navigated to via prev/next controls. Starts in sync with `date`. */
-  const [navDate, setNavDate] = useState(date || '');
-  const mapCenter = useRef<{ lat: number; lng: number }>({ lat: area.latitude, lng: area.longitude });
+  const legend = useMemo(() => getLayerLegend(layer), [layer]);
+  const stepDays = legend.stepDays || 1;
+  const todayIso = useMemo(() => new Date().toISOString().slice(0, 10), []);
 
-  // Keep navDate in sync when the parent changes the date externally.
+  const [navDate, setNavDate] = useState(date || '');
+  const pickRef = useRef({ pickMode, onMapPick });
+  pickRef.current = { pickMode, onMapPick };
+
   useEffect(() => {
     if (date && date !== navDate) setNavDate(date);
   }, [date, navDate]);
 
   const goToDay = useCallback(
-    (offset: number) => {
+    (offsetDays: number) => {
       if (!navDate) return;
-      const ms = Date.parse(`${navDate}T00:00:00Z`) + offset * 86_400_000;
-      const next = new Date(ms).toISOString().slice(0, 10);
-      setNavDate(next);
-      onDateChange?.(next);
+      const ms = Date.parse(`${navDate}T00:00:00Z`) + offsetDays * 86_400_000;
+      const candidate = new Date(ms).toISOString().slice(0, 10);
+      const clamped = candidate > todayIso ? todayIso : candidate;
+      setNavDate(clamped);
+      onDateChange?.(clamped);
     },
-    [navDate, onDateChange]
+    [navDate, onDateChange, todayIso]
   );
 
   const service: 'wmts' | 'wms' = verifiedService || layer.service;
   const format: 'jpg' | 'png' = verifiedFormat || layer.format;
-
   const attribution = useMemo(() => `${labels.attribution} · ${layer.id}`, [labels.attribution, layer.id]);
 
   const reportView = useCallback(
     (map: L.Map) => {
-      if (!onViewChange) return;
       const bounds = map.getBounds();
       const center = map.getCenter();
-      mapCenter.current = { lat: center.lat, lng: center.lng };
-      onViewChange({
+      const zoom = map.getZoom();
+      setCenterReadout({ lat: center.lat, lng: center.lng, zoom });
+      onViewChange?.({
         bounds: [bounds.getSouth(), bounds.getWest(), bounds.getNorth(), bounds.getEast()],
         center: [center.lat, center.lng],
-        zoom: map.getZoom()
+        zoom
       });
     },
     [onViewChange]
@@ -183,7 +211,7 @@ export default function ImageryMap({
       const map = L.map(primaryRef.current, {
         ...options,
         center: [area.latitude, area.longitude],
-        zoom: area.bounds ? 6 : 6
+        zoom: 6
       });
       map.attributionControl.setPrefix(false);
       mapPrimary.current = map;
@@ -195,6 +223,13 @@ export default function ImageryMap({
           syncing.current = false;
         }
       });
+      map.on('click', (event: L.LeafletMouseEvent) => {
+        if (pickRef.current.pickMode && pickRef.current.onMapPick) {
+          const lat = Math.max(-90, Math.min(90, Number(event.latlng.lat.toFixed(4))));
+          const lon = ((((event.latlng.lng + 180) % 360) + 360) % 360) - 180;
+          pickRef.current.onMapPick({ latitude: lat, longitude: Number(lon.toFixed(4)) });
+        }
+      });
       reportView(map);
     }
 
@@ -203,7 +238,6 @@ export default function ImageryMap({
         ...options,
         center: [area.latitude, area.longitude],
         zoom: 6,
-        // The overlay map in swipe mode must never steal pointer events.
         dragging: mode !== 'swipe',
         scrollWheelZoom: mode !== 'swipe',
         touchZoom: mode !== 'swipe',
@@ -222,6 +256,7 @@ export default function ImageryMap({
     }
 
     return () => {
+      markerPrimary.current = null;
       mapPrimary.current?.remove();
       mapSecondary.current?.remove();
       mapPrimary.current = null;
@@ -230,30 +265,65 @@ export default function ImageryMap({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reducedMotion, mode]);
 
+  /* ---------------------- study target reticle marker ---------------------- */
+  useEffect(() => {
+    const map = mapPrimary.current;
+    if (!map) return;
+    if (!markerPrimary.current) {
+      markerPrimary.current = L.circleMarker([area.latitude, area.longitude], {
+        radius: 6,
+        color: '#5ed3f2',
+        weight: 2,
+        fillColor: '#050b16',
+        fillOpacity: 0.65,
+        interactive: false
+      }).addTo(map);
+    } else {
+      markerPrimary.current.setLatLng([area.latitude, area.longitude]);
+    }
+  }, [area.latitude, area.longitude, mode]);
+
   /* ------------------------- tile layers per mode/date ---------------------- */
   useEffect(() => {
     const errors = { count: 0 };
-    const apply = (map: L.Map | null, when?: string | null) => {
+    let inFlight = 0;
+
+    const apply = (map: L.Map | null, when?: string | null, trackLoading = false) => {
       if (!map) return;
-      if (blocked) return;
       map.eachLayer((existing) => {
         if (existing instanceof L.TileLayer) map.removeLayer(existing);
       });
-      if (!when) return;
+      if (blocked || !when) return;
       const tileLayer = buildTileLayer(layer, when, opacity, service, format, attribution, reducedMotion, tileTemplateOverride);
+      if (trackLoading) {
+        tileLayer.on('tileloadstart', () => {
+          inFlight += 1;
+          setTilesPending(inFlight);
+        });
+        tileLayer.on('tileload', () => {
+          inFlight = Math.max(0, inFlight - 1);
+          setTilesPending(inFlight);
+        });
+        tileLayer.on('load', () => {
+          inFlight = 0;
+          setTilesPending(0);
+        });
+      }
       tileLayer.on('tileerror', () => {
         errors.count += 1;
         setTileErrors(errors.count);
+        if (trackLoading) {
+          inFlight = Math.max(0, inFlight - 1);
+          setTilesPending(inFlight);
+        }
       });
       tileLayer.addTo(map);
     };
 
-    apply(mapPrimary.current, navDate || undefined);
-    apply(mapSecondary.current, mode === 'single' ? null : compareDate || navDate || undefined);
     setTileErrors(0);
-    return () => {
-      /* layers are removed on the next run / unmount */
-    };
+    setTilesPending(0);
+    apply(mapPrimary.current, navDate || undefined, true);
+    apply(mapSecondary.current, mode === 'single' ? null : compareDate || navDate || undefined, false);
   }, [layer, navDate, compareDate, mode, opacity, service, format, attribution, reducedMotion, tileTemplateOverride, blocked]);
 
   /* --------------------------- area / bounds changes ----------------------- */
@@ -265,10 +335,7 @@ export default function ImageryMap({
       const [south, west, north, east] = bounds;
       maps.forEach((map) => {
         try {
-          map.fitBounds(
-            L.latLngBounds([south, west], [north, east]),
-            { animate: !reducedMotion, padding: [8, 8] }
-          );
+          map.fitBounds(L.latLngBounds([south, west], [north, east]), { animate: !reducedMotion, padding: [10, 10] });
         } catch {
           map.setView([area.latitude, area.longitude], 6, { animate: false });
         }
@@ -327,7 +394,6 @@ export default function ImageryMap({
   const onMapKeyDown = (event: React.KeyboardEvent) => {
     const map = mapPrimary.current;
     if (!map) return;
-    const step = 0.5;
     switch (event.key) {
       case 'ArrowUp':
         map.panBy([0, -60], { animate: !reducedMotion });
@@ -354,10 +420,17 @@ export default function ImageryMap({
     event.preventDefault();
   };
 
+  const canStepForward = Boolean(navDate && navDate < todayIso);
+
   return (
-    <div className="space-y-2">
-      <div ref={containerRef} className="relative h-[320px] w-full overflow-hidden rounded-[10px] border border-line sm:h-[420px] lg:h-[520px]">
-        {/* Secondary (comparison) map sits underneath in swipe mode. */}
+    <div className="space-y-3">
+      <div
+        ref={containerRef}
+        className={`relative h-[340px] w-full overflow-hidden rounded-[14px] border border-line bg-void sm:h-[440px] lg:h-[540px] ${
+          pickMode ? 'cursor-crosshair ring-1 ring-atmo/50' : ''
+        }`}
+      >
+        {/* Secondary (comparison) map */}
         <div
           ref={secondaryRef}
           className={`absolute inset-0 z-0 ${mode === 'single' ? 'hidden' : 'block'} ${
@@ -367,12 +440,12 @@ export default function ImageryMap({
           style={mode === 'swipe' ? { clipPath: `inset(0 0 0 ${divider}%)` } : undefined}
         />
 
-        {/* Primary map (observation date in view). */}
+        {/* Primary map */}
         <div
           ref={primaryRef}
           role="application"
           tabIndex={0}
-          aria-label={`${labels.primary}. ${layer.title}, ${date}`}
+          aria-label={`${labels.primary}. ${layer.title}, ${date || 'unavailable'}`}
           onKeyDown={onMapKeyDown}
           className={`absolute inset-0 z-10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-atmo ${
             mode === 'swipe' ? 'pointer-events-none' : ''
@@ -380,66 +453,63 @@ export default function ImageryMap({
           style={mode === 'swipe' ? { clipPath: `inset(0 ${100 - divider}% 0 0)` } : undefined}
         />
 
-        {mode === 'single' || mode === 'side' ? (
-          <div className="absolute top-2 left-1/2 -translate-x-1/2 z-20 flex flex-wrap items-center gap-1">
-            <button
-              type="button"
-              onClick={() => goToDay(-1)}
-              disabled={!navDate}
-              aria-label="Previous day"
-              className="rounded-md border border-line bg-abyss/70/85 p-1 text-ink-2 hover:border-cyan-500/60 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-atmo disabled:opacity-40"
-            >
-              <ChevronLeft className="h-3 w-3" />
-            </button>
-            <span className="rounded-full border border-line bg-abyss/70 px-2 py-0.5 font-mono text-[10px] text-ink-2">
-              {navDate || date}
+        {/* Top date & cadence navigation HUD */}
+        <div className="absolute top-2.5 left-1/2 z-20 flex -translate-x-1/2 flex-wrap items-center justify-center gap-1.5 px-2">
+          <button
+            type="button"
+            onClick={() => goToDay(-stepDays)}
+            disabled={!navDate}
+            aria-label={`Previous ${stepDays} day(s)`}
+            className="earth-map-hud-btn p-1.5 disabled:opacity-40"
+          >
+            <ChevronLeft className="h-3.5 w-3.5" />
+          </button>
+          <span className="earth-map-hud-pill flex items-center gap-1.5 px-3 py-1 font-mono text-[10.5px] text-ink">
+            {tilesPending > 0 ? <Loader2 className="h-3 w-3 animate-spin text-atmo" aria-hidden="true" /> : null}
+            <span>{mode === 'swipe' ? `${navDate || date} ↔ ${compareDate || date}` : navDate || date}</span>
+            {stepDays > 1 ? <span className="text-ink-4">· {stepDays}d</span> : null}
+          </span>
+          <button
+            type="button"
+            onClick={() => goToDay(stepDays)}
+            disabled={!navDate || !canStepForward}
+            aria-label={`Next ${stepDays} day(s)`}
+            className="earth-map-hud-btn p-1.5 disabled:opacity-40"
+          >
+            <ChevronRight className="h-3.5 w-3.5" />
+          </button>
+          {mode === 'side' && compareDate ? (
+            <span className="earth-map-hud-pill border-caution/40 px-2.5 py-1 font-mono text-[10.5px] text-caution">
+              {labels.comparison} · {compareDate}
             </span>
-            <button
-              type="button"
-              onClick={() => goToDay(1)}
-              disabled={!navDate}
-              aria-label="Next day"
-              className="rounded-md border border-line bg-abyss/70/85 p-1 text-ink-2 hover:border-cyan-500/60 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-atmo disabled:opacity-40"
-            >
-              <ChevronRight className="h-3 w-3" />
-            </button>
-            {mode === 'side' && compareDate ? (
-              <span className="ml-2 rounded-full border border-caution/35 bg-abyss/70 px-2 py-0.5 font-mono text-[10px] text-caution">
-                {labels.comparison} · {compareDate}
-              </span>
-            ) : null}
-          </div>
-        ) : null}
-        {mode === 'swipe' ? (
-          <div className="absolute top-2 left-1/2 -translate-x-1/2 z-20 flex flex-wrap items-center gap-1">
-            <button
-              type="button"
-              onClick={() => goToDay(-1)}
-              disabled={!navDate}
-              aria-label="Previous day"
-              className="rounded-md border border-line bg-abyss/70/85 p-1 text-ink-2 hover:border-cyan-500/60 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-atmo disabled:opacity-40"
-            >
-              <ChevronLeft className="h-3 w-3" />
-            </button>
-            <span className="rounded-full border border-line bg-abyss/70 px-2 py-0.5 font-mono text-[10px] text-ink-2">
-              {navDate || date} ↔ {compareDate || date}
-            </span>
-            <button
-              type="button"
-              onClick={() => goToDay(1)}
-              disabled={!navDate}
-              aria-label="Next day"
-              className="rounded-md border border-line bg-abyss/70/85 p-1 text-ink-2 hover:border-cyan-500/60 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-atmo disabled:opacity-40"
-            >
-              <ChevronRight className="h-3 w-3" />
-            </button>
+          ) : null}
+        </div>
+
+        {/* Epoch shortcuts for multi-epoch annual layers such as Black Marble */}
+        {legend.epochs && legend.epochs.length > 0 ? (
+          <div className="absolute top-12 left-1/2 z-20 flex -translate-x-1/2 items-center gap-1.5">
+            {legend.epochs.map((epoch) => (
+              <button
+                key={epoch}
+                type="button"
+                onClick={() => {
+                  setNavDate(epoch);
+                  onDateChange?.(epoch);
+                }}
+                className={`earth-map-hud-pill px-2.5 py-0.5 font-mono text-[10px] transition ${
+                  navDate === epoch ? 'border-atmo/60 text-atmo-soft' : 'text-ink-3 hover:text-ink'
+                }`}
+              >
+                Epoch {epoch.slice(0, 4)}
+              </button>
+            ))}
           </div>
         ) : null}
 
-        {/* Swipe divider — a keyboard-operable slider. */}
+        {/* Swipe divider */}
         {mode === 'swipe' ? (
           <div
-            className="absolute inset-y-0 z-30 w-px -translate-x-1/2 bg-cyan-400/80 shadow-[0_0_12px_rgba(34,211,238,0.6)]"
+            className="absolute inset-y-0 z-30 w-px -translate-x-1/2 bg-cyan-400/85 shadow-[0_0_14px_rgba(94,211,242,0.7)]"
             style={{ left: `${divider}%` }}
           >
             <div
@@ -460,54 +530,80 @@ export default function ImageryMap({
                 else return;
                 event.preventDefault();
               }}
-              className="absolute top-1/2 left-1/2 flex h-9 w-9 -translate-x-1/2 -translate-y-1/2 cursor-ew-resize items-center justify-center rounded-full border border-atmo/60 bg-abyss/70/90 text-atmo-soft focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-300"
+              className="earth-map-hud-pill absolute top-1/2 left-1/2 flex h-9 w-9 -translate-x-1/2 -translate-y-1/2 cursor-ew-resize items-center justify-center border-atmo/60 text-atmo-soft"
             >
               <Move className="h-4 w-4" />
             </div>
           </div>
         ) : null}
 
-      {blocked ? (
-        <div
-          role="status"
-          className="absolute inset-x-3 bottom-6 z-40 rounded-[10px] border border-caution/35 bg-abyss/70/95 p-3 text-xs leading-relaxed text-caution sm:inset-x-8"
-        >
-          {blocked.reason}
-        </div>
-      ) : null}
-
-        {/* Coordinate readout — current map center. */}
-        <div className="absolute left-2 bottom-8 z-20 rounded-full border border-line bg-abyss/70/85 px-2 py-0.5 font-mono text-[10px] text-ink-2">
-          {mapCenter.current.lat.toFixed(3)}°, {mapCenter.current.lng.toFixed(3)}°
-        </div>
-
-        {/* Accessible map controls (Leaflet's default controls stay disabled). */}
-        <div className="absolute right-2 bottom-8 z-20 flex flex-col gap-1">
-          <button
-            type="button"
-            onClick={() => zoom(1)}
-            aria-label={labels.zoomIn}
-            className="rounded-md border border-line bg-abyss/70/85 p-1.5 text-ink-2 hover:border-cyan-500/60 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-atmo"
+        {/* Blocked / outside-domain banner */}
+        {blocked ? (
+          <div
+            role="status"
+            className="earth-glass-inset absolute inset-x-3 bottom-10 z-40 border-caution/40 bg-abyss/95 p-3 text-xs leading-relaxed text-caution sm:inset-x-8"
           >
+            {blocked.reason}
+          </div>
+        ) : null}
+
+        {/* Bottom-left telemetry coordinate readout */}
+        <div className="earth-map-hud-pill absolute left-2.5 bottom-7 z-20 flex items-center gap-1.5 px-2.5 py-1 font-mono text-[10px] text-ink-2">
+          <Crosshair className="h-3 w-3 text-atmo" aria-hidden="true" />
+          <span>
+            {centerReadout.lat.toFixed(3)}°, {centerReadout.lng.toFixed(3)}° · z{centerReadout.zoom}
+          </span>
+        </div>
+
+        {/* Accessible zoom & reset controls */}
+        <div className="absolute right-2.5 bottom-7 z-20 flex flex-col gap-1.5">
+          <button type="button" onClick={() => zoom(1)} aria-label={labels.zoomIn} className="earth-map-hud-btn p-1.5">
             <Plus className="h-4 w-4" />
           </button>
-          <button
-            type="button"
-            onClick={() => zoom(-1)}
-            aria-label={labels.zoomOut}
-            className="rounded-md border border-line bg-abyss/70/85 p-1.5 text-ink-2 hover:border-cyan-500/60 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-atmo"
-          >
+          <button type="button" onClick={() => zoom(-1)} aria-label={labels.zoomOut} className="earth-map-hud-btn p-1.5">
             <Minus className="h-4 w-4" />
           </button>
-          <button
-            type="button"
-            onClick={reset}
-            aria-label={labels.reset}
-            className="rounded-md border border-line bg-abyss/70/85 p-1.5 text-ink-2 hover:border-cyan-500/60 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-atmo"
-          >
+          <button type="button" onClick={reset} aria-label={labels.reset} className="earth-map-hud-btn p-1.5">
             <RotateCcw className="h-4 w-4" />
           </button>
         </div>
+      </div>
+
+      {/* Calibrated scientific layer legend */}
+      <div className="earth-glass-inset p-3.5" aria-label={labels.legendTitle || 'Layer legend'}>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="flex items-center gap-1.5 text-[11px] font-medium text-ink">
+            <Palette className="h-3.5 w-3.5 text-atmo" aria-hidden="true" />
+            <span>{legend.title}</span>
+          </p>
+          <span className="font-mono text-[10px] text-ink-3">{legend.unitLabel}</span>
+        </div>
+
+        {legend.kind === 'continuous' && legend.gradient ? (
+          <div className="mt-2.5 space-y-1.5">
+            <div className="earth-legend-ramp" style={{ background: legend.gradient }} aria-hidden="true" />
+            <div className="flex flex-wrap items-center justify-between gap-2 font-mono text-[10px] text-ink-3">
+              {legend.stops.map((stop) => (
+                <span key={stop.label}>{stop.label}</span>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <div className="mt-2.5 flex flex-wrap items-center gap-3">
+            {legend.stops.map((stop) => (
+              <span key={stop.label} className="inline-flex items-center gap-1.5 text-[11px] text-ink-2">
+                <span
+                  className="h-2.5 w-2.5 rounded-full border border-white/25"
+                  style={{ backgroundColor: stop.color }}
+                  aria-hidden="true"
+                />
+                {stop.label}
+              </span>
+            ))}
+          </div>
+        )}
+
+        <p className="mt-2 text-[10.5px] leading-relaxed text-ink-4">{legend.note}</p>
       </div>
 
       {mode === 'swipe' ? <p className="text-[11px] text-ink-4">{labels.swipeHint}</p> : null}

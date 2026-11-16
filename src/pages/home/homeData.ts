@@ -217,6 +217,7 @@ async function loadApodLive(signal: AbortSignal): Promise<Sourced<Apod>> {
     data?: Apod;
     isFallback?: boolean;
     cached?: boolean;
+    note?: string;
     fallbackReason?: 'network' | 'rate-limited' | 'upstream' | 'shape' | 'degraded';
     keySource?: 'DEMO_KEY' | 'configured';
   }>('/api/apod', signal, 18000);
@@ -233,7 +234,7 @@ async function loadApodLive(signal: AbortSignal): Promise<Sourced<Apod>> {
           ? 'The shared NASA DEMO_KEY is rate-limited, so a curated archival image is shown. It is not today’s official APOD; setting NASA_API_KEY restores the live feed.'
           : 'The NASA API rejected the request (rate limit or quota), so a curated archival image is shown. It is not today’s official APOD.'
         : 'The NASA APOD service did not respond, so a curated archival image is shown. It is not today’s official APOD.'
-      : undefined,
+      : payload.note,
     retrievedAt: new Date().toISOString()
   };
 }

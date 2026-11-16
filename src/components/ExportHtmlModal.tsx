@@ -41,7 +41,7 @@ export const ExportHtmlModal: React.FC<ExportHtmlModalProps> = ({ isOpen, onClos
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'nasa-apod-trilingual.html';
+    a.download = 'cosmora-apod-trilingual.html';
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
