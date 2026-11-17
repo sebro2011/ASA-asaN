@@ -122,7 +122,12 @@ with the full one."""),
     log=print,
 )
 print(f"elapsed: {result.elapsed_seconds:.1f}s")"""),
-    ("markdown", "## 6 · Validation metrics (walk-forward, out-of-fold)"),
+    ("markdown", (
+        "## 6 · Validation metrics (walk-forward, out-of-fold)\n\n"
+        "`n` counts **distinct target months**; `n_instances` counts the forecasts that produced them. "
+        "Adjacent folds overlap by `cv_validation_months - cv_step_months` months, so the second number is "
+        "larger — the overlapping forecasts are averaged per month, not discarded and not counted twice."
+    )),
     ("code", """val = result.metrics_validation.copy()
 display(val.groupby("model")[["mae", "rmse", "r2", "bias"]].mean().round(4))"""),
     ("markdown", "## 7 · Independent test tail (used once)"),
@@ -162,7 +167,7 @@ point = mean_preds["ensemble"]
 
 extremes = analyse_extremes(pre_test["rain"].to_numpy(), aligned["rain"].to_numpy(), point, config["extreme"]["quantile"])
 display(pd.DataFrame([extremes]).T.rename(columns={0: "value"}).round(3))"""),
-    ("markdown", "## 10 · Statistical comparison\n\nA model is called better only when the paired bootstrap interval excludes zero **and** Diebold–Mariano does not reject equal loss."),
+    ("markdown", "## 10 · Statistical comparison\n\nA model is called better only when the paired bootstrap interval excludes zero **and** Diebold–Mariano does not reject equal loss — after Benjamini–Hochberg adjustment across the planned family. `dm_p` is raw, `dm_q` adjusted; the notebook's demo family is the four candidates shown below, which is why the adjusted values are close to the raw ones. The full run adjusts across all 24 planned comparisons."),
     ("code", """from cosmora_v3.stats import summarise_comparison
 from cosmora_v3.metrics import mae
 
@@ -179,7 +184,11 @@ for name in ("mlp", "gru", "lstm", "xgboost"):
                  "candidate_mae": mae(result.y_true, mean_preds[name]),
                  "delta": delta["delta"], "ci_low": delta["ci_low"], "ci_high": delta["ci_high"],
                  "dm_p": dm["p_value"], "verdict": verdict})
-display(pd.DataFrame(rows).round(4))"""),
+table = pd.DataFrame(rows)
+from cosmora_v3.stats import benjamini_hochberg
+table["dm_q"] = benjamini_hochberg(table["dm_p"])
+table["verdict_adjusted"] = table["dm_q"].lt(config["evaluation"]["alpha"]).map({True: "significant", False: "not distinguishable"})
+display(table.round(4))"""),
     ("markdown", "## 11 · Seed stability"),
     ("code", """spread = result.metrics_test.groupby("model").agg(
     mae_mean=("mae", "mean"), mae_std=("mae", "std"), mae_min=("mae", "min"), mae_max=("mae", "max")

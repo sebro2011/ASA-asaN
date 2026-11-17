@@ -192,13 +192,13 @@ def run_series(
         # One residual per distinct month, never one per fold instance: overlapping
         # validation windows would otherwise enter the same month twice and the
         # conformal quantile would be computed over duplicated evidence.
-        frames = [month_level[name][seed] for seed in month_level[name]]
-        index = frames[0].index
-        for frame in frames[1:]:
-            if not frame.index.equals(index):
+        per_seed_months = [month_level[name][seed] for seed in month_level[name]]
+        index = per_seed_months[0].index
+        for other in per_seed_months[1:]:
+            if not other.index.equals(index):
                 raise ValueError(f"{location_id}/{target_key}/{name}: seeds disagree on validation months")
-        preds = np.vstack([frame["pred"].to_numpy() for frame in frames])
-        truths = frames[0]["true"].to_numpy()
+        preds = np.vstack([months["pred"].to_numpy() for months in per_seed_months])
+        truths = per_seed_months[0]["true"].to_numpy()
         mean_val = preds.mean(axis=0)
         interval = calibrate_residuals(truths - mean_val, alpha)
 

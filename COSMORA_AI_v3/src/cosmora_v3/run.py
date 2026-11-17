@@ -28,7 +28,7 @@ from .data import load_dataset
 from .evaluate import SeriesResult, run_series, seed_stability
 from .extreme import analyse as analyse_extremes
 from .plots import actual_vs_predicted, extreme_chart, model_comparison, overview_dashboard, scatter_panel, seed_stability_chart
-from .stats import benjamini_hochberg, conclusion, summarise_comparison
+from .stats import benjamini_hochberg, summarise_comparison
 
 
 LIMITATIONS_COMMON = [
@@ -205,8 +205,13 @@ def run(
                 } if not epochs_override else {
                     model: int(epochs_override) for model in ("mlp", "gru", "lstm")
                 },
-                "folds_per_series": {r.location_id + "/" + r.target: int(len(r.fold_table))
-                                     for r in series_results},
+                "folds_per_series": {
+                    # distinct fold names, not seed × fold rows: the table has one row per
+                    # (fold, seed), and reporting 40 where 8 folds exist was wrong in the
+                    # first two phase-2 manifests (see docs/evidence/README.md).
+                    r.location_id + "/" + r.target: int(r.fold_table["name"].nunique())
+                    for r in series_results
+                },
                 "validation_counts": {r.location_id + "/" + r.target: r.validation_counts
                                       for r in series_results},
                 "alpha": float(config["evaluation"].get("alpha", 0.05)),
