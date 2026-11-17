@@ -171,3 +171,21 @@ verification behind a dependency.
    outcome is permitted — in particular, no silent fallback to synthetic data.
 4. The report distinguishes validation from test on every page, and never states a model
    is better without a bootstrap interval and a DM p-value.
+
+---
+
+## 6. Post hoc: what phase 2 changed in this design
+
+The document above describes the design as built. Four defects found by the independent
+audit (`DEFECT_REPORT.md` §2–§3) contradicted it, and were fixed after the real-data run:
+
+| Design claim above | What was actually true | Now |
+| --- | --- | --- |
+| Early stopping holds out 20% of the training window | the held-out block was the last **single row** (D11) | 20% by row count, chronological, recorded on the fitted object |
+| Walk-forward validation never overlaps training | true, but consecutive **validation** windows overlap by 12 months, and the concatenation counted those months twice (D12) | true, and metrics/calibration use the distinct months; the overlapping forecast instances are reported separately instead of discarded |
+| Model differences need a DM test | the test used a normal reference and an un-corrected HAC variance on n = 60 dependent months (D14) | t reference with n−1 df, Newey–West variance, Harvey–Leybourne–Newbold factor |
+| A model is better only when the tests agree | 24 comparisons were read at α = 0.05 each with no correction (D15) | Benjamini–Hochberg over the planned family; raw and adjusted p both reported |
+
+None of these changes the threat model in §3, and none of them was a design decision — they
+were implementation defects. The acceptance criteria in §5 are now enforced by 79 tests,
+36 of which were added with the fixes.

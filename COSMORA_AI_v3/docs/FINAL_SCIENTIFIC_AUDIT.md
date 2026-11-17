@@ -1,9 +1,18 @@
 # COSMORA AI v3.0 — final scientific audit
 
-Date: 2026-11-17 · Commit: `arena/e5eb545e-asa-asan` (base `0c37695`) · Package version 3.0.0
+Date: 2026-11-17 (revised after the phase-2 corrections) · Branch `arena/e5eb545e-asa-asan`
+(base `0c37695`) · Package version 3.0.0 · Corrections commit `c452a61` · Run
+`run_20261117T182826Z_a6bbe9432b389257`
 
 This document reports what was built, **what was actually executed**, and what remains
 unverified. It is written so that a reader can separate the three.
+
+**Revision note.** §8 and §9 below describe the run executed *after* the four defects
+D11, D12, D14 and D15 were fixed (see `DEFECT_REPORT.md` §9). The pre-correction version
+of this document — including every number it quoted — is preserved verbatim at
+`docs/evidence/FINAL_SCIENTIFIC_AUDIT_pre_correction.md`, and the pre-correction run's
+tables are committed at `docs/evidence/pre_fix_run/`. Where a conclusion changed, the
+change is stated rather than quietly applied.
 
 ---
 
@@ -12,32 +21,39 @@ unverified. It is written so that a reader can separate the three.
 | Item | Status |
 | --- | --- |
 | Code implemented (all 10 requested items) | ✅ |
-| Unit / contract tests | ✅ 43 tests, 0 failures |
+| Unit / contract tests | ✅ 79 tests, 0 failures (43 at the pre-correction baseline, 36 added) |
 | Engine check on synthetic data | ✅ (`--synthetic`, §2) |
-| **End-to-end run on real NASA POWER data** | ✅ 3 cities × 2 targets × 5 seeds × 8 walk-forward folds + sealed 60-month tail, 1 218 s (§8) |
+| **End-to-end run on real NASA POWER data** | ✅ 3 cities × 2 targets × 5 seeds × 8 walk-forward folds + sealed 60-month tail, 1 014 s (§8) |
 | Real climate metrics (MAE / RMSE / R² on reanalysis data) | ✅ reported in §8, with the window caveat in §7.3 |
 | Bit-for-bit reproducibility of the numbers | ✅ two independent full runs produced **identical** tables (§8.0) |
-| Evidence that the ensemble beats its members | ⚠️ **partial** — 4 of 24 comparisons favour it, one of those against XGBoost (§8.2, §9). Enough for "comparable", not for "superior" |
+| Evidence that the ensemble beats its members | ❌ **none** — 0 of 24 comparisons favour it once the family-wise correction is applied; 2 come out `worse`, 15 `not distinguishable`, 7 `inconclusive` (§8.2, §9). "Comparable", not "superior" — and no longer better than that |
 | Extreme-rainfall detection skill | ❌ recall 0.00–0.33, every observed event underpredicted (§8.4) |
-| Calibrated intervals at nominal 90% | ✅ mostly — conformal coverage 0.817–1.000, mean 0.924; 6 of 30 cells fall below 0.90 and one as low as 0.817 (§8.3) |
+| Calibrated intervals at nominal 90% | ⚠️ **partly** — conformal coverage 0.833–1.000, mean 0.911; 9 of 30 cells fall below 0.90 and 5 sit above 0.95 (§8.3) |
+| Phase-2 corrections (D11, D12, D14, D15) | ✅ fixed, tested, experiments re-run on identical data/seeds/folds; evidence in `docs/evidence/` (`DEFECT_REPORT.md` §9) |
 
 **Status after the independent defect pass.** A second audit of the package found 21
 further defects (2 that silently change what the experiment measures, 9 that change a
-reported number or the provenance record, 10 robustness/hygiene). None of them changes the
-direction of the findings below; the neural-network numbers and the word "calibrated" carry
-less weight than this document originally implied. Every item, with evidence and repro
-commands, is in [`DEFECT_REPORT.md`](DEFECT_REPORT.md).
+reported number or the provenance record, 10 robustness/hygiene). Four of them were fixed
+in phase 2 — D11 (early stopping was driven by one row), D12 (overlapping folds were
+counted as independent months), D14 (Diebold–Mariano used a normal reference) and D15 (24
+comparisons, no multiplicity control) — and the experiment was re-run end to end. The
+other 17 remain open and are listed in `DEFECT_REPORT.md` §9.6. Every item, with evidence
+and repro commands, is in [`DEFECT_REPORT.md`](DEFECT_REPORT.md).
+
+Fixing them did **not** rescue the ensemble or the neural models; it made the picture
+worse for them, which is the useful direction for a reader. XGBoost, which none of the
+four fixes touches, is unchanged to the last digit (test MAE 0.263 / 0.471 / 0.349 °C).
 
 **The one-line version.** On 25 years of NASA POWER data for Colombo, Kandy and Jaffna,
 one-month-ahead **temperature** is predictable well enough to beat climatology with
 XGBoost (test MAE 0.263 / 0.471 / 0.349 °C, skill +0.61 / +0.22 / +0.23), the neural
 models are **not** reliably better than climatology, and **rainfall is not predictable at
-all** by this design — every model has negative skill on at least three of six
-city × target cells, and no model beats climatology on rainfall in more than one cell.
-The ensemble beats individual members in 4 of 24 statistical comparisons — one of them
-against XGBoost (Colombo rainfall, Δ MAE −0.437 mm/day, DM p = 0.002) — and in the other
-five XGBoost comparisons it is `not distinguishable` or `inconclusive`. That supports
-*comparable*, not *superior*.
+all** by this design — every model has negative skill on rainfall in all three cities.
+XGBoost is the best model in all six city × target cells and the ensemble is second in all
+six, but the ensemble is not *significantly* better than any member in a single comparison
+(0 of 24 `better`; 2 `worse`; 7 `inconclusive`; 15 `not distinguishable`). That supports
+*comparable*, not *superior* — and after the phase-2 corrections the earlier, weaker claim
+("4 of 24 comparisons favour it") no longer holds either.
 
 **What changed from the previous state of this document.** Earlier revisions reported
 no real numbers, because this sandbox cannot open a TLS connection to
@@ -209,7 +225,7 @@ directly.
 | 7 | MAE, RMSE, R² + more | ✅ | `metrics.py` (7 metrics + 3 interval scores); skill-vs-climatology reported alongside §8.1 |
 | 8 | Multi-seed stability | ✅ | 5 seeds × every fold, per city × target (never pooled across units); §8.5 |
 | 9 | Actual-vs-predicted + comparison dashboard | ✅ | `plots.py` (10 figures/run) + `dashboard.html` |
-| 10 | Export models, scalers, config, metrics, reports | ✅ | 150 model exports + 8 CSV tables + manifest + REPORT.md + dashboard (§8) |
+| 10 | Export models, scalers, config, metrics, reports | ✅ | 150 model exports + 9 CSV tables + manifest + REPORT.md + dashboard (§8) |
 
 ### Scientific requirements
 
@@ -220,7 +236,7 @@ directly.
 | Identical test periods | one `Split` per (location, target) consumed by every model and seed |
 | Validation clearly separated from test | separate tables, sections, and figures; never concatenated |
 | Documented limitations and uncertainty | `LIMITATIONS_COMMON` printed in every report; conformal + seed bands reported |
-| No superiority claim without statistics | `verdict` column requires bootstrap CI **and** DM; "not distinguishable" is a first-class outcome |
+| No superiority claim without statistics | `verdict` column requires bootstrap CI **and** DM **and** Benjamini–Hochberg across the planned family; raw and adjusted p are both reported, and "not distinguishable" is a first-class outcome |
 
 ### Critical rules
 
@@ -230,7 +246,7 @@ directly.
 | Separate directory | All new code lives under `COSMORA_AI_v3/` |
 | Inspect the notebook before modifying | Done; it is a corrupt Vertopal export — see `docs/00_AUDIT_AND_METHODOLOGY.md` §0. No v2 file was edited |
 | Never fabricate experimental results | Real POWER values only, verified against POWER's month-13 identity (§7.4); a failed request exits 2 rather than substituting; every synthetic number stays labelled SYNTHETIC |
-| Chronological splits, no leakage | §3 of the audit doc; 7 leakage tests |
+| Chronological splits, no leakage | §3 of the audit doc; 7 leakage tests, plus the D11/D12 regression tests that pin the inner split and the fold-overlap accounting |
 | Reproducible configuration | SHA-256 config hash on every artefact; two runs produced byte-identical tables (§8.0). Two configs exist — the base design and the narrower real-data run — and `derivation` lists every difference (§7.3) |
 
 ---
@@ -273,7 +289,7 @@ cd COSMORA_AI_v3
 python -m venv .venv && . .venv/bin/activate
 pip install -r requirements.txt
 
-python -m unittest discover -s tests        # 43 tests incl. gradient, payload and scope checks
+python -m unittest discover -s tests        # 79 tests incl. gradient, payload, scope and D11–D15 checks
 python scripts/run_experiments.py --synthetic --quick   # engine check (~90 s)
 python scripts/run_experiments.py           # real NASA POWER run
 python scripts/build_notebook.py            # regenerate the notebook
@@ -374,13 +390,19 @@ matches each city's terrain rather than a swapped site.
 
 ## 8. Real NASA POWER run — results
 
-Executed `scripts/run_experiments.py --config config/experiment_lk_power_2000_2024.json`.
-Config hash `6da3a2ceb621a903`, data provenance `NASA_POWER`, `scientific_results: true`.
+Executed `scripts/run_experiments.py --config config/experiment_lk_power_2000_2024.json`
+at commit `c452a61` with a clean working tree. Config hash `a6bbe9432b389257`, data
+provenance `NASA_POWER`, `scientific_results: true`, run
+`run_20261117T182826Z_a6bbe9432b389257`.
 
 * seeds 7, 21, 42, 84, 123 · 8 walk-forward folds per series · sealed test tail 60 months, evaluated once.
-* 240 fold rows, 150 test-metric rows, 3 model exports on disk.
-* Training window grows 120 → 204 months; each fold scores 24 months.
-* Total runtime 1217 s.
+* 240 fold rows (5 seeds × 8 folds × 6 series), 150 test-metric rows, 150 model exports on disk.
+* Training window grows 120 → 204 months; each fold scores 24 months; adjacent folds
+  overlap by 12 months, and the tables below say so instead of counting those months twice.
+* Total runtime 1 014 s.
+* SHA-256 of the cache files actually read: `911aac86…`, `fa9ea32e…`, `ef2ea94b…`
+  (Colombo, Kandy, Jaffna) — recorded in the manifest, so the data these numbers came
+  from can be checked rather than assumed.
 
 Dataset, from `run_manifest.json`:
 
@@ -392,333 +414,426 @@ Dataset, from `run_manifest.json`:
 
 ### 8.0 Determinism check
 
-This run was executed twice, start to finish, twenty minutes apart, from the same
-committed payloads and the same config. Seven of the eight tables below were
-**byte-identical** between the two runs (`metrics_test`, `metrics_validation`,
-`folds`, `statistical_comparisons`, `interval_scores`, `extreme_rainfall`,
-`location_summary`); the eighth, `seed_stability`, changed only because it was
-rewritten to report per city × target instead of pooling °C with mm/day.
+This run was executed twice, start to finish, from the same code and the same committed
+payloads, at 18:28 and 18:45 UTC on the same machine (2 vCPU). Both runs used
+`config/experiment_lk_power_2000_2024.json` (hash `a6bbe9432b389257`) and the same seeds.
 
-So the numbers that follow are a function of code + data + seeds, not of when the
-run happened. A reader who re-runs the command on the page gets these numbers, or a
-bug.
+All nine result tables below are **byte-identical** between the two runs:
+
+```
+metrics_test  metrics_validation  metrics_validation_instances  folds
+statistical_comparisons  interval_scores  extreme_rainfall  seed_stability
+location_summary
+```
+
+The two manifests record different commit ids (`c452a61` and `be8e325`) only because the
+second run started after the first run's tables had been committed as evidence;
+`git diff c452a61 be8e325 -- src config tests scripts` is empty. Both manifests report
+`working_tree_dirty: false`, and the cache-file digests are the same three values.
+
+So the numbers that follow are a function of code + data + seeds, not of when the run
+happened. A reader who re-runs the command on the page gets these numbers, or a bug.
+
+- folds per series: 8 (all series)
+- validation: 192 forecast instances over 108 distinct months per series (overlapping folds are averaged per month, not double-counted)
+- Diebold–Mariano: newey-west (bartlett) variance, lag 6, student-t, df = n-1, harvey-leybourne-newbold correction
+- verdicts at alpha = 0.05, Benjamini–Hochberg within the family
 
 ### 8.1 Sealed test tail — mean over seeds
 
-Each cell is the mean over the 5 seeds; the ± is the seed standard deviation, which is
-the honest way to read a single-seed number. `skill` is **1 − MSE/MSE(climatology)** as
-implemented in `metrics.skill_score` (an earlier revision of this paragraph said MAE —
-see `docs/DEFECT_REPORT.md` D26), computed on the same test months with the climatology
-taken from the training window only: **negative means the model is worse than the
-training-window climatological mean**, which is the floor any claim has to clear.
+Each cell is the mean over the seeds; the ± is the seed standard deviation, which is
+the honest way to read a single-seed number. `skill` is **1 − MSE/MSE(climatology)**
+with the climatology taken from the training window only: **negative means the model
+is worse than the training-window climatological mean**, the floor any claim has to clear.
 
 **temp (°C)**
 
 | City | Model | MAE | RMSE | R² | skill vs climatology |
 | --- | --- | --- | --- | --- | --- |
 | colombo | xgboost | 0.263 ± 0.005 | 0.327 | 0.819 | +0.605 |
-| colombo | gru | 0.399 ± 0.092 | 0.498 | 0.563 | +0.046 |
-| colombo | lstm | 0.460 ± 0.112 | 0.584 | 0.393 | -0.327 |
-| colombo | mlp | 0.507 ± 0.160 | 0.635 | 0.271 | -0.593 |
-| colombo | ensemble | 0.360 ± 0.023 | 0.455 | 0.648 | +0.231 |
-| kandy | xgboost | 0.471 ± 0.018 | 0.609 | 0.772 | +0.216 |
-| kandy | gru | 0.723 ± 0.096 | 0.899 | 0.500 | -0.721 |
-| kandy | lstm | 0.614 ± 0.070 | 0.817 | 0.587 | -0.420 |
-| kandy | mlp | 0.735 ± 0.126 | 0.945 | 0.440 | -0.926 |
-| kandy | ensemble | 0.559 ± 0.061 | 0.737 | 0.665 | -0.154 |
+| colombo | ensemble | 0.424 ± 0.043 | 0.536 | 0.511 | -0.069 |
+| colombo | gru | 0.494 ± 0.050 | 0.622 | 0.343 | -0.436 |
+| colombo | lstm | 0.473 ± 0.061 | 0.614 | 0.355 | -0.409 |
+| colombo | mlp | 0.462 ± 0.077 | 0.579 | 0.422 | -0.262 |
 | jaffna | xgboost | 0.349 ± 0.009 | 0.446 | 0.868 | +0.230 |
-| jaffna | gru | 0.585 ± 0.059 | 0.738 | 0.636 | -1.129 |
-| jaffna | lstm | 0.519 ± 0.031 | 0.653 | 0.716 | -0.662 |
-| jaffna | mlp | 0.655 ± 0.134 | 0.833 | 0.525 | -1.783 |
-| jaffna | ensemble | 0.495 ± 0.065 | 0.606 | 0.754 | -0.441 |
+| jaffna | ensemble | 0.486 ± 0.045 | 0.596 | 0.764 | -0.383 |
+| jaffna | gru | 0.586 ± 0.076 | 0.734 | 0.640 | -1.109 |
+| jaffna | lstm | 0.491 ± 0.058 | 0.627 | 0.737 | -0.538 |
+| jaffna | mlp | 0.631 ± 0.118 | 0.805 | 0.559 | -1.582 |
+| kandy | xgboost | 0.471 ± 0.018 | 0.609 | 0.772 | +0.216 |
+| kandy | ensemble | 0.607 ± 0.039 | 0.841 | 0.565 | -0.497 |
+| kandy | gru | 0.757 ± 0.066 | 1.009 | 0.373 | -1.158 |
+| kandy | lstm | 0.700 ± 0.087 | 0.958 | 0.432 | -0.955 |
+| kandy | mlp | 0.659 ± 0.076 | 0.887 | 0.512 | -0.677 |
 
 **rain (mm/day)**
 
 | City | Model | MAE | RMSE | R² | skill vs climatology |
 | --- | --- | --- | --- | --- | --- |
 | colombo | xgboost | 2.722 ± 0.035 | 3.394 | 0.316 | -0.191 |
-| colombo | gru | 2.706 ± 0.167 | 3.442 | 0.294 | -0.230 |
-| colombo | lstm | 2.756 ± 0.436 | 3.482 | 0.270 | -0.271 |
-| colombo | mlp | 2.718 ± 0.246 | 3.566 | 0.240 | -0.323 |
-| colombo | ensemble | 2.418 ± 0.180 | 3.079 | 0.436 | +0.018 |
-| kandy | xgboost | 2.473 ± 0.078 | 3.149 | 0.319 | -0.217 |
-| kandy | gru | 2.625 ± 0.271 | 3.316 | 0.242 | -0.354 |
-| kandy | lstm | 2.514 ± 0.265 | 3.243 | 0.273 | -0.298 |
-| kandy | mlp | 2.867 ± 0.362 | 3.558 | 0.119 | -0.575 |
-| kandy | ensemble | 2.337 ± 0.186 | 2.911 | 0.416 | -0.043 |
+| colombo | ensemble | 2.772 ± 0.347 | 3.465 | 0.283 | -0.249 |
+| colombo | gru | 2.984 ± 0.613 | 3.716 | 0.165 | -0.455 |
+| colombo | lstm | 3.036 ± 0.242 | 3.829 | 0.130 | -0.516 |
+| colombo | mlp | 3.051 ± 0.490 | 3.884 | 0.089 | -0.587 |
 | jaffna | xgboost | 2.276 ± 0.066 | 3.247 | 0.476 | -0.097 |
-| jaffna | gru | 2.683 ± 0.281 | 3.653 | 0.332 | -0.398 |
-| jaffna | lstm | 2.434 ± 0.385 | 3.491 | 0.384 | -0.289 |
-| jaffna | mlp | 2.596 ± 0.212 | 3.722 | 0.309 | -0.444 |
-| jaffna | ensemble | 2.260 ± 0.082 | 3.315 | 0.452 | -0.146 |
+| jaffna | ensemble | 2.428 ± 0.132 | 3.388 | 0.428 | -0.196 |
+| jaffna | gru | 2.504 ± 0.292 | 3.422 | 0.414 | -0.226 |
+| jaffna | lstm | 2.605 ± 0.054 | 3.613 | 0.350 | -0.360 |
+| jaffna | mlp | 3.182 ± 0.146 | 4.165 | 0.136 | -0.807 |
+| kandy | xgboost | 2.473 ± 0.078 | 3.149 | 0.319 | -0.217 |
+| kandy | ensemble | 2.594 ± 0.169 | 3.222 | 0.285 | -0.277 |
+| kandy | gru | 2.999 ± 0.350 | 3.703 | 0.051 | -0.696 |
+| kandy | lstm | 2.719 ± 0.258 | 3.409 | 0.200 | -0.430 |
+| kandy | mlp | 2.970 ± 0.366 | 3.674 | 0.061 | -0.678 |
 
 Best test MAE per city × target, and the margin over the runner-up:
 
 | City | Target | Best | MAE | Runner-up | MAE | Margin |
 | --- | --- | --- | --- | --- | --- | --- |
-| colombo | temp | xgboost | 0.263 | ensemble | 0.360 | 0.097 |
-| colombo | rain | ensemble | 2.418 | gru | 2.706 | 0.288 |
-| kandy | temp | xgboost | 0.471 | ensemble | 0.559 | 0.087 |
-| kandy | rain | ensemble | 2.337 | xgboost | 2.473 | 0.136 |
-| jaffna | temp | xgboost | 0.349 | ensemble | 0.495 | 0.146 |
-| jaffna | rain | ensemble | 2.260 | xgboost | 2.276 | 0.016 |
+| colombo | temp | xgboost | 0.263 | ensemble | 0.424 | 0.161 |
+| jaffna | temp | xgboost | 0.349 | ensemble | 0.486 | 0.137 |
+| kandy | temp | xgboost | 0.471 | ensemble | 0.607 | 0.136 |
+| colombo | rain | xgboost | 2.722 | ensemble | 2.772 | 0.050 |
+| jaffna | rain | xgboost | 2.276 | ensemble | 2.428 | 0.152 |
+| kandy | rain | xgboost | 2.473 | ensemble | 2.594 | 0.120 |
 
 ### 8.2 Does the ensemble beat its members? — statistical verdicts
 
 Two estimators of the same thing appear in this document, and they are not the same
-number. §8.1 averages each seed's own MAE. Here the five seeds' predictions are
-*averaged first* and the error is taken once (the `ensemble_mae` / `candidate_mae`
-columns). Seed-averaging cancels part of the initialisation noise, so it scores
-better — most visibly for the neural models, whose per-seed spread is large (§8.5).
-Every row below compares the same estimator on both sides, on the same 60 test months:
-the ensemble is not given a different treatment from its member. The two tables must
-therefore not be compared cell-to-cell.
+number. §8.1 averages each seed's own MAE. Here the seeds' predictions are *averaged
+first* and the error is taken once (the `ensemble_mae` / `candidate_mae` columns).
+Every row compares the same estimator on both sides, on the same test months, so the
+two tables must not be compared cell-to-cell.
 
-A difference is only called an improvement when **both** tests agree: a paired
-bootstrap 95% CI on the MAE difference that excludes zero, *and* a Diebold–Mariano
-test at p < 0.05. Otherwise the verdict is `not distinguishable`; when the two tests
-disagree the verdict says so rather than picking the convenient one.
+A difference is called an improvement only when **all three** agree: a paired-bootstrap
+95% CI on the MAE difference that excludes zero, a Diebold–Mariano p-value that
+survives Benjamini–Hochberg adjustment across the planned comparison family, and the
+bootstrap p-value that also survives it. `DM p` is raw, `DM q` adjusted; `BH q (boot)`
+is the adjusted bootstrap p. When the tests disagree the verdict says so rather than
+picking the convenient one.
 
-| City | Target | Compared with | MAE ens (seed-avg) | MAE other (seed-avg) | Δ (ens − other) | 95% CI | DM p | Verdict |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| colombo | rain | gru | 2.271 | 2.409 | -0.138 | [-0.300, +0.019] | 0.052 | not distinguishable |
-| colombo | rain | lstm | 2.271 | 2.469 | -0.198 | [-0.399, +0.005] | 0.084 | not distinguishable |
-| colombo | rain | mlp | 2.271 | 2.133 | +0.137 | [-0.109, +0.393] | 0.448 | not distinguishable |
-| colombo | rain | xgboost | 2.271 | 2.708 | -0.437 | [-0.754, -0.121] | 0.002 | better |
-| colombo | temp | gru | 0.307 | 0.302 | +0.005 | [-0.017, +0.029] | 0.750 | not distinguishable |
-| colombo | temp | lstm | 0.307 | 0.395 | -0.087 | [-0.144, -0.032] | 0.091 | inconclusive (tests disagree) |
-| colombo | temp | mlp | 0.307 | 0.310 | -0.003 | [-0.058, +0.058] | 0.957 | not distinguishable |
-| colombo | temp | xgboost | 0.307 | 0.260 | +0.048 | [-0.000, +0.097] | 0.168 | not distinguishable |
-| jaffna | rain | gru | 2.111 | 2.142 | -0.031 | [-0.186, +0.110] | 0.708 | not distinguishable |
-| jaffna | rain | lstm | 2.111 | 2.242 | -0.131 | [-0.318, +0.064] | 0.184 | not distinguishable |
-| jaffna | rain | mlp | 2.111 | 2.234 | -0.123 | [-0.320, +0.055] | 0.238 | not distinguishable |
-| jaffna | rain | xgboost | 2.111 | 2.269 | -0.158 | [-0.481, +0.159] | 0.157 | not distinguishable |
-| jaffna | temp | gru | 0.459 | 0.450 | +0.010 | [-0.039, +0.059] | 0.667 | not distinguishable |
-| jaffna | temp | lstm | 0.459 | 0.461 | -0.002 | [-0.047, +0.044] | 0.957 | not distinguishable |
-| jaffna | temp | mlp | 0.459 | 0.527 | -0.067 | [-0.118, -0.021] | 0.010 | better |
-| jaffna | temp | xgboost | 0.459 | 0.345 | +0.114 | [+0.047, +0.183] | 0.054 | inconclusive (tests disagree) |
-| kandy | rain | gru | 2.207 | 2.361 | -0.155 | [-0.401, +0.090] | 0.349 | not distinguishable |
-| kandy | rain | lstm | 2.207 | 2.216 | -0.010 | [-0.177, +0.161] | 0.910 | not distinguishable |
-| kandy | rain | mlp | 2.207 | 2.406 | -0.199 | [-0.451, +0.065] | 0.151 | not distinguishable |
-| kandy | rain | xgboost | 2.207 | 2.452 | -0.245 | [-0.512, +0.019] | 0.056 | not distinguishable |
-| kandy | temp | gru | 0.488 | 0.596 | -0.108 | [-0.170, -0.046] | 0.003 | better |
-| kandy | temp | lstm | 0.488 | 0.557 | -0.069 | [-0.114, -0.023] | 0.050 | better |
-| kandy | temp | mlp | 0.488 | 0.463 | +0.025 | [-0.045, +0.094] | 0.640 | not distinguishable |
-| kandy | temp | xgboost | 0.488 | 0.466 | +0.023 | [-0.067, +0.113] | 0.680 | not distinguishable |
+| City | Target | Compared with | MAE ens | MAE other | Δ (ens − other) | 95% CI | DM stat | DM p | DM q | BH q (boot) | Verdict |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| colombo | temp | gru | 0.391 | 0.415 | -0.024 | [-0.054, +0.006] | -0.90 | 0.3731 | 0.6323 | 0.2057 | not distinguishable |
+| colombo | temp | lstm | 0.391 | 0.440 | -0.049 | [-0.081, -0.018] | -2.33 | 0.0230 | 0.0996 | 0.0168 | inconclusive (tests disagree) |
+| colombo | temp | mlp | 0.391 | 0.360 | +0.031 | [-0.015, +0.081] | +0.81 | 0.4216 | 0.6323 | 0.2911 | not distinguishable |
+| colombo | temp | xgboost | 0.391 | 0.260 | +0.132 | [+0.060, +0.204] | +2.18 | 0.0330 | 0.1106 | 0.0048 | inconclusive (tests disagree) |
+| jaffna | temp | gru | 0.452 | 0.485 | -0.033 | [-0.081, +0.016] | -0.73 | 0.4668 | 0.6458 | 0.2911 | not distinguishable |
+| jaffna | temp | lstm | 0.452 | 0.453 | -0.001 | [-0.046, +0.046] | -0.02 | 0.9856 | 0.9856 | 0.9832 | not distinguishable |
+| jaffna | temp | mlp | 0.452 | 0.518 | -0.066 | [-0.137, +0.002] | -1.00 | 0.3192 | 0.6323 | 0.1478 | not distinguishable |
+| jaffna | temp | xgboost | 0.452 | 0.345 | +0.107 | [+0.041, +0.173] | +3.26 | 0.0018 | 0.0220 | 0.0160 | worse |
+| kandy | temp | gru | 0.565 | 0.605 | -0.041 | [-0.087, +0.009] | -1.36 | 0.1789 | 0.4294 | 0.1940 | not distinguishable |
+| kandy | temp | lstm | 0.565 | 0.643 | -0.078 | [-0.122, -0.039] | -2.36 | 0.0217 | 0.0996 | 0.0048 | inconclusive (tests disagree) |
+| kandy | temp | mlp | 0.565 | 0.525 | +0.040 | [-0.021, +0.102] | +0.82 | 0.4178 | 0.6323 | 0.2911 | not distinguishable |
+| kandy | temp | xgboost | 0.565 | 0.466 | +0.099 | [-0.020, +0.225] | +0.95 | 0.3465 | 0.6323 | 0.2057 | not distinguishable |
+| colombo | rain | gru | 2.637 | 2.657 | -0.020 | [-0.190, +0.146] | -0.16 | 0.8700 | 0.9856 | 0.9643 | not distinguishable |
+| colombo | rain | lstm | 2.637 | 2.882 | -0.245 | [-0.459, -0.035] | -2.02 | 0.0479 | 0.1279 | 0.0978 | inconclusive (tests disagree) |
+| colombo | rain | mlp | 2.637 | 2.625 | +0.012 | [-0.279, +0.316] | +0.06 | 0.9538 | 0.9856 | 0.9832 | not distinguishable |
+| colombo | rain | xgboost | 2.637 | 2.708 | -0.071 | [-0.362, +0.226] | -0.49 | 0.6259 | 0.7906 | 0.7963 | not distinguishable |
+| jaffna | rain | gru | 2.263 | 2.057 | +0.206 | [+0.060, +0.348] | +3.55 | 0.0008 | 0.0184 | 0.0269 | worse |
+| jaffna | rain | lstm | 2.263 | 2.472 | -0.210 | [-0.393, -0.013] | -2.30 | 0.0249 | 0.0996 | 0.0978 | inconclusive (tests disagree) |
+| jaffna | rain | mlp | 2.263 | 2.511 | -0.248 | [-0.508, -0.010] | -2.65 | 0.0103 | 0.0828 | 0.1365 | inconclusive (tests disagree) |
+| jaffna | rain | xgboost | 2.263 | 2.269 | -0.006 | [-0.399, +0.374] | -0.05 | 0.9637 | 0.9856 | 0.9832 | not distinguishable |
+| kandy | rain | gru | 2.448 | 2.615 | -0.167 | [-0.363, +0.035] | -2.14 | 0.0369 | 0.1106 | 0.1940 | not distinguishable |
+| kandy | rain | lstm | 2.448 | 2.614 | -0.166 | [-0.316, -0.013] | -1.29 | 0.2019 | 0.4405 | 0.0978 | inconclusive (tests disagree) |
+| kandy | rain | mlp | 2.448 | 2.557 | -0.109 | [-0.362, +0.155] | -0.70 | 0.4843 | 0.6458 | 0.5571 | not distinguishable |
+| kandy | rain | xgboost | 2.448 | 2.452 | -0.004 | [-0.343, +0.335] | -0.02 | 0.9804 | 0.9856 | 0.9832 | not distinguishable |
 
-Verdict tally: **not distinguishable** 18, **better** 4, **inconclusive (tests disagree)** 2.
+Planned comparison family: **24** tests (cities × targets × members). Verdict tally: **not distinguishable** 15, **inconclusive (tests disagree)** 7, **worse** 2.
+**7 verdict(s) changed** after correction: colombo temp vs lstm: better → inconclusive (tests disagree); colombo temp vs xgboost: worse → inconclusive (tests disagree); colombo rain vs lstm: better → inconclusive (tests disagree); kandy temp vs lstm: better → inconclusive (tests disagree); kandy rain vs gru: inconclusive (tests disagree) → not distinguishable; jaffna rain vs mlp: better → inconclusive (tests disagree); … and 1 more.
+
+#### 8.2.1 What the correction did to the p-values
+
+Same data, same seeds, same test months; only the reference distribution and the
+multiplicity handling differ.
+
+Largest raw correction (normal → t + HLN) was +98.2% at jaffna rain vs gru.
+
+| City | Target | Compared with | DM p (pre) | DM p (now) | DM q (now) | Verdict (pre) | Verdict (now) |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| colombo | temp | gru | 0.7499 | 0.3731 | 0.6323 | not distinguishable | not distinguishable |
+| colombo | temp | lstm | 0.0907 | 0.0230 | 0.0996 | inconclusive (tests disagree) | inconclusive (tests disagree) |
+| colombo | temp | mlp | 0.9566 | 0.4216 | 0.6323 | not distinguishable | not distinguishable |
+| colombo | temp | xgboost | 0.1681 | 0.0330 | 0.1106 | not distinguishable | inconclusive (tests disagree) |
+| jaffna | temp | gru | 0.6671 | 0.4668 | 0.6458 | not distinguishable | not distinguishable |
+| jaffna | temp | lstm | 0.9568 | 0.9856 | 0.9856 | not distinguishable | not distinguishable |
+| jaffna | temp | mlp | 0.0099 | 0.3192 | 0.6323 | better | not distinguishable |
+| jaffna | temp | xgboost | 0.0539 | 0.0018 | 0.0220 | inconclusive (tests disagree) | worse |
+| kandy | temp | gru | 0.0035 | 0.1789 | 0.4294 | better | not distinguishable |
+| kandy | temp | lstm | 0.0499 | 0.0217 | 0.0996 | better | inconclusive (tests disagree) |
+| kandy | temp | mlp | 0.6398 | 0.4178 | 0.6323 | not distinguishable | not distinguishable |
+| kandy | temp | xgboost | 0.6804 | 0.3465 | 0.6323 | not distinguishable | not distinguishable |
+| colombo | rain | gru | 0.0515 | 0.8700 | 0.9856 | not distinguishable | not distinguishable |
+| colombo | rain | lstm | 0.0845 | 0.0479 | 0.1279 | not distinguishable | inconclusive (tests disagree) |
+| colombo | rain | mlp | 0.4477 | 0.9538 | 0.9856 | not distinguishable | not distinguishable |
+| colombo | rain | xgboost | 0.0025 | 0.6259 | 0.7906 | better | not distinguishable |
+| jaffna | rain | gru | 0.7080 | 0.0008 | 0.0184 | not distinguishable | worse |
+| jaffna | rain | lstm | 0.1842 | 0.0249 | 0.0996 | not distinguishable | inconclusive (tests disagree) |
+| jaffna | rain | mlp | 0.2375 | 0.0103 | 0.0828 | not distinguishable | inconclusive (tests disagree) |
+| jaffna | rain | xgboost | 0.1565 | 0.9637 | 0.9856 | not distinguishable | not distinguishable |
+| kandy | rain | gru | 0.3494 | 0.0369 | 0.1106 | not distinguishable | not distinguishable |
+| kandy | rain | lstm | 0.9103 | 0.2019 | 0.4405 | not distinguishable | inconclusive (tests disagree) |
+| kandy | rain | mlp | 0.1511 | 0.4843 | 0.6458 | not distinguishable | not distinguishable |
+| kandy | rain | xgboost | 0.0561 | 0.9804 | 0.9856 | not distinguishable | not distinguishable |
 
 ### 8.3 Calibrated prediction intervals (nominal 90%)
 
-Split-conformal intervals are calibrated on validation-fold residuals and then scored
-on the test tail. `coverage` is the fraction of test months inside the interval:
-close to 0.90 is correct, far below is over-confident, far above is needlessly wide.
+Split-conformal intervals are calibrated on the **distinct validation months** and then
+scored on the sealed test tail. `coverage` is the fraction of test months inside the
+interval: close to 0.90 is correct, far below is over-confident, far above is
+needlessly wide.
 
-| City | Target | Model | Coverage (conformal) | Mean width | Coverage (Gaussian) | Width (Gaussian) |
-| --- | --- | --- | --- | --- | --- | --- |
-| colombo | rain | ensemble | 0.950 | 11.61 | 0.967 | 12.80 |
-| colombo | rain | gru | 0.950 | 12.00 | 0.983 | 13.34 |
-| colombo | rain | lstm | 0.900 | 11.44 | 0.950 | 13.80 |
-| colombo | rain | mlp | 0.950 | 12.36 | 0.950 | 13.40 |
-| colombo | rain | xgboost | 0.900 | 10.86 | 0.950 | 12.40 |
-| colombo | temp | ensemble | 0.933 | 1.47 | 0.950 | 1.64 |
-| colombo | temp | gru | 0.950 | 1.50 | 0.950 | 1.78 |
-| colombo | temp | lstm | 0.883 | 1.61 | 0.933 | 1.90 |
-| colombo | temp | mlp | 0.900 | 1.42 | 0.933 | 1.66 |
-| colombo | temp | xgboost | 0.983 | 1.39 | 0.983 | 1.40 |
-| jaffna | rain | ensemble | 0.933 | 10.78 | 0.933 | 11.33 |
-| jaffna | rain | gru | 0.917 | 9.60 | 0.933 | 11.31 |
-| jaffna | rain | lstm | 0.967 | 11.93 | 0.967 | 12.38 |
-| jaffna | rain | mlp | 0.917 | 10.65 | 0.933 | 12.02 |
-| jaffna | rain | xgboost | 0.883 | 10.22 | 0.883 | 10.32 |
-| jaffna | temp | ensemble | 0.933 | 1.86 | 0.950 | 2.11 |
-| jaffna | temp | gru | 0.933 | 2.21 | 0.983 | 2.68 |
-| jaffna | temp | lstm | 0.950 | 2.15 | 0.967 | 2.43 |
-| jaffna | temp | mlp | 0.850 | 1.75 | 0.867 | 1.86 |
-| jaffna | temp | xgboost | 0.833 | 1.29 | 0.900 | 1.53 |
-| kandy | rain | ensemble | 0.983 | 12.74 | 1.000 | 14.78 |
-| kandy | rain | gru | 0.983 | 13.08 | 1.000 | 16.57 |
-| kandy | rain | lstm | 0.967 | 13.17 | 1.000 | 15.99 |
-| kandy | rain | mlp | 0.950 | 12.74 | 0.983 | 14.62 |
-| kandy | rain | xgboost | 1.000 | 14.12 | 1.000 | 15.53 |
-| kandy | temp | ensemble | 0.917 | 2.22 | 0.933 | 2.62 |
-| kandy | temp | gru | 0.900 | 2.44 | 0.983 | 3.05 |
-| kandy | temp | lstm | 0.883 | 2.57 | 0.967 | 2.95 |
-| kandy | temp | mlp | 0.917 | 2.24 | 0.933 | 2.54 |
-| kandy | temp | xgboost | 0.817 | 1.69 | 0.917 | 2.07 |
+| City | Target | Model | Coverage (conformal) | Mean width | Coverage (Gaussian) | Width (Gaussian) | Calibration months |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| colombo | temp | ensemble | 0.833 | 1.405 | 0.883 | 1.487 | 108 |
+| colombo | temp | gru | 0.850 | 1.447 | 0.883 | 1.616 | 108 |
+| colombo | temp | lstm | 0.900 | 1.756 | 0.900 | 1.820 | 108 |
+| colombo | temp | mlp | 0.933 | 1.493 | 0.917 | 1.421 | 108 |
+| colombo | temp | xgboost | 0.983 | 1.393 | 0.983 | 1.398 | 108 |
+| jaffna | temp | ensemble | 0.900 | 1.791 | 0.900 | 1.911 | 108 |
+| jaffna | temp | gru | 0.900 | 1.905 | 0.950 | 2.309 | 108 |
+| jaffna | temp | lstm | 0.950 | 2.120 | 0.950 | 2.254 | 108 |
+| jaffna | temp | mlp | 0.833 | 1.549 | 0.850 | 1.688 | 108 |
+| jaffna | temp | xgboost | 0.833 | 1.327 | 0.900 | 1.519 | 108 |
+| kandy | temp | ensemble | 0.883 | 2.435 | 0.900 | 2.552 | 108 |
+| kandy | temp | gru | 0.850 | 2.449 | 0.900 | 2.927 | 108 |
+| kandy | temp | lstm | 0.850 | 2.535 | 0.917 | 3.008 | 108 |
+| kandy | temp | mlp | 0.883 | 2.211 | 0.900 | 2.339 | 108 |
+| kandy | temp | xgboost | 0.883 | 1.910 | 0.933 | 2.138 | 108 |
+| colombo | rain | ensemble | 0.917 | 11.575 | 0.950 | 12.846 | 108 |
+| colombo | rain | gru | 0.933 | 12.273 | 0.967 | 13.035 | 108 |
+| colombo | rain | lstm | 0.917 | 12.508 | 0.933 | 13.953 | 108 |
+| colombo | rain | mlp | 0.917 | 12.619 | 0.917 | 12.672 | 108 |
+| colombo | rain | xgboost | 0.917 | 11.506 | 0.950 | 12.611 | 108 |
+| jaffna | rain | ensemble | 0.933 | 10.977 | 0.933 | 10.390 | 108 |
+| jaffna | rain | gru | 0.917 | 9.457 | 0.950 | 10.681 | 108 |
+| jaffna | rain | lstm | 0.950 | 10.959 | 0.950 | 11.026 | 108 |
+| jaffna | rain | mlp | 0.900 | 10.363 | 0.917 | 10.685 | 108 |
+| jaffna | rain | xgboost | 0.900 | 10.767 | 0.883 | 10.121 | 108 |
+| kandy | rain | ensemble | 0.967 | 13.011 | 1.000 | 15.015 | 108 |
+| kandy | rain | gru | 0.983 | 13.651 | 1.000 | 16.346 | 108 |
+| kandy | rain | lstm | 0.967 | 13.716 | 0.983 | 16.260 | 108 |
+| kandy | rain | mlp | 0.950 | 12.385 | 0.967 | 13.872 | 108 |
+| kandy | rain | xgboost | 1.000 | 14.122 | 1.000 | 15.404 | 108 |
 
-Conformal coverage ranges 0.817–1.000 against a nominal 0.90 (mean 0.924); Gaussian intervals give 0.867–1.000 (mean 0.953).
+Conformal coverage ranges 0.833–1.000 against a nominal 0.90 (mean 0.911); 9 cell(s) below 0.90 and 5 above 0.95. Gaussian intervals give 0.850–1.000 (mean 0.932).
 
 ### 8.4 Extreme rainfall
 
 Threshold = the 95th percentile of **training** rain, per city, taken with
-`method="higher"` so the threshold is a value an observation actually had. An event is
-a test month above it; a predicted event is a prediction above it.
+`method="higher"` so the threshold is a value an observation actually had. An event
+is a test month above it; a predicted event is a prediction above it.
 
 | City | Model | Threshold | Observed | Predicted | Hits | Precision | Recall | rank-AUC | Underpredicted |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| colombo | ensemble | 13.33 | 6 | 0 | 0 | — | 0.00 | 0.870 | 100% |
-| colombo | gru | 13.33 | 6 | 0 | 0 | — | 0.00 | 0.910 | 100% |
-| colombo | lstm | 13.33 | 6 | 0 | 0 | — | 0.00 | 0.827 | 100% |
-| colombo | mlp | 13.33 | 6 | 2 | 2 | 1.00 | 0.33 | 0.846 | 100% |
+| colombo | ensemble | 13.33 | 6 | 0 | 0 | — | 0.00 | 0.799 | 100% |
+| colombo | gru | 13.33 | 6 | 0 | 0 | — | 0.00 | 0.855 | 100% |
+| colombo | lstm | 13.33 | 6 | 0 | 0 | — | 0.00 | 0.722 | 100% |
+| colombo | mlp | 13.33 | 6 | 3 | 2 | 0.67 | 0.33 | 0.787 | 100% |
 | colombo | xgboost | 13.33 | 6 | 0 | 0 | — | 0.00 | 0.793 | 100% |
-| jaffna | ensemble | 9.65 | 7 | 1 | 1 | 1.00 | 0.14 | 0.935 | 100% |
-| jaffna | gru | 9.65 | 7 | 1 | 1 | 1.00 | 0.14 | 0.927 | 100% |
-| jaffna | lstm | 9.65 | 7 | 3 | 1 | 0.33 | 0.14 | 0.946 | 100% |
-| jaffna | mlp | 9.65 | 7 | 2 | 1 | 0.50 | 0.14 | 0.927 | 100% |
+| jaffna | ensemble | 9.65 | 7 | 0 | 0 | — | 0.00 | 0.916 | 100% |
+| jaffna | gru | 9.65 | 7 | 0 | 0 | — | 0.00 | 0.949 | 100% |
+| jaffna | lstm | 9.65 | 7 | 0 | 0 | — | 0.00 | 0.930 | 100% |
+| jaffna | mlp | 9.65 | 7 | 5 | 1 | 0.20 | 0.14 | 0.895 | 100% |
 | jaffna | xgboost | 9.65 | 7 | 4 | 2 | 0.50 | 0.29 | 0.892 | 100% |
-| kandy | ensemble | 12.42 | 4 | 0 | 0 | — | 0.00 | 0.982 | 100% |
-| kandy | gru | 12.42 | 4 | 0 | 0 | — | 0.00 | 0.982 | 100% |
-| kandy | lstm | 12.42 | 4 | 1 | 1 | 1.00 | 0.25 | 0.946 | 100% |
-| kandy | mlp | 12.42 | 4 | 1 | 1 | 1.00 | 0.25 | 0.991 | 100% |
+| kandy | ensemble | 12.42 | 4 | 0 | 0 | — | 0.00 | 0.938 | 100% |
+| kandy | gru | 12.42 | 4 | 0 | 0 | — | 0.00 | 0.951 | 100% |
+| kandy | lstm | 12.42 | 4 | 0 | 0 | — | 0.00 | 0.888 | 100% |
+| kandy | mlp | 12.42 | 4 | 1 | 1 | 1.00 | 0.25 | 0.951 | 100% |
 | kandy | xgboost | 12.42 | 4 | 1 | 1 | 1.00 | 0.25 | 0.938 | 100% |
 
-Recall across all cells: 0.00–0.33. rank-AUC (can the model *order* events above non-events, regardless of threshold): 0.793–0.991. Underprediction rate on observed events: **100% in every cell** — not one extreme month was predicted above the threshold by any model in any city.
+Recall across all cells: 0.00–0.33. rank-AUC (can the model *order* events above non-events, regardless of threshold): 0.722–0.951. Underprediction rate on observed events: mean 100.0%, min 100%, max 100%.
 
 ### 8.5 Multi-seed stability
 
-Spread across the 5 seeds, computed **inside each city × target** so the numbers keep
-their unit. `std/|mean|` is unit-free and is the only column comparable across units.
+Test MAE across the seeds, per city × target × model. `relative_spread` (std / |mean|)
+is unit-free and is the only column comparable across cells.
 
-| Model | mean std/\|mean\| | worst std/\|mean\| | city×target cells |
-| --- | --- | --- | --- |
-| xgboost | 0.026 | 0.039 | 6 |
-| ensemble | 0.083 | 0.132 | 6 |
-| gru | 0.122 | 0.230 | 6 |
-| lstm | 0.140 | 0.244 | 6 |
-| mlp | 0.165 | 0.315 | 6 |
+| City | Target | Model | Mean MAE | Std | Min | Max | Relative spread | Seeds |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| colombo | temp | ensemble | 0.424 | 0.043 | 0.382 | 0.477 | 0.102 | 5 |
+| colombo | temp | gru | 0.494 | 0.050 | 0.429 | 0.539 | 0.101 | 5 |
+| colombo | temp | lstm | 0.473 | 0.061 | 0.396 | 0.549 | 0.129 | 5 |
+| colombo | temp | mlp | 0.462 | 0.077 | 0.379 | 0.571 | 0.167 | 5 |
+| colombo | temp | xgboost | 0.263 | 0.005 | 0.258 | 0.269 | 0.017 | 5 |
+| jaffna | temp | ensemble | 0.486 | 0.045 | 0.449 | 0.561 | 0.093 | 5 |
+| jaffna | temp | gru | 0.586 | 0.076 | 0.498 | 0.686 | 0.129 | 5 |
+| jaffna | temp | lstm | 0.491 | 0.058 | 0.408 | 0.560 | 0.118 | 5 |
+| jaffna | temp | mlp | 0.631 | 0.118 | 0.550 | 0.839 | 0.186 | 5 |
+| jaffna | temp | xgboost | 0.349 | 0.009 | 0.336 | 0.359 | 0.026 | 5 |
+| kandy | temp | ensemble | 0.607 | 0.039 | 0.547 | 0.653 | 0.064 | 5 |
+| kandy | temp | gru | 0.757 | 0.066 | 0.661 | 0.841 | 0.088 | 5 |
+| kandy | temp | lstm | 0.700 | 0.087 | 0.622 | 0.825 | 0.124 | 5 |
+| kandy | temp | mlp | 0.659 | 0.076 | 0.571 | 0.760 | 0.116 | 5 |
+| kandy | temp | xgboost | 0.471 | 0.018 | 0.442 | 0.486 | 0.039 | 5 |
+| colombo | rain | ensemble | 2.772 | 0.347 | 2.528 | 3.348 | 0.125 | 5 |
+| colombo | rain | gru | 2.984 | 0.613 | 2.619 | 4.052 | 0.205 | 5 |
+| colombo | rain | lstm | 3.036 | 0.242 | 2.680 | 3.328 | 0.080 | 5 |
+| colombo | rain | mlp | 3.051 | 0.490 | 2.567 | 3.627 | 0.161 | 5 |
+| colombo | rain | xgboost | 2.722 | 0.035 | 2.679 | 2.775 | 0.013 | 5 |
+| jaffna | rain | ensemble | 2.428 | 0.132 | 2.314 | 2.634 | 0.055 | 5 |
+| jaffna | rain | gru | 2.504 | 0.292 | 2.198 | 2.972 | 0.116 | 5 |
+| jaffna | rain | lstm | 2.605 | 0.054 | 2.510 | 2.639 | 0.021 | 5 |
+| jaffna | rain | mlp | 3.182 | 0.146 | 3.003 | 3.367 | 0.046 | 5 |
+| jaffna | rain | xgboost | 2.276 | 0.066 | 2.177 | 2.337 | 0.029 | 5 |
+| kandy | rain | ensemble | 2.594 | 0.169 | 2.374 | 2.779 | 0.065 | 5 |
+| kandy | rain | gru | 2.999 | 0.350 | 2.660 | 3.591 | 0.117 | 5 |
+| kandy | rain | lstm | 2.719 | 0.258 | 2.370 | 3.006 | 0.095 | 5 |
+| kandy | rain | mlp | 2.970 | 0.366 | 2.517 | 3.402 | 0.123 | 5 |
+| kandy | rain | xgboost | 2.473 | 0.078 | 2.399 | 2.580 | 0.031 | 5 |
 
-Worst single cell: colombo/temp/mlp at 0.315 — that model's test MAE moves by about 32% of its own value when the seed changes, so a single-seed comparison between models in that cell would be noise.
+Least stable cell: colombo rain gru (relative spread 0.205).
 
-### 8.6 Validation folds versus the sealed test tail
+### 8.6 Validation folds versus the sealed test tail — does the ranking hold?
 
-The same models, ranked in two places. If the ranking does not survive the move from
-out-of-fold validation to the untouched tail, the selection was fitted to the
-validation noise and cannot be trusted.
+Model order by MAE, best first, in the same city × target.
 
-| City | Target | Validation order (best → worse) | Test order (best → worse) | Same? |
+| City | Target | Validation order | Test order | Top model agreed? |
 | --- | --- | --- | --- | --- |
-| colombo | temp | xgboost > ensemble > lstm > mlp > gru | xgboost > ensemble > gru > lstm > mlp | yes |
-| colombo | rain | xgboost > ensemble > lstm > mlp > gru | ensemble > gru > mlp > xgboost > lstm | no — top model changed |
-| kandy | temp | xgboost > ensemble > lstm > mlp > gru | xgboost > ensemble > lstm > gru > mlp | yes |
-| kandy | rain | xgboost > ensemble > lstm > mlp > gru | ensemble > xgboost > lstm > gru > mlp | no — top model changed |
-| jaffna | temp | xgboost > ensemble > lstm > mlp > gru | xgboost > ensemble > lstm > gru > mlp | yes |
-| jaffna | rain | xgboost > ensemble > lstm > mlp > gru | ensemble > xgboost > lstm > mlp > gru | no — top model changed |
+| colombo | temp | xgboost > ensemble > lstm > mlp > gru | xgboost > ensemble > mlp > lstm > gru | yes |
+| jaffna | temp | xgboost > ensemble > mlp > lstm > gru | xgboost > ensemble > lstm > gru > mlp | yes |
+| kandy | temp | xgboost > ensemble > lstm > mlp > gru | xgboost > ensemble > mlp > lstm > gru | yes |
+| colombo | rain | ensemble > xgboost > mlp > lstm > gru | xgboost > ensemble > gru > lstm > mlp | no — top model changed |
+| jaffna | rain | xgboost > ensemble > lstm > gru > mlp | xgboost > ensemble > gru > lstm > mlp | yes |
+| kandy | rain | ensemble > xgboost > mlp > lstm > gru | xgboost > ensemble > lstm > mlp > gru | no — top model changed |
 
-Top model agreed in 3 of 6 city × target cells.
+Top model agreed in 4 of 6 city × target cells.
 
 ### 8.7 Validation versus test, side by side (MAE)
 
+Validation numbers are computed over **distinct out-of-fold months** (overlapping
+forecast instances are averaged, never discarded — `tables/metrics_validation_instances.csv`
+holds the instance-level view). The test column is the sealed 60-month tail, evaluated
+once. The two columns are not interchangeable and are never averaged together.
+
 | City | Target | Model | Validation MAE | Test MAE | Change |
 | --- | --- | --- | --- | --- | --- |
-| colombo | temp | xgboost | 0.281 | 0.263 | -0.018 |
-| colombo | temp | gru | 0.468 | 0.399 | -0.069 |
-| colombo | temp | lstm | 0.415 | 0.460 | +0.045 |
-| colombo | temp | mlp | 0.463 | 0.507 | +0.044 |
-| colombo | temp | ensemble | 0.367 | 0.360 | -0.007 |
-| colombo | rain | xgboost | 2.604 | 2.722 | +0.118 |
-| colombo | rain | gru | 3.339 | 2.706 | -0.633 |
-| colombo | rain | lstm | 3.134 | 2.756 | -0.378 |
-| colombo | rain | mlp | 3.207 | 2.718 | -0.489 |
-| colombo | rain | ensemble | 2.846 | 2.418 | -0.428 |
-| kandy | temp | xgboost | 0.425 | 0.471 | +0.047 |
-| kandy | temp | gru | 0.808 | 0.723 | -0.085 |
-| kandy | temp | lstm | 0.673 | 0.614 | -0.059 |
-| kandy | temp | mlp | 0.755 | 0.735 | -0.020 |
-| kandy | temp | ensemble | 0.607 | 0.559 | -0.048 |
-| kandy | rain | xgboost | 2.953 | 2.473 | -0.480 |
-| kandy | rain | gru | 3.889 | 2.625 | -1.264 |
-| kandy | rain | lstm | 3.344 | 2.514 | -0.830 |
-| kandy | rain | mlp | 3.596 | 2.867 | -0.729 |
-| kandy | rain | ensemble | 3.162 | 2.337 | -0.825 |
-| jaffna | temp | xgboost | 0.324 | 0.349 | +0.025 |
-| jaffna | temp | gru | 0.661 | 0.585 | -0.076 |
-| jaffna | temp | lstm | 0.526 | 0.519 | -0.007 |
-| jaffna | temp | mlp | 0.583 | 0.655 | +0.072 |
-| jaffna | temp | ensemble | 0.474 | 0.495 | +0.020 |
-| jaffna | rain | xgboost | 1.994 | 2.276 | +0.282 |
-| jaffna | rain | gru | 2.631 | 2.683 | +0.052 |
-| jaffna | rain | lstm | 2.589 | 2.434 | -0.155 |
-| jaffna | rain | mlp | 2.625 | 2.596 | -0.030 |
-| jaffna | rain | ensemble | 2.289 | 2.260 | -0.028 |
+| colombo | temp | ensemble | 0.336 | 0.424 | +0.087 |
+| colombo | temp | gru | 0.427 | 0.494 | +0.067 |
+| colombo | temp | lstm | 0.400 | 0.473 | +0.073 |
+| colombo | temp | mlp | 0.419 | 0.462 | +0.044 |
+| colombo | temp | xgboost | 0.279 | 0.263 | -0.017 |
+| jaffna | temp | ensemble | 0.420 | 0.486 | +0.066 |
+| jaffna | temp | gru | 0.571 | 0.586 | +0.015 |
+| jaffna | temp | lstm | 0.509 | 0.491 | -0.018 |
+| jaffna | temp | mlp | 0.479 | 0.631 | +0.152 |
+| jaffna | temp | xgboost | 0.320 | 0.349 | +0.029 |
+| kandy | temp | ensemble | 0.584 | 0.607 | +0.023 |
+| kandy | temp | gru | 0.765 | 0.757 | -0.008 |
+| kandy | temp | lstm | 0.676 | 0.700 | +0.024 |
+| kandy | temp | mlp | 0.735 | 0.659 | -0.076 |
+| kandy | temp | xgboost | 0.434 | 0.471 | +0.038 |
+| colombo | rain | ensemble | 2.624 | 2.772 | +0.148 |
+| colombo | rain | gru | 2.999 | 2.984 | -0.015 |
+| colombo | rain | lstm | 2.890 | 3.036 | +0.146 |
+| colombo | rain | mlp | 2.753 | 3.051 | +0.297 |
+| colombo | rain | xgboost | 2.634 | 2.722 | +0.088 |
+| jaffna | rain | ensemble | 2.058 | 2.428 | +0.371 |
+| jaffna | rain | gru | 2.399 | 2.504 | +0.105 |
+| jaffna | rain | lstm | 2.256 | 2.605 | +0.349 |
+| jaffna | rain | mlp | 2.407 | 3.182 | +0.775 |
+| jaffna | rain | xgboost | 1.939 | 2.276 | +0.338 |
+| kandy | rain | ensemble | 2.912 | 2.594 | -0.319 |
+| kandy | rain | gru | 3.483 | 2.999 | -0.484 |
+| kandy | rain | lstm | 3.172 | 2.719 | -0.453 |
+| kandy | rain | mlp | 3.073 | 2.970 | -0.102 |
+| kandy | rain | xgboost | 2.968 | 2.473 | -0.494 |
 
-Test MAE is computed on a 60-month tail that none of the validation numbers saw. The
-two columns are not interchangeable and are never averaged together.
-
----
 
 ## 9. What these results do and do not support
+
+These are the claims the corrected run supports. Where the pre-correction document made a
+stronger claim, the difference is called out in parentheses.
 
 ### 9.1 Supported
 
 1. **One-month-ahead temperature is predictable from the previous 12 months.**
-   XGBoost reaches test MAE 0.263 °C (Colombo), 0.471 °C (Kandy), 0.349 °C (Jaffna), and
+   XGBoost reaches test MAE 0.263 °C (Colombo), 0.471 °C (Kandy), 0.349 °C (Jaffna) and
    beats the training-window climatological mean with skill +0.605 / +0.216 / +0.230.
-   XGBoost is first and the ensemble second in **both** validation and the sealed test
-   tail in all three cities for temperature (§8.6) — the placement of the top two is not
-   a selection artefact, although the order below them is not stable (in Colombo,
-   GRU/LSTM/MLP swap places between validation and test).
-2. **The ensemble is a variance reducer, not a winner.** It has lower test MAE than every
-   neural member in all six city × target cells (e.g. 0.360 vs 0.399–0.507 °C in Colombo),
-   because averaging cancels part of the seed-to-seed noise that dominates the nets
-   (§8.5: GRU/LSTM/MLP relative spread 0.12–0.17 versus 0.03 for XGBoost). Against
-   XGBoost the picture is mixed and mostly flat: 4 of 24 comparisons come out `better`,
-   one of them against XGBoost (Colombo rainfall), 18 of 24 are `not distinguishable` and
-   2 are `inconclusive`. "The ensemble outperforms the individual models" is therefore
-   **not** supported; "the ensemble is competitive with the best member and much less
-   seed-sensitive" is.
+   It is first and the ensemble second in **both** validation and the sealed test tail in
+   all three cities for temperature (§8.6) — the placement of the top two is not a
+   selection artefact, although the order below them is not stable (MLP and LSTM swap
+   places between validation and test in all three cities). These three numbers are
+   identical to the pre-correction run: XGBoost uses none of the code that was fixed.
+2. **The ensemble is a variance reducer, not a winner.** It is second in all six
+   city × target cells, and its advantage is stability rather than accuracy: across seeds
+   its relative spread is 0.084 on average (worst 0.125) against 0.126–0.133 for the
+   neural members and 0.026 for XGBoost (§8.5). But averaging does not make it better than
+   the best member: after Benjamini–Hochberg across the 24 planned comparisons, **no**
+   comparison favours the ensemble, **2** come out `worse` (Jaffna rainfall vs GRU,
+   Δ MAE +0.206 mm/day; Jaffna temperature vs XGBoost, +0.114 °C), 15 are `not
+   distinguishable` and 7 are `inconclusive`. *(The pre-correction document said 4 of 24
+   favoured it; that count was read off unadjusted p-values and does not survive the
+   correction.)*
 3. **Conformal intervals are close to calibrated on unseen data — and their failure mode
    is visible.** Against a nominal 90%, measured coverage on the sealed test tail is
-   0.817–1.000 (mean 0.924) over the 30 model × city × target cells. Conformal intervals
-   are narrower than the Gaussian baseline in **30 of 30** cells and have the better
-   Winkler (interval) score in 26 of 30, which is the expected benefit of not assuming
-   normality. But they are also slightly over-confident where the calibration residuals
-   are too optimistic: 6 of 30 cells fall below 0.90, the worst being Kandy temperature
-   with XGBoost at 0.817 (Gaussian: 0.917). Reporting the mean coverage alone would hide
-   that; it is reported per cell in §8.3.
-4. **The pipeline is deterministic.** Two independent full runs, 20 minutes each, produced
-   byte-identical `metrics_test`, `metrics_validation`, `folds`,
-   `statistical_comparisons`, `interval_scores`, `extreme_rainfall` and
-   `location_summary` tables (§8.0). The numbers are a property of code + data + seeds,
-   not of when the run happened.
-5. **Extreme rainfall can be ranked but not flagged.** rank-AUC 0.793–0.991 means the
+   0.833–1.000 (mean 0.911) over the 30 model × city × target cells, calibrated on the
+   108 distinct validation months (not the 192 overlapping fold instances). They are
+   narrower than the Gaussian baseline in 27 of 30 cells and have the better Winkler
+   score in 19 of 30. They are also over-confident in places: 9 of 30 cells fall below
+   0.90, and 5 sit above 0.95, i.e. wider than necessary. Reporting the mean alone would
+   hide both directions; §8.3 reports every cell.
+4. **The pipeline is deterministic.** Two independent full runs, from the same commit and
+   payloads, produced byte-identical result tables (§8.0). The numbers are a property of
+   code + data + seeds, not of when the run happened.
+5. **Extreme rainfall can be ranked but not flagged.** rank-AUC 0.722–0.951 means the
    models order wet months above dry months well. Recall at a fixed 95th-percentile
-   threshold is 0.00–0.33 because every model under-predicts the magnitude of extreme
-   months, by 3.57–6.95 mm/day on average across cells (§8.4). Ordering skill ≠ threshold
-   skill.
+   threshold is 0.00–0.33, and **every** observed extreme month was under-predicted in
+   every cell: the highest prediction anywhere is 14.77 mm/day against an observed
+   maximum of 20.90. Ordering skill ≠ threshold skill.
+6. **The corrections were verified, not assumed.** Each of the four fixes ships with a
+   regression test that fails on the old code (36 new tests, 79 total), the pre-fix run is
+   preserved as evidence (`docs/evidence/pre_fix_run/`), and the D11 ablation isolates its
+   effect by training the same series twice under both split rules
+   (`docs/evidence/nn_split_experiment/`). The measured effect of D11 on test MAE was
+   −0.068 to +0.103 °C depending on the model — a correctness defect with **no consistent
+   sign**, which is why it had to be fixed rather than argued about.
 
 ### 9.2 Not supported — do not write these
 
-* **"Rainfall is predictable by this model."** Rainfall skill is negative in 3 of 6
-  city × target cells for every model, and XGBoost — the validation winner in all three
-  cities — loses to the ensemble on the test tail in all three (§8.6). The ranking does
-  not survive the move from validation to test, which is exactly the situation in which
-  a model-selection claim is not allowed.
-* **"The ensemble is superior to XGBoost."** 1 of 6 comparisons supports it (Colombo
-  rainfall, Δ MAE −0.437 mm/day, DM p = 0.002), 1 is formally inconclusive (Jaffna
-  temperature: bootstrap and DM disagree) and 4 are `not distinguishable`. One win in six
-  is a statement about one city's rainfall, not about the ensemble.
-* **"Deep learning beats gradient boosting here."** In validation, XGBoost is best in
-  all six city × target cells. In the sealed test it is best in three of six.
+* **"Rainfall is predictable by this model."** Rainfall skill is negative for **every**
+  model in **every** city (§8.1): the best cell is Jaffna with XGBoost at −0.097. The
+  model ranking also does not survive the move from validation to test in 2 of 6 cells
+  (Colombo and Kandy rainfall: the ensemble leads in validation, XGBoost in the test tail).
+* **"The ensemble is superior to its members."** 0 of 24 comparisons support it, and 2
+  statistically reject it (Jaffna rainfall vs GRU, q = 0.018; Jaffna temperature vs
+  XGBoost, q = 0.022). *(The pre-correction document reported 1 win in 6 for the ensemble
+  against XGBoost; that win was a p-value read outside its family.)*
+* **"Deep learning beats gradient boosting here."** XGBoost is best in all six city ×
+  target cells in validation **and** in the sealed test tail (§8.6). The neural members —
+  and the ensemble built from them — have **negative** temperature skill in all three
+  cities (−0.069 to −1.158 against a positive +0.216 to +0.605 for XGBoost, §8.1), and
+  their seed spread is 3.6–5.1× XGBoost's (§8.5).
 * **"The model is ready for operational warning."** Recall at the extreme threshold is
-  0.00–0.33 and every observed event is under-predicted. §8.4 is a negative result, and
-  it is reported as one.
+  0.00–0.33, every observed event is under-predicted, and the maximum predicted rainfall
+  never reaches the observed maximum. §8.4 is a negative result and is reported as one.
 * **"These numbers describe the full 1985–2025, five-parameter design."** They describe
   2000–2024 with two parameters (§7.3).
+* **"The earlier audit's ensemble claims still hold."** They do not. Four "the ensemble is
+  better" verdicts in the pre-correction document became 0 after D14 (t-reference,
+  Harvey–Leybourne–Newbold) and D15 (Benjamini–Hochberg over 24 planned tests) were applied
+  to the same kind of evidence. This is the clearest illustration in the package of why
+  the corrections mattered: the fix did not change the data, it changed what the data was
+  allowed to claim.
 
 ### 9.3 Why the negative results are trustworthy
 
 A negative result is only worth reporting if the machinery that produced it is known to
-work. Three independent lines of evidence say it does:
+work. Four independent lines of evidence say it does:
 
 * **The guards were attacked.** Seven fixes were reverted one at a time; all seven are
-  now caught by the suite (`§3.1`), including two that initially survived. A further two
+  now caught by the suite (§3.1), including two that initially survived. A further two
   defects found during the real-data work (the month-13 annual row, §3 defect 8, and
   `seed_stability` pooling °C with mm/day) are pinned by tests as well.
-* **The pipeline reproduces bit-for-bit** across two full runs (§9.1 item 4).
+* **The new fixes were attacked the same way.** Each of D11, D12, D14 and D15 has a test
+  that fails on the pre-correction code: 36 tests were run against the old sources and
+  fail there, and pass on the committed ones (`DEFECT_REPORT.md` §9).
+* **The pipeline reproduces bit-for-bit** across two full runs at the same commit (§9.1
+  item 4, §8.0).
 * **The data verifies itself** — every transcribed value is checked against POWER's own
-  month-13 identity, worst case 0.016 °C / 0.048 mm/day (§7.4), and the committed payloads
-  are re-checked by the test suite rather than trusted from the build script.
+  month-13 identity, worst case 0.016 °C / 0.048 mm/day (§7.4), the committed payloads are
+  re-checked by the test suite rather than trusted from the build script, and the run
+  manifest records the SHA-256 of the exact cache files that were read.
 
 ### 9.4 What would change the conclusions
 
@@ -734,8 +849,8 @@ In descending order of expected effect:
    sample.
 4. **Nested model selection.** Hyper-parameters were fixed on prior knowledge and
    identical across folds; the reported scores are for a configured model, not an oracle.
-   A proper nested inner loop would let us say which model *should* be chosen, not merely
-   which scored best.
+   Now that early stopping actually holds out 20% of the training window (D11), an inner
+   selection loop would be meaningful — it was not meaningful before.
 5. **A high-resolution extreme model.** Predicting monthly mean rainfall and then
    thresholding it at the 95th percentile is the wrong tool for extremes; a separate
    event-classifier or a quantile-regression head would test the §8.4 negative result
@@ -748,7 +863,10 @@ In descending order of expected effect:
 Every number in §8 was produced by `scripts/run_experiments.py` from the committed
 payloads in `data/cache/`, on the machine and date recorded in each
 `run_manifest.json`. Nothing in this document was typed from memory: §8 is generated
-from the run's CSV tables, and the tables are exported with the run. The synthetic engine
+from the run's CSV tables by `scripts/emit_results_section.py`, and the tables are
+committed under `docs/evidence/post_fix_run/tables/` (pre-correction: `pre_fix_run/`).
+Re-running the generator against a different run directory produces a different §8, which
+is the point — the document cannot drift from the artefacts. The synthetic engine
 check in §2 is labelled as such wherever it appears, and is never mixed into §8.
 
 Where the design asked for more than the environment could deliver, this document says

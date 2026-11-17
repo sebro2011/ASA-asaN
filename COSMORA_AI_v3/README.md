@@ -89,16 +89,18 @@ against the config that produced them.
 ## Status of the numbers
 
 Real NASA POWER data has been run: 3 cities × 2 targets × 5 seeds × 8 walk-forward
-folds plus a sealed 60-month test tail, in 1 218 s. Headline result, honestly stated:
+folds plus a sealed 60-month test tail, in 1 014 s, after the four phase-2 corrections
+(D11, D12, D14, D15 — `docs/DEFECT_REPORT.md` §9). Headline result, honestly stated:
 
 * **Temperature** is predictable one month ahead — XGBoost test MAE 0.263 / 0.471 /
   0.349 °C (Colombo / Kandy / Jaffna), skill vs climatology +0.61 / +0.22 / +0.23.
-* **Rainfall is not**, by this design: skill is negative in half of the cells and the
-  validation winner changes on the sealed test tail in all three cities.
-* **The ensemble is comparable but not superior** to XGBoost: 1 of 6 comparisons favours
-  it (Colombo rainfall), 1 is inconclusive, 4 are not distinguishable. No superiority
-  claim is made.
-* **Extreme rainfall is ranked but not detected** — rank-AUC 0.79–0.99, recall 0.00–0.33.
+  These three numbers are unchanged by the corrections; XGBoost uses none of the fixed code.
+* **Rainfall is not**, by this design: skill is negative for every model in every city.
+* **The ensemble is comparable but not superior** to XGBoost: of the 24 planned
+  comparisons, none favours it once Benjamini–Hochberg is applied, two come out `worse`,
+  15 are not distinguishable and 7 are inconclusive. No superiority claim is made.
+* **Extreme rainfall is ranked but not detected** — rank-AUC 0.72–0.95, recall 0.00–0.33,
+  every observed extreme month under-predicted in magnitude.
 
 The full tables, verdicts and the list of claims these results do **not** support are in
 [`docs/FINAL_SCIENTIFIC_AUDIT.md`](docs/FINAL_SCIENTIFIC_AUDIT.md) §8–§9. The synthetic

@@ -35,6 +35,9 @@ Defects 1–10 were found earlier and are already fixed, with tests; they are li
 
 ### D11. Neural-network early stopping is driven by a single sample
 
+> **Status: fixed in phase 2** (commit `2e359e2`) — the split now holds out the intended
+> fraction; measured effect and tests in §9.1. The text below is the original finding.
+
 `src/cosmora_v3/nn.py`, `_BaseNet.fit`:
 
 ```python
@@ -81,6 +84,9 @@ and assert `n - split >= 2` (a validation set of one cannot early-stop anything)
 number of validation rows is at least 10% of `n`.
 
 ### D12. Walk-forward validation windows overlap, so months are counted as independent evidence twice
+
+> **Status: fixed in phase 2** (commit `c452a61`) — metrics and calibration now use the 108
+> distinct months, the 192 instances are kept in a separate table. §9.2.
 
 `splits.py` builds folds with `cv_validation_months = 24` and `cv_step_months = 12`. Each
 fold's validation window therefore overlaps the previous one by 12 months, and
@@ -137,6 +143,9 @@ recent folds only.
 
 ### D14. Diebold–Mariano uses a normal approximation where a t-distribution is required
 
+> **Status: fixed in phase 2** (commit `c452a61`) — Newey–West variance, t reference with
+> n−1 df, Harvey–Leybourne–Newbold factor. §9.3.
+
 `stats.diebold_mariano` computes `p = erfc(|DM| / √2)`, which is the large-sample limit.
 With `n = 60` monthly observations the correct reference is `t_{n-1}` (or the
 Harvey–Leybourne–Newbold small-sample correction). Measured effect across the 24
@@ -159,6 +168,9 @@ correct test it becomes `inconclusive (tests disagree)`. So **three** of the fou
 exceed the normal-approximation p-value.
 
 ### D15. Twenty-four simultaneous comparisons, no multiplicity control
+
+> **Status: fixed in phase 2** (commit `c452a61`) — Benjamini–Hochberg across the 24
+> planned comparisons, raw and adjusted p reported side by side. §9.4.
 
 `statistical_comparisons.csv` contains 24 tests (3 cities × 2 targets × 4 candidates) at
 α = 0.05 each. Nothing corrects for that. Applying Benjamini–Hochberg to the bootstrap
@@ -406,6 +418,11 @@ weight the neural numbers and the "calibrated" wording can carry.
 
 ## 8. Recommended order of work
 
+> Four of the items below were completed in phase 2 — D11, D12, D14 and D15. The order
+> still applies to what remains; the phase-2 work is described in §9, which lists what was
+> deliberately left alone (§9.6) and why.
+
+
 1. **D11** (one-line fix + test) — every neural number in the package is currently an
    arbitrary snapshot. Re-run afterwards; expect the neural scores to move.
 2. **D12** (tile the folds, or deduplicate the validation union) — this changes validation
@@ -417,3 +434,186 @@ weight the neural numbers and the "calibrated" wording can carry.
 5. **D20 + D19 + D21** (latent correctness) — no effect on today's numbers, full effect on
    the next dataset.
 6. **D13** (adaptive conformal) and the S3 items as hygiene.
+
+---
+
+## 9. Phase 2 — the four corrections that were applied (D11, D12, D14, D15)
+
+The scope of this pass was deliberately narrow: the four defects above, nothing else. No
+refactor, no unrelated file touched, no test deleted. Each fix ships with a test that fails
+on the pre-correction code, and the full experiment was re-run on **identical data, seeds
+and folds** so the before/after pair differs only by the code.
+
+| Defect | Fix commit | New tests | Artefacts it changed |
+| --- | --- | --- | --- |
+| D11 — early stopping on one row | `2e359e2` | 6 | every MLP/GRU/LSTM fit, and therefore every neural number and the ensemble |
+| D12 — overlapping folds double-counted | `c452a61` | 8 | `metrics_validation` (n, metrics), new `metrics_validation_instances`, `calib_n_calibration` |
+| D14 — Diebold–Mariano reference distribution | `c452a61` | 12 | `dm_stat`, `dm_p`, every verdict |
+| D15 — 24 comparisons, no multiplicity control | `c452a61` | 10 | new `dm_q`, `bootstrap_q`, `verdict_pre_correction`, `family_size`; every verdict |
+
+Evidence committed with the fixes:
+
+* `docs/evidence/pre_fix_run/` — the full pre-correction run (tables, manifest, report).
+* `docs/evidence/post_fix_run/` — the post-correction run, same config/seeds/folds.
+* `docs/evidence/nn_split_experiment/` — the D11 ablation.
+* `docs/evidence/FINAL_SCIENTIFIC_AUDIT_pre_correction.md` — the audit as it stood before
+  any number changed.
+* `scripts/emit_results_section.py` — regenerates §8 of the audit from a run directory, so
+  the document can no longer drift from the tables.
+
+### 9.1 D11 — the early-stopping split now holds out what it says it holds out
+
+`split = int(round(n * (1 - f)))`, clamped to `[1, n-1]`; `n=200, f=0.20` gives 160 train /
+40 validation instead of 199 / 1. Both counts are recorded on the fitted object
+(`inner_split_`, `inner_val_rows_`) so a test can assert them rather than trust them.
+
+Tests (`tests/test_d11_early_stopping.py`, 6): the fraction is respected across
+n ∈ {20, 40, 60, 200, 300} × f ∈ {0.10, 0.20, 0.25}; train and validation blocks are
+disjoint and ordered; replacing the validation block's features leaves every training
+gradient bit-identical while changing the validation loss (i.e. the block steers stopping
+and nothing else); GRU and LSTM share the contract; `n = 2` does not crash.
+Against the pre-correction sources, 5 of these error out and the 6th fails.
+
+Measured effect (`scripts/d11_split_ablation.py`, Colombo temperature, seed 7, 2 folds,
+identical data):
+
+| model | validation MAE (old → new) | test MAE (old → new) | Δ test |
+| --- | --- | --- | --- |
+| mlp | 0.3900 → 0.3911 | 0.5494 → 0.4818 | −0.0676 |
+| gru | 0.4794 → 0.5413 | 0.4736 → 0.5390 | +0.0654 |
+| lstm | 0.4344 → 0.4423 | 0.5653 → 0.5486 | −0.0167 |
+| ensemble | 0.3552 → 0.3557 | 0.3744 → 0.4771 | +0.1027 |
+| xgboost | 0.3426 → 0.3426 | 0.2579 → 0.2579 | 0.0000 |
+
+The sign of the change is **not consistent** across models (mean +0.017 °C). The defect was
+a correctness problem — the best epoch was chosen by one month's error — not a bias that
+could be corrected for by adding a constant. Full run, mean over seeds, all cities:
+`temp/ensemble` 0.4711 → 0.5054, `temp/mlp` 0.6322 → 0.5840, `temp/gru` 0.5688 → 0.6123,
+`temp/lstm` 0.5309 → 0.5547. XGBoost, which does not use this code: 0.361 → 0.361.
+
+### 9.2 D12 — overlapping folds are averaged, not discarded, and not double-counted
+
+`evaluate.run_series` now keeps both views. `metrics_validation` describes **distinct
+target months** (`n = 108`, plus an explicit `n_instances = 192` column);
+`metrics_validation_instances` keeps the **192 forecast instances** with the same metrics,
+so no valid forecast is thrown away. The conformal calibration residual set is the
+month-level one: `calib_n_calibration` 192 → **108**.
+
+The collapse is a mean over the forecasts that covered a month, and it refuses to run if
+two folds disagree about a month's truth (`_month_level_validation` raises). The run
+manifest records both counts per series (`execution.validation_counts`), and `REPORT.md`
+prints them above the validation table — the ambiguity that produced the defect is now
+impossible to miss.
+
+Tests (`tests/test_d12_validation_aggregation.py`, 8): overlapping windows collapse to the
+union with averaged predictions; instance order does not matter; inconsistent truth and
+length mismatches are rejected; end-to-end counts are 2 horizons of instances over
+`horizon + step` months; both tables agree with the manifest; `n_calibration` equals the
+distinct-month count for every model.
+
+### 9.3 D14 — Diebold–Mariano: HAC variance, t reference, HLN small-sample factor
+
+The statistic keeps the Newey–West (Bartlett) long-run variance, but the p-value is now
+`2 · t.sf(|DM|, df = n-1)` and the statistic is multiplied by the Harvey–Leybourne–Newbold
+factor `sqrt((n + 1 − 2h + h(h−1)/n) / n)`. Each row records `dm_p_normal` (the old answer)
+and `dm_correction`, so the size of the correction is inspectable rather than asserted.
+
+Measured, on the **pre-correction run's own tables** (recomputed from the stored statistic,
+so this is reproducible from committed evidence):
+
+```
+max inflation (normal → t+HLN)  48.1%   (Colombo rain vs XGBoost: 0.0025 → 0.0037)
+rows crossing alpha                  1   (Kandy temp vs LSTM: 0.0499 → 0.0546)
+```
+
+On the corrected run the correction is larger in relative terms but crosses nothing:
+
+```
+max inflation (normal → t+HLN)  98.2%   (Jaffna rain vs GRU: 0.0004 → 0.0008)
+rows crossing alpha                  0
+```
+
+Both facts belong in the record: the direction of the correction is always conservative
+(t-based p ≥ normal p), the magnitude depends on n and on how small the raw p is, and
+whether a specific claim flips is data-dependent.
+
+Tests (`tests/test_d14_d15_statistics.py`, DM part, 12): cross-check against a loop
+implementation; t-p always exceeds normal-p; HLN factor shrinks |statistic|; HAC variance
+exceeds the independence variance on AR(1) differentials; `n < 8`, constant differentials
+and mismatched lengths return NaN; sign convention; monotone p in the effect size;
+`squared` loss; HLN inapplicable at `lag = n`; `conclusion()` honours an adjusted p.
+
+### 9.4 D15 — Benjamini–Hochberg across the 24 planned comparisons
+
+The family is fixed by the design (3 cities × 2 targets × 4 members = 24), not by which
+rows happened to be reported. `run._apply_multiplicity` adjusts the Diebold–Mariano
+p-values and the paired-bootstrap p-values separately, requires **both** adjusted values
+below α **and** the bootstrap interval to exclude zero, and keeps `verdict_pre_correction`
+beside `verdict` so a reader can see what the correction did. α is declared in the config
+(`evaluation.alpha = 0.05`) and validated.
+
+Corrected run:
+
+| quantity | value |
+| --- | --- |
+| planned comparisons | 24 |
+| raw DM p < 0.05 | 9 |
+| significant on raw p **and** CI excluding zero | 8 → 5 `better`, 3 `worse` |
+| DM q ≤ 0.05 | 2 |
+| bootstrap q ≤ 0.05 | 5 |
+| surviving both adjustments | 2 → both `worse` |
+| verdicts | 15 not distinguishable · 7 inconclusive · 2 worse · **0 better** |
+
+So the uncorrected analysis would have claimed the ensemble was better than five of its
+members. The corrected analysis says it is worse than two and indistinguishable from the
+rest. That is the whole argument for multiplicity control in one line.
+
+Tests (BH part, 10): agreement with a brute-force step-up implementation on a known
+vector; `q ≥ p`; `q ≤ Bonferroni`; monotone in the raw order; NaN excluded from the family
+and passed through; single/empty/all-NaN inputs; ties; family size enforced at 24; a
+marginal result (p = 0.0499) loses its claim inside the family; a clear result survives.
+
+### 9.5 What the corrections changed in the scientific conclusions
+
+| Claim | Before | After |
+| --- | --- | --- |
+| Ensemble better than a member | 4 of 24 comparisons | **0 of 24** (2 worse) |
+| Best model on the sealed test tail | XGBoost in 3 of 6 cells | **XGBoost in 6 of 6** (ensemble 2nd in all 6) |
+| Conformal coverage (nominal 0.90) | 0.817–1.000, mean 0.924 | 0.833–1.000, mean 0.911 |
+| Validation sample size | "192 observations" | **108 distinct months** (192 forecast instances) |
+| Neural test MAE (temp, mean over cities) | ensemble 0.4711 | ensemble 0.5054 |
+
+None of the negative findings weakened. The temperature result that does not depend on any
+of this code — XGBoost at 0.263 / 0.471 / 0.349 °C — is unchanged to the last digit, which
+is the check that the corrections were confined to what they claimed to fix.
+
+### 9.6 What was deliberately not changed (still open)
+
+| Defect | Why it is still open |
+| --- | --- |
+| D13 — conformal intervals miss 0.90 in both directions | A calibration-shape problem (9 of 30 cells below 0.90, 5 above 0.95), not a counting problem; out of the phase-2 scope. |
+| D16 — `config_hash` covers presentation settings | Changing the hash definition invalidates every stored hash, including the ones in this report; needs its own pass. |
+| D17 — a reduced-epoch run reports the full-config hash | Same reason; the manifest now records `epochs_effective` alongside the hash, which makes the discrepancy visible without pretending it is fixed. |
+| D18 — `payload_sha256` is not a digest of a file | Out of scope; the manifest now *also* records `dataset_file_sha256` (the digest of the exact bytes read), which is checkable today. |
+| D19 — cache key ignores the parameter list | Would change cache keys and require re-verification of the committed payloads. |
+| D20 — lag features are positional | A feature-engineering change with its own test burden. |
+| D21 — config validation leaves expensive failures open | Partly mitigated (α is now validated), otherwise unchanged. |
+
+Nothing in D13 or D16–D21 was touched: the fixes are confined to `nn.py`, `evaluate.py`,
+`stats.py`, `run.py`, `report.py`, `config.py` (one validation) and the two config files
+(`alpha`).
+
+### 9.7 Reproduce
+
+```bash
+cd COSMORA_AI_v3
+python -m unittest discover -s tests                 # 79 tests
+PYTHONPATH=src python scripts/run_experiments.py \
+    --config config/experiment_lk_power_2000_2024.json --out /tmp/run
+python scripts/d11_split_ablation.py --out /tmp/d11.json      # ~65 s
+python scripts/emit_results_section.py --run /tmp/run/run_… \
+    --previous docs/evidence/pre_fix_run                      # §8 of the audit
+```
+
+Expected: `config_hash a6bbe9432b389257`, 1 014 s on 2 vCPU, and tables byte-identical to
+`docs/evidence/post_fix_run/tables/` (§8.0 of the scientific audit).
