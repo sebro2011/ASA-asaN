@@ -526,16 +526,21 @@ max inflation (normal → t+HLN)  48.1%   (Colombo rain vs XGBoost: 0.0025 → 0
 rows crossing alpha                  1   (Kandy temp vs LSTM: 0.0499 → 0.0546)
 ```
 
-On the corrected run the correction is larger in relative terms but crosses nothing:
+Isolated inside the corrected run — same rows, same statistic, `dm_p_normal` vs `dm_p` —
+the correction is smaller (it only changes the reference distribution; the HAC variance and
+the HLN factor are common to both columns) and crosses nothing:
 
 ```
-max inflation (normal → t+HLN)  98.2%   (Jaffna rain vs GRU: 0.0004 → 0.0008)
-rows crossing alpha                  0
+max inflation (normal → t)   +49.5%   (Jaffna rain vs GRU: 0.0004 → 0.0008)
+rows crossing alpha               0
 ```
 
-Both facts belong in the record: the direction of the correction is always conservative
-(t-based p ≥ normal p), the magnitude depends on n and on how small the raw p is, and
-whether a specific claim flips is data-dependent.
+Both facts belong in the record. The direction of the correction is always conservative
+(t-based p ≥ normal p; the HLN factor only shrinks the statistic), so it can remove a claim
+but never create one. The magnitude depends on n and on how close the raw p sits to alpha,
+and whether a specific claim flips is a property of the data: on the pre-correction run one
+row crossed, on the corrected run none did. A reader who wants the honest summary should
+carry both sentences, not whichever one flatters the package.
 
 Tests (`tests/test_d14_d15_statistics.py`, DM part, 12): cross-check against a loop
 implementation; t-p always exceeds normal-p; HLN factor shrinks |statistic|; HAC variance

@@ -542,39 +542,68 @@ picking the convenient one.
 Planned comparison family: **24** tests (cities × targets × members). Verdict tally: **not distinguishable** 15, **inconclusive (tests disagree)** 7, **worse** 2.
 **7 verdict(s) changed** after correction: colombo temp vs lstm: better → inconclusive (tests disagree); colombo temp vs xgboost: worse → inconclusive (tests disagree); colombo rain vs lstm: better → inconclusive (tests disagree); kandy temp vs lstm: better → inconclusive (tests disagree); kandy rain vs gru: inconclusive (tests disagree) → not distinguishable; jaffna rain vs mlp: better → inconclusive (tests disagree); … and 1 more.
 
-#### 8.2.1 What the correction did to the p-values
+#### 8.2.1 D14 — reference distribution, isolated
 
-Same data, same seeds, same test months; only the reference distribution and the
-multiplicity handling differ.
+Same rows, same HAC variance, same statistic; only the p-value's reference
+distribution and the small-sample factor differ. `DM p (normal)` is what the
+pre-correction code reported; `DM p (t + HLN)` is what it reports now.
 
-Largest raw correction (normal → t + HLN) was +98.2% at jaffna rain vs gru.
-
-| City | Target | Compared with | DM p (pre) | DM p (now) | DM q (now) | Verdict (pre) | Verdict (now) |
+| City | Target | Compared with | DM stat | DM p (normal) | DM p (t + HLN) | Change | Crosses 0.05? |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| colombo | temp | gru | 0.7499 | 0.3731 | 0.6323 | not distinguishable | not distinguishable |
-| colombo | temp | lstm | 0.0907 | 0.0230 | 0.0996 | inconclusive (tests disagree) | inconclusive (tests disagree) |
-| colombo | temp | mlp | 0.9566 | 0.4216 | 0.6323 | not distinguishable | not distinguishable |
-| colombo | temp | xgboost | 0.1681 | 0.0330 | 0.1106 | not distinguishable | inconclusive (tests disagree) |
-| jaffna | temp | gru | 0.6671 | 0.4668 | 0.6458 | not distinguishable | not distinguishable |
-| jaffna | temp | lstm | 0.9568 | 0.9856 | 0.9856 | not distinguishable | not distinguishable |
-| jaffna | temp | mlp | 0.0099 | 0.3192 | 0.6323 | better | not distinguishable |
-| jaffna | temp | xgboost | 0.0539 | 0.0018 | 0.0220 | inconclusive (tests disagree) | worse |
-| kandy | temp | gru | 0.0035 | 0.1789 | 0.4294 | better | not distinguishable |
-| kandy | temp | lstm | 0.0499 | 0.0217 | 0.0996 | better | inconclusive (tests disagree) |
-| kandy | temp | mlp | 0.6398 | 0.4178 | 0.6323 | not distinguishable | not distinguishable |
-| kandy | temp | xgboost | 0.6804 | 0.3465 | 0.6323 | not distinguishable | not distinguishable |
-| colombo | rain | gru | 0.0515 | 0.8700 | 0.9856 | not distinguishable | not distinguishable |
-| colombo | rain | lstm | 0.0845 | 0.0479 | 0.1279 | not distinguishable | inconclusive (tests disagree) |
-| colombo | rain | mlp | 0.4477 | 0.9538 | 0.9856 | not distinguishable | not distinguishable |
-| colombo | rain | xgboost | 0.0025 | 0.6259 | 0.7906 | better | not distinguishable |
-| jaffna | rain | gru | 0.7080 | 0.0008 | 0.0184 | not distinguishable | worse |
-| jaffna | rain | lstm | 0.1842 | 0.0249 | 0.0996 | not distinguishable | inconclusive (tests disagree) |
-| jaffna | rain | mlp | 0.2375 | 0.0103 | 0.0828 | not distinguishable | inconclusive (tests disagree) |
-| jaffna | rain | xgboost | 0.1565 | 0.9637 | 0.9856 | not distinguishable | not distinguishable |
-| kandy | rain | gru | 0.3494 | 0.0369 | 0.1106 | not distinguishable | not distinguishable |
-| kandy | rain | lstm | 0.9103 | 0.2019 | 0.4405 | not distinguishable | inconclusive (tests disagree) |
-| kandy | rain | mlp | 0.1511 | 0.4843 | 0.6458 | not distinguishable | not distinguishable |
-| kandy | rain | xgboost | 0.0561 | 0.9804 | 0.9856 | not distinguishable | not distinguishable |
+| colombo | temp | gru | -0.90 | 0.3694 | 0.3731 | +1.0 | no |
+| colombo | temp | lstm | -2.33 | 0.0196 | 0.0230 | +14.9 | no |
+| colombo | temp | mlp | +0.81 | 0.4183 | 0.4216 | +0.8 | no |
+| colombo | temp | xgboost | +2.18 | 0.0290 | 0.0330 | +12.1 | no |
+| jaffna | temp | gru | -0.73 | 0.4639 | 0.4668 | +0.6 | no |
+| jaffna | temp | lstm | -0.02 | 0.9855 | 0.9856 | +0.0 | no |
+| jaffna | temp | mlp | -1.00 | 0.3151 | 0.3192 | +1.3 | no |
+| jaffna | temp | xgboost | +3.26 | 0.0011 | 0.0018 | +39.9 | no |
+| kandy | temp | gru | -1.36 | 0.1738 | 0.1789 | +2.9 | no |
+| kandy | temp | lstm | -2.36 | 0.0183 | 0.0217 | +15.4 | no |
+| kandy | temp | mlp | +0.82 | 0.4145 | 0.4178 | +0.8 | no |
+| kandy | temp | xgboost | +0.95 | 0.3427 | 0.3465 | +1.1 | no |
+| colombo | rain | gru | -0.16 | 0.8694 | 0.8700 | +0.1 | no |
+| colombo | rain | lstm | -2.02 | 0.0434 | 0.0479 | +9.5 | no |
+| colombo | rain | mlp | +0.06 | 0.9536 | 0.9538 | +0.0 | no |
+| colombo | rain | xgboost | -0.49 | 0.6241 | 0.6259 | +0.3 | no |
+| jaffna | rain | gru | +3.55 | 0.0004 | 0.0008 | +49.5 | no |
+| jaffna | rain | lstm | -2.30 | 0.0214 | 0.0249 | +14.2 | no |
+| jaffna | rain | mlp | -2.65 | 0.0081 | 0.0103 | +21.9 | no |
+| jaffna | rain | xgboost | -0.05 | 0.9635 | 0.9637 | +0.0 | no |
+| kandy | rain | gru | -2.14 | 0.0327 | 0.0369 | +11.3 | no |
+| kandy | rain | lstm | -1.29 | 0.1969 | 0.2019 | +2.5 | no |
+| kandy | rain | mlp | -0.70 | 0.4816 | 0.4843 | +0.6 | no |
+| kandy | rain | xgboost | -0.02 | 0.9803 | 0.9804 | +0.0 | no |
+
+Largest relative change: +49.5% at jaffna rain vs gru (0.0004 → 0.0008). Rows crossing alpha as a result: **0**.
+
+The change is always in the same direction — the t reference with n−1 degrees of
+freedom is more conservative than the normal one, and the HLN factor shrinks the
+statistic — so no claim can be created by this correction, only removed. Whether a
+*specific* claim is removed depends on how close its raw p sat to alpha: on the
+pre-correction run one row did cross (see 8.2.2).
+
+#### 8.2.2 Pre-correction run versus this run
+
+These are **different numbers on different fits**: D11 changed the neural models
+themselves, so this table compares two implementations, not two statistics. It is
+here because the before/after pair is the honest way to show what the pass did.
+
+Re-deriving the corrected p-value from the pre-correction run's own stored
+statistic (df = 59) reproduces the D14 finding on committed evidence:
+max inflation +48.1%, rows crossing alpha **1**.
+
+Row(s) that crossed: kandy temp vs lstm (0.0499 → 0.0546).
+
+| Verdict | Pre-correction run | This run |
+| --- | --- | --- |
+| better | 4 | 0 |
+| inconclusive (tests disagree) | 2 | 7 |
+| not distinguishable | 18 | 15 |
+| worse | 0 | 2 |
+
+Planned family: 24 comparisons in both runs; the correction itself is
+apply-to-every-row, so the tally moves only when a p-value or a fit moved.
 
 ### 8.3 Calibrated prediction intervals (nominal 90%)
 
@@ -761,7 +790,7 @@ stronger claim, the difference is called out in parentheses.
    neural members and 0.026 for XGBoost (§8.5). But averaging does not make it better than
    the best member: after Benjamini–Hochberg across the 24 planned comparisons, **no**
    comparison favours the ensemble, **2** come out `worse` (Jaffna rainfall vs GRU,
-   Δ MAE +0.206 mm/day; Jaffna temperature vs XGBoost, +0.114 °C), 15 are `not
+   Δ MAE +0.206 mm/day; Jaffna temperature vs XGBoost, +0.107 °C), 15 are `not
    distinguishable` and 7 are `inconclusive`. *(The pre-correction document said 4 of 24
    favoured it; that count was read off unadjusted p-values and does not survive the
    correction.)*

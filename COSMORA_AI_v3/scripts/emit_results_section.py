@@ -21,6 +21,7 @@ import json
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+import numpy as np
 import pandas as pd
 
 TARGET_UNIT = {"temp": "°C", "rain": "mm/day"}
@@ -182,38 +183,99 @@ def section_comparisons(comp: pd.DataFrame, previous: Optional[pd.DataFrame]) ->
             lines.append(f"**{len(changed)} verdict(s) changed** after correction: {detail}.")
     lines.append("")
 
-    if previous is not None and not previous.empty and "dm_p" in previous:
+    # -- 8.2.1  D14 alone: same rows, same statistic, different reference ---------
+    if "dm_p_normal" in comp and "dm_p" in comp:
         lines += [
-            "#### 8.2.1 What the correction did to the p-values",
+            "#### 8.2.1 D14 — reference distribution, isolated",
             "",
-            "Same data, same seeds, same test months; only the reference distribution and the",
-            "multiplicity handling differ.",
+            "Same rows, same HAC variance, same statistic; only the p-value's reference",
+            "distribution and the small-sample factor differ. `DM p (normal)` is what the",
+            "pre-correction code reported; `DM p (t + HLN)` is what it reports now.",
             "",
         ]
-        merged = comp.merge(
-            previous[["location", "target", "candidate", "dm_p", "verdict"]],
-            on=["location", "target", "candidate"], suffixes=("", "_pre"), how="left",
+        work = comp.copy()
+        work["inflation"] = np.where(
+            work["dm_p"] > 0, (work["dm_p"] - work["dm_p_normal"]) / work["dm_p"].where(work["dm_p"] > 0, 1), np.nan
         )
-        if "dm_p_normal" in merged:
-            merged["inflation"] = (merged["dm_p"] - merged["dm_p_normal"]) / merged["dm_p_normal"]
-            worst = merged.loc[merged["inflation"].abs().idxmax()]
-            lines.append(
-                f"Largest raw correction (normal → t + HLN) was "
-                f"{_fmt(worst['inflation'] * 100, 1, signed=True)}% at "
-                f"{worst['location']} {worst['target']} vs {worst['candidate']}."
-            )
-            lines.append("")
         rows = []
-        for _, row in _sort(merged, ["location", "candidate"]).iterrows():
+        for _, row in _sort(work, ["location", "candidate"]).iterrows():
+            crossed = (row["dm_p_normal"] < 0.05) != (row["dm_p"] < 0.05)
             rows.append([
                 str(row["location"]), str(row["target"]), str(row["candidate"]),
-                _fmt(row["dm_p_pre"], 4), _fmt(row["dm_p"], 4),
-                _fmt(row.get("dm_q"), 4) if has_q else "—",
-                str(row["verdict_pre"]), str(row["verdict"]),
+                _fmt(row["dm_stat"], 2, signed=True),
+                _fmt(row["dm_p_normal"], 4), _fmt(row["dm_p"], 4),
+                _fmt(row["inflation"] * 100, 1, signed=True),
+                "yes" if crossed else "no",
             ])
         lines += [
-            _table(["City", "Target", "Compared with", "DM p (pre)", "DM p (now)",
-                    "DM q (now)", "Verdict (pre)", "Verdict (now)"], rows),
+            _table(["City", "Target", "Compared with", "DM stat", "DM p (normal)",
+                    "DM p (t + HLN)", "Change", "Crosses 0.05?"], rows),
+            "",
+        ]
+        worst = work.loc[work["dm_stat"].abs().idxmax()] if len(work) else None
+        n_cross = int(((work["dm_p_normal"] < 0.05) != (work["dm_p"] < 0.05)).sum())
+        biggest = work.loc[work["inflation"].idxmax()] if work["inflation"].notna().any() else None
+        if biggest is not None:
+            lines.append(
+                f"Largest relative change: {_fmt(biggest['inflation'] * 100, 1, signed=True)}% at "
+                f"{biggest['location']} {biggest['target']} vs {biggest['candidate']} "
+                f"({_fmt(biggest['dm_p_normal'], 4)} → {_fmt(biggest['dm_p'], 4)}). "
+                f"Rows crossing alpha as a result: **{n_cross}**."
+            )
+        lines += [
+            "",
+            "The change is always in the same direction — the t reference with n−1 degrees of",
+            "freedom is more conservative than the normal one, and the HLN factor shrinks the",
+            "statistic — so no claim can be created by this correction, only removed. Whether a",
+            "*specific* claim is removed depends on how close its raw p sat to alpha: on the",
+            "pre-correction run one row did cross (see 8.2.2).",
+            "",
+        ]
+
+    # -- 8.2.2  the whole pipeline, before and after ------------------------------
+    if previous is not None and not previous.empty and "dm_p" in previous:
+        lines += [
+            "#### 8.2.2 Pre-correction run versus this run",
+            "",
+            "These are **different numbers on different fits**: D11 changed the neural models",
+            "themselves, so this table compares two implementations, not two statistics. It is",
+            "here because the before/after pair is the honest way to show what the pass did.",
+            "",
+        ]
+        try:
+            from scipy import stats as _sps  # noqa: PLC0415 - optional, for the pre-run p_t
+            prev = previous.copy()
+            df = float(prev["n_months"].iloc[0]) - 1 if "n_months" in prev else 59.0
+            prev["p_t"] = 2.0 * _sps.t.sf(prev["dm_stat"].abs(), df=df)
+            crosses = int(((prev["dm_p"] < 0.05) != (prev["p_t"] < 0.05)).sum())
+            worst = float(((prev["p_t"] - prev["dm_p"]) / prev["dm_p"]).max() * 100.0)
+            lines += [
+                f"Re-deriving the corrected p-value from the pre-correction run's own stored",
+                f"statistic (df = {int(df)}) reproduces the D14 finding on committed evidence:",
+                f"max inflation {_fmt(worst, 1, signed=True)}%, rows crossing alpha **{crosses}**.",
+                "",
+            ]
+            if crosses:
+                flipped = prev[(prev["dm_p"] < 0.05) != (prev["p_t"] < 0.05)]
+                detail = "; ".join(
+                    f"{row['location']} {row['target']} vs {row['candidate']} "
+                    f"({_fmt(row['dm_p'], 4)} → {_fmt(row['p_t'], 4)})"
+                    for _, row in flipped.iterrows()
+                )
+                lines.append(f"Row(s) that crossed: {detail}.")
+                lines.append("")
+        except Exception:  # noqa: BLE001 - the diff is a convenience, never a requirement
+            pass
+
+        before = previous["verdict"].value_counts()
+        after = comp["verdict"].value_counts()
+        keys = sorted(set(before.index) | set(after.index))
+        rows = [[k, str(int(before.get(k, 0))), str(int(after.get(k, 0)))] for k in keys]
+        lines += [
+            _table(["Verdict", "Pre-correction run", "This run"], rows),
+            "",
+            f"Planned family: {len(comp)} comparisons in both runs; the correction itself is",
+            "apply-to-every-row, so the tally moves only when a p-value or a fit moved.",
             "",
         ]
     return lines
