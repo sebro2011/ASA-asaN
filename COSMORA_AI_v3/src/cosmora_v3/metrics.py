@@ -128,7 +128,14 @@ def climatology_forecast(train_values: np.ndarray, train_months: np.ndarray,
 
 
 def summarise(y_true: np.ndarray, y_pred: np.ndarray, *, reference: Optional[np.ndarray] = None) -> Dict[str, float]:
-    """Full metric bundle for one (model, location, target, split)."""
+    """Full metric bundle for one (model, location, target, split).
+
+    ``n`` counts rows that were actually scored, not rows that were passed in: a run
+    whose predictions were all NaN reports ``n = 0`` and NaN metrics, rather than
+    ``n = 60`` next to a blank MAE — the difference between "we measured nothing" and
+    "we measured 60 months and they were all unusable".
+    """
+    scored, _ = _clean(y_true, y_pred)
     mape_value, guard = mae_daily_scale_mape(y_true, y_pred)
     out = {
         "mae": mae(y_true, y_pred),
@@ -138,7 +145,7 @@ def summarise(y_true: np.ndarray, y_pred: np.ndarray, *, reference: Optional[np.
         "pearson": pearson(y_true, y_pred),
         "mape_pct": mape_value,
         "mape_zero_guard_used": float(guard),
-        "n": float(len(np.asarray(y_true).reshape(-1))),
+        "n": float(len(scored)),
     }
     if reference is not None:
         out["skill_vs_climatology"] = skill_score(y_true, y_pred, reference)

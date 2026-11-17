@@ -141,12 +141,42 @@ successes is not an audit.
 
 | # | Defect | Caught by | Fix |
 | --- | --- | --- | --- |
-| 1 | `test_split` returned an **empty training window** (`train_start == train_end == n−T`), so the final model was fitted on nothing while still producing plausible metrics | manual inspection of a printed `describe()` | `Split("test", 0, boundary, boundary, n)` + regression test `test_test_split_trains_on_all_preceding_history` |
+| 1 | `test_split` returned an **empty training window** (`train_start == train_end == n−T`): the model was fitted on zero rows, the scaler produced NaN, and the metrics table still claimed **`n = 24` evaluated months** with blank scores | manual inspection of a printed `describe()` | `Split("test", 0, boundary, boundary, n)`; regression test `test_test_split_trains_on_all_preceding_history`; `n` now counts scored rows |
 | 2 | GRU BPTT omitted the `h_{t−1}` factor in the update-gate path (`dp_r`), producing gradients ~40 % low | finite-difference test (`test_gru_gradients`) | corrected chain rule; documented as the classic silent-BPTT bug |
 | 3 | `skill_score` discarded the reference vector due to a swapped tuple unpack, yielding `NaN` | `test_skill_score_against_climatology` | `_, r = _clean(...)` |
 | 4 | Extreme threshold used interpolated quantiles (a value no observation took) | `test_threshold_comes_from_training_data_only` | `method="higher"` |
 | 5 | MAPE on dry months | code review of `mae_daily_scale_mape` | zero band + `mape_zero_guard_used` column |
 | 6 | Run summary averaged MAE across °C and mm/day | inspecting the CLI summary | keyed `target/model` |
+| 7 | `n` in every metric row counted *supplied* rows, so an all-NaN run reported `n = 60` beside a blank MAE | mutation testing (see §3.1) | `n` counts rows that were actually scored |
+
+### 3.1 Mutation testing — proof that the guards work
+
+A fix without a test that fails when the fix is reverted is a comment, not a guard.
+Each repair was therefore re-applied *backwards* on a copy of the package and the
+suite was run again:
+
+| Reverted fix | Suite result |
+| --- | --- |
+| empty test training window | **caught** — `test_test_split_trains_on_all_preceding_history` |
+| GRU `dp_r` without `h_{t−1}` | **caught** — `test_gru_gradients` |
+| `skill_score` swapped unpack | **caught** — `test_skill_score_against_climatology` |
+| interpolated extreme quantile | **caught** — `test_threshold_comes_from_training_data_only` |
+| MAPE zero guard removed | **caught** — `test_mape_reports_when_the_zero_guard_matters` |
+| summary pools °C with mm/day | **initially MISSED** → `tests/test_reporting.py` added → now caught |
+| `n` counts supplied rows | **initially MISSED** → now caught (2 failures) |
+
+Two of the seven mutations survived the first pass. That is the useful outcome: the
+suite looked complete and was not. Both gaps are closed, and the tests were written
+before the fix was trusted.
+
+### 3.2 Measured size of the two numerical defects
+
+* **GRU BPTT** — against central differences the corrected update-gate gradient
+  agrees to `1.3e-10`; the buggy version is off by up to **4 429 %** on the same
+  entries. It is not a rounding issue: it is a different function.
+* **Empty training window** — `TrainOnlyScaler.fit` on zero rows gives `mean = NaN`,
+  every prediction is NaN, and the metric row read `mae = NaN` next to `n = 24`.
+  A reader would have seen a populated-looking row with nothing in it.
 
 Defect 1 is the one that matters most: it would have produced a full, plausible,
 completely meaningless set of test metrics. Nothing in the design prevented it; only
@@ -231,8 +261,23 @@ cd COSMORA_AI_v3
 python -m venv .venv && . .venv/bin/activate
 pip install -r requirements.txt
 
-python -m unittest discover -s tests        # 26 tests incl. gradient checks
+python -m unittest discover -s tests        # 29 tests incl. gradient checks
 python scripts/run_experiments.py --synthetic --quick   # engine check (~90 s)
 python scripts/run_experiments.py           # real NASA POWER run
 python scripts/build_notebook.py            # regenerate the notebook
+```
+
+### 7.1 Reproduce one mutation
+
+```bash
+cp -r src tests config /tmp/mut/
+python - <<'PY'
+import io
+path = "/tmp/mut/src/cosmora_v3/nn.py"
+old = "                dp_r = (d_r_times_h * h_prev) * r * (1.0 - r)"
+new = "                dp_r = d_r_times_h * r * (1.0 - r)"
+s = io.open(path).read(); assert s.count(old) == 1
+io.open(path, "w").write(s.replace(old, new))
+PY
+cd /tmp/mut && PYTHONPATH=src python -m unittest discover -s tests   # must FAIL
 ```
