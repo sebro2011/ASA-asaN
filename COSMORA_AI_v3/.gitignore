@@ -1,0 +1,8 @@
+# Run artefacts: regenerable, and large. The manifest inside each run records the
+# config hash and dataset hashes, so a run can be reproduced rather than stored.
+results/
+data/cache/
+notebooks/figures/
+__pycache__/
+*.pyc
+.venv/
