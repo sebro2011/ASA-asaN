@@ -62,7 +62,13 @@ class AdamState:
 
 
 class _BaseNet:
-    """Shared training loop: chronological inner validation, Adam, early stopping."""
+    """Shared training loop: chronological inner validation, Adam, early stopping.
+
+    The inner split is positional (earliest rows train, latest rows validate) because
+    the data are a time series: a random split would let the model early-stop on a
+    month it has effectively already seen through its neighbours. ``inner_val_rows_``
+    records how many rows the early-stopping decision actually used.
+    """
 
     def __init__(self, epochs: int = 300, batch_size: int = 32, lr: float = 0.005,
                  weight_decay: float = 1e-4, patience: int = 40, seed: int = 42,
@@ -98,10 +104,20 @@ class _BaseNet:
         y_scaled = (y - self.y_mean_) / self.y_std_
         n = len(X)
 
-        split = max(int(n * (1.0 - self.inner_val_fraction)), n - 1)
+        # Chronological inner split: the earliest (1 - fraction) of the rows train,
+        # the most recent `fraction` early-stop. The earlier revision wrote
+        # `max(int(n * (1 - f)), n - 1)`, and since n - 1 > n * (1 - f) for every
+        # n > 5 the held-out set collapsed to a single row: best-epoch selection was
+        # then driven by one month's error. See docs/DEFECT_REPORT.md D11.
+        split = int(round(n * (1.0 - self.inner_val_fraction)))
         split = min(max(split, 1), n - 1) if n > 1 else n
         train_idx = np.arange(split)
         val_idx = np.arange(split, n)
+        # Recorded so a test (and a reader) can check the split rather than trust it.
+        # Inner validation is chronological by construction: val_idx follows train_idx
+        # in time, and no row appears in both.
+        self.inner_split_ = int(split)
+        self.inner_val_rows_ = int(n - split)
 
         self._init_params(rng, X.shape[-1])
         optimiser = AdamState()
