@@ -80,6 +80,12 @@ def validate_config(config: Dict[str, Any]) -> None:
     if not 0.0 < alpha < 1.0:
         raise ConfigError("uncertainty.alpha must lie in (0, 1)")
 
+    # Significance level of the comparison family (D15). It is declared rather than
+    # hard-coded so the verdicts in a report can be traced back to a config value.
+    comparison_alpha = float(config["evaluation"].get("alpha", 0.05))
+    if not 0.0 < comparison_alpha < 0.5:
+        raise ConfigError("evaluation.alpha must lie in (0, 0.5)")
+
     quantile = float(config["extreme"]["quantile"])
     if not 0.5 <= quantile < 1.0:
         raise ConfigError("extreme.quantile must lie in [0.5, 1)")

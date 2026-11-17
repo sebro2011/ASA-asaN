@@ -48,6 +48,10 @@ class SeriesResult:
     intervals: Dict[str, SplitConformal] = field(default_factory=dict)
     interval_scores: Dict[str, Dict[str, float]] = field(default_factory=dict)
     metrics_validation: pd.DataFrame = field(default_factory=pd.DataFrame)
+    # Forecast-instance view of the same folds: the two tables differ only in whether
+    # months covered by more than one fold are collapsed (see _month_level_validation).
+    metrics_validation_instances: pd.DataFrame = field(default_factory=pd.DataFrame)
+    validation_counts: Dict[str, float] = field(default_factory=dict)
     metrics_test: pd.DataFrame = field(default_factory=pd.DataFrame)
     fold_table: pd.DataFrame = field(default_factory=pd.DataFrame)
     # model -> seed -> {model, scaler, columns, lookback} for artefact export
@@ -98,9 +102,10 @@ def run_series(
             y_tr = y[fold.train_slice]
             for name in names:
                 pred = _fit_predict(name, cfg, seed, spec.lookback, X_tr, y_tr, X_ev)
-                slot = validation[name].setdefault(str(seed), {"pred": [], "true": []})
+                slot = validation[name].setdefault(str(seed), {"pred": [], "true": [], "index": []})
                 slot["pred"].append(pred)
                 slot["true"].append(y[fold.eval_slice])
+                slot["index"].append(np.arange(fold.eval_start, fold.eval_end))
             fold_rows.append({**fold.describe(), "seed": seed})
 
         scaler = TrainOnlyScaler().fit(X[test.train_slice])
@@ -138,14 +143,30 @@ def run_series(
     reference = climatology_forecast(y[test.train_slice], train_months, test_months)
 
     val_rows: List[Dict[str, Any]] = []
+    inst_rows: List[Dict[str, Any]] = []
     test_rows: List[Dict[str, Any]] = []
+    month_level: Dict[str, Dict[str, pd.DataFrame]] = {}
     for name in names:
+        month_level[name] = {}
         for seed, slot in validation[name].items():
             v_pred = np.concatenate(slot["pred"])
             v_true = np.concatenate(slot["true"])
-            row = {"model": name, "seed": int(seed), "split": "validation"}
-            row.update(summarise(v_true, v_pred))
+
+            # -- month level: the unit a metric is supposed to describe -----------
+            months, n_instances = _month_level_validation(slot)
+            month_level[name][str(seed)] = months
+            row = {
+                "model": name, "seed": int(seed), "split": "validation",
+                "n_instances": float(n_instances),
+            }
+            row.update(summarise(months["true"].to_numpy(), months["pred"].to_numpy()))
             val_rows.append(row)
+
+            # -- instance level: every forecast kept, nothing discarded -----------
+            inst = {"model": name, "seed": int(seed), "split": "validation",
+                    "n_months": float(len(months))}
+            inst.update(summarise(v_true, v_pred))
+            inst_rows.append(inst)
 
         for seed, pred in predictions[name].items():
             row = {"model": name, "seed": int(seed), "split": "test"}
@@ -153,7 +174,13 @@ def run_series(
             test_rows.append(row)
 
     result.metrics_validation = pd.DataFrame(val_rows)
+    result.metrics_validation_instances = pd.DataFrame(inst_rows)
     result.metrics_test = pd.DataFrame(test_rows)
+    any_slot = next(iter(validation[names[0]].values()))
+    result.validation_counts = {
+        "forecast_instances": float(len(np.concatenate(any_slot["index"]))),
+        "distinct_months": float(len(next(iter(month_level[names[0]].values())))),
+    }
 
     # -- uncertainty ---------------------------------------------------------
     # Calibration uses the seed-mean out-of-fold prediction for each validation
@@ -162,8 +189,16 @@ def run_series(
     # shrink the conformal quantile for no scientific reason.
     alpha = float(cfg["uncertainty"]["alpha"])
     for name in names:
-        preds = np.vstack([np.concatenate(slot["pred"]) for slot in validation[name].values()])
-        truths = np.concatenate(next(iter(validation[name].values()))["true"])
+        # One residual per distinct month, never one per fold instance: overlapping
+        # validation windows would otherwise enter the same month twice and the
+        # conformal quantile would be computed over duplicated evidence.
+        frames = [month_level[name][seed] for seed in month_level[name]]
+        index = frames[0].index
+        for frame in frames[1:]:
+            if not frame.index.equals(index):
+                raise ValueError(f"{location_id}/{target_key}/{name}: seeds disagree on validation months")
+        preds = np.vstack([frame["pred"].to_numpy() for frame in frames])
+        truths = frames[0]["true"].to_numpy()
         mean_val = preds.mean(axis=0)
         interval = calibrate_residuals(truths - mean_val, alpha)
 
@@ -178,6 +213,35 @@ def run_series(
 
     result.elapsed_seconds = time.time() - started
     return result
+
+
+def _month_level_validation(slot: Dict[str, List[np.ndarray]]) -> tuple[pd.DataFrame, int]:
+    """Collapse out-of-fold predictions to one row per target month.
+
+    Walk-forward folds overlap whenever ``cv_step_months < cv_validation_months``, so
+    the concatenated validation prediction vector contains interior months more than
+    once (192 instances over 108 months in the shipped configuration). Each instance is
+    a legitimate forecast from a different training window — none is discarded — but
+    they are *not* independent observations of the same month.
+
+    This returns one row per distinct month, taking the mean of the forecasts that
+    covered it, together with the number of instances that were collapsed. Metrics and
+    the conformal calibration use this view; ``metrics_validation_instances`` keeps the
+    instance-level numbers so the collapse is auditable rather than hidden.
+    """
+    index = np.concatenate(slot["index"])
+    pred = np.concatenate(slot["pred"])
+    true = np.concatenate(slot["true"])
+    if not (len(index) == len(pred) == len(true)):
+        raise ValueError("validation instance arrays disagree in length")
+    frame = pd.DataFrame({"month": index, "pred": pred, "true": true})
+    grouped = frame.groupby("month", sort=True)
+    spread = grouped["true"].agg(lambda values: float(values.max() - values.min()))
+    if float(spread.max()) > 0.0:
+        raise ValueError("the same month has different truths across folds")
+    months = grouped[["pred", "true"]].mean().astype("float64")
+    months.index.name = "month"
+    return months, int(len(index))
 
 
 def _fit_predict(

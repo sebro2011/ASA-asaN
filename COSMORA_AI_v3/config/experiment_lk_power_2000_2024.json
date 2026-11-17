@@ -146,6 +146,7 @@
     "bootstrap_resamples": 5000,
     "bootstrap_seed": 20241101,
     "dm_max_lag": 6,
+    "alpha": 0.05,
     "primary_metric": "mae"
   },
   "output": {

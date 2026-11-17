@@ -263,6 +263,30 @@ def _figure_gallery(out_dir: Path) -> str:
     )
 
 
+def _validation_counts_note(validation: pd.DataFrame) -> List[str]:
+    """Say plainly what the validation numbers are averaged over.
+
+    Walk-forward folds overlap when the step is shorter than the horizon, so the number
+    of forecast instances exceeds the number of distinct months. Both are printed: a
+    single "n" here would be ambiguous, which is exactly how the pre-correction tables
+    misled their reader (DEFECT_REPORT D12).
+    """
+    if validation is None or validation.empty:
+        return []
+    months = int(validation["n"].iloc[0]) if "n" in validation else None
+    instances = int(validation["n_instances"].iloc[0]) if "n_instances" in validation else None
+    if months is None or instances is None:
+        return []
+    overlap = f" ({instances / months:.2f}x, folds overlap)" if months and instances > months else ""
+    return [
+        f"_Each row is one model × seed. Metrics are computed over **{months} distinct target "
+        f"months**; the folds produced **{instances} forecast instances**{overlap}. Overlapping "
+        "instances are averaged per month — none is discarded, and instance-level numbers are "
+        "in `tables/metrics_validation_instances.csv`._",
+        "",
+    ]
+
+
 def render_markdown_report(
     out_dir: Path,
     manifest: Dict[str, Any],
@@ -309,8 +333,36 @@ def render_markdown_report(
         f"- scientific results: **{manifest['scientific_results']}**",
         f"- seeds executed: {manifest.get('seeds_executed', manifest['seeds'])} (configured: {manifest['seeds']})",
         f"- quick mode: {manifest['quick_mode']}",
-        "",
     ]
+    execution = manifest.get("execution") or {}
+    if execution:
+        epochs = execution.get("epochs_effective") or {}
+        if epochs:
+            lines.append("- epochs (actual): " + ", ".join(f"{k}={v}" for k, v in epochs.items()))
+        if execution.get("folds_per_series"):
+            folds = sorted(set(execution["folds_per_series"].values()))
+            lines.append(f"- folds per series: {folds[0]}" + (" (all series)" if len(folds) == 1 else f" — values {folds}"))
+        if execution.get("alpha") is not None:
+            lines.append(
+                f"- significance: alpha={execution['alpha']} · verdicts require the bootstrap "
+                "interval to exclude zero and both adjusted p-values to clear alpha"
+            )
+        dm = execution.get("dm_test") or {}
+        if dm:
+            lines.append(
+                f"- Diebold–Mariano: {dm.get('variance')} variance, lag {dm.get('max_lag')}, "
+                f"{dm.get('reference')}, {dm.get('small_sample')} correction"
+            )
+    code = manifest.get("code") or {}
+    if code.get("git_sha"):
+        dirty = " (working tree dirty)" if code.get("working_tree_dirty") else ""
+        lines.append(f"- code: {code.get('package_version')} @ `{str(code['git_sha'])[:12]}`{dirty}")
+    if manifest.get("dataset_file_sha256"):
+        lines.append(
+            "- cache file sha256: "
+            + ", ".join(f"{k}={str(v)[:12]}" for k, v in manifest["dataset_file_sha256"].items())
+        )
+    lines += [""]
     if not manifest["scientific_results"]:
         lines += [
             "> **ENGINE CHECK — not scientific results.**",
@@ -321,6 +373,8 @@ def render_markdown_report(
         ]
     lines += [
         "## Validation (walk-forward, mean over seeds)",
+        "",
+        *_validation_counts_note(validation),
         markdown_table(summary(validation)),
         "",
         "## Independent test tail (mean over seeds)",

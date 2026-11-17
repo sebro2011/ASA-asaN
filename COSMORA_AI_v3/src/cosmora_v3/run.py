@@ -28,7 +28,7 @@ from .data import load_dataset
 from .evaluate import SeriesResult, run_series, seed_stability
 from .extreme import analyse as analyse_extremes
 from .plots import actual_vs_predicted, extreme_chart, model_comparison, overview_dashboard, scatter_panel, seed_stability_chart
-from .stats import summarise_comparison
+from .stats import benjamini_hochberg, conclusion, summarise_comparison
 
 
 LIMITATIONS_COMMON = [
@@ -110,6 +110,9 @@ def run(
                     seed=int(config["evaluation"]["bootstrap_seed"]),
                     max_lag=int(config["evaluation"]["dm_max_lag"]),
                 )
+                # Raw, uncorrected numbers. The verdict is finalised across the whole
+                # family of planned comparisons once every series has run, because a
+                # multiplicity correction is a property of the family, not of a row.
                 comparison_rows.append({
                     "location": location["id"], "target": target,
                     "candidate": name, "reference": "ensemble",
@@ -119,7 +122,9 @@ def run(
                     "ci_low": delta["ci_low"], "ci_high": delta["ci_high"],
                     "bootstrap_p": delta["p_two_sided"],
                     "dm_stat": dm["dm_stat"], "dm_p": dm["p_value"],
-                    "verdict": verdict,
+                    "dm_p_normal": dm["p_value_normal"],
+                    "dm_lag": dm["lag_used"], "dm_correction": dm["correction"],
+                    "verdict_raw": verdict,
                     "n_months": int(len(result.y_true)),
                 })
 
@@ -147,17 +152,26 @@ def run(
                     extreme_rows.append({"location": location["id"], "model": name, **rows})
 
     # -- tables ---------------------------------------------------------------
-    val_frames, test_frames, fold_frames = [], [], []
+    val_frames, inst_frames, test_frames, fold_frames = [], [], [], []
     for result in series_results:
         if not result.metrics_validation.empty:
             val_frames.append(result.metrics_validation.assign(location=result.location_id, target=result.target))
+        if not result.metrics_validation_instances.empty:
+            inst_frames.append(result.metrics_validation_instances.assign(
+                location=result.location_id, target=result.target))
         if not result.metrics_test.empty:
             test_frames.append(result.metrics_test.assign(location=result.location_id, target=result.target))
         if not result.fold_table.empty:
             fold_frames.append(result.fold_table.assign(location=result.location_id, target=result.target))
 
+    alpha = float(config["evaluation"].get("alpha", 0.05))
+    _apply_multiplicity(comparison_rows, alpha=alpha)
+
     tables: Dict[str, pd.DataFrame] = {
         "metrics_validation": pd.concat(val_frames, ignore_index=True) if val_frames else pd.DataFrame(),
+        "metrics_validation_instances": (
+            pd.concat(inst_frames, ignore_index=True) if inst_frames else pd.DataFrame()
+        ),
         "metrics_test": pd.concat(test_frames, ignore_index=True) if test_frames else pd.DataFrame(),
         "folds": pd.concat(fold_frames, ignore_index=True) if fold_frames else pd.DataFrame(),
         "statistical_comparisons": pd.DataFrame(comparison_rows),
@@ -182,6 +196,30 @@ def run(
             "seeds_executed": seeds,
             "locations_executed": sorted({r.location_id for r in series_results}),
             "folds_executed": max_folds,
+            # What the run actually used, not only what the config asked for.
+            "execution": {
+                "epochs_override": epochs_override,
+                "epochs_effective": {
+                    model: int(config["models"][model].get("epochs", 0))
+                    for model in ("mlp", "gru", "lstm")
+                } if not epochs_override else {
+                    model: int(epochs_override) for model in ("mlp", "gru", "lstm")
+                },
+                "folds_per_series": {r.location_id + "/" + r.target: int(len(r.fold_table))
+                                     for r in series_results},
+                "validation_counts": {r.location_id + "/" + r.target: r.validation_counts
+                                      for r in series_results},
+                "alpha": float(config["evaluation"].get("alpha", 0.05)),
+                "multiplicity_correction": "benjamini-hochberg over the planned comparison family",
+                "dm_test": {
+                    "variance": "newey-west (bartlett)",
+                    "max_lag": int(config["evaluation"]["dm_max_lag"]),
+                    "reference": "student-t, df = n-1",
+                    "small_sample": "harvey-leybourne-newbold",
+                },
+            },
+            "code": _code_identity(),
+            "dataset_file_sha256": _dataset_file_hashes(config),
             "epochs_override": epochs_override,
             "series": [
                 {"location": r.location_id, "target": r.target,
@@ -218,6 +256,104 @@ def run(
     }
     log(f"[COSMORA v3] finished in {summary['seconds']}s → {run_dir}")
     return summary
+
+
+def _apply_multiplicity(rows: List[Dict[str, Any]], *, alpha: float = 0.05) -> None:
+    """Benjamini–Hochberg across the *planned* family, then final verdicts.
+
+    The family is every ensemble-vs-member comparison the design specifies (cities ×
+    targets × members), not only the rows that happened to run: shrinking the family to
+    the tests you chose to report would silently weaken the correction. Adjustments are
+    computed on the two p-values separately (Diebold–Mariano, and the paired-bootstrap
+    p-value that accompanies the interval), and a verdict now requires **both**
+    adjusted values to clear ``alpha`` as well as the bootstrap interval excluding zero.
+
+    Raw values are kept in the same row as ``dm_p`` / ``bootstrap_p`` so a reader can see
+    what the correction changed.
+    """
+    if not rows:
+        return
+    dm_q = benjamini_hochberg([row["dm_p"] for row in rows])
+    boot_q = benjamini_hochberg([row["bootstrap_p"] for row in rows])
+    for row, q_dm, q_boot in zip(rows, dm_q, boot_q):
+        row["dm_q"] = float(q_dm)
+        row["bootstrap_q"] = float(q_boot)
+        delta = {"delta": row["mae_delta_ensemble_minus_candidate"],
+                 "ci_low": row["ci_low"], "ci_high": row["ci_high"]}
+        strict = _verdict_with_family(delta, row["dm_p"], q_dm, q_boot, alpha)
+        row["verdict"] = strict
+        row["verdict_pre_correction"] = row.get("verdict_raw", strict)
+        row["alpha"] = float(alpha)
+        row["family_size"] = int(len(rows))
+
+
+def _verdict_with_family(
+    delta: Dict[str, float], p_dm: float, q_dm: float, q_boot: float, alpha: float
+) -> str:
+    """Verdict that requires both tests to survive the family-wise correction."""
+    if not np.isfinite(delta["delta"]):
+        return "insufficient data"
+    interval_excludes_zero = delta["ci_low"] > 0 or delta["ci_high"] < 0
+    boot_sig = bool(np.isfinite(q_boot) and q_boot < alpha)
+    dm_sig = bool(np.isfinite(q_dm) and q_dm < alpha)
+    if interval_excludes_zero and dm_sig and boot_sig:
+        return "better" if delta["delta"] < 0 else "worse"
+    if interval_excludes_zero != dm_sig:
+        return "inconclusive (tests disagree)"
+    return "not distinguishable"
+
+
+def _code_identity() -> Dict[str, Any]:
+    """Package version plus the commit this run executed, when git is available."""
+    import os
+    import subprocess
+
+    version = "unknown"
+    try:
+        from . import __version__ as version  # type: ignore
+    except Exception:  # noqa: BLE001 - provenance must never break a run
+        pass
+    sha = os.environ.get("GITHUB_SHA") or os.environ.get("COSMORA_GIT_SHA")
+    if not sha:
+        try:
+            sha = subprocess.run(
+                ["git", "rev-parse", "HEAD"],
+                cwd=str(Path(__file__).resolve().parents[2]),
+                capture_output=True, text=True, timeout=5, check=False,
+            ).stdout.strip() or None
+        except Exception:  # noqa: BLE001
+            sha = None
+    try:
+        dirty = subprocess.run(
+            ["git", "status", "--porcelain"],
+            cwd=str(Path(__file__).resolve().parents[2]),
+            capture_output=True, text=True, timeout=5, check=False,
+        ).stdout.strip()
+        dirty_flag = bool(dirty)
+    except Exception:  # noqa: BLE001
+        dirty_flag = None
+    return {"package_version": version, "git_sha": sha, "working_tree_dirty": dirty_flag}
+
+
+def _dataset_file_hashes(config: Dict[str, Any]) -> Dict[str, str]:
+    """SHA-256 of each cache file as bytes.
+
+    Deliberately separate from ``payload_sha256`` in the provenance record, which is
+    computed over a re-serialised object and therefore cannot be checked against the file
+    on disk (DEFECT_REPORT D18, out of scope in this phase). This field can be: it is the
+    digest of the exact bytes a reader has.
+    """
+    import hashlib
+
+    base = Path(__file__).resolve().parents[2]
+    cache_dir = base / config["power"]["cache_dir"]
+    stamp = f"{config['power']['start_year']}_{config['power']['end_year']}"
+    out: Dict[str, str] = {}
+    for loc in config["locations"]:
+        path = cache_dir / f"power_{loc['id']}_{stamp}.json"
+        if path.exists():
+            out[loc["id"]] = hashlib.sha256(path.read_bytes()).hexdigest()
+    return out
 
 
 def _location_summary(metrics_test: pd.DataFrame) -> pd.DataFrame:
