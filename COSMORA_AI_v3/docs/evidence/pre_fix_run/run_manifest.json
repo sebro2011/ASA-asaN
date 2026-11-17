@@ -1,0 +1,163 @@
+{
+  "package": "COSMORA_AI_v3",
+  "version": "3.0.0",
+  "created_utc": "2026-11-17T18:26:11+00:00",
+  "config_hash": "6da3a2ceb621a903",
+  "config_path": "config/experiment_lk_power_2000_2024.json",
+  "data_provenance": "NASA_POWER",
+  "scientific_results": true,
+  "quick_mode": false,
+  "seeds": [
+    7,
+    21,
+    42,
+    84,
+    123
+  ],
+  "locations_configured": [
+    "colombo",
+    "kandy",
+    "jaffna"
+  ],
+  "environment": {
+    "python": "3.11.2",
+    "platform": "Linux-6.1.158+-x86_64-with-glibc2.36",
+    "numpy": "2.4.6",
+    "pandas": "3.1.1"
+  },
+  "dataset": [
+    {
+      "location_id": "colombo",
+      "source": "cache",
+      "url": "https://power.larc.nasa.gov/api/temporal/monthly/point?parameters=T2M,PRECTOTCORR&community=RE&longitude=79.8612&latitude=6.9271&start=2000&end=2024&format=JSON",
+      "retrieved_utc": "2026-11-17T13:58:06+00:00",
+      "payload_sha256": "443d6d9b86057bde1d6b724ef06d2ef495c2c813ade13248651fe1531e243ac6",
+      "rows": 300,
+      "first_month": "2000-01",
+      "last_month": "2024-12",
+      "dropped_months": 0,
+      "annual_rows_excluded": 25,
+      "power_header": {
+        "title": "NASA/POWER Source Native Resolution Monthly and Annual",
+        "api": {
+          "version": "v2.10.0",
+          "name": "POWER Monthly and Annual API"
+        },
+        "sources": [
+          "MERRA2"
+        ],
+        "fill_value": -999.0,
+        "time_standard": "LST",
+        "start": "20000101",
+        "end": "20241231"
+      }
+    },
+    {
+      "location_id": "kandy",
+      "source": "cache",
+      "url": "https://power.larc.nasa.gov/api/temporal/monthly/point?parameters=T2M,PRECTOTCORR&community=RE&longitude=80.6337&latitude=7.2906&start=2000&end=2024&format=JSON",
+      "retrieved_utc": "2026-11-17T13:58:06+00:00",
+      "payload_sha256": "baaa534ac7a789fbc824a2c63a7b15514c3177e02d59c34322147ad79239dfb6",
+      "rows": 300,
+      "first_month": "2000-01",
+      "last_month": "2024-12",
+      "dropped_months": 0,
+      "annual_rows_excluded": 25,
+      "power_header": {
+        "title": "NASA/POWER Source Native Resolution Monthly and Annual",
+        "api": {
+          "version": "v2.10.0",
+          "name": "POWER Monthly and Annual API"
+        },
+        "sources": [
+          "MERRA2"
+        ],
+        "fill_value": -999.0,
+        "time_standard": "LST",
+        "start": "20000101",
+        "end": "20241231"
+      }
+    },
+    {
+      "location_id": "jaffna",
+      "source": "cache",
+      "url": "https://power.larc.nasa.gov/api/temporal/monthly/point?parameters=T2M,PRECTOTCORR&community=RE&longitude=80.0255&latitude=9.6615&start=2000&end=2024&format=JSON",
+      "retrieved_utc": "2026-11-17T13:58:06+00:00",
+      "payload_sha256": "906b9c734b05fa892ef981dc9825dd2435f9d90d76a977056c815df72de5a3b9",
+      "rows": 300,
+      "first_month": "2000-01",
+      "last_month": "2024-12",
+      "dropped_months": 0,
+      "annual_rows_excluded": 25,
+      "power_header": {
+        "title": "NASA/POWER Source Native Resolution Monthly and Annual",
+        "api": {
+          "version": "v2.10.0",
+          "name": "POWER Monthly and Annual API"
+        },
+        "sources": [
+          "MERRA2"
+        ],
+        "fill_value": -999.0,
+        "time_standard": "LST",
+        "start": "20000101",
+        "end": "20241231"
+      }
+    }
+  ],
+  "timing": {
+    "total_seconds": 1528.7
+  },
+  "seeds_executed": [
+    7,
+    21,
+    42,
+    84,
+    123
+  ],
+  "locations_executed": [
+    "colombo",
+    "jaffna",
+    "kandy"
+  ],
+  "folds_executed": null,
+  "epochs_override": null,
+  "series": [
+    {
+      "location": "colombo",
+      "target": "temp",
+      "test_months": 60,
+      "seconds": 295.4
+    },
+    {
+      "location": "colombo",
+      "target": "rain",
+      "test_months": 60,
+      "seconds": 376.2
+    },
+    {
+      "location": "kandy",
+      "target": "temp",
+      "test_months": 60,
+      "seconds": 231.5
+    },
+    {
+      "location": "kandy",
+      "target": "rain",
+      "test_months": 60,
+      "seconds": 202.0
+    },
+    {
+      "location": "jaffna",
+      "target": "temp",
+      "test_months": 60,
+      "seconds": 245.4
+    },
+    {
+      "location": "jaffna",
+      "target": "rain",
+      "test_months": 60,
+      "seconds": 172.0
+    }
+  ]
+}
