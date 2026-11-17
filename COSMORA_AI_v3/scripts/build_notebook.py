@@ -52,10 +52,16 @@ import pandas as pd, numpy as np
 pd.set_option("display.width", 140)
 pd.set_option("display.max_columns", 30)
 
-config = load_config(ROOT / "config" / "experiment.json")
+# The notebook runs the configuration that the committed POWER payloads can actually
+# serve: 2000-2024, two parameters. config/experiment.json (1985-2025, five parameters)
+# is the wider design; the 7.3 section of the audit records the difference and why.
+config = load_config(ROOT / "config" / "experiment_lk_power_2000_2024.json")
 print("config hash:", config["config_hash"])
 print("seeds:", config["seeds"])
-print("locations:", [loc["id"] for loc in config["locations"]])"""),
+print("locations:", [loc["id"] for loc in config["locations"]])
+print("window:", config["power"]["start_year"], "-", config["power"]["end_year"],
+      "| parameters:", list(config["power"]["parameters"]))
+print("derivation from the base config:", *config["derivation"]["changes"], sep="\n  - ")"""),
     ("markdown", """## 2 · Data acquisition (NASA POWER)
 
 Cached responses are reused; a failed request raises `DataUnavailable` rather than
@@ -68,7 +74,28 @@ except DataUnavailable as exc:
     raise SystemExit(f"NASA POWER unreachable — no analysis performed.\\n{exc}")
 
 audit = pd.DataFrame([p.as_dict() for p in provenance])
-display(audit[["location_id", "source", "first_month", "last_month", "rows", "dropped_months"]])"""),
+display(audit[["location_id", "source", "first_month", "last_month", "rows",
+               "dropped_months", "annual_rows_excluded"]])"""),
+    ("markdown", """## 2b · The thirteenth value in every year, and why it is not a month
+
+A POWER monthly response has **thirteen** values per year: `YYYY01` … `YYYY12` and
+`YYYY13`, the annual aggregate. Month 13 does not exist, so the loader removes it before
+building the month index — and records how many rows it removed. Keeping it would either
+crash the index or, with a looser parser, paste a year-mean onto December."""),
+    ("code", """payload = json.loads((ROOT / "data" / "cache" / "power_colombo_2000_2024.json").read_text())
+keys = list(payload["properties"]["parameter"]["T2M"])
+year_keys = [k for k in keys if k.startswith("2000")]
+print("values in year 2000:", len(year_keys), "→", year_keys)
+
+try:
+    pd.PeriodIndex(keys, freq="M")
+except Exception as exc:
+    print("a naive parse refuses the payload:", type(exc).__name__, "—", exc)
+
+print("annual rows excluded by the loader:", int(audit.loc[0, "annual_rows_excluded"]),
+      "| months modelled:", int(audit.loc[0, "rows"]))
+check = payload["_cosmora_transcription_check"]
+print("transcription check:", json.dumps(check["parameters"], indent=2))"""),
     ("markdown", "## 3 · Feature build + leakage assertions\n\nA row for month *t* may only contain information available at the end of *t-1*. The cell asserts that, rather than asserting it in prose."),
     ("code", """loc_id = config["locations"][0]["id"]
 target = "temp"

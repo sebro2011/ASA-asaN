@@ -110,10 +110,31 @@ def scatter_panel(y_true: np.ndarray, predictions: Dict[str, np.ndarray], title:
     return path
 
 
-def seed_stability_chart(metrics: pd.DataFrame, metric: str, title: str, path: Path) -> Path:
+def seed_stability_chart(stability: pd.DataFrame, metric: str, title: str, path: Path) -> Path:
+    """Spread across seeds, per model, in the only unit-free form: std / |mean|.
+
+    Plotting raw MAE by model would put °C and mm/day in one box — the mixture has no
+    unit, so it has no meaning. Values come from ``seed_stability``, which is keyed per
+    (location, target).
+    """
+    if stability.empty or "relative_spread" not in stability.columns:
+        # Nothing to draw; write a placeholder rather than a chart of nothing.
+        fig, ax = plt.subplots(figsize=(7.0, 3.2), dpi=140)
+        ax.text(0.5, 0.5, "no seed-stability rows", ha="center", va="center", fontsize=10, color=INK)
+        ax.axis("off")
+        ax.set_title(title, fontsize=10, color=INK, loc="left")
+        fig.tight_layout()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        fig.savefig(path)
+        plt.close(fig)
+        return path
+
     fig, ax = plt.subplots(figsize=(7.0, 3.2), dpi=140)
-    models = sorted(metrics["model"].unique())
-    data = [metrics.loc[metrics["model"] == m, metric].to_numpy(dtype="float64") for m in models]
+    models = sorted(stability["model"].unique())
+    data = [
+        (stability.loc[stability["model"] == m, "relative_spread"].dropna().to_numpy(dtype="float64"))
+        for m in models
+    ]
     box = ax.boxplot(data, tick_labels=[m.upper() for m in models], patch_artist=True, widths=0.5)
     for patch, model in zip(box["boxes"], models):
         patch.set_facecolor(PALETTE.get(model, "#475569"))
@@ -121,7 +142,7 @@ def seed_stability_chart(metrics: pd.DataFrame, metric: str, title: str, path: P
         patch.set_edgecolor(PALETTE.get(model, "#475569"))
     for median in box["medians"]:
         median.set_color(INK)
-    ax.set_ylabel(metric.upper(), fontsize=9, color=INK)
+    ax.set_ylabel("std / |mean|", fontsize=9, color=INK)
     ax.set_title(title, fontsize=10, color=INK, loc="left")
     _style(ax)
     fig.tight_layout()

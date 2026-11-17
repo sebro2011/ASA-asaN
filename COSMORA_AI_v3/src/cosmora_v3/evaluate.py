@@ -212,14 +212,27 @@ def aggregate_metrics(rows: List[pd.DataFrame], **extra: Any) -> pd.DataFrame:
 
 
 def seed_stability(metrics_test: pd.DataFrame, metric: str = "mae") -> pd.DataFrame:
-    """Dispersion of a test metric across seeds, per model."""
+    """Dispersion of a test metric across seeds, per model **within each unit**.
+
+    Grouping by model alone pools degrees Celsius with millimetres per day, and the
+    mean and standard deviation of that mixture describe nothing: a 0.3 °C model and a
+    3 mm/day model land in the same distribution. Rows are therefore keyed by
+    ``(location, target, model)``, where the metric has one unit.
+
+    ``relative_spread`` (std / |mean|) is unit-free, so it is the only quantity in this
+    table that can be compared across locations or targets — and the only one the
+    chart plots.
+    """
     if metrics_test.empty or metric not in metrics_test:
         return pd.DataFrame()
-    grouped = metrics_test.groupby("model")[metric]
-    return pd.DataFrame({
+    keys = [k for k in ("location", "target") if k in metrics_test.columns]
+    grouped = metrics_test.groupby(keys + ["model"])[metric]
+    table = pd.DataFrame({
         "mean": grouped.mean(),
         "std": grouped.std(ddof=1),
         "min": grouped.min(),
         "max": grouped.max(),
-        "relative_spread": grouped.std(ddof=1) / grouped.mean().abs().replace(0, np.nan),
-    }).reset_index()
+        "seeds": grouped.count(),
+    })
+    table["relative_spread"] = table["std"] / table["mean"].abs().replace(0, np.nan)
+    return table.reset_index().sort_values(keys + ["model"]).reset_index(drop=True)

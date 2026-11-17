@@ -1,8 +1,18 @@
 # Run artefacts: regenerable, and large. The manifest inside each run records the
 # config hash and dataset hashes, so a run can be reproduced rather than stored.
 results/
-data/cache/
+data/cache/*
 notebooks/figures/
 __pycache__/
 *.pyc
 .venv/
+
+# Exception: the three verified NASA POWER payloads below ARE committed. They are the
+# source data of the real-data run, this sandbox cannot re-download them (no HTTPS
+# egress to power.larc.nasa.gov), and each file carries its request URL, retrieval
+# stamp and its own month-13 transcription check. Without them a clone could only
+# reproduce the synthetic engine check.
+!data/cache/power_colombo_2000_2024.json
+!data/cache/power_kandy_2000_2024.json
+!data/cache/power_jaffna_2000_2024.json
+!data/cache/README.md

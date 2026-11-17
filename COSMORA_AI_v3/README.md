@@ -22,9 +22,9 @@ cd COSMORA_AI_v3
 python -m venv .venv && . .venv/bin/activate
 pip install -r requirements.txt
 
-python -m unittest discover -s tests                     # 26 tests, incl. gradient checks
+python -m unittest discover -s tests                     # 35 tests, incl. gradient + payload checks
 python scripts/run_experiments.py --synthetic --quick    # engine check, ~90 s, NOT science
-python scripts/run_experiments.py                        # real NASA POWER run
+python scripts/run_experiments.py --config config/experiment_lk_power_2000_2024.json   # real NASA POWER run
 ```
 
 Open `results/<run_id>/dashboard.html` for the comparison dashboard and
@@ -36,6 +36,15 @@ Open `results/<run_id>/dashboard.html` for the comparison dashboard and
   retrieval timestamp and a SHA-256 of the payload.
 * If POWER is unreachable the run **fails with exit code 2**. No interpolation, no
   forward-fill, no synthetic stand-in.
+* The monthly endpoint returns **thirteen** values per year: `YYYY01…YYYY12` plus
+  `YYYY13`, the annual aggregate. The thirteenth value is excluded before the month index
+  is built, and the count is recorded in the provenance. Keeping it would inject a
+  year-mean into a monthly series — see `tests/test_data_payload.py`.
+* The three committed payloads in `data/cache/` (Colombo, Kandy, Jaffna, 2000–2024) are
+  the source data of the real run. They were captured through a fetch tool and
+  transcribed, so each carries a per-value transcription check — POWER's month-13 value
+  must equal the mean of the twelve transcribed months. See
+  [`data/cache/README.md`](data/cache/README.md).
 * `--synthetic` exists only for verifying the code paths. Its output is stamped
   `data_provenance: SYNTHETIC`, `scientific_results: false`, and the dashboard carries a
   red banner saying so.
@@ -67,12 +76,35 @@ results/<run_id>/
 * **Extremes** — threshold = configured quantile of *training* rainfall, in mm/day, because
   POWER's `PRECTOTCORR` is a daily rate and a monthly total would need a day-count factor.
 
+## Two configs, and why
+
+`config/experiment.json` is the full design: 1985–2025, five POWER parameters, 8 folds on
+40 years. `config/experiment_lk_power_2000_2024.json` is the configuration that actually
+produced the reported real-data numbers: 2000–2024, two parameters (`T2M`,
+`PRECTOTCORR`), 120-month initial training to keep 8 folds on the shorter series. Its
+`derivation` block lists every difference, and the gap between the two is written up in
+[`docs/FINAL_SCIENTIFIC_AUDIT.md`](docs/FINAL_SCIENTIFIC_AUDIT.md) §7.3. Quote results
+against the config that produced them.
+
 ## Status of the numbers
 
-The pipeline is verified end to end on synthetic data in the development environment.
-Real NASA POWER data was not reachable there, so **no climate metrics have been produced
-yet**; `docs/FINAL_SCIENTIFIC_AUDIT.md` states exactly which claims are verified, which are
-pending, and why.
+Real NASA POWER data has been run: 3 cities × 2 targets × 5 seeds × 8 walk-forward
+folds plus a sealed 60-month test tail, in 1 218 s. Headline result, honestly stated:
+
+* **Temperature** is predictable one month ahead — XGBoost test MAE 0.263 / 0.471 /
+  0.349 °C (Colombo / Kandy / Jaffna), skill vs climatology +0.61 / +0.22 / +0.23.
+* **Rainfall is not**, by this design: skill is negative in half of the cells and the
+  validation winner changes on the sealed test tail in all three cities.
+* **The ensemble is comparable but not superior** to XGBoost: 1 of 6 comparisons favours
+  it (Colombo rainfall), 1 is inconclusive, 4 are not distinguishable. No superiority
+  claim is made.
+* **Extreme rainfall is ranked but not detected** — rank-AUC 0.79–0.99, recall 0.00–0.33.
+
+The full tables, verdicts and the list of claims these results do **not** support are in
+[`docs/FINAL_SCIENTIFIC_AUDIT.md`](docs/FINAL_SCIENTIFIC_AUDIT.md) §8–§9. The synthetic
+engine check is §2 and is labelled as such. The data window actually used (2000–2024, two
+parameters) differs from the base config's 1985–2025 five-parameter design; §7.3
+enumerates the difference.
 
 ## Layout
 

@@ -180,6 +180,7 @@ def run(
             # The executed seed list, not the configured one: a quick run uses a
             # subset, and the report must not imply otherwise.
             "seeds_executed": seeds,
+            "locations_executed": sorted({r.location_id for r in series_results}),
             "folds_executed": max_folds,
             "epochs_override": epochs_override,
             "series": [
@@ -281,7 +282,11 @@ def _make_figures(run_dir: Path, series_results: List[SeriesResult], tables: Dic
                 model_comparison(r2_subset, "r2", f"test R2 · {target}", figures / f"comparison_r2_{target}.png")
 
     if not tables["metrics_test"].empty:
-        seed_stability_chart(tables["metrics_test"], "mae", "Test MAE across seeds", figures / "seed_stability_mae.png")
+        seed_stability_chart(
+            tables["seed_stability"], "mae",
+            "Test MAE: dispersion across seeds (per location/target, unit-free)",
+            figures / "seed_stability_mae.png",
+        )
     if not tables["extreme_rainfall"].empty:
         extreme_chart(tables["extreme_rainfall"].head(12), figures / "extreme_rainfall.png")
     overview_dashboard(

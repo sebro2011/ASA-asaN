@@ -50,6 +50,7 @@ class Provenance:
     last_month: str
     dropped_months: int
     power_header: Dict[str, Any] = field(default_factory=dict)
+    annual_rows_excluded: int = 0
 
     def as_dict(self) -> Dict[str, Any]:
         return {
@@ -62,6 +63,7 @@ class Provenance:
             "first_month": self.first_month,
             "last_month": self.last_month,
             "dropped_months": self.dropped_months,
+            "annual_rows_excluded": self.annual_rows_excluded,
             "power_header": self.power_header,
         }
 
@@ -82,14 +84,25 @@ def _cache_path(cache_dir: Path, location_id: str, power_cfg: Dict[str, Any]) ->
     return cache_dir / f"power_{location_id}_{stamp}.json"
 
 
+ANNUAL_MONTH_SUFFIX = "13"
+
+
 def _frame_from_payload(
     payload: Dict[str, Any], power_cfg: Dict[str, Any], location_id: str
-) -> tuple[pd.DataFrame, int]:
+) -> tuple[pd.DataFrame, int, int]:
     """Turn a POWER point response into a month-indexed frame.
 
-    Returns the frame and the number of months dropped for containing a fill
-    sentinel in any requested parameter. Dropping the whole month (rather than
-    the single cell) keeps every feature row internally consistent.
+    Returns ``(frame, dropped_months, annual_rows_excluded)``.
+
+    The monthly endpoint returns **thirteen** values per year: ``YYYY01`` ...
+    ``YYYY12`` and ``YYYY13``, the latter being the year's aggregate rather than
+    a month. ``YYYY13`` is removed here, before the month index is built: it has
+    no calendar position, and treating it as a thirteenth month would inject an
+    annual mean into what is supposed to be a monthly series.
+
+    A month containing a fill sentinel in any requested parameter is dropped
+    whole (rather than blanking the single cell) so that every feature row stays
+    internally consistent.
     """
     parameters = payload.get("properties", {}).get("parameter", {})
     if not parameters:
@@ -103,20 +116,26 @@ def _frame_from_payload(
         columns[alias] = pd.Series(series, dtype="float64")
 
     frame = pd.DataFrame(columns)
+    frame.index = frame.index.astype(str)
     frame.index.name = "yyyymm"
     frame = frame.sort_index()
+
+    annual_mask = frame.index.str[-2:] == ANNUAL_MONTH_SUFFIX
+    annual_rows_excluded = int(annual_mask.sum())
+    if annual_rows_excluded:
+        frame = frame.loc[~annual_mask]
+    if frame.empty:
+        raise DataUnavailable(f"{location_id}: no monthly rows after excluding annual aggregates")
 
     sentinel_mask = frame.isin(list(FILL_SENTINELS))
     bad = sentinel_mask.any(axis=1)
     dropped = int(bad.sum())
     frame = frame.loc[~bad]
 
-    months = pd.PeriodIndex(
-        [str(idx) for idx in frame.index], freq="M"
-    ).to_timestamp()
+    months = pd.PeriodIndex([str(idx) for idx in frame.index], freq="M").to_timestamp()
     frame.index = months
     frame.index.name = "date"
-    return frame, dropped
+    return frame, dropped, annual_rows_excluded
 
 
 def fetch_location(
@@ -150,7 +169,7 @@ def fetch_location(
         cache_file.write_text(json.dumps(payload), encoding="utf-8")
         source = "power.larc.nasa.gov"
 
-    frame, dropped = _frame_from_payload(payload, power_cfg, location["id"])
+    frame, dropped, annual_rows = _frame_from_payload(payload, power_cfg, location["id"])
     if len(frame) < 60:
         raise DataUnavailable(
             f"{location['id']}: only {len(frame)} usable months returned; refusing to model"
@@ -167,6 +186,7 @@ def fetch_location(
         last_month=str(frame.index[-1].strftime("%Y-%m")),
         dropped_months=dropped,
         power_header=payload.get("header", {}),
+        annual_rows_excluded=annual_rows,
     )
     return frame, provenance
 
