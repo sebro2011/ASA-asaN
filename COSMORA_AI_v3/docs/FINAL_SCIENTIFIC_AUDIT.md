@@ -21,6 +21,13 @@ unverified. It is written so that a reader can separate the three.
 | Extreme-rainfall detection skill | ❌ recall 0.00–0.33, every observed event underpredicted (§8.4) |
 | Calibrated intervals at nominal 90% | ✅ mostly — conformal coverage 0.817–1.000, mean 0.924; 6 of 30 cells fall below 0.90 and one as low as 0.817 (§8.3) |
 
+**Status after the independent defect pass.** A second audit of the package found 21
+further defects (2 that silently change what the experiment measures, 9 that change a
+reported number or the provenance record, 10 robustness/hygiene). None of them changes the
+direction of the findings below; the neural-network numbers and the word "calibrated" carry
+less weight than this document originally implied. Every item, with evidence and repro
+commands, is in [`DEFECT_REPORT.md`](DEFECT_REPORT.md).
+
 **The one-line version.** On 25 years of NASA POWER data for Colombo, Kandy and Jaffna,
 one-month-ahead **temperature** is predictable well enough to beat climatology with
 XGBoost (test MAE 0.263 / 0.471 / 0.349 °C, skill +0.61 / +0.22 / +0.23), the neural
@@ -399,8 +406,10 @@ bug.
 ### 8.1 Sealed test tail — mean over seeds
 
 Each cell is the mean over the 5 seeds; the ± is the seed standard deviation, which is
-the honest way to read a single-seed number. `skill` is 1 − MAE/MAE(climatology),
-computed on the same test months: **negative means the model is worse than the
+the honest way to read a single-seed number. `skill` is **1 − MSE/MSE(climatology)** as
+implemented in `metrics.skill_score` (an earlier revision of this paragraph said MAE —
+see `docs/DEFECT_REPORT.md` D26), computed on the same test months with the climatology
+taken from the training window only: **negative means the model is worse than the
 training-window climatological mean**, which is the floor any claim has to clear.
 
 **temp (°C)**
