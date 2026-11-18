@@ -5930,8 +5930,8 @@ var PROBE_COOLDOWN_MS = 1e4;
 var MAX_REASON_CHARS = 180;
 var CHAT_PROBE_COOLDOWN_MS = 3e4;
 var CHAT_PROBE_PROMPT = "Reply with the single word: OK";
-var CHAT_PROBE_TIMEOUT_MS = 1e4;
-var CHAT_PROBE_BUDGET_MS = 12e3;
+var CHAT_PROBE_TIMEOUT_MS = 6e3;
+var CHAT_PROBE_BUDGET_MS = 7e3;
 function envValue(env, key2) {
   const value = env?.[key2];
   return typeof value === "string" ? value.trim() : "";
