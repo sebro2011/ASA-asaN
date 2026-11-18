@@ -6134,6 +6134,7 @@ function createDiagnosticsHandler({
 } = {}) {
   let lastProbeAt = 0;
   let lastChatProbeAt = 0;
+  let lastChatSelfTest = null;
   return async function handleNovaDiagnostics2({ probe: deep = false, chat: chatProbe = false } = {}) {
     const keys = {
       openrouter: envValue(env, "OPENROUTER_API_KEY"),
@@ -6267,7 +6268,9 @@ function createDiagnosticsHandler({
     });
     const probes = outcomes.filter((entry) => entry.status === "ok" || entry.status === "error").length;
     let chatSelfTest;
-    if (chatProbe) {
+    if (chatProbe && chatThrottled && lastChatSelfTest) {
+      chatSelfTest = { ...lastChatSelfTest, throttled: true, cachedFrom: lastChatSelfTest.ranAt };
+    } else if (chatProbe) {
       chatSelfTest = { ranAt: new Date(now()).toISOString(), throttled: chatThrottled, results: {} };
       if (wantChatProbe) {
         const targets = ["local", ...providerIds.filter((provider) => keys[provider])];
@@ -6309,6 +6312,7 @@ function createDiagnosticsHandler({
             };
           }
         }));
+        if (!chatSelfTest.throttled) lastChatSelfTest = chatSelfTest;
       }
     }
     return {
