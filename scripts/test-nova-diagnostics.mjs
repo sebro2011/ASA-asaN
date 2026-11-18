@@ -621,3 +621,19 @@ test('the chat self-test is opt-in, throttled, and reports the live budgets', as
   const again = await handler({ chat: true });
   assert.equal(again.chatSelfTest.throttled, true, 'a second call inside 30 s spends nothing');
 });
+
+test('the Vercel diagnostics function forwards ?chat=1 to the self-test', async () => {
+  // `/api/nova/diagnostics` is served by its own function file, not by the
+  // bundled app, so the query flag has to be wired in *both* places.
+  const state = { status: 0, headers: {}, body: null };
+  const get = {
+    state,
+    setHeader(name, value) { state.headers[name.toLowerCase()] = value; },
+    status(code) { state.status = code; return this; },
+    json(payload) { state.body = payload; return this; },
+  };
+  await vercelDiagnosticsHandler({ method: 'GET', query: { chat: '1' } }, get);
+  assert.equal(get.state.status, 200);
+  assert.ok(get.state.body.chatSelfTest, 'the deployment adapter must expose the end-to-end self-test');
+  assert.equal(get.state.body.budgets.upstreamTimeoutMs >= 12_000, true);
+});
