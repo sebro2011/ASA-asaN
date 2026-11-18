@@ -36,6 +36,7 @@ older phase reports are kept for provenance and are marked at the top of the fil
 - [`NOVA_MEMORY_SYSTEM.md`](NOVA_MEMORY_SYSTEM.md), [`NOVA_SKILL_EVOLUTION.md`](NOVA_SKILL_EVOLUTION.md), [`NOVA_RESEARCH_AND_NOVELTY.md`](NOVA_RESEARCH_AND_NOVELTY.md), [`NOVA_LIFE_TECHNICAL_SPEC.md`](NOVA_LIFE_TECHNICAL_SPEC.md)
 - [`NOVA_DEVELOPMENT_REPORT.md`](NOVA_DEVELOPMENT_REPORT.md), [`NOVA_OPENROUTER.md`](NOVA_OPENROUTER.md)
 - [`nova/AI_PROVIDER_DIAGNOSTICS.md`](nova/AI_PROVIDER_DIAGNOSTICS.md) — what `/api/nova/diagnostics` reports and what each `code` means
+- [`nova/PROVIDER_RESILIENCE.md`](nova/PROVIDER_RESILIENCE.md) — the 502/504 repair: root causes, timeouts, retries, model discovery, `?chat=1` self-test
 - [`nova/GEMINI_ACCESS_RUNBOOK.md`](nova/GEMINI_ACCESS_RUNBOOK.md) — **Sinhala**: the console steps for Gemini access (env pin, redeploy, probe, rollback)
 
 ### Hypothesis Forge (a NOVA sub-system, 10 documents)

@@ -553,3 +553,71 @@ test('an unreadable model list leaves the hint hedged, with no new certainty', a
   assert.match(gemini.hint, /check NOVA_GEMINI_MODEL/);
   assert.match(gemini.hint, /different causes/);
 });
+
+test('the chat self-test runs the real handler and reports shape, never content', async () => {
+  const seen = [];
+  const report = await createDiagnosticsHandler({
+    fetchImpl: fetchStub().impl,
+    env: envWith(),
+    chatHandlerFactory: () => async ({ body, ip }) => {
+      seen.push({ provider: body.provider, ip });
+      if (body.provider === 'openrouter') {
+        return {
+          status: 200,
+          body: {
+            text: 'OK',
+            provider: 'OpenRouter',
+            model: 'example/model:free',
+            fallback: false,
+          },
+        };
+      }
+      return {
+        status: 200,
+        body: {
+          text: 'Local answer body that must not be echoed',
+          provider: 'NOVA Local Space Engine',
+          model: 'nasa-local-engine',
+          fallback: true,
+          fallbackChain: [{ provider: 'Google Gemini', code: 'PROVIDER_UNAVAILABLE', status: 503 }],
+        },
+      };
+    },
+  })({ chat: true });
+
+  assert.equal(report.chatSelfTest.throttled, false);
+  assert.deepEqual(Object.keys(report.chatSelfTest.results).sort(), ['arena', 'gemini', 'local', 'openrouter'], 'every configured provider, plus the local engine');
+  assert.equal(report.chatSelfTest.results.openrouter.code, 'OK');
+  assert.equal(report.chatSelfTest.results.openrouter.hasText, true);
+  assert.equal(report.chatSelfTest.results.gemini.fallback, true);
+  assert.deepEqual(report.chatSelfTest.results.gemini.fallbackChain, [
+    { provider: 'Google Gemini', code: 'PROVIDER_UNAVAILABLE', status: 503 },
+  ]);
+  assert.equal(JSON.stringify(report).includes('must not be echoed'), false, 'no answer text leaves the server');
+  assert.equal(seen.every((entry) => entry.ip === 'nova-diagnostics-self-test'), true, 'own rate-limit bucket');
+});
+
+test('the chat self-test is opt-in, throttled, and reports the live budgets', async () => {
+  let runs = 0;
+  let clock = 1_000_000;
+  const handler = createDiagnosticsHandler({
+    fetchImpl: fetchStub().impl,
+    env: envWith(),
+    now: () => clock,
+    chatHandlerFactory: () => async () => {
+      runs += 1;
+      return { status: 200, body: { text: 'OK', provider: 'OpenRouter', model: 'm', fallback: false } };
+    },
+  });
+
+  const withoutChat = await handler({ probe: false });
+  assert.equal(withoutChat.chatSelfTest, undefined, 'no chat work unless asked');
+  assert.equal(withoutChat.budgets.upstreamTimeoutMs >= 12_000, true, 'the repaired timeout is deployed');
+
+  await handler({ chat: true });
+  assert.equal(runs > 0, true);
+
+  clock += 1_000;
+  const again = await handler({ chat: true });
+  assert.equal(again.chatSelfTest.throttled, true, 'a second call inside 30 s spends nothing');
+});

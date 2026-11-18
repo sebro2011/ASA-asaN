@@ -827,11 +827,13 @@ test('Auto routing prefers Arena when configured, falls back to Gemini', async (
   const response = await handler({ body: sampleBody, ip: '198.51.100.49' });
 
   assert.equal(response.status, 200);
-  assert.deepEqual(attemptedProviders, ['arena', 'gemini']);
+  // A 503 is retried once before the chain moves on, so Arena is asked twice.
+  assert.deepEqual([...new Set(attemptedProviders)], ['arena', 'gemini']);
+  assert.equal(attemptedProviders.filter((entry) => entry === 'arena').length, 2, 'one retry, not a loop');
   assert.equal(response.body.provider, 'Google Gemini');
   assert.equal(response.body.fallback, true);
   assert.deepEqual(response.body.fallbackChain, [
-    { provider: 'Arena AI', code: 'PROVIDER_UNAVAILABLE', status: 503 },
+    { provider: 'Arena AI', code: 'PROVIDER_UNAVAILABLE', status: 503, attempts: 2 },
   ]);
   assert.equal(JSON.stringify(response).includes(ARENA_TEST_KEY), false);
   assert.equal(JSON.stringify(response).includes('gemini-test-key'), false);
@@ -985,8 +987,10 @@ test('Auto routing never hangs longer than one budgeted chain', async () => {
   assert.equal(response.status, 200);
   assert.equal(response.body.provider, 'NOVA Local Space Engine');
   assert.equal(response.body.fallback, true);
-  assert.ok(elapsed < 2_000, `answered in ${elapsed} ms, not a 24-second chain`);
-  assert.deepEqual(timeouts, ['abortable', 'abortable', 'abortable'], 'every provider call can be aborted');
+  // Three providers, each retried once inside the budget, then the local answer.
+  assert.ok(elapsed < 3_000, `answered in ${elapsed} ms, not a 25-second chain`);
+  assert.ok(timeouts.length >= 3, 'every configured provider was tried');
+  assert.ok(timeouts.every((entry) => entry === 'abortable'), 'every provider call can be aborted');
 });
 
 test('a refused provider keeps its name and upstream status on the error', async () => {
@@ -1062,7 +1066,7 @@ test('a provider error never leaks the key or the raw upstream body', async () =
   assert.equal(response.status, 200);
   assert.equal(response.body.provider, 'NOVA Local Space Engine');
   assert.deepEqual(response.body.fallbackChain, [
-    { provider: 'OpenRouter', code: 'PROVIDER_UNAVAILABLE', status: 500 },
+    { provider: 'OpenRouter', code: 'PROVIDER_UNAVAILABLE', status: 500, attempts: 2 },
   ]);
   assert.doesNotMatch(JSON.stringify(response.body), /sk-or-test/);
 });
@@ -1385,7 +1389,10 @@ test('an overloaded model (503) is retried once against another id, and labelled
   assert.equal(response.body.modelFallback, true);
   assert.notEqual(response.body.model, 'gemini-3.8-flash');
   assert.match(response.body.text, /fallback model/);
-  assert.equal(urls.length, 2, 'one alternative, not a loop');
+  // The overloaded id is retried once (503 is often momentary), then exactly one
+  // alternative id is tried — a bounded chain, not a loop over the catalogue.
+  assert.equal(urls.filter((url) => url.includes('gemini-3.8-flash')).length, 2, 'the busy id gets one retry');
+  assert.equal(urls.length, 3, 'then one alternative, not a loop');
 });
 
 test('when every model id is refused the same way, the real error survives', async () => {
@@ -1414,7 +1421,12 @@ test('when every model id is refused the same way, the real error survives', asy
   assert.equal(response.status, 200);
   assert.equal(response.body.fallback, true);
   assert.equal(response.body.provider, 'NOVA Local Space Engine');
-  assert.deepEqual(response.body.fallbackChain[0], { provider: 'Google Gemini', code: 'PROVIDER_UNAVAILABLE', status: 503 });
+  assert.deepEqual(response.body.fallbackChain[0], {
+    provider: 'Google Gemini',
+    code: 'PROVIDER_UNAVAILABLE',
+    status: 503,
+    attempts: 2,
+  });
   assert.ok(urls.length > 1, 'the other ids were tried before giving up');
 });
 

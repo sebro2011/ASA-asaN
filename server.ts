@@ -196,7 +196,10 @@ app.get('/api/nova/diagnostics', async (req, res) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   try {
     const probe = req.query?.probe === '1' || req.query?.probe === 'true';
-    return res.json(await handleNovaDiagnostics({ probe }));
+    // `?chat=1` runs the real chat handler once per configured provider, so the
+    // report says whether a *completion* works, not just whether a host answers.
+    const chat = req.query?.chat === '1' || req.query?.chat === 'true';
+    return res.json(await handleNovaDiagnostics({ probe, chat }));
   } catch {
     return res.status(500).json({ error: 'Diagnostics could not run.', code: 'INTERNAL_ERROR' });
   }

@@ -17,10 +17,13 @@
  */
 import {
   ARENA_BASE_URL,
+  AUTO_CHAIN_BUDGET_MS,
   DEFAULT_GEMINI_MODEL,
   GEMINI_MODEL_FALLBACKS,
   GEMINI_GENERATE_CONTENT_URL,
   OPENROUTER_CHAT_COMPLETIONS_URL,
+  UPSTREAM_TIMEOUT_MS,
+  createNovaChatHandler,
   geminiGenerationConfig,
   OPENROUTER_FREE_MODEL,
 } from './novaChat.js';
@@ -35,6 +38,10 @@ const PROBE_TIMEOUT_MS = 20_000;
 const KEY_CHECK_TIMEOUT_MS = 6_000;
 const PROBE_COOLDOWN_MS = 10_000;
 const MAX_REASON_CHARS = 180;
+// The chat self-test spends real tokens on a real completion, so it is both
+// opt-in (`?chat=1`) and throttled harder than the one-token probe.
+const CHAT_PROBE_COOLDOWN_MS = 30_000;
+const CHAT_PROBE_PROMPT = 'Reply with the single word: OK';
 
 function envValue(env, key) {
   const value = env?.[key];
@@ -284,10 +291,14 @@ export function createDiagnosticsHandler({
   timeoutMs = PROBE_TIMEOUT_MS,
   keyCheckTimeoutMs = KEY_CHECK_TIMEOUT_MS,
   now = Date.now,
+  // The chat self-test runs the *real* chat handler, so a green result means the
+  // path a user takes works — not that a hand-written probe could reach a host.
+  chatHandlerFactory = () => createNovaChatHandler(),
 } = {}) {
   let lastProbeAt = 0;
+  let lastChatProbeAt = 0;
 
-  return async function handleNovaDiagnostics({ probe: deep = false } = {}) {
+  return async function handleNovaDiagnostics({ probe: deep = false, chat: chatProbe = false } = {}) {
     const keys = {
       openrouter: envValue(env, 'OPENROUTER_API_KEY'),
       gemini: envValue(env, 'GEMINI_API_KEY'),
@@ -314,6 +325,10 @@ export function createDiagnosticsHandler({
     const wantProbe = deep && now() - lastProbeAt >= PROBE_COOLDOWN_MS;
     const throttled = deep && !wantProbe;
     if (wantProbe) lastProbeAt = now();
+
+    const wantChatProbe = chatProbe && now() - lastChatProbeAt >= CHAT_PROBE_COOLDOWN_MS;
+    const chatThrottled = chatProbe && !wantChatProbe;
+    if (wantChatProbe) lastChatProbeAt = now();
 
     const endpoints = {
       openrouter: OPENROUTER_CHAT_COMPLETIONS_URL,
@@ -459,6 +474,49 @@ export function createDiagnosticsHandler({
     providerIds.forEach((provider, index) => { providers[provider] = outcomes[index]; });
     const probes = outcomes.filter((entry) => entry.status === 'ok' || entry.status === 'error').length;
 
+    // End-to-end self-test: the same handler `/api/nova/chat` uses, one tiny
+    // completion per configured provider. It reports *shape* (numbers, codes and
+    // whether text came back) and never the answer itself.
+    let chatSelfTest;
+    if (chatProbe) {
+      chatSelfTest = { ranAt: new Date(now()).toISOString(), throttled: chatThrottled, results: {} };
+      if (wantChatProbe) {
+        const handler = chatHandlerFactory();
+        const targets = ['local', ...providerIds.filter((provider) => keys[provider])];
+        await Promise.all(targets.map(async (provider) => {
+          const started = now();
+          try {
+            const response = await handler({
+              body: { lang: 'en', provider, messages: [{ role: 'user', content: CHAT_PROBE_PROMPT }] },
+              // A separate bucket, so the self-test never eats a visitor's quota.
+              ip: 'nova-diagnostics-self-test',
+            });
+            const body = response?.body || {};
+            chatSelfTest.results[provider] = {
+              requested: provider,
+              httpStatus: response?.status ?? 0,
+              code: typeof body.code === 'string' ? body.code : 'OK',
+              answeredBy: typeof body.provider === 'string' ? body.provider : null,
+              model: typeof body.model === 'string' ? body.model.slice(0, 120) : null,
+              hasText: typeof body.text === 'string' && body.text.trim().length > 0,
+              textChars: typeof body.text === 'string' ? body.text.length : 0,
+              fallback: body.fallback === true,
+              ...(Array.isArray(body.fallbackChain) ? { fallbackChain: body.fallbackChain } : {}),
+              ms: now() - started,
+            };
+          } catch (error) {
+            chatSelfTest.results[provider] = {
+              requested: provider,
+              httpStatus: 0,
+              code: 'DIAGNOSTICS_FAILED',
+              reason: redactReason(error?.message || 'self-test threw', secrets),
+              ms: now() - started,
+            };
+          }
+        }));
+      }
+    }
+
     return {
       checkedAt: new Date(now()).toISOString(),
       // Environment plus short commit: two deployments can serve the same URL
@@ -467,7 +525,11 @@ export function createDiagnosticsHandler({
       // `probed` means an upstream request actually ran, not that probing was allowed.
       probed: probes > 0,
       throttled,
+      // The budgets the deployment is really running: a stale build answers with
+      // the old 8 s / 18 s pair, which is how a "fix" can look merged and absent.
+      budgets: { upstreamTimeoutMs: UPSTREAM_TIMEOUT_MS, chainBudgetMs: AUTO_CHAIN_BUDGET_MS },
       providers,
+      ...(chatSelfTest ? { chatSelfTest } : {}),
     };
   };
 }
