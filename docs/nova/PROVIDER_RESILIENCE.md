@@ -1,6 +1,7 @@
 # NOVA provider resilience — the 502 / 504 production repair
 
-**Status:** implemented, tested locally, **not yet deployed**.
+**Status:** implemented, tested, **deployed and verified in production**
+(`4ec5998`, 2026-11-18T09:05Z).
 **Scope:** the online AI path only (`/api/nova/chat` → `server/novaChat.js`). The
 local engine, the provider options (Auto / OpenRouter / Gemini / Local), the chat
 history and the astronomy features are untouched.
@@ -158,23 +159,47 @@ Local (this branch, `npm ci` from the committed lockfile):
 * `npm run build:api` — `api/index.js` regenerated (`npm run check:bundle` enforces
   that the committed bundle matches `server/`).
 
-Live (after deploy — not yet done):
+### Live verification (production `4ec5998`, 2026-11-18T09:05:14Z)
 
 ```
-curl -s "https://nasa-space-expolere.vercel.app/api/nova/diagnostics?chat=1" | jq '.budgets, .chatSelfTest'
+GET /api/nova/diagnostics?chat=1
 ```
 
-Expect `budgets.upstreamTimeoutMs = 15000`, and a `chatSelfTest` entry per
-provider. Gemini is expected to still report its vendor 503; OpenRouter is
-expected to answer.
+```json
+"budgets": { "upstreamTimeoutMs": 15000, "chainBudgetMs": 25000 },
+"chatSelfTest": { "throttled": false, "results": {
+  "local":      { "code": "OK", "httpStatus": 200, "ms": 73,   "hasText": true },
+  "openrouter": { "code": "OK", "httpStatus": 200, "ms": 3079,
+                  "answeredBy": "OpenRouter",
+                  "model": "nvidia/nemotron-3.5-lightning:free",
+                  "fallback": false, "hasText": true },
+  "gemini":     { "code": "OK", "httpStatus": 200, "ms": 4499, "fallback": true,
+                  "answeredBy": "NOVA Local Space Engine",
+                  "fallbackChain": [
+                    { "provider": "Google Gemini", "code": "PROVIDER_UNAVAILABLE", "status": 503 }
+                  ] }
+}}
+```
+
+What that settles, with the real chat handler rather than a probe:
+
+1. **OpenRouter answers a real completion end to end** — 200, 3.1 s, a real model
+   id from the free router, text returned. The 502 is gone.
+2. **Gemini still cannot generate** — the vendor answers 503, the chain says so,
+   and the request answers from the local engine in **4.5 s**. The 504 is gone:
+   no more 8-second abort reported as a timeout.
+3. **The repaired budgets are the ones running** (15 000 / 25 000), so a stale
+   deployment can no longer masquerade as a fix.
 
 ## 6. Remaining limitations (honest list)
 
-1. **Gemini generation is unavailable for this deployment** — the vendor
-   answers 503 "high demand" on the only id that exists for this key, and 404 on
-   everything else. Nothing in this repository can enable it; `?chat=1` will keep
-   reporting the live status. NOVA keeps answering through OpenRouter and the
-   local engine, and now says exactly why Gemini was skipped.
+1. **Gemini generation is unavailable for this deployment** — verified live
+   again after the deploy (503 `PROVIDER_UNAVAILABLE` in the chain above). The
+   vendor answers "high demand" on the only id that exists for this key and 404
+   on everything else, so nothing in this repository can enable it. NOVA keeps
+   answering through OpenRouter and the local engine, and now says exactly why
+   Gemini was skipped. When Google releases the model, no code change is needed:
+   the same id is retried first, and the catalogue supplies any new one.
 2. **The free router has documented daily caps.** `openrouter/free` is shared
    pool infrastructure; a 429 is mapped to `UPSTREAM_RATE_LIMITED` with
    `Retry-After`, never retried.
@@ -187,7 +212,14 @@ expected to answer.
 4. **`maxDuration` stays 30 s.** Raising it to 60 s is a one-line change in
    `vercel.json`, but it depends on the plan; the 25 s chain budget was chosen so
    the current limit is never the reason a request dies.
-5. **The exact trigger of the original OpenRouter 502 is not reproducible from
-   this sandbox** (no egress to `openrouter.ai`). What is proven is the
-   classification defect and the missing retry; the next occurrence will now name
-   the body shape, the phase and the attempt count instead of saying "unreadable".
+5. **The original OpenRouter 502 was not reproducible from this sandbox** (no
+   egress to `openrouter.ai` from the agent environment). What the repair proves
+   is the classification defect and the missing retry, and the live self-test now
+   shows the same key and router answering a real completion. If it recurs, the
+   response names the body shape, the phase and the attempt count instead of
+   saying "unreadable".
+6. **The self-test bound is 6 s per provider**, shorter than a chat hop (15 s), so
+   the whole report fits one browser request. A provider that needs longer
+   reports `AI_TIMEOUT` there and still gets its full budget from
+   `/api/nova/chat`. The Guardian's scheduled AI probe stays one-token only —
+   running real completions on a timer would spend the free tier's daily quota.

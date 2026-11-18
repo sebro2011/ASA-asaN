@@ -16,6 +16,24 @@ means neither was possible from this environment.
 | `GET /api/workspace/config` | env | — | — | 200 with booleans only |
 | `GET /api/news/sources` | env | — | — | booleans only |
 
+## NOVA AI providers — chat self-test (production `4ec5998`, 2026-11-18T09:05Z)
+
+`GET /api/nova/diagnostics?chat=1` runs the **real chat handler** once per
+configured provider (isolated, 6 s bound, 30 s throttle). Unlike a one-token
+probe it answers "does a completion come back", and it reports the budgets the
+deployment is really running.
+
+| Provider | Chat result | Detail |
+| --- | --- | --- |
+| Local engine | **ok** | 200, 73 ms, in-process |
+| OpenRouter | **ok** | 200, 3 079 ms, model `nvidia/nemotron-3.5-lightning:free`, text returned, no fallback |
+| Gemini | **error → local** | 200, 4 499 ms, `fallbackChain: [{ Google Gemini, PROVIDER_UNAVAILABLE, 503 }]` |
+| Arena | not configured | — |
+
+`budgets: { upstreamTimeoutMs: 15000, chainBudgetMs: 25000 }` — the 8 s / 18 s
+pair that produced the 502/504 reports is gone. Root causes and the repair:
+[`nova/PROVIDER_RESILIENCE.md`](nova/PROVIDER_RESILIENCE.md).
+
 ## AI providers — production evidence, re-measured (2026-11-13T15:57–15:59Z)
 
 `GET /api/nova/diagnostics?probe=1` against the live deployment of **`aeb601e`**
