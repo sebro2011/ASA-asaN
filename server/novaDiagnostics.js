@@ -302,6 +302,10 @@ export function createDiagnosticsHandler({
 } = {}) {
   let lastProbeAt = 0;
   let lastChatProbeAt = 0;
+  // The self-test is expensive and slow by nature (a real completion), so a
+  // throttled call returns the last report instead of an empty one. "Nothing
+   // new for 30 s" is useful; "no information" is not.
+  let lastChatSelfTest = null;
 
   return async function handleNovaDiagnostics({ probe: deep = false, chat: chatProbe = false } = {}) {
     const keys = {
@@ -483,7 +487,9 @@ export function createDiagnosticsHandler({
     // completion per configured provider. It reports *shape* (numbers, codes and
     // whether text came back) and never the answer itself.
     let chatSelfTest;
-    if (chatProbe) {
+    if (chatProbe && chatThrottled && lastChatSelfTest) {
+      chatSelfTest = { ...lastChatSelfTest, throttled: true, cachedFrom: lastChatSelfTest.ranAt };
+    } else if (chatProbe) {
       chatSelfTest = { ranAt: new Date(now()).toISOString(), throttled: chatThrottled, results: {} };
       if (wantChatProbe) {
         const targets = ['local', ...providerIds.filter((provider) => keys[provider])];
@@ -529,6 +535,7 @@ export function createDiagnosticsHandler({
             };
           }
         }));
+        if (!chatSelfTest.throttled) lastChatSelfTest = chatSelfTest;
       }
     }
 

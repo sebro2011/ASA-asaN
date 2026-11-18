@@ -648,3 +648,31 @@ test('the Vercel diagnostics function forwards ?chat=1 to the self-test', async 
   assert.ok(get.state.body.chatSelfTest, 'the deployment adapter must expose the end-to-end self-test');
   assert.equal(get.state.body.budgets.upstreamTimeoutMs >= 12_000, true);
 });
+
+test('a throttled self-test returns the last report instead of nothing', async () => {
+  let clock = 5_000_000;
+  const handler = createDiagnosticsHandler({
+    fetchImpl: fetchStub().impl,
+    env: envWith(),
+    now: () => clock,
+    chatHandlerFactory: () => async () => ({
+      status: 200,
+      body: { text: 'OK', provider: 'OpenRouter', model: 'example/model:free', fallback: false },
+    }),
+  });
+
+  const first = await handler({ chat: true });
+  assert.equal(first.chatSelfTest.throttled, false);
+  assert.equal(first.chatSelfTest.results.openrouter.code, 'OK');
+
+  clock += 2_000;
+  const second = await handler({ chat: true });
+  assert.equal(second.chatSelfTest.throttled, true, 'still throttled');
+  assert.equal(second.chatSelfTest.results.openrouter.code, 'OK', 'but the last answer is still reported');
+  assert.equal(second.chatSelfTest.cachedFrom, first.chatSelfTest.ranAt);
+
+  clock += 40_000;
+  const third = await handler({ chat: true });
+  assert.equal(third.chatSelfTest.throttled, false, 'the cooldown expires');
+  assert.equal(third.chatSelfTest.cachedFrom, undefined);
+});
