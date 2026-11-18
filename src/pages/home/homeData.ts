@@ -220,9 +220,20 @@ async function loadApodLive(signal: AbortSignal): Promise<Sourced<Apod>> {
     note?: string;
     fallbackReason?: 'network' | 'rate-limited' | 'upstream' | 'shape' | 'degraded';
     keySource?: 'DEMO_KEY' | 'configured';
+    /** The server's one-line reason (safe to show), when it has one. */
+    hint?: string;
+    code?: string;
+    upstreamStatus?: number;
   }>('/api/apod', signal, 18000);
   const apod = payload?.data;
-  if (!apod?.title || !apod?.url) throw new Error('APOD service returned an incomplete record');
+  if (!apod?.title || !apod?.url) {
+    // Carry the server's own sentence into the failure, so the "saved N days
+    // ago because ..." note says what actually happened instead of
+    // "incomplete record" — on 2026-11-18 that was "api.nasa.gov returned a
+    // site logo instead of the entry image".
+    const hint = typeof payload?.hint === 'string' ? payload.hint.trim().replace(/[.\s]+$/, '') : '';
+    throw new Error(hint || 'APOD service returned an incomplete record');
+  }
   return {
     data: apod,
     state: payload.isFallback ? 'static' : payload.cached ? 'cached' : 'live',

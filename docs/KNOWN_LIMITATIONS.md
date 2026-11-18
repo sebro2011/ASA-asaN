@@ -1,9 +1,24 @@
 # Known limitations
 
-Honest list as of **2026-11-13** (branch `arena/8a962084-asa-asan`).
+Honest list as of **2026-11-18** (branch `arena/9805b9df-asa-asan`).
 Each item says what a user or operator would actually see, and where it is
 recorded. Entries dated 2026-11-12 below the current table remain accurate unless
 the table supersedes them.
+
+## 2026-11-18 — what the two long home cards claim
+
+The APOD panel and the Earth preview under the service strip both overstated
+or under-explained their own numbers. Recorded here because the fix is a
+statement about what those cards are allowed to claim, not just a layout change.
+
+| Behaviour | Detail |
+| --- | --- |
+| **"Complete years" counts complete years** | NASA POWER returns the current year with the months it has so far (on 2026-11-18, 2026 had January–September). The card counted every annual bucket with a number — 15 for a 2012–2026 request — and printed it under the label *Complete years*. There are 14: `src/pages/home/EarthPreview.tsx` now counts `point.complete`, and `src/lib/earth/power.ts` already defined complete as 12 monthly values. |
+| **The year in progress is drawn as provisional** | The partial 2026 mean was plotted as an ordinary vertex, which reads as "2026 warmed" even though `leastSquaresTrend` had always excluded it. `src/pages/home/Sparkline.tsx` now draws it hollow, joins it with a dashed segment, leaves it out of the period-mean line, and the caption names it: `2026 in progress, not in 2012–2025`. |
+| **The metric labels no longer collide** | *Least-squares slope* wraps to two lines in a ~350 px column, and `.eyebrow` sets `line-height: 1`, so the wrapped label pushed `+0.034 /yr` below its neighbours. The three `dt`s now carry a shared `min-h` and `leading-[1.35]`, so the three values share a baseline. |
+| **A saved APOD says why and when** | The card's only signal was a small **CACHED** badge beside a four-day-old picture. It now prints the loader's own reason (*"Live request failed (api.nasa.gov returned a site logo instead of the entry image). Showing the value saved 4 days ago."*) in the space that used to be empty, carries the same sentence in the badge tooltip, and offers its own *Try again* — the Earth card already had one. |
+| **APOD has no live picture to show** | This is not a defect the card can fix: `/api/apod` answers `success: false`, `APOD_UNAVAILABLE`, `fallbackReason: "degraded"` because `api.nasa.gov` served its own site logo instead of the entry. The card is a labelled archival fallback (`apod.regression` covers that path) and its date will lag the Earth card's `retrievedAt` until the upstream recovers. |
+| **These notes are English-only** | Like the per-tile failure notes in `src/pages/home/SignalStrip.tsx`, the provenance sentence and the chart caption are hard-coded English inside a trilingual page. The metric labels themselves are translated. |
 
 ## 2026-11-14 — the four home-page service tiles
 
