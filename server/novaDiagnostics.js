@@ -42,6 +42,11 @@ const MAX_REASON_CHARS = 180;
 // opt-in (`?chat=1`) and throttled harder than the one-token probe.
 const CHAT_PROBE_COOLDOWN_MS = 30_000;
 const CHAT_PROBE_PROMPT = 'Reply with the single word: OK';
+// A self-test is a GET that a person waits for, so each provider is bounded and
+// isolated: one provider cannot spend another's budget, and the whole report
+// returns inside a browser request.
+const CHAT_PROBE_TIMEOUT_MS = 10_000;
+const CHAT_PROBE_BUDGET_MS = 12_000;
 
 function envValue(env, key) {
   const value = env?.[key];
@@ -293,7 +298,7 @@ export function createDiagnosticsHandler({
   now = Date.now,
   // The chat self-test runs the *real* chat handler, so a green result means the
   // path a user takes works — not that a hand-written probe could reach a host.
-  chatHandlerFactory = () => createNovaChatHandler(),
+  chatHandlerFactory = (options) => createNovaChatHandler(options),
 } = {}) {
   let lastProbeAt = 0;
   let lastChatProbeAt = 0;
@@ -481,11 +486,21 @@ export function createDiagnosticsHandler({
     if (chatProbe) {
       chatSelfTest = { ranAt: new Date(now()).toISOString(), throttled: chatThrottled, results: {} };
       if (wantChatProbe) {
-        const handler = chatHandlerFactory();
         const targets = ['local', ...providerIds.filter((provider) => keys[provider])];
         await Promise.all(targets.map(async (provider) => {
           const started = now();
           try {
+            // One provider per handler: isolation is what keeps the report inside
+            // the request budget when one provider is down (a shared chain would
+            // spend Gemini's 10 s and then answer through OpenRouter anyway,
+            // which says nothing about Gemini).
+            const handler = chatHandlerFactory({
+              getArenaApiKey: () => (provider === 'arena' ? keys.arena : ''),
+              getOpenRouterApiKey: () => (provider === 'openrouter' ? keys.openrouter : ''),
+              getGeminiApiKey: () => (provider === 'gemini' ? keys.gemini : ''),
+              timeoutMs: CHAT_PROBE_TIMEOUT_MS,
+              budgetMs: CHAT_PROBE_BUDGET_MS,
+            });
             const response = await handler({
               body: { lang: 'en', provider, messages: [{ role: 'user', content: CHAT_PROBE_PROMPT }] },
               // A separate bucket, so the self-test never eats a visitor's quota.
