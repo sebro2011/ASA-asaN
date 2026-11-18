@@ -1736,7 +1736,7 @@ function abortableSleep(ms, signal) {
 function createOrchestrator(options) {
   const config = { ...DEFAULTS, ...options };
   const now = options.now || Date.now;
-  const sleep = options.sleep || abortableSleep;
+  const sleep2 = options.sleep || abortableSleep;
   const random = options.random || Math.random;
   const log = options.log || (() => {
   });
@@ -1822,7 +1822,7 @@ function createOrchestrator(options) {
         if (attempts >= config.maxAttempts) break;
         const delay = Math.max(failure2.retryAfterMs ?? 0, backoffMs(attempts));
         try {
-          await sleep(Math.min(delay, Math.max(0, deadline - now())), outerSignal);
+          await sleep2(Math.min(delay, Math.max(0, deadline - now())), outerSignal);
         } catch {
           lastError = new ProviderError("aborted while backing off", { code: "ABORTED", retryable: false });
           break;
@@ -4927,8 +4927,17 @@ var MAX_REQUEST_BYTES = 24 * 1024;
 var MAX_TOTAL_MESSAGE_BYTES = 20 * 1024;
 var MAX_MESSAGE_CHARS = 4e3;
 var MAX_MESSAGES = 12;
-var UPSTREAM_TIMEOUT_MS = 8e3;
-var AUTO_CHAIN_BUDGET_MS = 18e3;
+var DEFAULT_UPSTREAM_TIMEOUT_MS = 15e3;
+var DEFAULT_AUTO_CHAIN_BUDGET_MS = 25e3;
+var MIN_UPSTREAM_TIMEOUT_MS = 4e3;
+var MAX_UPSTREAM_TIMEOUT_MS = 24e3;
+var MIN_AUTO_CHAIN_BUDGET_MS = 6e3;
+var MAX_AUTO_CHAIN_BUDGET_MS = 27e3;
+var LOCAL_FALLBACK_RESERVE_MS = 1200;
+var DEFAULT_MAX_ATTEMPTS = 2;
+var RETRY_DELAY_MS = 350;
+var MIN_RETRY_BUDGET_MS = 4e3;
+var MIN_ATTEMPT_BUDGET_MS = 1500;
 var RATE_LIMIT_WINDOW_MS = 6e4;
 var RATE_LIMIT_REQUESTS = 8;
 var SUPPORTED_LANGUAGES = /* @__PURE__ */ new Set(["en", "si", "ta"]);
@@ -5134,6 +5143,26 @@ function cleanModelName(value, fallback) {
 function getProcessEnv() {
   return typeof process !== "undefined" && process.env ? process.env : {};
 }
+function envInt(env, key2, fallback, min, max) {
+  const raw = env?.[key2];
+  const value = typeof raw === "string" ? Number.parseInt(raw.trim(), 10) : Number.NaN;
+  if (!Number.isFinite(value) || value <= 0) return fallback;
+  return Math.min(max, Math.max(min, value));
+}
+var UPSTREAM_TIMEOUT_MS = envInt(
+  getProcessEnv(),
+  "NOVA_UPSTREAM_TIMEOUT_MS",
+  DEFAULT_UPSTREAM_TIMEOUT_MS,
+  MIN_UPSTREAM_TIMEOUT_MS,
+  MAX_UPSTREAM_TIMEOUT_MS
+);
+var AUTO_CHAIN_BUDGET_MS = envInt(
+  getProcessEnv(),
+  "NOVA_AUTO_CHAIN_BUDGET_MS",
+  DEFAULT_AUTO_CHAIN_BUDGET_MS,
+  MIN_AUTO_CHAIN_BUDGET_MS,
+  MAX_AUTO_CHAIN_BUDGET_MS
+);
 function getReferer() {
   const env = getProcessEnv();
   const configuredUrl = env.APP_URL;
@@ -5210,6 +5239,14 @@ function withProvider(response, provider) {
     }
   };
 }
+function withEvidence(response, evidence) {
+  const body = { ...response.body };
+  for (const [key2, value] of Object.entries(evidence)) {
+    if (value === void 0 || value === "") continue;
+    body[key2] = value;
+  }
+  return { ...response, body };
+}
 function getLocalResponse(query, language, { fallback = false, chain = [], thinking = DEFAULT_THINKING_LEVEL } = {}) {
   const local = generateLocalSpaceResponse(query, language);
   return result(200, {
@@ -5226,28 +5263,148 @@ function getLocalResponse(query, language, { fallback = false, chain = [], think
     intent: local.intent
   });
 }
-async function fetchProviderJson({ fetchImpl, url, init, timeoutMs, provider, model }) {
-  const controller = new AbortController();
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, Math.max(0, ms)));
+}
+function remainingTime(deadline) {
+  if (!deadline) return Number.POSITIVE_INFINITY;
+  return deadline - Date.now();
+}
+function classifyBodyShape(text2, contentType = "") {
+  const trimmed = typeof text2 === "string" ? text2.trim() : "";
+  const type = typeof contentType === "string" ? contentType.toLowerCase() : "";
+  if (!trimmed) return "empty";
+  if (type.includes("text/event-stream") || /^(:|data:|event:)/m.test(trimmed.slice(0, 400))) return "event-stream";
+  if (type.includes("text/html") || /^<(!doctype|html|head|body|\?xml)/i.test(trimmed)) return "html";
+  if (/^\{\s*$|^[\[{]/.test(trimmed)) return "truncated-json";
+  return "text";
+}
+function headerValue(headers, name) {
+  try {
+    if (!headers) return "";
+    if (typeof headers.get === "function") return String(headers.get(name) || "");
+    const lower = name.toLowerCase();
+    for (const [key2, value] of Object.entries(headers)) {
+      if (key2.toLowerCase() === lower) return String(value);
+    }
+  } catch {
+  }
+  return "";
+}
+function textFromEventStream(text2) {
+  const parts = [];
+  let model = "";
+  for (const line of String(text2 || "").split(/\r?\n/)) {
+    const match = /^data:\s*(.*)$/.exec(line.trim());
+    if (!match) continue;
+    const payload = match[1].trim();
+    if (!payload || payload === "[DONE]") continue;
+    let chunk;
+    try {
+      chunk = JSON.parse(payload);
+    } catch {
+      continue;
+    }
+    if (typeof chunk?.model === "string" && !model) model = chunk.model;
+    const delta = chunk?.choices?.[0]?.delta?.content ?? chunk?.choices?.[0]?.message?.content;
+    if (typeof delta === "string") parts.push(delta);
+    else if (Array.isArray(delta)) {
+      for (const item of delta) if (typeof item?.text === "string") parts.push(item.text);
+    }
+    const geminiParts = chunk?.candidates?.[0]?.content?.parts;
+    if (Array.isArray(geminiParts)) {
+      for (const item of geminiParts) if (typeof item?.text === "string") parts.push(item.text);
+    }
+  }
+  return { text: parts.join(""), model };
+}
+function streamedData(provider, { text: text2, model }) {
+  if (provider === "gemini") {
+    return { model: model || void 0, candidates: [{ content: { parts: [{ text: text2 }] } }] };
+  }
+  return { model: model || void 0, choices: [{ message: { role: "assistant", content: text2 } }] };
+}
+async function fetchProviderJsonOnce({ fetchImpl, url, init, timeoutMs, provider, model }) {
+  const controller = typeof AbortController === "function" ? new AbortController() : null;
   let timeoutExpired = false;
-  const timeout = setTimeout(() => {
+  const timeout = controller ? setTimeout(() => {
     timeoutExpired = true;
     controller.abort();
-  }, timeoutMs);
+  }, Math.max(1, timeoutMs)) : null;
   try {
-    const upstream = await fetchImpl(url, { ...init, signal: controller.signal });
+    const upstream = await fetchImpl(url, controller ? { ...init, signal: controller.signal } : init);
     if (!upstream || !upstream.ok) {
       return { error: providerError(Number(upstream?.status) || 502, provider, model) };
     }
-    let data;
+    let text2 = "";
     try {
-      data = await upstream.json();
-    } catch {
+      if (typeof upstream.text === "function") {
+        text2 = await upstream.text();
+      } else if (typeof upstream.json === "function") {
+        const parsed = await upstream.json();
+        return { data: parsed };
+      } else {
+        text2 = "";
+      }
+    } catch (error) {
+      const aborted = timeoutExpired || error?.name === "AbortError";
+      const looksLikeTransport = /terminated|other side closed|socket|ECONN|EAI_AGAIN|network|fetch failed/i.test(String(error?.message || ""));
+      if (!aborted && !looksLikeTransport) {
+        return {
+          error: withProvider(
+            withEvidence(
+              errorResult(502, "INVALID_PROVIDER_RESPONSE", "The AI provider returned an unreadable response. Please retry."),
+              { upstreamStatus: 200, bodyShape: "unparseable", model: model || null }
+            ),
+            provider
+          )
+        };
+      }
+      if (aborted) {
+        return {
+          error: withProvider(
+            withEvidence(errorResult(504, "AI_TIMEOUT", "The AI response took too long. Please retry."), {
+              phase: "body",
+              model: model || null
+            }),
+            provider
+          )
+        };
+      }
       return {
         error: withProvider(
-          errorResult(502, "INVALID_PROVIDER_RESPONSE", "The AI provider returned an unreadable response. Please retry."),
+          errorResult(503, "UPSTREAM_NETWORK_ERROR", "Could not reach the AI provider. Check your connection and retry."),
           provider
         )
       };
+    }
+    let data;
+    try {
+      data = JSON.parse(text2);
+    } catch {
+      const shape = classifyBodyShape(text2, headerValue(upstream.headers, "content-type"));
+      if (shape === "event-stream") {
+        const aggregated = textFromEventStream(text2);
+        if (aggregated.text.trim()) return { data: streamedData(provider, aggregated) };
+      }
+      return {
+        error: withProvider(
+          withEvidence(
+            errorResult(502, "INVALID_PROVIDER_RESPONSE", "The AI provider returned an unreadable response. Please retry."),
+            {
+              upstreamStatus: 200,
+              bodyShape: shape,
+              bodyBytes: typeof text2 === "string" ? text2.length : 0,
+              model: model || null
+            }
+          ),
+          provider
+        )
+      };
+    }
+    if (data && typeof data === "object" && data.error && !data.choices && !data.candidates) {
+      const upstreamStatus = Number(data.error.code) || 502;
+      return { error: providerError(upstreamStatus, provider, model) };
     }
     return { data };
   } catch (error) {
@@ -5266,10 +5423,72 @@ async function fetchProviderJson({ fetchImpl, url, init, timeoutMs, provider, mo
       )
     };
   } finally {
-    clearTimeout(timeout);
+    if (timeout) clearTimeout(timeout);
   }
 }
-async function callOpenRouter({ fetchImpl, apiKey, model, messages, language, thinking = DEFAULT_THINKING_LEVEL, timeoutMs }) {
+var RETRYABLE_ATTEMPT_CODES = /* @__PURE__ */ new Set([
+  "AI_TIMEOUT",
+  "INVALID_PROVIDER_RESPONSE",
+  "UPSTREAM_NETWORK_ERROR",
+  "EMPTY_PROVIDER_RESPONSE",
+  "PROVIDER_UNAVAILABLE"
+]);
+async function fetchProviderJson({
+  fetchImpl,
+  url,
+  init,
+  timeoutMs,
+  provider,
+  model,
+  deadline = null,
+  maxAttempts = DEFAULT_MAX_ATTEMPTS,
+  retryDelayMs = RETRY_DELAY_MS
+}) {
+  let result2 = null;
+  let attempt = 0;
+  while (attempt < maxAttempts) {
+    const left = remainingTime(deadline);
+    if (attempt > 0 && left !== Number.POSITIVE_INFINITY && left < retryDelayMs + MIN_RETRY_BUDGET_MS) break;
+    const budget = Math.max(1, Math.min(timeoutMs, left === Number.POSITIVE_INFINITY ? timeoutMs : left));
+    attempt += 1;
+    result2 = await fetchProviderJsonOnce({ fetchImpl, url, init, timeoutMs: budget, provider, model });
+    if (!result2.error) {
+      if (attempt > 1) result2.attempts = attempt;
+      return result2;
+    }
+    const code = typeof result2.error.body?.code === "string" ? result2.error.body.code : "";
+    if (!RETRYABLE_ATTEMPT_CODES.has(code)) break;
+    const after = remainingTime(deadline);
+    if (after !== Number.POSITIVE_INFINITY && after < retryDelayMs + MIN_RETRY_BUDGET_MS) break;
+    await sleep(retryDelayMs);
+  }
+  if (result2?.error) {
+    result2 = { error: { ...result2.error, body: { ...result2.error.body, attempts: attempt } } };
+  }
+  return result2;
+}
+var OPENROUTER_FALLBACK_MODEL = "openrouter/auto";
+function openRouterRequestBody({ model, messages, language, thinking }) {
+  return JSON.stringify({
+    model,
+    messages: [
+      { role: "system", content: makeSystemPrompt(language, thinking) },
+      ...messages
+    ],
+    ...openRouterThinkingFields(thinking)
+  });
+}
+async function callOpenRouter({
+  fetchImpl,
+  apiKey,
+  model,
+  messages,
+  language,
+  thinking = DEFAULT_THINKING_LEVEL,
+  timeoutMs,
+  deadline = null,
+  fallbackModel = OPENROUTER_FALLBACK_MODEL
+}) {
   const headers = {
     Authorization: `Bearer ${apiKey}`,
     "Content-Type": "application/json",
@@ -5277,26 +5496,36 @@ async function callOpenRouter({ fetchImpl, apiKey, model, messages, language, th
   };
   const referer = getReferer();
   if (referer) headers["HTTP-Referer"] = referer;
-  const upstreamResult = await fetchProviderJson({
+  const send = (modelId) => fetchProviderJson({
     fetchImpl,
     url: OPENROUTER_CHAT_COMPLETIONS_URL,
     init: {
       method: "POST",
       headers,
-      body: JSON.stringify({
-        model,
-        messages: [
-          { role: "system", content: makeSystemPrompt(language, thinking) },
-          ...messages
-        ],
-        ...openRouterThinkingFields(thinking)
-      })
+      body: openRouterRequestBody({ model: modelId, messages, language, thinking })
     },
     timeoutMs,
     provider: "openrouter",
-    model
+    model: modelId,
+    deadline
   });
-  if (upstreamResult.error) return upstreamResult.error;
+  let usedModel = model;
+  let upstreamResult = await send(model);
+  const firstError = upstreamResult.error || null;
+  if (upstreamResult.error) {
+    const code = upstreamResult.error.body?.code;
+    const modelGone = code === "FREE_MODEL_UNAVAILABLE" || code === "MODEL_UNAVAILABLE";
+    const worthAnother = modelGone && fallbackModel && fallbackModel !== model && remainingTime(deadline) > MIN_ATTEMPT_BUDGET_MS + RETRY_DELAY_MS;
+    if (worthAnother) {
+      usedModel = fallbackModel;
+      upstreamResult = await send(fallbackModel);
+      if (!upstreamResult.error) upstreamResult.modelFallback = true;
+    }
+  }
+  if (upstreamResult.error) {
+    const reported = firstError || upstreamResult.error;
+    return usedModel === model ? reported : { ...reported, body: { ...reported.body, fallbackModel: usedModel } };
+  }
   const rawText = extractText(upstreamResult.data?.choices?.[0]?.message?.content);
   if (!rawText) {
     return withProvider(
@@ -5305,26 +5534,99 @@ async function callOpenRouter({ fetchImpl, apiKey, model, messages, language, th
     );
   }
   const parsed = extractSuggestions(rawText, language);
-  return result(200, {
+  const body = {
     text: parsed.text || rawText,
     suggestions: parsed.suggestions,
-    model: typeof upstreamResult.data?.model === "string" && upstreamResult.data.model.length <= 160 ? upstreamResult.data.model : model,
+    model: typeof upstreamResult.data?.model === "string" && upstreamResult.data.model.length <= 160 ? upstreamResult.data.model : usedModel,
     provider: PROVIDER_NAMES.openrouter,
     lang: language,
     thinking,
     fallback: false
-  });
+  };
+  if (usedModel !== model) {
+    body.requestedModel = model;
+    body.modelFallback = true;
+  }
+  if (upstreamResult.attempts > 1) body.attempts = upstreamResult.attempts;
+  return result(200, body);
 }
-async function callGemini({ fetchImpl, apiKey, model, messages, language, thinking = DEFAULT_THINKING_LEVEL, timeoutMs }) {
+var GEMINI_DISCOVERY_TTL_MS = 10 * 6e4;
+var GEMINI_DISCOVERY_TIMEOUT_MS = 3e3;
+var GEMINI_DISCOVERY_MAX_CANDIDATES = 2;
+var geminiDiscoveryCache = { key: "", at: 0, models: [] };
+var GEMINI_RETIRED_TTL_MS = 30 * 6e4;
+var geminiRetired = /* @__PURE__ */ new Map();
+function isRetired(model) {
+  const at = geminiRetired.get(model);
+  if (!at) return false;
+  if (Date.now() - at > GEMINI_RETIRED_TTL_MS) {
+    geminiRetired.delete(model);
+    return false;
+  }
+  return true;
+}
+function pickGeminiChatModels(models) {
+  const usable = (Array.isArray(models) ? models : []).map((entry) => String(entry || "").trim().replace(/^models\//, "")).filter((id) => /^gemini-(3|4)[.-]/i.test(id)).filter((id) => !/(image|tts|audio|embedding|live|computer-use|deep-research|antigravity)/i.test(id));
+  const rank = (id) => /flash/i.test(id) ? 0 : /pro/i.test(id) ? 1 : 2;
+  return [...new Set(usable)].sort((a, b) => rank(a) - rank(b) || a.length - b.length);
+}
+async function discoverGeminiModels({ fetchImpl, apiKey }) {
+  if (!apiKey) return [];
+  const now = Date.now();
+  if (geminiDiscoveryCache.key === apiKey && now - geminiDiscoveryCache.at < GEMINI_DISCOVERY_TTL_MS) {
+    return geminiDiscoveryCache.models;
+  }
+  const controller = typeof AbortController === "function" ? new AbortController() : null;
+  const timer = controller ? setTimeout(() => controller.abort(), GEMINI_DISCOVERY_TIMEOUT_MS) : null;
+  try {
+    const response = await fetchImpl("https://generativelanguage.googleapis.com/v1beta/models?pageSize=1000", {
+      method: "GET",
+      headers: { "x-goog-api-key": apiKey },
+      ...controller ? { signal: controller.signal } : {}
+    });
+    if (!response?.ok || typeof response.json !== "function") return [];
+    const data = await response.json();
+    const models = (Array.isArray(data?.models) ? data.models : []).filter((model) => Array.isArray(model?.supportedGenerationMethods) && model.supportedGenerationMethods.includes("generateContent")).map((model) => model?.name);
+    geminiDiscoveryCache.key = apiKey;
+    geminiDiscoveryCache.at = now;
+    geminiDiscoveryCache.models = pickGeminiChatModels(models);
+    return geminiDiscoveryCache.models;
+  } catch {
+    return [];
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+async function callGemini({
+  fetchImpl,
+  apiKey,
+  model,
+  messages,
+  language,
+  thinking = DEFAULT_THINKING_LEVEL,
+  timeoutMs,
+  deadline = null,
+  discoverModels = discoverGeminiModels
+}) {
   const contents = messages.map((message) => ({
     role: message.role === "assistant" ? "model" : "user",
     parts: [{ text: message.content }]
   }));
+  const hopDeadline = deadline || (timeoutMs ? Date.now() + timeoutMs : null);
   let upstreamResult = null;
   let firstError = null;
   let usedModel = model;
-  const deadline = timeoutMs ? Date.now() + timeoutMs : 0;
-  for (const candidate of geminiModelCandidates(model)) {
+  let discoveries = 0;
+  const tried = /* @__PURE__ */ new Set();
+  const queue = [...geminiModelCandidates(model)];
+  while (queue.length) {
+    const left = remainingTime(hopDeadline);
+    if (left !== Number.POSITIVE_INFINITY && left <= 0) break;
+    if (tried.size > 0 && left !== Number.POSITIVE_INFINITY && left < MIN_ATTEMPT_BUDGET_MS) break;
+    const candidate = queue.shift();
+    if (tried.has(candidate)) continue;
+    if (candidate !== model && isRetired(candidate)) continue;
+    tried.add(candidate);
     usedModel = candidate;
     const url = `${GEMINI_GENERATE_CONTENT_URL}/${encodeURIComponent(candidate)}:generateContent`;
     upstreamResult = await fetchProviderJson({
@@ -5344,15 +5646,40 @@ async function callGemini({ fetchImpl, apiKey, model, messages, language, thinki
       },
       timeoutMs,
       provider: "gemini",
-      model: candidate
+      model: candidate,
+      deadline: hopDeadline,
+      retryDelayMs: 600
     });
     if (!upstreamResult.error) break;
     if (!firstError) firstError = upstreamResult.error;
     const upstreamStatus = upstreamResult.error.body?.upstreamStatus;
+    if (upstreamStatus === 404 || upstreamStatus === 422) geminiRetired.set(candidate, Date.now());
     if (!GEMINI_RETRYABLE_MODEL_STATUSES.has(upstreamStatus)) break;
-    if (deadline && Date.now() > deadline) break;
+    const leftAfter = remainingTime(hopDeadline);
+    if (!queue.length && !discoveries && leftAfter !== Number.POSITIVE_INFINITY && leftAfter > MIN_ATTEMPT_BUDGET_MS * 2) {
+      discoveries += 1;
+      const discovered = await discoverModels({ fetchImpl, apiKey });
+      for (const id of pickGeminiChatModels(discovered).slice(0, GEMINI_DISCOVERY_MAX_CANDIDATES)) {
+        if (!tried.has(id)) queue.push(id);
+      }
+    }
   }
-  if (upstreamResult.error) return firstError || upstreamResult.error;
+  if (!upstreamResult) {
+    return withProvider(
+      withEvidence(errorResult(504, "AI_TIMEOUT", "The AI response took too long. Please retry."), {
+        reason: "no-budget",
+        modelsTried: [...tried]
+      }),
+      "gemini"
+    );
+  }
+  if (upstreamResult.error) {
+    const reported = firstError || upstreamResult.error;
+    return {
+      ...reported,
+      body: { ...reported.body, modelsTried: [...tried] }
+    };
+  }
   const rawText = extractText(upstreamResult.data?.candidates?.[0]?.content?.parts);
   if (!rawText) {
     return withProvider(
@@ -5376,7 +5703,16 @@ async function callGemini({ fetchImpl, apiKey, model, messages, language, thinki
   }
   return result(200, body);
 }
-async function callArena({ fetchImpl, apiKey, model, messages, language, thinking = DEFAULT_THINKING_LEVEL, timeoutMs }) {
+async function callArena({
+  fetchImpl,
+  apiKey,
+  model,
+  messages,
+  language,
+  thinking = DEFAULT_THINKING_LEVEL,
+  timeoutMs,
+  deadline = null
+}) {
   const headers = {
     Authorization: `Bearer ${apiKey}`,
     "Content-Type": "application/json"
@@ -5399,7 +5735,8 @@ async function callArena({ fetchImpl, apiKey, model, messages, language, thinkin
     },
     timeoutMs,
     provider: "arena",
-    model
+    model,
+    deadline
   });
   if (upstreamResult.error) return upstreamResult.error;
   const rawText = extractText(upstreamResult.data?.choices?.[0]?.message?.content);
@@ -5466,9 +5803,11 @@ function createNovaChatHandler({
   getGeminiModel = () => getProcessEnv().NOVA_GEMINI_MODEL,
   getArenaModel = () => getProcessEnv().NOVA_ARENA_MODEL,
   rateLimiter = createNovaRateLimiter(),
-  timeoutMs = UPSTREAM_TIMEOUT_MS
+  timeoutMs = UPSTREAM_TIMEOUT_MS,
+  budgetMs = AUTO_CHAIN_BUDGET_MS
 } = {}) {
   const readOpenRouterKey = getOpenRouterApiKey || getApiKey || (() => getProcessEnv().OPENROUTER_API_KEY);
+  const chainBudgetMs = Math.max(1e3, Number(budgetMs) || AUTO_CHAIN_BUDGET_MS);
   return async function handleNovaChatRequest2({ body, ip = "unknown", contentLength } = {}) {
     const parsed = parseRequestBody(body, contentLength);
     if (parsed.error) return parsed.error;
@@ -5523,41 +5862,29 @@ function createNovaChatHandler({
     let lastError = null;
     const chain = [];
     const chainStartedAt = Date.now();
+    const reserve = Math.min(LOCAL_FALLBACK_RESERVE_MS, Math.floor(chainBudgetMs / 4));
+    const chainDeadline = chainStartedAt + Math.max(500, chainBudgetMs - reserve);
+    const minHopMs = Math.min(MIN_ATTEMPT_BUDGET_MS, Math.max(50, Math.floor(chainBudgetMs / 6)));
     for (const provider of providerOrder) {
-      const remainingMs = AUTO_CHAIN_BUDGET_MS - (Date.now() - chainStartedAt);
-      if (remainingMs <= 0) break;
+      const remainingMs = remainingTime(chainDeadline);
+      if (remainingMs < minHopMs) break;
       const providerTimeout = Math.min(timeoutMs, remainingMs);
+      const hopDeadline = Date.now() + providerTimeout;
+      const shared = {
+        fetchImpl,
+        messages: validated.messages,
+        language: validated.language,
+        thinking: validated.thinking,
+        timeoutMs: providerTimeout,
+        deadline: hopDeadline
+      };
       let response;
       if (provider === "arena") {
-        response = await callArena({
-          fetchImpl,
-          apiKey: keys.arena,
-          model: models.arena,
-          messages: validated.messages,
-          language: validated.language,
-          thinking: validated.thinking,
-          timeoutMs: providerTimeout
-        });
+        response = await callArena({ ...shared, apiKey: keys.arena, model: models.arena });
       } else if (provider === "openrouter") {
-        response = await callOpenRouter({
-          fetchImpl,
-          apiKey: keys.openrouter,
-          model: models.openrouter,
-          messages: validated.messages,
-          language: validated.language,
-          thinking: validated.thinking,
-          timeoutMs: providerTimeout
-        });
+        response = await callOpenRouter({ ...shared, apiKey: keys.openrouter, model: models.openrouter });
       } else {
-        response = await callGemini({
-          fetchImpl,
-          apiKey: keys.gemini,
-          model: models.gemini,
-          messages: validated.messages,
-          language: validated.language,
-          thinking: validated.thinking,
-          timeoutMs: providerTimeout
-        });
+        response = await callGemini({ ...shared, apiKey: keys.gemini, model: models.gemini });
       }
       if (response.status === 200) {
         if (chain.length === 0) return response;
@@ -5575,7 +5902,13 @@ function createNovaChatHandler({
       chain.push({
         provider: typeof response.body?.provider === "string" ? response.body.provider : PROVIDER_NAMES[provider],
         code: failureCode,
-        status: Number(response.body?.upstreamStatus) || response.status
+        status: Number(response.body?.upstreamStatus) || response.status,
+        // Numbers and fixed vocabulary only: how many attempts were spent, what
+        // kind of body arrived, and how long the hop took. This is what makes
+        // "the provider returned an unreadable response" actionable.
+        ...Number(response.body?.attempts) > 1 ? { attempts: Number(response.body.attempts) } : {},
+        ...typeof response.body?.bodyShape === "string" ? { bodyShape: response.body.bodyShape } : {},
+        ...typeof response.body?.phase === "string" ? { phase: response.body.phase } : {}
       });
       if (validated.provider !== "auto" && !RETRYABLE_FAILURES.has(failureCode)) return response;
     }
@@ -5593,6 +5926,8 @@ var PROBE_TIMEOUT_MS = 2e4;
 var KEY_CHECK_TIMEOUT_MS = 6e3;
 var PROBE_COOLDOWN_MS = 1e4;
 var MAX_REASON_CHARS = 180;
+var CHAT_PROBE_COOLDOWN_MS = 3e4;
+var CHAT_PROBE_PROMPT = "Reply with the single word: OK";
 function envValue(env, key2) {
   const value = env?.[key2];
   return typeof value === "string" ? value.trim() : "";
@@ -5788,10 +6123,14 @@ function createDiagnosticsHandler({
   env = typeof process !== "undefined" ? process.env : {},
   timeoutMs = PROBE_TIMEOUT_MS,
   keyCheckTimeoutMs = KEY_CHECK_TIMEOUT_MS,
-  now = Date.now
+  now = Date.now,
+  // The chat self-test runs the *real* chat handler, so a green result means the
+  // path a user takes works — not that a hand-written probe could reach a host.
+  chatHandlerFactory = () => createNovaChatHandler()
 } = {}) {
   let lastProbeAt = 0;
-  return async function handleNovaDiagnostics2({ probe: deep = false } = {}) {
+  let lastChatProbeAt = 0;
+  return async function handleNovaDiagnostics2({ probe: deep = false, chat: chatProbe = false } = {}) {
     const keys = {
       openrouter: envValue(env, "OPENROUTER_API_KEY"),
       gemini: envValue(env, "GEMINI_API_KEY"),
@@ -5816,6 +6155,9 @@ function createDiagnosticsHandler({
     const wantProbe = deep && now() - lastProbeAt >= PROBE_COOLDOWN_MS;
     const throttled = deep && !wantProbe;
     if (wantProbe) lastProbeAt = now();
+    const wantChatProbe = chatProbe && now() - lastChatProbeAt >= CHAT_PROBE_COOLDOWN_MS;
+    const chatThrottled = chatProbe && !wantChatProbe;
+    if (wantChatProbe) lastChatProbeAt = now();
     const endpoints = {
       openrouter: OPENROUTER_CHAT_COMPLETIONS_URL,
       gemini: GEMINI_GENERATE_CONTENT_URL,
@@ -5920,6 +6262,45 @@ function createDiagnosticsHandler({
       providers[provider] = outcomes[index];
     });
     const probes = outcomes.filter((entry) => entry.status === "ok" || entry.status === "error").length;
+    let chatSelfTest;
+    if (chatProbe) {
+      chatSelfTest = { ranAt: new Date(now()).toISOString(), throttled: chatThrottled, results: {} };
+      if (wantChatProbe) {
+        const handler = chatHandlerFactory();
+        const targets = ["local", ...providerIds.filter((provider) => keys[provider])];
+        await Promise.all(targets.map(async (provider) => {
+          const started = now();
+          try {
+            const response = await handler({
+              body: { lang: "en", provider, messages: [{ role: "user", content: CHAT_PROBE_PROMPT }] },
+              // A separate bucket, so the self-test never eats a visitor's quota.
+              ip: "nova-diagnostics-self-test"
+            });
+            const body = response?.body || {};
+            chatSelfTest.results[provider] = {
+              requested: provider,
+              httpStatus: response?.status ?? 0,
+              code: typeof body.code === "string" ? body.code : "OK",
+              answeredBy: typeof body.provider === "string" ? body.provider : null,
+              model: typeof body.model === "string" ? body.model.slice(0, 120) : null,
+              hasText: typeof body.text === "string" && body.text.trim().length > 0,
+              textChars: typeof body.text === "string" ? body.text.length : 0,
+              fallback: body.fallback === true,
+              ...Array.isArray(body.fallbackChain) ? { fallbackChain: body.fallbackChain } : {},
+              ms: now() - started
+            };
+          } catch (error) {
+            chatSelfTest.results[provider] = {
+              requested: provider,
+              httpStatus: 0,
+              code: "DIAGNOSTICS_FAILED",
+              reason: redactReason(error?.message || "self-test threw", secrets),
+              ms: now() - started
+            };
+          }
+        }));
+      }
+    }
     return {
       checkedAt: new Date(now()).toISOString(),
       // Environment plus short commit: two deployments can serve the same URL
@@ -5928,7 +6309,11 @@ function createDiagnosticsHandler({
       // `probed` means an upstream request actually ran, not that probing was allowed.
       probed: probes > 0,
       throttled,
-      providers
+      // The budgets the deployment is really running: a stale build answers with
+      // the old 8 s / 18 s pair, which is how a "fix" can look merged and absent.
+      budgets: { upstreamTimeoutMs: UPSTREAM_TIMEOUT_MS, chainBudgetMs: AUTO_CHAIN_BUDGET_MS },
+      providers,
+      ...chatSelfTest ? { chatSelfTest } : {}
     };
   };
 }
@@ -18769,7 +19154,7 @@ function bearer(headers) {
   const match = /^Bearer\s+(.+)$/i.exec(raw.trim());
   return match ? match[1].trim() : "";
 }
-function headerValue(headers, name) {
+function headerValue2(headers, name) {
   const value = headers[name] ?? headers[name.toLowerCase()] ?? headers[name.toUpperCase()];
   return typeof value === "string" ? value.trim() : "";
 }
@@ -18783,7 +19168,7 @@ function authorizeAdmin(headers, env) {
       message: "GUARDIAN_ADMIN_TOKEN is not configured, so administrative actions are disabled."
     };
   }
-  const presented = bearer(headers) || headerValue(headers, "x-guardian-token");
+  const presented = bearer(headers) || headerValue2(headers, "x-guardian-token");
   if (!presented) {
     return { ok: false, status: 401, code: "GUARDIAN_UNAUTHORIZED", message: "An administrator token is required." };
   }
@@ -18802,7 +19187,7 @@ function authorizeCron(headers, env) {
       message: "CRON_SECRET is not configured, so the scheduled sweep endpoint is disabled."
     };
   }
-  const presented = bearer(headers) || headerValue(headers, "x-cron-secret");
+  const presented = bearer(headers) || headerValue2(headers, "x-cron-secret");
   if (!presented || !constantTimeEquals(presented, expected)) {
     return { ok: false, status: 401, code: "CRON_UNAUTHORIZED", message: "The schedule secret was rejected." };
   }
@@ -18834,8 +19219,8 @@ function envReadiness(env) {
   return { set, missing, total: WATCHED_ENV_NAMES.length, newsOnly };
 }
 function callerKey(headers, fallback) {
-  const forwarded = headerValue(headers, "x-forwarded-for").split(",")[0]?.trim();
-  const address = forwarded || headerValue(headers, "x-real-ip") || fallback || "unknown";
+  const forwarded = headerValue2(headers, "x-forwarded-for").split(",")[0]?.trim();
+  const address = forwarded || headerValue2(headers, "x-real-ip") || fallback || "unknown";
   return createHash3("sha256").update(address).digest("hex").slice(0, 16);
 }
 
@@ -19599,7 +19984,8 @@ app.get("/api/nova/diagnostics", async (req, res) => {
   res.setHeader("X-Content-Type-Options", "nosniff");
   try {
     const probe2 = req.query?.probe === "1" || req.query?.probe === "true";
-    return res.json(await handleNovaDiagnostics({ probe: probe2 }));
+    const chat = req.query?.chat === "1" || req.query?.chat === "true";
+    return res.json(await handleNovaDiagnostics({ probe: probe2, chat }));
   } catch {
     return res.status(500).json({ error: "Diagnostics could not run.", code: "INTERNAL_ERROR" });
   }

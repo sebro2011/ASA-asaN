@@ -22,6 +22,23 @@ reports what came back: HTTP status, latency, an error code, and a redacted
 reason. The deep probe is throttled to once every 10 seconds and can never
 return a key or a key fragment.
 
+```
+https://nasa-space-expolere.vercel.app/api/nova/diagnostics?chat=1
+```
+
+Runs the **real chat handler** — the same code `/api/nova/chat` uses — once per
+configured provider, with a one-word prompt, and reports the shape of the answer:
+`httpStatus`, `code`, `answeredBy`, `model`, `hasText`, `textChars`, `fallback`,
+`fallbackChain` and `ms`. It never returns the answer, the request or a key. A
+probe can only say "a host answered"; this says "a completion works", which is
+the question a user is actually asking. It spends real tokens, so it is opt-in,
+throttled to once every 30 seconds, and runs on its own rate-limit bucket.
+
+Every report now also carries
+`budgets: { upstreamTimeoutMs, chainBudgetMs }`. A deployment still running the
+old 8 s / 18 s pair is visible in one glance — that is how a "merged but not
+deployed" state is told apart from a regression.
+
 The same information is in the app: **Settings → AI providers → Re-check**.
 
 ### Codes and what each one means
@@ -37,7 +54,8 @@ The same information is in the app: **Settings → AI providers → Re-check**.
 | `UPSTREAM_RATE_LIMITED` (429) | provider quota exhausted | wait; OpenRouter's free tier is 50 requests/day |
 | `PROVIDER_UNAVAILABLE` (5xx) | provider-side outage | retry later; Auto falls back to local |
 | `UPSTREAM_NETWORK_ERROR` | the function could not reach the host | check egress/DNS, not the key |
-| `AI_TIMEOUT` | no answer inside the budget | provider is slow; retry |
+| `AI_TIMEOUT` | no answer inside the budget (headers or body) | provider is slow; retry |
+| `INVALID_PROVIDER_RESPONSE` | a 2xx whose body could not be parsed | see `bodyShape`: `html` is a proxy/WAF page, `truncated-json` a cut-off body, `event-stream` is reassembled automatically |
 
 ### 404 is not 503 — and neither is a timeout
 
