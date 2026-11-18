@@ -5930,6 +5930,8 @@ var PROBE_COOLDOWN_MS = 1e4;
 var MAX_REASON_CHARS = 180;
 var CHAT_PROBE_COOLDOWN_MS = 3e4;
 var CHAT_PROBE_PROMPT = "Reply with the single word: OK";
+var CHAT_PROBE_TIMEOUT_MS = 1e4;
+var CHAT_PROBE_BUDGET_MS = 12e3;
 function envValue(env, key2) {
   const value = env?.[key2];
   return typeof value === "string" ? value.trim() : "";
@@ -6128,7 +6130,7 @@ function createDiagnosticsHandler({
   now = Date.now,
   // The chat self-test runs the *real* chat handler, so a green result means the
   // path a user takes works — not that a hand-written probe could reach a host.
-  chatHandlerFactory = () => createNovaChatHandler()
+  chatHandlerFactory = (options) => createNovaChatHandler(options)
 } = {}) {
   let lastProbeAt = 0;
   let lastChatProbeAt = 0;
@@ -6268,11 +6270,17 @@ function createDiagnosticsHandler({
     if (chatProbe) {
       chatSelfTest = { ranAt: new Date(now()).toISOString(), throttled: chatThrottled, results: {} };
       if (wantChatProbe) {
-        const handler = chatHandlerFactory();
         const targets = ["local", ...providerIds.filter((provider) => keys[provider])];
         await Promise.all(targets.map(async (provider) => {
           const started = now();
           try {
+            const handler = chatHandlerFactory({
+              getArenaApiKey: () => provider === "arena" ? keys.arena : "",
+              getOpenRouterApiKey: () => provider === "openrouter" ? keys.openrouter : "",
+              getGeminiApiKey: () => provider === "gemini" ? keys.gemini : "",
+              timeoutMs: CHAT_PROBE_TIMEOUT_MS,
+              budgetMs: CHAT_PROBE_BUDGET_MS
+            });
             const response = await handler({
               body: { lang: "en", provider, messages: [{ role: "user", content: CHAT_PROBE_PROMPT }] },
               // A separate bucket, so the self-test never eats a visitor's quota.

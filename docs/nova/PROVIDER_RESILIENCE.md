@@ -127,7 +127,7 @@ All in `server/novaChat.js` unless stated.
 
 | # | Change | Why |
 | --- | --- | --- |
-| 14 | `GET /api/nova/diagnostics?chat=1` runs the **real chat handler** once per configured provider (30 s throttle, own rate-limit bucket) and reports `httpStatus`, `code`, `answeredBy`, `model`, `hasText`, `textChars`, `fallback`, `fallbackChain`, `ms` | A green probe meant "a host answered"; it did not mean "a completion works". This closes that gap end-to-end — and it is how the fix is meant to be verified on the live deployment |
+| 14 | `GET /api/nova/diagnostics?chat=1` runs the **real chat handler** once per configured provider — each on its own isolated handler (10 s attempt / 12 s budget, so one down provider cannot spend another's time) — with a 30 s throttle and its own rate-limit bucket, and reports `httpStatus`, `code`, `answeredBy`, `model`, `hasText`, `textChars`, `fallback`, `fallbackChain`, `ms` | A green probe meant "a host answered"; it did not mean "a completion works". This closes that gap end-to-end — and it is how the fix is verified on the live deployment |
 | 15 | The report now includes `budgets: { upstreamTimeoutMs, chainBudgetMs }` | A stale deployment answers with 8 000 / 18 000; that is now visible without reading logs |
 
 No API key, header, provider body or answer text is added to any response. The
