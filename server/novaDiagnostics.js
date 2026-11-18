@@ -45,8 +45,12 @@ const CHAT_PROBE_PROMPT = 'Reply with the single word: OK';
 // A self-test is a GET that a person waits for, so each provider is bounded and
 // isolated: one provider cannot spend another's budget, and the whole report
 // returns inside a browser request.
-const CHAT_PROBE_TIMEOUT_MS = 10_000;
-const CHAT_PROBE_BUDGET_MS = 12_000;
+// Deliberately shorter than a real chat hop (15 s): a self-test answers "does a
+// completion come back at all", and it has to fit in one browser request. A
+// provider that needs longer reports AI_TIMEOUT here and still gets its full
+// budget from `/api/nova/chat`.
+const CHAT_PROBE_TIMEOUT_MS = 6_000;
+const CHAT_PROBE_BUDGET_MS = 7_000;
 
 function envValue(env, key) {
   const value = env?.[key];

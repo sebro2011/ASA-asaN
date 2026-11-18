@@ -599,8 +599,8 @@ test('the chat self-test runs the real handler and reports shape, never content'
   // Each provider gets its own isolated, bounded handler: one down provider must
   // not spend another's budget, and the GET must return inside a request.
   const geminiRun = seen.find((entry) => entry.provider === 'gemini');
-  assert.equal(geminiRun.options.timeoutMs, 10_000);
-  assert.equal(geminiRun.options.budgetMs, 12_000);
+  assert.equal(geminiRun.options.timeoutMs, 6_000);
+  assert.equal(geminiRun.options.budgetMs, 7_000);
   assert.equal(geminiRun.options.getGeminiApiKey(), KEYS.GEMINI_API_KEY);
   assert.equal(geminiRun.options.getOpenRouterApiKey(), '', 'no cross-provider fallback in a self-test');
   assert.equal(geminiRun.options.getArenaApiKey(), '');
