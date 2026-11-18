@@ -118,7 +118,7 @@ All in `server/novaChat.js` unless stated.
 | 7 | Gemini: one shared deadline for the whole hop, the configured id always tried, a 503 **retried once on the same id**, extra ids only when they can finish | Retries the model that can actually answer, instead of walking retired ids |
 | 8 | Gemini: **model discovery** — when every static candidate fails, `GET /v1beta/models` (51 ms) is consulted and up to two `gemini-3.x` chat ids are tried (10-minute cache) | The catalogue cannot go stale; the key's own list decides |
 | 9 | Gemini: ids that answered 404/422 are remembered for 30 min (never the configured one) | Stops paying ~250 ms per request for three retired ids |
-| 10 | OpenRouter: `openrouter/free` → **`openrouter/auto`** on 404/422, reported as `requestedModel` + `modelFallback`; the *configured* model's error is what gets reported if both fail | The free router's pool varies by design; one documented alternative beats a dead hop |
+| 10 | OpenRouter: **only the shared free router** falls back to `openrouter/auto` on 404/422, reported as `requestedModel` + `modelFallback`; a pinned model keeps its own error, and the *configured* model's error is what is reported if both fail | The free router's pool varies by design; an operator who pinned a model wants that model's failure |
 | 11 | SSE bodies are **reassembled** (`textFromEventStream`) into the normal non-streaming shape | A provider that streams anyway still answers the non-streaming client |
 | 12 | A 2xx carrying `{ error }` is mapped to `providerError()`, not treated as an answer | Some gateways answer 200 with an error object |
 | 13 | Chain hops now carry `attempts`, `bodyShape`, `phase`; Gemini errors carry `modelsTried` | Diagnostics without content, keys or headers |
@@ -139,7 +139,7 @@ Local (this branch, `npm ci` from the committed lockfile):
 
 * `npm run test:nova-chat` — 51/51 (the seven assertions that pinned the old
   8-second / one-attempt behaviour were updated to the new policy and say so);
-* `node --test scripts/test-nova-resilience.mjs` — **13/13 new cases**, including:
+* `node --test scripts/test-nova-resilience.mjs` — **15/15 new cases**, including:
   * a 200 whose body is cut off by the timer → `AI_TIMEOUT`, not `INVALID_PROVIDER_RESPONSE`;
   * HTML body → retried once → healthy answer on the second attempt;
   * two HTML bodies → `INVALID_PROVIDER_RESPONSE` + `bodyShape: "html"` + local fallback, key never echoed;
@@ -149,6 +149,8 @@ Local (this branch, `npm ci` from the committed lockfile):
   * every static model failing → discovery → `gemini-3.9-flash-preview` answers, `modelFallback: true`;
   * `openrouter/free` 404 → `openrouter/auto` answers;
   * all three providers hanging → local answer in < 3 s, all three hops attempted;
+  * a failed hop reports 502, never a confusing "HTTP 200";
+  * a pinned OpenRouter model is not silently replaced;
   * the budget constants fit inside `maxDuration`;
 * `npm run test:nova-diagnostics` — 25/25 (two new self-test cases);
 * `npm run test:nova-routes` — 4/4;

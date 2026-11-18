@@ -312,3 +312,27 @@ test('every provider hanging still answers quickly and inside the budget', async
   assert.ok(elapsed < 3_000, `answered in ${elapsed} ms`);
   assert.equal(response.body.fallbackChain.length, 3, 'all three providers were tried, each within budget');
 });
+
+test('a failed hop reports this API\'s status, never a confusing "HTTP 200"', async () => {
+  const handler = openRouterHandler({
+    fetchImpl: async () => rawResponse('<html>blocked</html>', { contentType: 'text/html' }),
+  });
+  const response = await handler({ body: { ...body, provider: 'openrouter' }, ip: '203.0.113.30' });
+  const hop = response.body.fallbackChain[0];
+  assert.equal(hop.code, 'INVALID_PROVIDER_RESPONSE');
+  assert.equal(hop.status, 502, 'the chain shows 502, not the upstream 200');
+});
+
+test('a pinned OpenRouter model keeps its own error instead of switching models', async () => {
+  const seen = [];
+  const handler = openRouterHandler({
+    getOpenRouterModel: () => 'anthropic/some-model',
+    fetchImpl: async (_url, init) => {
+      seen.push(JSON.parse(init.body).model);
+      return rawResponse('{"error":{}}', { status: 404 });
+    },
+  });
+  const response = await handler({ body: { ...body, provider: 'openrouter' }, ip: '203.0.113.31' });
+  assert.deepEqual(seen, ['anthropic/some-model']);
+  assert.equal(response.body.fallbackChain[0].code, 'MODEL_UNAVAILABLE');
+});

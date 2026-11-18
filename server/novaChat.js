@@ -636,7 +636,7 @@ async function fetchProviderJsonOnce({ fetchImpl, url, init, timeoutMs, provider
           error: withProvider(
             withEvidence(
               errorResult(502, 'INVALID_PROVIDER_RESPONSE', 'The AI provider returned an unreadable response. Please retry.'),
-              { upstreamStatus: 200, bodyShape: 'unparseable', model: model || null },
+              { bodyShape: 'unparseable', model: model || null },
             ),
             provider,
           ),
@@ -678,7 +678,9 @@ async function fetchProviderJsonOnce({ fetchImpl, url, init, timeoutMs, provider
           withEvidence(
             errorResult(502, 'INVALID_PROVIDER_RESPONSE', 'The AI provider returned an unreadable response. Please retry.'),
             {
-              upstreamStatus: 200,
+              // No `upstreamStatus` on purpose: a 2xx is not a failure status, and
+              // putting 200 in the chain made the UI print "HTTP 200" for a
+              // failure. The shape is the evidence that matters here.
               bodyShape: shape,
               bodyBytes: typeof text === 'string' ? text.length : 0,
               model: model || null,
@@ -827,7 +829,10 @@ async function callOpenRouter({
   const firstError = upstreamResult.error || null;
   if (upstreamResult.error) {
     const code = upstreamResult.error.body?.code;
-    const modelGone = code === 'FREE_MODEL_UNAVAILABLE' || code === 'MODEL_UNAVAILABLE';
+    // Only the shared free router is substituted: an operator who pinned a specific
+    // model wants that model's error, not a silent switch to `openrouter/auto`.
+    const modelGone = model === OPENROUTER_FREE_MODEL
+      && (code === 'FREE_MODEL_UNAVAILABLE' || code === 'MODEL_UNAVAILABLE');
     const worthAnother = modelGone && fallbackModel && fallbackModel !== model
       && remainingTime(deadline) > MIN_ATTEMPT_BUDGET_MS + RETRY_DELAY_MS;
     if (worthAnother) {
