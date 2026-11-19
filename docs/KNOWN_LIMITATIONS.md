@@ -1,9 +1,57 @@
 # Known limitations
 
-Honest list as of **2026-11-13** (branch `arena/8a962084-asa-asan`).
+Honest list as of **2026-11-18** (branch `arena/9805b9df-asa-asan`).
 Each item says what a user or operator would actually see, and where it is
 recorded. Entries dated 2026-11-12 below the current table remain accurate unless
 the table supersedes them.
+
+## 2026-11-18 — the analyst answer that drew over itself
+
+The island-wide Sri Lanka answer ("Local Earth Intelligence", 549 POWER months,
+7 parameters) rendered its verified bullets outside the card: a bullet pasted the
+entire POWER request URL — `?parameters=T2M,PRECTOTCORR,…&community=RE&…`, about
+220 characters with no space in it — and the bullet's text node had no
+`min-width` or word break, so its min-content width was the whole URL. The
+two-column grid let that column overflow, and the URL was painted across the
+neighbouring "Calculated from retrieved data" panel, over its first two bullets.
+
+| Behaviour | Detail |
+| --- | --- |
+| **Bullets wrap mid-token** | `src/components/earth/AnalystPanel.tsx` renders each bullet through `BulletText`: `min-w-0 [overflow-wrap:anywhere]` on the text, `min-w-0` on the flex row and the card, `overflow-hidden` on the section card. A URL is now rendered as a link (`break-all`, `rel="noreferrer noopener"`, sentence punctuation kept outside the href) instead of as a wall of characters. |
+| **Prose names the source, not the query** | `server/earth/localAnalysis.ts` used to put `power.larc.nasa.gov/api/temporal/monthly/point?parameters=…` inside the sentence. The bullet now says `source power.larc.nasa.gov, full query under Evidence`; the complete URL is still recorded verbatim in the evidence block and in `sources[].url`, so provenance is unchanged — only its location. Same three languages. |
+| **Two attempt pills get tooltips** | `6 attempt(s)` and `6 retry attempt(s)` sit next to each other and read like the same fact twice. Each now carries a tooltip saying what it counts (total provider calls vs calls that were not a first attempt). The numbers themselves are unchanged: they come from `server/earth/providerOrchestrator.ts`, and `retries = Σ(attempts−1)` cannot equal `attempts` for a non-empty chain — the production pair (6/6) is therefore **unexplained** and is recorded as open rather than "fixed" (see the audit report §I). |
+
+## 2026-11-18 — audit pass: what was fixed, what was only measured
+
+A full audit pass (rate limiting, the COSMORA AI v3 defect register, four open
+pull requests, build/tests, security, live verification) produced these changes.
+The report is `docs/audits/PHASE3_AUDIT_2026-11-18.md`; the scientific register is
+`COSMORA_AI_v3/docs/DEFECT_REPORT.md` §10.
+
+| Behaviour | Detail |
+| --- | --- |
+| **The Earth rate limiter is bounded** | `server/earthIntelligence.ts` kept one `Map` of per-client counters forever: an entry was only replaced when *the same client* returned after its window. A client that appears once — or one rotating source addresses — left a permanent entry, so the map grew with every distinct client the process had ever seen. This is the defect `server/requestRateLimit.ts` had already fixed for the other routes; the Earth router kept its own copy of the unbounded pattern. It now sweeps closed windows at 5,000 tracked clients and enforces a 10,000 ceiling. **No production memory exhaustion was demonstrated** — the ceiling needs thousands of distinct clients in one process lifetime — so this is reported as a bounded-memory fix, level with the `api` limiter that already had it. |
+| **The upstream payload cache has a ceiling** | The same file's `cache` swept expired entries above 400 but had no cap if every entry was still live; it now drops the soonest-to-expire entries at 600. |
+| **Scientific provenance digests are recomputable** | `payload_sha256` was the hash of a re-serialised object, so it matched neither the file on disk nor the digest published in `data/cache/README.md`. It is now the digest of the file's bytes, and the three committed payloads reproduce their published digests exactly. |
+| **A `--quick` run can no longer claim the full run's identity** | The manifest, report, dashboard footer and run directory all carried the hash of the unmodified config even when the epoch budget was overridden. The effective configuration is now hashed, written to `effective_config.json`, and the configured hash is kept beside it with an explicit "overridden" note. Full runs are unaffected (same hash, `a6bbe9432b389257`). |
+| **Gaps in a monthly record no longer shift every lag** | Lags were positional, so one dropped month turned `lag1` into `lag2` for every later row, silently. Features are now built on a gap-free monthly calendar and rows that cannot be described from history are dropped. The reported run has `dropped_months = 0`, so its numbers are unchanged. |
+| **Still open, deliberately** | `config_hash` still covers presentation settings (D16), conformal coverage is still a measurement rather than a guarantee with no adaptive interval built (D13), the cache filename still omits the request signature for existing files (D19 residual), the MAPE-style metric is still unusable on dry months (D25), the notebook is still never executed in CI (D28), and the ruff style backlog is untouched (D31). Each is argued in `COSMORA_AI_v3/docs/DEFECT_REPORT.md` §10. |
+| **APOD is failing upstream right now** | `api.nasa.gov` answered HTTP 500 at 10:44Z on 2026-11-18, so the home APOD panel reads Unavailable and the strip keeps retrying. The key is configured; the failure is NASA's. Nothing is substituted. |
+
+## 2026-11-18 — what the two long home cards claim
+
+The APOD panel and the Earth preview under the service strip both overstated
+or under-explained their own numbers. Recorded here because the fix is a
+statement about what those cards are allowed to claim, not just a layout change.
+
+| Behaviour | Detail |
+| --- | --- |
+| **"Complete years" counts complete years** | NASA POWER returns the current year with the months it has so far (on 2026-11-18, 2026 had January–September). The card counted every annual bucket with a number — 15 for a 2012–2026 request — and printed it under the label *Complete years*. There are 14: `src/pages/home/EarthPreview.tsx` now counts `point.complete`, and `src/lib/earth/power.ts` already defined complete as 12 monthly values. |
+| **The year in progress is drawn as provisional** | The partial 2026 mean was plotted as an ordinary vertex, which reads as "2026 warmed" even though `leastSquaresTrend` had always excluded it. `src/pages/home/Sparkline.tsx` now draws it hollow, joins it with a dashed segment, leaves it out of the period-mean line, and the caption names it: `2026 in progress, not in 2012–2025`. |
+| **The metric labels no longer collide** | *Least-squares slope* wraps to two lines in a ~350 px column, and `.eyebrow` sets `line-height: 1`, so the wrapped label pushed `+0.034 /yr` below its neighbours. The three `dt`s now carry a shared `min-h` and `leading-[1.35]`, so the three values share a baseline. |
+| **A saved APOD says why and when** | The card's only signal was a small **CACHED** badge beside a four-day-old picture. It now prints the loader's own reason (*"Live request failed (api.nasa.gov returned a site logo instead of the entry image). Showing the value saved 4 days ago."*) in the space that used to be empty, carries the same sentence in the badge tooltip, and offers its own *Try again* — the Earth card already had one. |
+| **APOD has no live picture to show** | This is not a defect the card can fix: `/api/apod` answers `success: false`, `APOD_UNAVAILABLE`, `fallbackReason: "degraded"` because `api.nasa.gov` served its own site logo instead of the entry. The card is a labelled archival fallback (`apod.regression` covers that path) and its date will lag the Earth card's `retrievedAt` until the upstream recovers. |
+| **These notes are English-only** | Like the per-tile failure notes in `src/pages/home/SignalStrip.tsx`, the provenance sentence and the chart caption are hard-coded English inside a trilingual page. The metric labels themselves are translated. |
 
 ## 2026-11-14 — the four home-page service tiles
 

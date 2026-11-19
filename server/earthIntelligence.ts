@@ -57,12 +57,22 @@ function cacheGet<T>(key: string): T | null {
   return entry.payload as T;
 }
 
+/** Absolute ceiling for upstream payloads held in memory (~ a few hundred kB each). */
+const CACHE_MAX_ENTRIES = 600;
+
 function cacheSet(key: string, payload: unknown, ttlMs: number): void {
   if (cache.size > 400) {
     const now = Date.now();
     for (const [k, entry] of cache) {
       if (now > entry.expires) cache.delete(k);
     }
+  }
+  // Sweeping expired entries is not a ceiling: if every entry is still live the
+  // map keeps growing. Drop the soonest-to-expire entries instead.
+  if (cache.size >= CACHE_MAX_ENTRIES) {
+    const ordered = [...cache.entries()].sort((a, b) => a[1].expires - b[1].expires);
+    const excess = cache.size - CACHE_MAX_ENTRIES + 1;
+    for (let index = 0; index < excess; index += 1) cache.delete(ordered[index][0]);
   }
   cache.set(key, { expires: Date.now() + ttlMs, payload });
 }
@@ -78,7 +88,91 @@ async function fetchWithTimeout(url: string, options: RequestInit = {}, timeoutM
   }
 }
 
+/**
+ * Per-endpoint, per-client request counters.
+ *
+ * The map is keyed by `route:client`, so it grows with *distinct clients*, not
+ * with traffic. An entry is only removed when that same client comes back after
+ * its window elapsed — a client that appears once never returns to be cleaned
+ * up. A caller rotating through IPv6 addresses (or a proxy that presents many
+ * source addresses) therefore grew this map without limit and never shrank it:
+ * the same slow leak that `server/requestRateLimit.ts` was written to remove for
+ * the NAS-powered routes.
+ *
+ * Two bounds fix it, mirroring the proven limiter in `requestRateLimit.ts`:
+ * expired entries are swept once the map crosses a threshold, and a hard
+ * ceiling drops the oldest windows as a final backstop. The 429 contract below
+ * is unchanged: this is a memory fix, not a behavioural one.
+ */
 const rateBuckets = new Map<string, { count: number; resetAt: number }>();
+
+/** Above this many tracked clients, expired buckets are swept on the next call. */
+export const EARTH_RATE_PRUNE_THRESHOLD = 5_000;
+
+/** Absolute ceiling. Reached only when a sweep freed nothing. */
+export const EARTH_RATE_MAX_BUCKETS = 10_000;
+
+export type EarthRateBucket = { count: number; resetAt: number };
+
+/**
+ * Deletes windows that have already closed. Takes the map as an argument so the
+ * regression test can drive it with synthetic clients instead of 5,000 requests.
+ */
+export function sweepRateBuckets(map: Map<string, EarthRateBucket>, now: number): number {
+  let removed = 0;
+  for (const [key, bucket] of map) {
+    if (now >= bucket.resetAt) {
+      map.delete(key);
+      removed += 1;
+    }
+  }
+  return removed;
+}
+
+/** Drops the windows closest to expiry until the map is back under the ceiling. */
+export function enforceRateCap(map: Map<string, EarthRateBucket>): void {
+  if (map.size <= EARTH_RATE_MAX_BUCKETS) return;
+  const ordered = [...map.entries()].sort((a, b) => a[1].resetAt - b[1].resetAt);
+  const excess = map.size - EARTH_RATE_MAX_BUCKETS;
+  for (let index = 0; index < excess; index += 1) {
+    map.delete(ordered[index][0]);
+  }
+}
+
+/** Read-only view of the store for tests and diagnostics. */
+export function earthRateBucketCount(): number {
+  return rateBuckets.size;
+}
+
+/**
+ * Counts one request for `key` and returns the bucket afterwards.
+ *
+ * Extracted so the memory behaviour (sweep, cap, the post-insert re-check that
+ * keeps the map at or below the ceiling) can be tested against the same code
+ * the middleware runs, instead of a copy of it in the test.
+ */
+export function touchRateBucket(
+  map: Map<string, EarthRateBucket>,
+  key: string,
+  now: number,
+  windowMs: number
+): EarthRateBucket {
+  if (map.size >= EARTH_RATE_PRUNE_THRESHOLD) {
+    sweepRateBuckets(map, now);
+    enforceRateCap(map);
+  }
+  const existing = map.get(key);
+  if (!existing || now > existing.resetAt) {
+    map.set(key, { count: 1, resetAt: now + windowMs });
+    // A new client can be the one that pushes the map over the ceiling: the
+    // sweep above runs *before* the insert, so enforce the bound again here.
+    // Without this the map settles at ceiling + 1.
+    if (map.size > EARTH_RATE_MAX_BUCKETS) enforceRateCap(map);
+    return map.get(key)!;
+  }
+  existing.count += 1;
+  return existing;
+}
 
 function rateLimit(name: string, max: number, windowMs: number) {
   return (req: Request, res: Response, next: NextFunction) => {
@@ -89,12 +183,7 @@ function rateLimit(name: string, max: number, windowMs: number) {
     // analyst (or any other capability) for the same client.
     const key = `${name}:${ip}`;
     const now = Date.now();
-    const bucket = rateBuckets.get(key);
-    if (!bucket || now > bucket.resetAt) {
-      rateBuckets.set(key, { count: 1, resetAt: now + windowMs });
-      return next();
-    }
-    bucket.count += 1;
+    const bucket = touchRateBucket(rateBuckets, key, now, windowMs);
     if (bucket.count > max) {
       const retryAfter = Math.ceil((bucket.resetAt - now) / 1000);
       res.setHeader('Retry-After', String(retryAfter));

@@ -722,3 +722,31 @@ test('GET /health reports per-provider health without keys or quota spend', asyn
     server.close();
   }
 });
+
+/**
+ * The verified bullets used to embed the whole POWER request URL, query string
+ * and all (~220 characters, no spaces). It made the answer unreadable and, in
+ * the two-column layout, pushed unbreakable text out of its card. The bullet now
+ * names the host and points at the evidence block, which still carries the full
+ * query verbatim.
+ */
+test('the dataset bullet names the host and keeps the full query in the evidence block', async () => {
+  const { buildLocalAnalystAnswer } = await import('../server/earth/localAnalysis.ts');
+  const dates = ['2024-01', '2024-02'];
+  const answer = buildLocalAnalystAnswer(
+    'How warm is it?',
+    contextWith([{ code: 'T2M', unit: '°C', dates, values: [27.1, 27.9] }]),
+    { lang: 'en' }
+  );
+  const verified = answer.sections.find((section) => section.kind === 'verified');
+  const bullet = verified.bullets.find((line) => /NASA POWER monthly archive retrieved/.test(line));
+
+  assert.ok(bullet, 'the archive bullet is still reported');
+  assert.match(bullet, /power\.larc\.nasa\.gov/, 'the source is named');
+  assert.doesNotMatch(bullet, /[?&]parameters=/, 'the query string is not pasted into prose');
+  assert.match(bullet, /\d+ monthly records/);
+
+  const source = (answer.sources || []).find((entry) => /power\.larc\.nasa\.gov/.test(entry.url || ''));
+  assert.ok(source, 'the full query stays available as a source');
+  assert.match(source.url, /\?parameters=/);
+});

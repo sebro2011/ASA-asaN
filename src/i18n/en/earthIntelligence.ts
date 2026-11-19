@@ -150,6 +150,9 @@ export const earthIntelligenceEn: EarthIntelligenceStrings = {
   earthAnalystProviderAnsweredBy: 'Answered by {{provider}}',
   earthAnalystAttemptsCount: '{{count}} attempt(s)',
   earthAnalystRetriesCount: '{{count}} retry attempt(s)',
+
+  earthAnalystAttemptsHint: 'Provider calls made in total, including retries of the same provider.',
+  earthAnalystRetriesHint: 'Of those calls, the ones that were not the first attempt on a provider.',
   earthAnalystNoticePrimaryUnavailable:
     'The primary AI service is temporarily unavailable. An alternative analysis mode answered instead.',
   earthAnalystNoticeAllDown:

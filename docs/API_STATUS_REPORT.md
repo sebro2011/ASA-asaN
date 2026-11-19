@@ -16,6 +16,29 @@ means neither was possible from this environment.
 | `GET /api/workspace/config` | env | — | — | 200 with booleans only |
 | `GET /api/news/sources` | env | — | — | booleans only |
 
+## Live measurement — production `7b792bc`, 2026-11-18T10:44Z
+
+Taken from the audit sandbox with a GET-only fetch tool (no browser), against
+`https://nasa-space-expolere.vercel.app`. Everything below was actually observed;
+nothing is inferred from the source.
+
+| Surface | Observed | Reading |
+| --- | --- | --- |
+| `GET /` (home) | 200, full page rendered | deployment reports itself as `production · 7b792bc` |
+| `GET /api/apod` | `success:false · APOD_UNAVAILABLE · fallbackReason:upstream · upstreamStatus:500 · keySource:configured · hint "api.nasa.gov answered HTTP 500"` | the APOD card is an honest failure, not a stale record: the key is configured, so this is NASA's 500 |
+| `GET /api/nova/diagnostics` | `probed:false`, local `ok`, openrouter/gemini `configured`, budgets `15000/25000` | configuration is intact after the 502/504 repair; providers were not probed by this call (needs `?chat=1`) |
+| Orbital tracking tile | **Live**, epoch `2026-11-18 10:44Z`, `51.57N 135.11E`, 421 km | real altitude/velocity; the panel says "propagated two-body fallback" when it uses one |
+| Near-Earth objects tile | **Live**, 31 objects `2026-11-18 → 2026-11-24`, 1 flagged hazardous, closest `(2018 NE1)` 16.60 LD | real NeoWs close-approach window |
+| Earth preview (NASA POWER) | **Live**, Colombo `T2M 2012–2026`, mean 26.5 °C, slope +0.034 °C/yr | data is real; the "Complete years 15" label was wrong (14 complete, 2026 has 9 months) — fixed on `arena/9805b9df-asa-asan`, PR #73, not yet deployed |
+| APOD tile in the service strip | "Requesting" while the panel says Unavailable | the strip retries on its own timer; the panel is the authoritative state |
+
+**Not verified from this sandbox:** browser-only surfaces (3D/WebXR/AR, the launch
+simulator, rocket telemetry animation, the soundscape), Mars rover photos,
+DONKI, GIBS tile rendering, and any interaction that needs POST. The sandbox has
+no HTTPS egress (`curl` exits 35), so every server-side upstream call made *here*
+fails by design; the checks above are of the deployed instance, not of local
+service.
+
 ## NOVA AI providers — chat self-test (production `4ec5998`, 2026-11-18T09:05Z)
 
 `GET /api/nova/diagnostics?chat=1` runs the **real chat handler** once per

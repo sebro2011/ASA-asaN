@@ -33,6 +33,15 @@ export function Sparkline({
     const valid = points.filter((point): point is SparklinePoint & { mean: number } => typeof point.mean === 'number');
     if (valid.length < 2) return null;
 
+    // The current year arrives incomplete (NASA POWER returns the months it has
+    // so far). Its mean covers a different part of the year than the others, so
+    // it is not an annual mean: it is drawn hollow, joined by a dashed segment,
+    // and left out of the trend line and of the period mean.
+    const partial = valid.filter((point) => point.complete === false);
+    const complete = valid.filter((point) => point.complete !== false);
+    const basis = complete.length >= 2 ? complete : valid;
+    const hasPartial = partial.length > 0 && complete.length >= 2;
+
     const width = 640;
     const padX = 34;
     const padTop = 12;
@@ -55,10 +64,22 @@ export function Sparkline({
     const x = (year: number) => padX + ((year - firstYear) / yearSpan) * innerW;
     const y = (value: number) => padTop + (1 - (value - min) / (max - min)) * innerH;
 
-    const line = valid.map((point, index) => `${index === 0 ? 'M' : 'L'}${x(point.year).toFixed(2)},${y(point.mean).toFixed(2)}`).join(' ');
-    const area = `${line} L${x(lastYear).toFixed(2)},${(padTop + innerH).toFixed(2)} L${x(firstYear).toFixed(2)},${(padTop + innerH).toFixed(2)} Z`;
+    const line = basis.map((point, index) => `${index === 0 ? 'M' : 'L'}${x(point.year).toFixed(2)},${y(point.mean).toFixed(2)}`).join(' ');
+    const lastBasis = basis[basis.length - 1];
+    const area = `${line} L${x(lastBasis.year).toFixed(2)},${(padTop + innerH).toFixed(2)} L${x(basis[0].year).toFixed(2)},${(padTop + innerH).toFixed(2)} Z`;
 
-    const mean = values.reduce((sum, value) => sum + value, 0) / values.length;
+    // Dashed connector from the last complete year to the year in progress, so
+    // the eye sees a provisional value without reading it as the next data point
+    // of the trend.
+    const partialPath = hasPartial
+      ? basis
+          .slice(-1)
+          .concat(partial)
+          .map((point, index) => `${index === 0 ? 'M' : 'L'}${x(point.year).toFixed(2)},${y(point.mean).toFixed(2)}`)
+          .join(' ')
+      : '';
+
+    const mean = basis.reduce((sum, point) => sum + point.mean, 0) / basis.length;
 
     return {
       width,
@@ -68,12 +89,21 @@ export function Sparkline({
       innerH,
       line,
       area,
+      partialPath,
+      hasPartial,
       meanY: y(mean),
       firstYear,
       lastYear,
       min,
       max,
-      points: valid.map((point) => ({ ...point, cx: x(point.year), cy: y(point.mean) }))
+      trendYears: `${basis[0].year}–${basis[basis.length - 1].year}`,
+      partialLabel: hasPartial ? partial.map((point) => point.year).join(', ') : '',
+      points: valid.map((point) => ({
+        ...point,
+        cx: x(point.year),
+        cy: y(point.mean),
+        provisional: point.complete === false
+      }))
     };
   }, [points, height]);
 
@@ -90,7 +120,9 @@ export function Sparkline({
       <svg
         viewBox={`0 0 ${geometry.width} ${height}`}
         role="img"
-        aria-label={`${label} — annual means ${geometry.firstYear} to ${geometry.lastYear}, in ${unit}`}
+        aria-label={`${label} — annual means ${geometry.firstYear} to ${geometry.lastYear}, in ${unit}${
+          geometry.hasPartial ? `; ${geometry.partialLabel} is still in progress and excluded from the trend` : ''
+        }`}
         className="w-full"
         style={{ height }}
         preserveAspectRatio="none"
@@ -127,9 +159,33 @@ export function Sparkline({
           strokeWidth="1"
         />
 
-        {geometry.points.map((point) => (
-          <circle key={point.year} cx={point.cx} cy={point.cy} r="1.9" fill="#a7e8fa" />
-        ))}
+        {geometry.partialPath ? (
+          <path
+            d={geometry.partialPath}
+            fill="none"
+            stroke="rgba(167,232,250,0.55)"
+            strokeWidth="1.4"
+            strokeDasharray="3 3"
+            strokeLinecap="round"
+          />
+        ) : null}
+
+        {geometry.points.map((point) =>
+          point.provisional ? (
+            <circle
+              key={point.year}
+              cx={point.cx}
+              cy={point.cy}
+              r="2.6"
+              fill="#0a1524"
+              stroke="#a7e8fa"
+              strokeWidth="1.2"
+              data-incomplete="true"
+            />
+          ) : (
+            <circle key={point.year} cx={point.cx} cy={point.cy} r="1.9" fill="#a7e8fa" />
+          )
+        )}
 
         <text x={geometry.padX} y={height - 6} fill="#5f7290" fontSize="10" fontFamily="JetBrains Mono, monospace">
           {geometry.firstYear}
@@ -149,8 +205,11 @@ export function Sparkline({
         </text>
       </svg>
 
-      <figcaption className="mt-2 flex items-center justify-between gap-3 font-mono text-[10px] text-ink-4">
-        <span>Annual mean · dashed line = period mean</span>
+      <figcaption className="mt-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 font-mono text-[10px] leading-relaxed text-ink-4">
+        <span>
+          Annual mean · dashed line = period mean
+          {geometry.hasPartial ? ` · ${geometry.partialLabel} in progress, not in ${geometry.trendYears}` : ''}
+        </span>
         <details className="relative">
           <summary className="cursor-pointer list-none text-ink-3 underline decoration-dotted underline-offset-2 hover:text-ink">
             data table

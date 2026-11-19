@@ -23,7 +23,7 @@ import numpy as np
 import pandas as pd
 
 from . import report
-from .config import load_config
+from .config import config_hash, fold_overlap, load_config
 from .data import load_dataset
 from .evaluate import SeriesResult, run_series, seed_stability
 from .extreme import analyse as analyse_extremes
@@ -43,6 +43,26 @@ LIMITATIONS_COMMON = [
     "Ensemble weights are equal by construction to avoid fitting weights on the evaluation window; "
     "a learned weighting could be better or worse and has not been tested.",
 ]
+
+
+def _apply_epoch_override(config: Dict[str, Any], epochs_override: Optional[int]) -> Dict[str, Any]:
+    """Return the config the run will actually use, re-hashed (D17).
+
+    With no override the dict returned is the *same object*, so a full run keeps
+    its documented hash exactly. With an override the deep models get the reduced
+    budget and ``config_hash`` is recomputed over the result, so the run cannot
+    claim an identity it did not execute.
+    """
+    if not epochs_override:
+        return config
+    effective = {key: value for key, value in config.items()}
+    effective["models"] = {key: dict(value) for key, value in config["models"].items()}
+    for model in ("mlp", "gru", "lstm"):
+        if model in effective["models"]:
+            effective["models"][model]["epochs"] = int(epochs_override)
+    effective.pop("config_hash", None)
+    effective["config_hash"] = config_hash(effective)
+    return effective
 
 
 def _seed_subset(config: Dict[str, Any], quick: bool) -> List[int]:
@@ -66,6 +86,16 @@ def run(
     max_folds = 2 if quick else None
     epochs_override = 40 if quick else None
 
+    # D17: `--quick` (or any epoch override) changed the model but the manifest,
+    # the report, the dashboard footer and the run directory all carried the hash
+    # of the *unmodified* config — a 40-epoch smoke run was labelled with the
+    # 300-epoch identity it never executed. The effective configuration is now
+    # resolved before anything is named after it, hashed, and written to the run
+    # directory, with the configured hash kept alongside for traceability.
+    configured_hash = config["config_hash"]
+    effective = _apply_epoch_override(config, epochs_override)
+    if effective is not config:
+        config = effective
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     base = Path(out_dir) if out_dir else Path(config["output"]["results_dir"])
     if synthetic:
@@ -76,6 +106,8 @@ def run(
     mode = "SYNTHETIC engine check" if synthetic else "NASA POWER"
     log(f"[COSMORA v3] mode: {mode}{' · quick' if quick else ''}")
     log(f"[COSMORA v3] config {config['config_hash']} · output {run_dir}")
+    if configured_hash != config["config_hash"]:
+        log(f"[COSMORA v3] configured hash {configured_hash} was overridden for this run")
 
     frames, provenance = load_dataset(config, force_refresh=force_refresh, synthetic=synthetic)
     locations = [loc for loc in config["locations"] if not location_ids or loc["id"] in location_ids]
@@ -187,6 +219,17 @@ def run(
         _make_figures(run_dir, series_results, tables)
 
     # -- artefacts ------------------------------------------------------------
+    # The exact configuration this run executed, so a reader can hash it too.
+    import json as _effective_json
+
+    (run_dir / "effective_config.json").write_text(
+        _effective_json.dumps(
+            {k: v for k, v in config.items() if not k.startswith("_")},
+            indent=2, sort_keys=True, default=str,
+        ),
+        encoding="utf-8",
+    )
+
     manifest_path = report.write_manifest(
         run_dir, config, provenance, synthetic=synthetic, quick=quick,
         timing={"total_seconds": round(time.time() - started, 1)},
@@ -194,6 +237,8 @@ def run(
             # The executed seed list, not the configured one: a quick run uses a
             # subset, and the report must not imply otherwise.
             "seeds_executed": seeds,
+            "configured_config_hash": configured_hash,
+            "fold_overlap": fold_overlap(config["splits"]),
             "locations_executed": sorted({r.location_id for r in series_results}),
             "folds_executed": max_folds,
             # What the run actually used, not only what the config asked for.

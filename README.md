@@ -78,6 +78,7 @@ URL, or written to a log; upstream bodies are scrubbed before they leave the ser
 | --- | --- |
 | [`docs/README.md`](docs/README.md) | **Documentation index — start here** |
 | [`docs/audits/MASTER_AUDIT_REPORT.md`](docs/audits/MASTER_AUDIT_REPORT.md) | Current audit: 2 critical + 8 major findings, what was fixed, what needs a decision |
+| [`docs/audits/PHASE3_AUDIT_2026-11-18.md`](docs/audits/PHASE3_AUDIT_2026-11-18.md) | Latest pass: bounded rate-limit state, science/provenance repairs (D17–D30), pull-request triage, live API status |
 | [`docs/TECHNICAL_ARCHITECTURE.md`](docs/TECHNICAL_ARCHITECTURE.md) | System architecture |
 | [`docs/API_STATUS_REPORT.md`](docs/API_STATUS_REPORT.md) | Every route: source, cache, failure mode, live status |
 | [`docs/TEST_RESULTS.md`](docs/TEST_RESULTS.md) | What was run, and what it proves |

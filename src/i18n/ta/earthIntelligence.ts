@@ -156,6 +156,9 @@ export const earthIntelligenceTa: EarthIntelligenceStrings = {
   earthAnalystProviderAnsweredBy: 'பதிலளித்தது {{provider}}',
   earthAnalystAttemptsCount: '{{count}} முயற்சிகள்',
   earthAnalystRetriesCount: '{{count}} மறுமுயற்சிகள்',
+
+  earthAnalystAttemptsHint: 'அதே வழங்குநரின் மறுமுயற்சிகள் உட்பட மொத்த அழைப்புகள்.',
+  earthAnalystRetriesHint: 'அவற்றில் வழங்குநரின் முதல் முயற்சி அல்லாத அழைப்புகள்.',
   earthAnalystNoticePrimaryUnavailable:
     'முதன்மை AI சேவை தற்காலிகமாக கிடைக்கவில்லை. அதற்குப் பதிலாக மாற்று ஆய்வு முறை பதிலளித்தது.',
   earthAnalystNoticeAllDown:

@@ -3,7 +3,9 @@
 A reproducible research harness for **one-month-ahead monthly climate prediction** over
 Colombo, Kandy and Jaffna, using NASA POWER data. It compares MLP, GRU, LSTM and XGBoost
 against a GRU+LSTM+MLP ensemble under walk-forward validation with a sealed test tail,
-calibrated prediction intervals and statistical model comparison.
+split-conformal prediction intervals (coverage measured on the sealed tail, not
+guaranteed — see `docs/DEFECT_REPORT.md` D13) and statistical model comparison with a
+multiple-comparison correction.
 
 Nothing in v1.0/v2.0 is modified. v3 lives entirely in this directory.
 

@@ -622,3 +622,50 @@ python scripts/emit_results_section.py --run /tmp/run/run_… \
 
 Expected: `config_hash a6bbe9432b389257`, 1 014 s on 2 vCPU, and tables byte-identical to
 `docs/evidence/post_fix_run/tables/` (§8.0 of the scientific audit).
+
+---
+
+## 10. Phase 3 — what a second pass corrected (2026-11-18)
+
+The register above left seven S2 items and ten S3 items open (§9.6). This pass
+took them one at a time, with the same rule as before: reproduce first, fix only
+what has a demonstrable root cause, and record what was deliberately left alone.
+**No reported result moved.** Every change below is either an identity, a
+provenance record, a validation guard, or a code path the reported run does not
+enter (`dropped_months = 0` everywhere in it).
+
+| Defect | Status now | Change | Evidence |
+| --- | --- | --- | --- |
+| **D17** reduced-epoch run reports the full-config hash | **fixed** | `run.py::_apply_epoch_override` resolves the configuration *before* anything is named after it: the effective config is re-hashed, written to `effective_config.json`, used for the run directory, the manifest, the dashboard footer and `REPORT.md`; `configured_config_hash` is kept alongside and the report says when it was overridden. With no override the dict is returned unchanged, so a full run keeps `a6bbe9432b389257` exactly. | `test_d17_d18_d19_d21_repairs.py::D17EffectiveConfigHash` (3 tests); a synthetic `--quick` run now writes `config_hash cef18dda61ecb125` + `configured_config_hash 8a8600ab2cca3cc0` with `epochs_effective {mlp: 40, gru: 40, lstm: 40}` |
+| **D18** `payload_sha256` is not a digest of any file | **fixed** | `data.py::fetch_location` hashes the cache file's bytes on both the cold and the cached path. The reported digest now equals the value `data/cache/README.md` publishes, so a third party can check it. | measured: Colombo `911aac866cb35ef2…`, Kandy `fa9ea32edcbb7e2f…`, Jaffna `ef2ea94b66c948fe…` — the published digests, where the manifest previously carried `443d6d9b…`, `baaa534a…`, `906b9c73…` |
+| **D19** cache key ignores the request | **partial** | a request signature (parameters, community, base_url, window, rounded coordinates) is written into the payload and **verified on read**; a mismatch refuses with `DataUnavailable` instead of serving another request's data. Caches written before this change carry no signature; they are accepted and the provenance says `request_signature_checked: false` rather than pretending they were verified. | `D19CacheSignature` (2 tests) |
+| **D20** positional lags shift after a missing month | **fixed** | `features.py::_complete_monthly_index` reindexes to a gap-free monthly calendar before any `shift`/`rolling`, so a gap becomes a NaN row the existing mask drops. Reproduced first: with 2020-08 dropped, lag-1 for 2020-09 returned `59.0` (the 2020-07 value) instead of `60.0`. | `test_d20_calendar_features.py` (4 tests) |
+| **D21** validation leaves expensive failure modes open | **fixed (3 of 4), recorded (1)** | a location missing `lat`/`lon` or carrying a non-numeric one now raises `ConfigError` naming the entry; `test_months < 12` and `cv_validation_months < 1` are refused (a 0-month tail used to complete with `n = 0` and `scientific_results: true`); fold overlap is recorded as `fold_overlap` in the manifest and printed in `REPORT.md`; the POWER window is now checked against the months actually received (`configured_months`, `months_short_of_window`) instead of against the config's own arithmetic. | `D21Validation` (7 tests) |
+| **D22** duplicate months accepted silently | **fixed** | identical copies of a month are de-duplicated (one observation listed twice); copies that *disagree* are refused, because picking one would be a guess. Count recorded as `duplicate_month_rows_removed`. The three committed payloads have none. | `D22DuplicateMonths` (2 tests) |
+| **D24** `interval_score` cleans bounds independently | **fixed** | one joint mask over `(y, lower, upper)`; a NaN in either bound now drops the whole observation. Reproduced first: a NaN lower bound raised `operands could not be broadcast together with shapes (3,) (4,)`. | `D24IntervalAlignment` (2 tests); the reported run has no NaN bounds (`interval_scores.csv`, 0 matches) |
+| **D26** documentation says skill = 1 − MAE/MAE_ref | **verified already correct** | `FINAL_SCIENTIFIC_AUDIT.md` §8.1 states 1 − MSE/MSE(climatology); no stale MAE formulation remains in the audit. | `grep` over `docs/` |
+| **D27** `REPORT.md` prints `scientific results: True` | **fixed** | prints `yes`/`no`, and adds the configured-vs-effective hash and the fold geometry lines. | the synthetic `--quick` run's `REPORT.md` |
+| **D30** `_download` accepts a body containing the substring `"parameter"` | **fixed (validation + UA), TTL still absent** | the body is parsed and `properties.parameter` must be a dict; requests now send a `User-Agent` and `Accept: application/json`. A body that merely mentions the word is refused. | `D30ResponseValidation` (2 tests) |
+| **D23, D25, D28, D29, D31** | **open** | deliberately not changed: D23/D25 need a metrics-schema or metric-definition change that would alter the evidence tables; D28 needs a CI job that runs a full experiment; D29 is wasted compute with identical results; D31 is style only (155 `UP006`, 30 `UP035`, 7 unused `noqa`, 2 `EXE001`) with no unused imports, bare `except` or undefined names. | see §9.6 for the same reasoning |
+| **D13** conformal coverage | **claim corrected, method open** | the interval section and the package README now say coverage is *measured, not guaranteed*, and name the broken assumption (calibration on 2010–2019 folds, test tail 2020–2024). Adaptive conformal is still unbuilt. | `FINAL_SCIENTIFIC_AUDIT.md` §8.3, `README.md` |
+| **D16** `config_hash` covers presentation settings | **open** | unchanged: redefining the hash invalidates every stored hash including the ones in these documents, and needs its own pass. | §9.6 |
+
+### 10.1 What the phase-3 pass does to the reported conclusions
+
+Nothing. The three committed payloads are unchanged byte-for-byte, `dropped_months`
+stays 0, the fold geometry is untouched, and every corrected line is either a
+digest, a guard, or a field that did not exist before. `docs/evidence/post_fix_run`
+still describes the same run; only its `payload_sha256` values are now the
+recomputable ones for future runs, and its historical manifest is left as written.
+
+### 10.2 Reproduce
+
+```bash
+cd COSMORA_AI_v3
+python -m unittest discover -s tests            # 103 tests
+PYTHONPATH=src python -c "
+from cosmora_v3.config import load_config
+from cosmora_v3.data import fetch_location
+c = load_config('config/experiment_lk_power_2000_2024.json')
+print(fetch_location(c['locations'][0], c)[1].payload_sha256)"   # 911aac866cb35ef2…
+```

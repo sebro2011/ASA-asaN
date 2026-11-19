@@ -1,6 +1,39 @@
 # Test results
 
-Latest full run: **2026-11-13**, branch `arena/8a962084-asa-asan`.
+## Latest full run: 2026-11-18 (audit pass), branch `arena/9805b9df-asa-asan`
+
+Verified in this pass, on this branch, against `main` @ `7b792bc`. Everything below was
+executed; nothing is carried over from an earlier run.
+
+| Command | Result |
+| --- | --- |
+| `npm ci --no-audit --no-fund` | clean, 719 packages |
+| `npm run lint` (`tsc --noEmit`) | **clean** |
+| `npm test` (full chain, 40 scripts) | **1082 pass / 0 fail / 0 skipped** across **86** test files |
+| `npm run build` | exit 0 · 164 precached PWA entries · `check:pwa` ok |
+| `npm run build:api` + `npm run check:bundle` | `api/index.js` regenerated from `server/` and in sync after commit (the check fails while the regenerated bundle is uncommitted — that is its purpose) |
+| `npm run audit:env` | 34 variables · 0 undocumented · no secret reachable from browser code |
+| `python -m unittest discover -s tests` (`COSMORA_AI_v3`) | **103 tests / 0 failures** (79 pre-existing + 24 new) |
+| `python scripts/run_experiments.py --synthetic --quick --locations colombo` | exit 0 · 27 s · all artefacts written (`effective_config.json` included) |
+
+New suites added in this pass:
+
+| Suite | Result |
+| --- | --- |
+| `npm run test:earth-rate-memory` | 10 pass (expiration, no-op sweeps, cap ordering, 30,000-client bound, unchanged 429 contract, spoofed `X-Forwarded-For`) |
+| `npm run test:home-cards` | 7 pass (PR #73 — honest "complete years", in-progress year marked provisional, cached APOD states why/when and retries) |
+| `COSMORA_AI_v3/tests/test_d20_calendar_features.py` | 4 pass |
+| `COSMORA_AI_v3/tests/test_d17_d18_d19_d21_repairs.py` | 20 pass |
+
+Dependency audit: the pre-existing dev-chain advisories on `main` are unchanged and were
+not blindly "fixed". CI was not run from this sandbox (nothing was pushed); the local
+equivalents of every CI step were run.
+
+---
+
+## Historical run: 2026-11-13, branch `arena/8a962084-asa-asan`
+
+Kept for comparison. These numbers describe that branch, not the current one.
 
 | Command | Result |
 | --- | --- |

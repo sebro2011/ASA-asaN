@@ -212,3 +212,50 @@ test('an unreachable API still produces a local answer computed in the browser',
   assert.match(text, /Study area: Negombo, Sri Lanka/, 'the deterministic engine answered from the bundle');
   assert.equal(container.querySelectorAll('.animate-spin').length, 0, 'no spinner is left running after a failure');
 });
+
+/**
+ * The island-wide answer put a ~220-character POWER query URL inside a bullet.
+ * A URL has no spaces, and the bullet's text node had no min-width or
+ * word-break, so its min-content width was the whole URL: the text was painted
+ * outside the card and over the neighbouring "Calculated from retrieved data"
+ * column. A bullet must wrap mid-token and a URL must be a link, not a wall of
+ * characters.
+ */
+test('a bullet carrying a long provenance URL wraps and links instead of overflowing', async () => {
+  const longUrl =
+    'https://power.larc.nasa.gov/api/temporal/monthly/point?parameters=T2M%2CPRECTOTCORR%2CRH2M%2CWS2M%2CALLSKY_SFC_SW_DWN%2CT2M_MAX%2CT2M_MIN&community=RE&longitude=80.7720&latitude=7.8730&start=1981&end=2026&format=JSON';
+  const { container } = await mountPanel({
+    ok: true,
+    body: {
+      ok: true,
+      mode: 'local',
+      provider: 'local',
+      providerLabel: 'Local Earth Intelligence',
+      attempts: 2,
+      retries: 1,
+      fallback: true,
+      providerChain: [],
+      groundedInRetrievedData: true,
+      sections: [
+        {
+          kind: 'verified',
+          title: 'Verified observations',
+          bullets: [`NASA POWER monthly archive retrieved (549 monthly records; dataset ${longUrl}).`]
+        }
+      ],
+      sources: []
+    }
+  });
+
+  const link = container.querySelector(`a[href="${longUrl}"]`);
+  assert.ok(link, 'a provenance URL in a bullet is rendered as a link');
+  assert.equal(link.getAttribute('target'), '_blank');
+  assert.match(link.getAttribute('rel') || '', /noreferrer/, 'external links carry rel=noreferrer');
+
+  const bullet = link.closest('li');
+  assert.ok(bullet, 'the link sits inside its bullet');
+  const wrapper = link.parentElement;
+  assert.match(wrapper.className, /\[overflow-wrap:anywhere\]/, 'the bullet wraps mid-token');
+  assert.match(wrapper.className, /min-w-0/, 'the flex item may shrink below its content width');
+  assert.match(bullet.className, /min-w-0/, 'and so may the bullet row');
+});
