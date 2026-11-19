@@ -1202,6 +1202,14 @@ function daysInMonth(month) {
 function isRatePerDay(unit) {
   return Boolean(unit && /\/\s*day/i.test(unit));
 }
+function datasetHost(url) {
+  if (!url) return "not reported";
+  try {
+    return new URL(url).host || "not reported";
+  } catch {
+    return "not reported";
+  }
+}
 function computeOlsDecadeSlope(complete) {
   if (complete.length < 2) return null;
   const n = complete.length;
@@ -1439,7 +1447,7 @@ function buildLocalAnalystAnswer(question, context, options = {}) {
     );
     if (context.power) {
       verified.push(
-        `NASA POWER \u0DB8\u0DCF\u0DC3\u0DD2\u0D9A \u0DBD\u0DDA\u0D9B\u0DB1\u0DCF\u0D9C\u0DCF\u0DBB\u0DBA ${context.power.from || "\u0DB1\u0DDC\u0DAF\u0DB1\u0DCA\u0DB1\u0DCF"} \u0DC3\u0DD2\u0DA7 ${context.power.to || "\u0DB1\u0DDC\u0DAF\u0DB1\u0DCA\u0DB1\u0DCF"} \u0DAF\u0D9A\u0DCA\u0DC0\u0DCF \u0DBD\u0DB6\u0DCF\u0D9C\u0DD9\u0DB1 \u0D87\u0DAD (\u0DB8\u0DCF\u0DC3\u0DD2\u0D9A \u0DC0\u0DCF\u0DBB\u0DCA\u0DAD\u0DCF ${context.power.months ?? "\u0DB1\u0DDC\u0DAF\u0DB1\u0DCA\u0DB1\u0DCF"}; \u0DB8\u0DD6\u0DBD\u0DCF\u0DC1\u0DCA\u200D\u0DBB\u0DBA ${context.power.sourceUrl || "\u0DC0\u0DCF\u0DBB\u0DCA\u0DAD\u0DCF \u0D9A\u0DBB \u0DB1\u0DD0\u0DAD"}).`
+        `NASA POWER \u0DB8\u0DCF\u0DC3\u0DD2\u0D9A \u0DBD\u0DDA\u0D9B\u0DB1\u0DCF\u0D9C\u0DCF\u0DBB\u0DBA ${context.power.from || "\u0DB1\u0DDC\u0DAF\u0DB1\u0DCA\u0DB1\u0DCF"} \u0DC3\u0DD2\u0DA7 ${context.power.to || "\u0DB1\u0DDC\u0DAF\u0DB1\u0DCA\u0DB1\u0DCF"} \u0DAF\u0D9A\u0DCA\u0DC0\u0DCF \u0DBD\u0DB6\u0DCF\u0D9C\u0DD9\u0DB1 \u0D87\u0DAD (\u0DB8\u0DCF\u0DC3\u0DD2\u0D9A \u0DC0\u0DCF\u0DBB\u0DCA\u0DAD\u0DCF ${context.power.months ?? "\u0DB1\u0DDC\u0DAF\u0DB1\u0DCA\u0DB1\u0DCF"}; \u0DB8\u0DD6\u0DBD\u0DCF\u0DC1\u0DCA\u200D\u0DBB\u0DBA ${datasetHost(context.power.sourceUrl)}; \u0DC3\u0DB8\u0DCA\u0DB4\u0DD6\u0DBB\u0DCA\u0DAB \u0DC0\u0DD2\u0DB8\u0DC3\u0DD4\u0DB8 \u0DC3\u0DCF\u0D9A\u0DCA\u0DC2\u0DD2 (Evidence) \u0DBA\u0DA7\u0DAD\u0DDA).`
       );
     }
   } else if (lang === "ta") {
@@ -1448,7 +1456,7 @@ function buildLocalAnalystAnswer(question, context, options = {}) {
     );
     if (context.power) {
       verified.push(
-        `NASA POWER \u0BAE\u0BBE\u0BA4\u0BBE\u0BA8\u0BCD\u0BA4\u0BBF\u0BB0 \u0B95\u0BBE\u0BAA\u0BCD\u0BAA\u0B95\u0BAE\u0BCD ${context.power.from || "\u0B85\u0BB1\u0BBF\u0BAF\u0BAA\u0BCD\u0BAA\u0B9F\u0BBE\u0BA4\u0BA4\u0BC1"} \u0BAE\u0BC1\u0BA4\u0BB2\u0BCD ${context.power.to || "\u0B85\u0BB1\u0BBF\u0BAF\u0BAA\u0BCD\u0BAA\u0B9F\u0BBE\u0BA4\u0BA4\u0BC1"} \u0BB5\u0BB0\u0BC8 \u0BAA\u0BC6\u0BB1\u0BAA\u0BCD\u0BAA\u0B9F\u0BCD\u0B9F\u0BA4\u0BC1 (${context.power.months ?? "\u0B85\u0BB1\u0BBF\u0BAF\u0BAA\u0BCD\u0BAA\u0B9F\u0BBE\u0BA4"} \u0BAE\u0BBE\u0BA4\u0BBE\u0BA8\u0BCD\u0BA4\u0BBF\u0BB0 \u0BAA\u0BA4\u0BBF\u0BB5\u0BC1\u0B95\u0BB3\u0BCD; \u0BAE\u0BC2\u0BB2\u0BAE\u0BCD ${context.power.sourceUrl || "\u0B85\u0BB1\u0BBF\u0BB5\u0BBF\u0B95\u0BCD\u0B95\u0BAA\u0BCD\u0BAA\u0B9F\u0BB5\u0BBF\u0BB2\u0BCD\u0BB2\u0BC8"}).`
+        `NASA POWER \u0BAE\u0BBE\u0BA4\u0BBE\u0BA8\u0BCD\u0BA4\u0BBF\u0BB0 \u0B95\u0BBE\u0BAA\u0BCD\u0BAA\u0B95\u0BAE\u0BCD ${context.power.from || "\u0B85\u0BB1\u0BBF\u0BAF\u0BAA\u0BCD\u0BAA\u0B9F\u0BBE\u0BA4\u0BA4\u0BC1"} \u0BAE\u0BC1\u0BA4\u0BB2\u0BCD ${context.power.to || "\u0B85\u0BB1\u0BBF\u0BAF\u0BAA\u0BCD\u0BAA\u0B9F\u0BBE\u0BA4\u0BA4\u0BC1"} \u0BB5\u0BB0\u0BC8 \u0BAA\u0BC6\u0BB1\u0BAA\u0BCD\u0BAA\u0B9F\u0BCD\u0B9F\u0BA4\u0BC1 (${context.power.months ?? "\u0B85\u0BB1\u0BBF\u0BAF\u0BAA\u0BCD\u0BAA\u0B9F\u0BBE\u0BA4"} \u0BAE\u0BBE\u0BA4\u0BBE\u0BA8\u0BCD\u0BA4\u0BBF\u0BB0 \u0BAA\u0BA4\u0BBF\u0BB5\u0BC1\u0B95\u0BB3\u0BCD; \u0BAE\u0BC2\u0BB2\u0BAE\u0BCD ${datasetHost(context.power.sourceUrl)}; \u0BAE\u0BC1\u0BB4\u0BC1 \u0BB5\u0BBF\u0BA9\u0BB5\u0BB2\u0BCD \u0B9A\u0BBE\u0BA9\u0BCD\u0BB1\u0BC1 (Evidence) \u0BAA\u0B95\u0BC1\u0BA4\u0BBF\u0BAF\u0BBF\u0BB2\u0BCD).`
       );
     }
   } else {
@@ -1457,7 +1465,7 @@ function buildLocalAnalystAnswer(question, context, options = {}) {
     );
     if (context.power) {
       verified.push(
-        `NASA POWER monthly archive retrieved through ${context.power.from || "unknown"} \u2192 ${context.power.to || "unknown"} (${context.power.months ?? "unknown"} monthly records; dataset ${context.power.sourceUrl || "not reported"}).`
+        `NASA POWER monthly archive retrieved through ${context.power.from || "unknown"} \u2192 ${context.power.to || "unknown"} (${context.power.months ?? "unknown"} monthly records; source ${datasetHost(context.power.sourceUrl)}, full query under Evidence).`
       );
     }
   }
@@ -2288,12 +2296,18 @@ function cacheGet2(key2) {
   }
   return entry.payload;
 }
+var CACHE_MAX_ENTRIES = 600;
 function cacheSet2(key2, payload, ttlMs) {
   if (cache.size > 400) {
     const now = Date.now();
     for (const [k, entry] of cache) {
       if (now > entry.expires) cache.delete(k);
     }
+  }
+  if (cache.size >= CACHE_MAX_ENTRIES) {
+    const ordered = [...cache.entries()].sort((a, b) => a[1].expires - b[1].expires);
+    const excess = cache.size - CACHE_MAX_ENTRIES + 1;
+    for (let index = 0; index < excess; index += 1) cache.delete(ordered[index][0]);
   }
   cache.set(key2, { expires: Date.now() + ttlMs, payload });
 }
@@ -2307,17 +2321,46 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = 2e4) {
   }
 }
 var rateBuckets = /* @__PURE__ */ new Map();
+var EARTH_RATE_PRUNE_THRESHOLD = 5e3;
+var EARTH_RATE_MAX_BUCKETS = 1e4;
+function sweepRateBuckets(map, now) {
+  let removed = 0;
+  for (const [key2, bucket] of map) {
+    if (now >= bucket.resetAt) {
+      map.delete(key2);
+      removed += 1;
+    }
+  }
+  return removed;
+}
+function enforceRateCap(map) {
+  if (map.size <= EARTH_RATE_MAX_BUCKETS) return;
+  const ordered = [...map.entries()].sort((a, b) => a[1].resetAt - b[1].resetAt);
+  const excess = map.size - EARTH_RATE_MAX_BUCKETS;
+  for (let index = 0; index < excess; index += 1) {
+    map.delete(ordered[index][0]);
+  }
+}
+function touchRateBucket(map, key2, now, windowMs) {
+  if (map.size >= EARTH_RATE_PRUNE_THRESHOLD) {
+    sweepRateBuckets(map, now);
+    enforceRateCap(map);
+  }
+  const existing = map.get(key2);
+  if (!existing || now > existing.resetAt) {
+    map.set(key2, { count: 1, resetAt: now + windowMs });
+    if (map.size > EARTH_RATE_MAX_BUCKETS) enforceRateCap(map);
+    return map.get(key2);
+  }
+  existing.count += 1;
+  return existing;
+}
 function rateLimit(name, max, windowMs) {
   return (req, res, next) => {
     const ip = req.ip || req.socket.remoteAddress || "unknown";
     const key2 = `${name}:${ip}`;
     const now = Date.now();
-    const bucket = rateBuckets.get(key2);
-    if (!bucket || now > bucket.resetAt) {
-      rateBuckets.set(key2, { count: 1, resetAt: now + windowMs });
-      return next();
-    }
-    bucket.count += 1;
+    const bucket = touchRateBucket(rateBuckets, key2, now, windowMs);
     if (bucket.count > max) {
       const retryAfter = Math.ceil((bucket.resetAt - now) / 1e3);
       res.setHeader("Retry-After", String(retryAfter));

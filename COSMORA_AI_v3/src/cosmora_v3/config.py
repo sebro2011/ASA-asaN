@@ -48,11 +48,24 @@ def validate_config(config: Dict[str, Any]) -> None:
     if len(config["seeds"]) < 2:
         raise ConfigError("at least two seeds are required for a stability claim")
 
+    # D21: a location without `lat` reached the model as a raw KeyError, which is
+    # not a validation message and gave no clue which entry was wrong.
+    for loc in config["locations"]:
+        missing_keys = {"id", "lat", "lon"} - set(loc)
+        if missing_keys:
+            raise ConfigError(
+                f"location {loc.get('id', '<no id>')!r} is missing required keys: {sorted(missing_keys)}"
+            )
     location_ids = [loc["id"] for loc in config["locations"]]
     if len(location_ids) != len(set(location_ids)):
         raise ConfigError("duplicate location ids")
     for loc in config["locations"]:
-        if not (-90.0 <= loc["lat"] <= 90.0 and -180.0 <= loc["lon"] <= 180.0):
+        try:
+            lat = float(loc["lat"])
+            lon = float(loc["lon"])
+        except (TypeError, ValueError):
+            raise ConfigError(f"location {loc['id']}: lat and lon must be numbers") from None
+        if not (-90.0 <= lat <= 90.0 and -180.0 <= lon <= 180.0):
             raise ConfigError(f"location out of range: {loc['id']}")
 
     power = config["power"]
@@ -75,6 +88,17 @@ def validate_config(config: Dict[str, Any]) -> None:
         )
     if int(splits["cv_step_months"]) < 1:
         raise ConfigError("cv_step_months must be positive")
+    if int(splits["cv_validation_months"]) < 1:
+        raise ConfigError("cv_validation_months must be positive")
+    # D21: `test_months = 0` was accepted. The sealed tail was then empty,
+    # `run_series` completed anyway and wrote an all-NaN test table with n = 0,
+    # still stamped `scientific_results: true`. A run with no held-out months is
+    # not a scientific result, so it is refused at load time.
+    if reserved < 12:
+        raise ConfigError(
+            f"splits.test_months must be at least 12 (got {reserved}): a shorter sealed "
+            "tail cannot support a monthly comparison test"
+        )
 
     alpha = float(config["uncertainty"]["alpha"])
     if not 0.0 < alpha < 1.0:
@@ -93,6 +117,26 @@ def validate_config(config: Dict[str, Any]) -> None:
     members = set(config["models"]["ensemble"]["members"])
     if not members <= {"gru", "lstm", "mlp"}:
         raise ConfigError(f"unknown ensemble members: {sorted(members - {'gru', 'lstm', 'mlp'})}")
+
+
+def fold_overlap(splits: Dict[str, Any]) -> Dict[str, int]:
+    """How many folds share validation months (D21, D12).
+
+    ``cv_step_months < cv_validation_months`` means consecutive folds overlap, so
+    a month can be validated by more than one fold. The aggregation in
+    ``splits`` handles that (each month counted once per fold, folds weighted by
+    their own month count — D12), but the overlap is a property of the design a
+    reader should be able to see, so it is recorded in the manifest rather than
+    left implicit in the arithmetic.
+    """
+    step = int(splits["cv_step_months"])
+    window = int(splits["cv_validation_months"])
+    return {
+        "cv_step_months": step,
+        "cv_validation_months": window,
+        "months_shared_between_neighbouring_folds": max(0, window - step),
+        "overlapping": int(step < window),
+    }
 
 
 def _canonical(config: Dict[str, Any]) -> str:

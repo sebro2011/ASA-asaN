@@ -103,8 +103,18 @@ def interval_score(
     The Winkler score penalises both a missed observation and a needlessly wide
     interval, so it cannot be gamed by widening the band until coverage looks good.
     """
-    t, lo = _clean(y_true, lower)
-    _, hi = _clean(y_true, upper)
+    # D24: the two bounds used to be cleaned independently, so a row with a NaN
+    # lower bound kept its upper bound and the arrays could describe different
+    # observations after masking. One joint mask keeps the three series aligned.
+    y = np.asarray(y_true, dtype="float64").reshape(-1)
+    lower_values = np.asarray(lower, dtype="float64").reshape(-1)
+    upper_values = np.asarray(upper, dtype="float64").reshape(-1)
+    if not (y.shape == lower_values.shape == upper_values.shape):
+        raise ValueError(
+            f"shape mismatch: y={y.shape} lower={lower_values.shape} upper={upper_values.shape}"
+        )
+    joint = np.isfinite(y) & np.isfinite(lower_values) & np.isfinite(upper_values)
+    t, lo, hi = y[joint], lower_values[joint], upper_values[joint]
     if not len(t):
         return {"coverage": float("nan"), "mean_width": float("nan"), "winkler": float("nan")}
     inside = (t >= lo) & (t <= hi)

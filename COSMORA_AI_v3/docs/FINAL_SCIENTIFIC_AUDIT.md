@@ -605,12 +605,21 @@ Row(s) that crossed: kandy temp vs lstm (0.0499 → 0.0546).
 Planned family: 24 comparisons in both runs; the correction itself is
 apply-to-every-row, so the tally moves only when a p-value or a fit moved.
 
-### 8.3 Calibrated prediction intervals (nominal 90%)
+### 8.3 Prediction intervals (nominal 90% — coverage measured, not guaranteed)
 
 Split-conformal intervals are calibrated on the **distinct validation months** and then
 scored on the sealed test tail. `coverage` is the fraction of test months inside the
 interval: close to 0.90 is correct, far below is over-confident, far above is
 needlessly wide.
+
+**Read the numbers, not a guarantee.** Split conformal promises
+`P(y ∈ interval) ≥ 1 − α` only under *exchangeability* between the calibration points
+and the point being predicted. Here the calibration residuals come from the 2010–2019
+walk-forward folds and the test tail is 2020–2024, so that assumption does not hold and
+the finite-sample guarantee is void (DEFECT_REPORT D13). What is reported below is the
+coverage **actually measured** on the sealed tail: close to nominal on average, and
+wrong in both directions cell by cell — over-confident where the residual scale grew
+(Kandy, Jaffna temperature) and needlessly wide where it shrank.
 
 | City | Target | Model | Coverage (conformal) | Mean width | Coverage (Gaussian) | Width (Gaussian) | Calibration months |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -794,8 +803,8 @@ stronger claim, the difference is called out in parentheses.
    distinguishable` and 7 are `inconclusive`. *(The pre-correction document said 4 of 24
    favoured it; that count was read off unadjusted p-values and does not survive the
    correction.)*
-3. **Conformal intervals are close to calibrated on unseen data — and their failure mode
-   is visible.** Against a nominal 90%, measured coverage on the sealed test tail is
+3. **Conformal intervals are close to nominal on unseen data — a measurement, not a
+   guarantee — and their failure mode is visible.** Against a nominal 90%, measured coverage on the sealed test tail is
    0.833–1.000 (mean 0.911) over the 30 model × city × target cells, calibrated on the
    108 distinct validation months (not the 192 overlapping fold instances). They are
    narrower than the Gaussian baseline in 27 of 30 cells and have the better Winkler

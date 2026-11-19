@@ -31,6 +31,43 @@ interface AnalystPanelProps {
   aiCapable: boolean;
 }
 
+/**
+ * A bullet is arbitrary generated prose, and it can carry a full provenance URL.
+ * A URL has no spaces, so without `overflow-wrap: anywhere` the flex item's
+ * min-content width is the whole URL: the text then paints outside the card and
+ * over the neighbouring column (seen on the island-wide Sri Lanka answer, where a
+ * 220-character POWER query covered the "Calculated from retrieved data" panel).
+ * Every bullet therefore wraps mid-token, and URLs become links that wrap.
+ */
+function BulletText({ text }: { text: string }) {
+  const parts = text.split(/(https?:\/\/\S+)/g);
+  return (
+    <span className="min-w-0 break-words [overflow-wrap:anywhere]">
+      {parts.map((part, index) => {
+        if (!/^https?:\/\//.test(part)) return <React.Fragment key={index}>{part}</React.Fragment>;
+        // A generated sentence ends a URL with ")." or "," — those characters
+        // belong to the sentence, not to the href.
+        const trimmed = part.match(/^(https?:\/\/\S*?)([.,;:)\]]*)$/);
+        const url = trimmed ? trimmed[1] : part;
+        const tail = trimmed ? trimmed[2] : '';
+        return (
+          <React.Fragment key={`${index}-${url}`}>
+            <a
+              href={url}
+              target="_blank"
+              rel="noreferrer noopener"
+              className="break-all text-atmo underline decoration-atmo/40 underline-offset-2 hover:decoration-atmo"
+            >
+              {url}
+            </a>
+            {tail}
+          </React.Fragment>
+        );
+      })}
+    </span>
+  );
+}
+
 const SECTION_STYLES: Record<AnalystSectionKind, { tone: 'emerald' | 'violet' | 'cyan' | 'amber' | 'rose'; key: string }> = {
   verified: { tone: 'emerald', key: 'earthAnalystSectionVerified' },
   derived: { tone: 'violet', key: 'earthAnalystSectionDerived' },
@@ -322,8 +359,28 @@ export default function AnalystPanel({ context, lang, aiCapable }: AnalystPanelP
                 {execution?.providerLabel || (answer.provider === 'ai' ? t('earthAnalystProviderAi') : t('earthAnalystModeLocal'))}
               </Pill>
               {!isLocal && answer.model ? <Pill tone="slate">{t('earthAnalystModel', { model: answer.model })}</Pill> : null}
-              {execution && execution.attempts > 0 ? <Pill tone="slate">{t('earthAnalystAttemptsCount', { count: execution.attempts })}</Pill> : null}
-              {execution?.retries ? <Pill tone="amber">{t('earthAnalystRetriesCount', { count: execution.retries })}</Pill> : null}
+              {/*
+                Both numbers come from the server's provider chain, and they count
+                different things: `attempts` is every provider call including
+                retries, `retries` is the subset that was not a provider's first
+                try. The tooltips say so, because two adjacent pills reading
+                "6 attempt(s)" and "6 retry attempt(s)" otherwise look like the
+                same fact stated twice.
+              */}
+              {execution && execution.attempts > 0 ? (
+                <Pill tone="slate">
+                  <span title={t('earthAnalystAttemptsHint')}>
+                    {t('earthAnalystAttemptsCount', { count: execution.attempts })}
+                  </span>
+                </Pill>
+              ) : null}
+              {execution?.retries ? (
+                <Pill tone="amber">
+                  <span title={t('earthAnalystRetriesHint')}>
+                    {t('earthAnalystRetriesCount', { count: execution.retries })}
+                  </span>
+                </Pill>
+              ) : null}
               {execution?.fallback && !isLocal ? <Pill tone="amber">{t('earthAnalystAttemptError')}</Pill> : null}
               {answer.groundedInRetrievedData ? (
                 <Pill tone="emerald">
@@ -338,7 +395,7 @@ export default function AnalystPanel({ context, lang, aiCapable }: AnalystPanelP
             </p>
           </div>
 
-          <div className="grid gap-3 lg:grid-cols-2">
+          <div className="grid min-w-0 gap-3 lg:grid-cols-2">
             {answer.sections
               .filter((section) => section.bullets.length)
               .map((section, index) => {
@@ -351,7 +408,10 @@ export default function AnalystPanel({ context, lang, aiCapable }: AnalystPanelP
                   rose: 'border-rose-500/30 bg-rose-950/10'
                 };
                 return (
-                  <div key={`${section.kind}-${index}`} className={`rounded-[10px] border p-3 ${border[style.tone]}`}>
+                  <div
+                    key={`${section.kind}-${index}`}
+                    className={`min-w-0 overflow-hidden rounded-[10px] border p-3 ${border[style.tone]}`}
+                  >
                     <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-white">
                       {section.kind === 'limitations' || section.kind === 'gaps' ? (
                         <TriangleAlert className="h-3.5 w-3.5" />
@@ -362,9 +422,9 @@ export default function AnalystPanel({ context, lang, aiCapable }: AnalystPanelP
                     </p>
                     <ul className="mt-2 space-y-1.5 text-xs leading-relaxed text-ink-2">
                       {section.bullets.map((bullet) => (
-                        <li key={bullet} className="flex gap-2">
+                        <li key={bullet} className="flex min-w-0 gap-2">
                           <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-slate-400" />
-                          <span>{bullet}</span>
+                          <BulletText text={bullet} />
                         </li>
                       ))}
                     </ul>
@@ -384,7 +444,7 @@ export default function AnalystPanel({ context, lang, aiCapable }: AnalystPanelP
                 {evidence.rows.map((row) => (
                   <div key={row.label} className="grid grid-cols-[minmax(96px,auto)_1fr] gap-x-3 border-b border-line/50 py-1 text-[11px] last:border-0">
                     <dt className="text-ink-4">{row.label}</dt>
-                    <dd className="min-w-0 break-words text-ink-2">{row.value}</dd>
+                    <dd className="min-w-0 break-words [overflow-wrap:anywhere] text-ink-2">{row.value}</dd>
                   </div>
                 ))}
               </dl>
@@ -393,7 +453,7 @@ export default function AnalystPanel({ context, lang, aiCapable }: AnalystPanelP
                   <p className="mt-2 text-[10px] uppercase tracking-[0.12em] text-ink-4">{t('earthAnalystEvidenceComputed')}</p>
                   <ul className="mt-1 space-y-1 text-[11px] text-ink-2">
                     {evidence.computed.map((line) => (
-                      <li key={line} className="break-words">
+                      <li key={line} className="break-words [overflow-wrap:anywhere]">
                         {line}
                       </li>
                     ))}

@@ -25,6 +25,30 @@ import numpy as np
 import pandas as pd
 
 
+def _complete_monthly_index(frame: pd.DataFrame) -> pd.DataFrame:
+    """Reindex to a gap-free monthly calendar before any shift (D20).
+
+    ``Series.shift(k)`` and ``rolling(w)`` move *rows*, not calendar months. The
+    pipeline drops a month that contains a fill sentinel (``data.py``), so after
+    one dropped month ``shift(1)`` for the next month silently returns the value
+    from two months back, and ``roll12`` spans thirteen calendar months — every
+    downstream number is wrong with no error.
+
+    Reindexing to the full monthly range turns each gap into a NaN row. The
+    notna mask below then drops that row, so a gap costs one training row and
+    every lag stays calendar-true. ``dropped_months = 0`` in the reported run,
+    where this is a no-op; it is the live path that needed it.
+    """
+    if not isinstance(frame.index, pd.DatetimeIndex) or frame.empty:
+        return frame
+    full = pd.date_range(frame.index.min(), frame.index.max(), freq="MS")
+    if len(full) == len(frame):
+        return frame
+    complete = frame.reindex(full)
+    complete.index.name = frame.index.name
+    return complete
+
+
 @dataclass
 class FeatureSpec:
     """Names and layout of one feature matrix, so prediction can rebuild it."""
@@ -52,6 +76,7 @@ def build_features(frame: pd.DataFrame, config: Dict[str, Any], target_key: str)
 
     lookback = int(feat_cfg["lookback_months"])
     values = frame.sort_index()
+    values = _complete_monthly_index(values)
 
     features: Dict[str, pd.Series] = {}
 

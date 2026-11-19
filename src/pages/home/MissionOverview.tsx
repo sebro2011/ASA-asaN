@@ -11,7 +11,7 @@
 
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { ArrowRight, Aperture, ExternalLink, Info, Satellite, Target } from 'lucide-react';
+import { ArrowRight, Aperture, ExternalLink, Info, RefreshCw, Satellite, Target } from 'lucide-react';
 import {
   Button,
   DataStateBadge,
@@ -376,7 +376,7 @@ export function ApodMedia({ apod }: { apod: Apod }) {
   );
 }
 
-function ApodPanel({
+export function ApodPanel({
   resource,
   onNavigate
 }: {
@@ -404,7 +404,13 @@ function ApodPanel({
             eyebrow={apod ? apod.date : 'NASA APOD'}
             title={t('apodTitle')}
             icon={Aperture}
-            actions={<DataStateBadge state={toDataState(sourced?.state)} label={stateLabel(sourced?.state, t)} />}
+            actions={
+              <DataStateBadge
+                state={toDataState(sourced?.state)}
+                label={stateLabel(sourced?.state, t)}
+                detail={sourced?.note}
+              />
+            }
           />
 
           {resource.phase === 'error' && !apod ? (
@@ -422,17 +428,48 @@ function ApodPanel({
               <h4 className="text-[19px] font-semibold leading-tight tracking-[-0.02em] text-ink sm:text-[22px]">
                 {apod.title}
               </h4>
-              <p className="line-clamp-4 text-[12.5px] leading-relaxed text-ink-2">{apod.explanation}</p>
+              <p
+                className="line-clamp-4 text-[12.5px] leading-relaxed text-ink-2 lg:line-clamp-6"
+                title={apod.explanation}
+              >
+                {apod.explanation}
+              </p>
+              {/*
+                Why the panel is not showing today's picture. The loader already
+                knows the reason and the age of what it saved; printing neither
+                left the card claiming only "CACHED", with the space below the
+                text empty. A saved value has to say when it was saved and what
+                went wrong, or the reader cannot tell a stale copy from today's.
+              */}
               {sourced?.state === 'static' ? (
                 <p className="text-[11px] leading-relaxed text-caution">{t('apodSampleNote')}</p>
               ) : null}
-              <div className="mt-auto flex flex-wrap items-center justify-between gap-3 border-t border-line/60 pt-4">
-                <SourceNote className="max-w-[18rem]">
+              {sourced && sourced.state !== 'live' ? (
+                <p
+                  className="flex items-start gap-2 rounded-[8px] border border-line/70 bg-surface-2/40 px-2.5 py-2 text-[11px] leading-relaxed text-ink-3"
+                  data-testid="apod-provenance-note"
+                >
+                  <Info className="mt-0.5 h-3 w-3 shrink-0 text-ink-4" strokeWidth={1.9} />
+                  <span>
+                    {sourced.note ||
+                      `Showing the copy saved ${new Date(sourced.retrievedAt).toISOString().slice(0, 10)}.`}
+                  </span>
+                </p>
+              ) : null}
+              <div className="mt-auto flex flex-col gap-3 border-t border-line/60 pt-4 sm:flex-row sm:items-center sm:justify-between">
+                <SourceNote className="max-w-[26rem]">
                   {apod.source === 'NASA Science APOD archive' ? t('apodScienceSource') : `${t('apodCredit')}: ${apod.copyright || 'See APOD record'}`}
                 </SourceNote>
-                <Button variant="ghost" size="sm" onClick={() => onNavigate('apod')} trailingIcon={ArrowRight}>
-                  {t('apodOpen')}
-                </Button>
+                <div className="flex flex-wrap items-center gap-2">
+                  {sourced && sourced.state !== 'live' ? (
+                    <Button variant="ghost" size="sm" onClick={resource.reload} icon={RefreshCw}>
+                      {t('retry')}
+                    </Button>
+                  ) : null}
+                  <Button variant="ghost" size="sm" onClick={() => onNavigate('apod')} trailingIcon={ArrowRight}>
+                    {t('apodOpen')}
+                  </Button>
+                </div>
               </div>
             </>
           ) : null}

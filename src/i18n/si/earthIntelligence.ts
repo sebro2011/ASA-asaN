@@ -156,6 +156,9 @@ export const earthIntelligenceSi: EarthIntelligenceStrings = {
   earthAnalystProviderAnsweredBy: 'පිළිතුරු දුන්නේ {{provider}}',
   earthAnalystAttemptsCount: 'උත්සාහයන් {{count}}',
   earthAnalystRetriesCount: 'නැවත උත්සාහයන් {{count}}',
+
+  earthAnalystAttemptsHint: 'එකම සැපයුම්කරු නැවත උත්සාහ කිරීම් ඇතුළුව මුළු ඇමතුම් ගණන.',
+  earthAnalystRetriesHint: 'එයින් සැපයුම්කරුවකුගේ පළමු උත්සාහය නොවූ ඇමතුම්.',
   earthAnalystNoticePrimaryUnavailable:
     'ප්‍රධාන AI සේවාව තාවකාලිකව නොමැත. ඒ වෙනුවට විකල්ප විශ්ලේෂණ මාදිලියක් පිළිතුරු දුන්නේය.',
   earthAnalystNoticeAllDown:

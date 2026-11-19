@@ -168,6 +168,24 @@ function isRatePerDay(unit?: string): boolean {
   return Boolean(unit && /\/\s*day/i.test(unit));
 }
 
+/**
+ * The dataset label for a verified bullet.
+ *
+ * A POWER request URL carries every parameter, the community code and the
+ * window: ~220 characters with no spaces in it. Putting that in a bullet made the
+ * answer unreadable and, in the UI, pushed unbreakable text out of its column.
+ * The bullet names the host; the full query is recorded in the evidence block,
+ * where it can be read and copied (`sources[].url`).
+ */
+function datasetHost(url: string | undefined | null): string {
+  if (!url) return 'not reported';
+  try {
+    return new URL(url).host || 'not reported';
+  } catch {
+    return 'not reported';
+  }
+}
+
 function computeOlsDecadeSlope(complete: Array<{ year: number; mean: number }>): number | null {
   if (complete.length < 2) return null;
   const n = complete.length;
@@ -487,7 +505,7 @@ export function buildLocalAnalystAnswer(
     );
     if (context.power) {
       verified.push(
-        `NASA POWER මාසික ලේඛනාගාරය ${context.power.from || 'නොදන්නා'} සිට ${context.power.to || 'නොදන්නා'} දක්වා ලබාගෙන ඇත (මාසික වාර්තා ${context.power.months ?? 'නොදන්නා'}; මූලාශ්‍රය ${context.power.sourceUrl || 'වාර්තා කර නැත'}).`
+        `NASA POWER මාසික ලේඛනාගාරය ${context.power.from || 'නොදන්නා'} සිට ${context.power.to || 'නොදන්නා'} දක්වා ලබාගෙන ඇත (මාසික වාර්තා ${context.power.months ?? 'නොදන්නා'}; මූලාශ්‍රය ${datasetHost(context.power.sourceUrl)}; සම්පූර්ණ විමසුම සාක්ෂි (Evidence) යටතේ).`
       );
     }
   } else if (lang === 'ta') {
@@ -496,7 +514,7 @@ export function buildLocalAnalystAnswer(
     );
     if (context.power) {
       verified.push(
-        `NASA POWER மாதாந்திர காப்பகம் ${context.power.from || 'அறியப்படாதது'} முதல் ${context.power.to || 'அறியப்படாதது'} வரை பெறப்பட்டது (${context.power.months ?? 'அறியப்படாத'} மாதாந்திர பதிவுகள்; மூலம் ${context.power.sourceUrl || 'அறிவிக்கப்படவில்லை'}).`
+        `NASA POWER மாதாந்திர காப்பகம் ${context.power.from || 'அறியப்படாதது'} முதல் ${context.power.to || 'அறியப்படாதது'} வரை பெறப்பட்டது (${context.power.months ?? 'அறியப்படாத'} மாதாந்திர பதிவுகள்; மூலம் ${datasetHost(context.power.sourceUrl)}; முழு வினவல் சான்று (Evidence) பகுதியில்).`
       );
     }
   } else {
@@ -506,7 +524,8 @@ export function buildLocalAnalystAnswer(
     if (context.power) {
       verified.push(
         `NASA POWER monthly archive retrieved through ${context.power.from || 'unknown'} → ${context.power.to || 'unknown'} ` +
-          `(${context.power.months ?? 'unknown'} monthly records; dataset ${context.power.sourceUrl || 'not reported'}).`
+          `(${context.power.months ?? 'unknown'} monthly records; source ${datasetHost(context.power.sourceUrl)}, ` +
+          'full query under Evidence).'
       );
     }
   }

@@ -47,6 +47,14 @@ export default function EarthPreview({
   const { t } = useTranslation();
   const sourced = resource.data;
   const preview = sourced?.data;
+  // The label says "complete years", so it must count complete years. NASA
+  // POWER returns the current year with the months it has so far (on
+  // 2026-11-18 that was January-September), and counting that point as a year
+  // over-stated a 2012-2026 series as 15 complete years when it is 14.
+  const completeYears = preview
+    ? preview.points.filter((point) => point.complete && typeof point.mean === 'number').length
+    : null;
+  const partialYears = preview ? preview.points.filter((point) => !point.complete && typeof point.mean === 'number') : [];
 
   return (
     <section className="mx-auto max-w-[1400px] px-4 sm:px-6 lg:px-8">
@@ -65,23 +73,32 @@ export default function EarthPreview({
 
           <dl className="mt-6 grid max-w-md grid-cols-3 gap-4 border-t border-line/70 pt-5">
             <div>
-              <dt className="eyebrow">{t('earthMeanLabel')}</dt>
+              <dt className="eyebrow min-h-[2.7em] leading-[1.35]">{t('earthMeanLabel')}</dt>
               <dd className="metric mt-1.5 text-lg">
                 {preview?.mean !== null && preview?.mean !== undefined ? preview.mean.toFixed(1) : '—'}
                 <span className="ml-1 font-sans text-[10px] text-ink-4">{preview?.unit || '°C'}</span>
               </dd>
             </div>
             <div>
-              <dt className="eyebrow">{t('earthTrendLabel')}</dt>
+              <dt className="eyebrow min-h-[2.7em] leading-[1.35]">{t('earthTrendLabel')}</dt>
               <dd className="metric mt-1.5 text-lg">
                 {formatSigned(preview?.slopePerYear ?? null, 3)}
                 <span className="ml-1 font-sans text-[10px] text-ink-4">/yr</span>
               </dd>
             </div>
             <div>
-              <dt className="eyebrow">{t('earthPointsLabel')}</dt>
-              <dd className="metric mt-1.5 text-lg">
-                {preview ? preview.points.filter((point) => typeof point.mean === 'number').length : '—'}
+              <dt className="eyebrow min-h-[2.7em] leading-[1.35]">{t('earthPointsLabel')}</dt>
+              <dd
+                className="metric mt-1.5 text-lg"
+                title={
+                  partialYears.length
+                    ? `${preview?.years.start}–${preview?.years.end}: ${partialYears
+                        .map((point) => `${point.year} still in progress`)
+                        .join(', ')}`
+                    : undefined
+                }
+              >
+                {completeYears ?? '—'}
               </dd>
             </div>
           </dl>

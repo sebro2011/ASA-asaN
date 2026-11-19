@@ -51,6 +51,14 @@ class Provenance:
     dropped_months: int
     power_header: Dict[str, Any] = field(default_factory=dict)
     annual_rows_excluded: int = 0
+    # D21: months the configured window asks for versus months actually received.
+    configured_months: int = 0
+    months_short: int = 0
+    duplicate_month_rows: int = 0
+    # D19: which (parameters, community, base_url) this payload answers, and
+    # whether the file carried a signature that could be checked at all.
+    request_signature: Dict[str, Any] = field(default_factory=dict)
+    request_signature_checked: bool = False
 
     def as_dict(self) -> Dict[str, Any]:
         return {
@@ -64,6 +72,11 @@ class Provenance:
             "last_month": self.last_month,
             "dropped_months": self.dropped_months,
             "annual_rows_excluded": self.annual_rows_excluded,
+            "configured_months": self.configured_months,
+            "duplicate_month_rows_removed": self.duplicate_month_rows,
+            "months_short_of_window": self.months_short,
+            "request_signature": self.request_signature,
+            "request_signature_checked": self.request_signature_checked,
             "power_header": self.power_header,
         }
 
@@ -135,6 +148,22 @@ def _frame_from_payload(
     months = pd.PeriodIndex([str(idx) for idx in frame.index], freq="M").to_timestamp()
     frame.index = months
     frame.index.name = "date"
+    # D22: a duplicated month is the same observation listed twice, not two
+    # observations. It used to become two training rows with no signal at all.
+    # Keeping the first copy is a de-duplication, not an imputation — nothing is
+    # invented and nothing is averaged.
+    duplicates = int(frame.index.duplicated(keep="first").sum())
+    if duplicates:
+        # Where the copies disagree, one of them is wrong and there is no way to
+        # tell which: refuse rather than pick. Identical copies are simply the
+        # same observation listed twice, and one copy is dropped.
+        for month, block in frame.groupby(level=0):
+            if len(block) > 1 and (block.nunique(dropna=True) > 1).any():
+                raise DataUnavailable(
+                    f"{location_id}: month {month:%Y-%m} appears {len(block)} times with "
+                    "conflicting values; refusing to guess which copy is the observation"
+                )
+        frame = frame.loc[~frame.index.duplicated(keep="first")]
     return frame, dropped, annual_rows_excluded
 
 
@@ -154,19 +183,35 @@ def fetch_location(
     cache_file = _cache_path(cache_dir, location["id"], power_cfg)
     url = build_url(power_cfg, location["lat"], location["lon"])
 
+    signature = _request_signature(power_cfg, location)
     if cache_file.exists() and not force_refresh:
         payload = json.loads(cache_file.read_text(encoding="utf-8"))
-        raw_text = json.dumps(payload, sort_keys=True)
         source = "cache"
         retrieved = payload.get("_cosmora_retrieved_utc", "unknown")
-        digest = hashlib.sha256(raw_text.encode("utf-8")).hexdigest()
+        # D19: the cache filename encodes only the location and the window, so a
+        # payload written for (parameters, community, base_url) A was served to
+        # request B. A signature stored inside the payload can be checked; caches
+        # written before this change carry none, and are accepted as legacy
+        # rather than silently re-interpreted as a match.
+        stored = payload.get("_cosmora_request")
+        if isinstance(stored, dict) and stored != signature:
+            raise DataUnavailable(
+                f"{location['id']}: cached payload at {cache_file.name} was fetched for a "
+                f"different request ({stored} != {signature}). Delete the file or re-run "
+                "with --force-refresh; no data has been substituted."
+            )
+        # D18: the provenance digest must be recomputable by a third party, so it
+        # is the digest of the file's bytes — the same value data/cache/README.md
+        # publishes — not of a re-serialised object that no reader can reproduce.
+        digest = hashlib.sha256(cache_file.read_bytes()).hexdigest()
     else:
         raw_text = _download(url, timeout=int(power_cfg["timeout_seconds"]), session=session)
         payload = json.loads(raw_text)
         retrieved = datetime.now(timezone.utc).isoformat(timespec="seconds")
-        digest = hashlib.sha256(raw_text.encode("utf-8")).hexdigest()
         payload["_cosmora_retrieved_utc"] = retrieved
+        payload["_cosmora_request"] = signature
         cache_file.write_text(json.dumps(payload), encoding="utf-8")
+        digest = hashlib.sha256(cache_file.read_bytes()).hexdigest()
         source = "power.larc.nasa.gov"
 
     frame, dropped, annual_rows = _frame_from_payload(payload, power_cfg, location["id"])
@@ -174,6 +219,14 @@ def fetch_location(
         raise DataUnavailable(
             f"{location['id']}: only {len(frame)} usable months returned; refusing to model"
         )
+
+    # D21: the POWER window used to be validated against the config's own
+    # arithmetic and never against the data that was loaded, so a 1985-2025
+    # window served from a 300-month cache looked complete. Record the shortfall
+    # instead of trusting the request.
+    configured_months = (int(power_cfg["end_year"]) - int(power_cfg["start_year"]) + 1) * 12
+    months_short = max(0, configured_months - (len(frame) + dropped + annual_rows))
+    duplicate_rows = int(_payload_month_occurrences(payload, power_cfg) - len(frame) - dropped - annual_rows)
 
     provenance = Provenance(
         location_id=location["id"],
@@ -187,28 +240,88 @@ def fetch_location(
         dropped_months=dropped,
         power_header=payload.get("header", {}),
         annual_rows_excluded=annual_rows,
+        configured_months=configured_months,
+        months_short=months_short,
+        duplicate_month_rows=max(0, duplicate_rows),
+        request_signature=signature,
+        request_signature_checked=isinstance(payload.get("_cosmora_request"), dict),
     )
     return frame, provenance
 
 
-def _download(url: str, *, timeout: int, session: Any | None = None, attempts: int = 3) -> str:
-    """GET with bounded retries. Raises DataUnavailable — never invents data."""
+def _payload_month_occurrences(payload: Dict[str, Any], power_cfg: Dict[str, Any]) -> int:
+    """How many month keys the payload carries for the first configured parameter (D22)."""
+    parameters = payload.get("properties", {}).get("parameter", {})
+    for code in power_cfg["parameters"].values():
+        series = parameters.get(code)
+        if isinstance(series, dict):
+            return len(series)
+    return 0
+
+
+def _request_signature(power_cfg: Dict[str, Any], location: Dict[str, Any]) -> Dict[str, Any]:
+    """What a cache file is allowed to answer (D19).
+
+    The filename carries the location and the window only, so two requests that
+    differ in parameters, community or base URL collide. This records the rest.
+    """
+    return {
+        "parameters": [code for _, code in sorted(power_cfg["parameters"].items())],
+        "community": str(power_cfg.get("community", "")),
+        "base_url": str(power_cfg.get("base_url", "")),
+        "start_year": int(power_cfg["start_year"]),
+        "end_year": int(power_cfg["end_year"]),
+        "latitude": round(float(location["lat"]), 4),
+        "longitude": round(float(location["lon"]), 4),
+    }
+
+
+USER_AGENT = "COSMORA-AI-v3/1.0 (research; +https://github.com/sebro2011/ASA-asaN)"
+
+
+def _download(
+    url: str,
+    *,
+    timeout: int,
+    session: Any | None = None,
+    attempts: int = 3,
+    user_agent: str = USER_AGENT,
+) -> str:
+    """GET with bounded retries. Raises DataUnavailable — never invents data.
+
+    D30: a response used to be accepted if the *substring* ``"parameter"``
+    appeared anywhere in the body, and the request carried no ``User-Agent``.
+    The body is now parsed and the POWER structure (``properties.parameter``)
+    is required, so an HTML error page that mentions the word cannot be cached
+    as data.
+    """
     import urllib.error
     import urllib.request
 
     opener = session or urllib.request
     last_error: str = "unknown"
+    headers = {"User-Agent": user_agent, "Accept": "application/json"}
+    request: Any
+    try:
+        request = urllib.request.Request(url, headers=headers)
+    except Exception:  # noqa: BLE001 - a stub session may not accept a Request
+        request = url
     for attempt in range(1, attempts + 1):
         try:
-            with opener.urlopen(url, timeout=timeout) as response:  # type: ignore[attr-defined]
+            with opener.urlopen(request, timeout=timeout) as response:  # type: ignore[attr-defined]
                 if getattr(response, "status", 200) != 200:
                     last_error = f"HTTP {response.status}"
                 else:
                     body = response.read().decode("utf-8")
-                    if '"parameter"' not in body:
-                        last_error = "response does not contain a parameter block"
+                    try:
+                        parsed = json.loads(body)
+                    except ValueError:
+                        last_error = "response was not JSON"
                     else:
-                        return body
+                        if not isinstance(parsed.get("properties", {}).get("parameter"), dict):
+                            last_error = "response has no properties.parameter block"
+                        else:
+                            return body
         except Exception as exc:  # noqa: BLE001 - the message is what matters
             last_error = f"{type(exc).__name__}: {exc}"
         if attempt < attempts:

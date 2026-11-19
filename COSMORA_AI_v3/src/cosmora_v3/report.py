@@ -330,10 +330,33 @@ def render_markdown_report(
         f"- generated: `{manifest['created_utc']}`",
         f"- config hash: `{manifest['config_hash']}`",
         f"- data provenance: **{manifest['data_provenance']}**",
-        f"- scientific results: **{manifest['scientific_results']}**",
+        # D27: this printed the Python bool (`True`) in markdown; a reader should
+        # not have to parse a repr to learn whether the numbers are scientific.
+        f"- scientific results: **{'yes' if manifest['scientific_results'] else 'no'}**",
         f"- seeds executed: {manifest.get('seeds_executed', manifest['seeds'])} (configured: {manifest['seeds']})",
         f"- quick mode: {manifest['quick_mode']}",
     ]
+    if manifest.get("configured_config_hash"):
+        lines.append(
+            f"- configured hash: `{manifest['configured_config_hash']}`"
+            + (
+                " — **overridden for this run**; the hash above is the configuration that executed"
+                if manifest["configured_config_hash"] != manifest["config_hash"]
+                else ""
+            )
+        )
+    overlap = manifest.get("fold_overlap") or {}
+    if overlap:
+        lines.append(
+            f"- fold geometry: step {overlap['cv_step_months']} months, validation window "
+            f"{overlap['cv_validation_months']} months"
+            + (
+                f", {overlap['months_shared_between_neighbouring_folds']} months shared between "
+                "neighbouring folds (averaged once per month, D12)"
+                if overlap.get("overlapping")
+                else ""
+            )
+        )
     execution = manifest.get("execution") or {}
     if execution:
         epochs = execution.get("epochs_effective") or {}
