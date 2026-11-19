@@ -70,7 +70,7 @@ number/claim/provenance · **S3** robustness/hygiene · **R** runtime/server.
 | # | Sev | File · function | Root cause | Correction | Test evidence |
 | --- | --- | --- | --- | --- | --- |
 | U1 | **S2 (presentation)** | `src/components/earth/AnalystPanel.tsx` · section bullets; `server/earth/localAnalysis.ts` · verified-text builder | a bullet pasted the entire POWER request URL (~220 characters, no spaces) and the bullet's text node had no `min-width` or word break, so the flex item's min-content width was the URL. In the two-column grid the left column overflowed its card and painted the URL across the right-hand "Calculated from retrieved data" panel. | bullets render through `BulletText` (`min-w-0 [overflow-wrap:anywhere]`, cards `min-w-0 overflow-hidden`), bare URLs become wrapping links, and the prose now names the host while the full query stays in the evidence block and `sources[].url` | `scripts/test-earth-analyst-ui.mjs` (new case 4) + `scripts/test-earth-analyst.mjs` (new case 31): the link is an `<a rel="noreferrer">`, the wrapper carries the wrap classes, and the dataset bullet contains `power.larc.nasa.gov` but no `?parameters=` |
-| U2 | **unresolved observation** | provider metadata | production showed `6 attempt(s)` **and** `6 retry attempt(s)`. With `retries = Σ(attempts−1)` over a non-empty chain, `retries` cannot equal `attempts`; a local reproduction of the same bundle gives `attempts 6 / retries 4` for two providers × three attempts. | numbers left untouched; both pills now carry tooltips explaining what they count, so the pair cannot read as one fact stated twice | not reproduced — settling it needs a live `POST /api/earth/analyst`, which this sandbox cannot make (GET-only fetch tool, no egress) |
+| U2 | ~~S2~~ **closed — not a defect** | provider metadata | **the pair was misread, not miscomputed.** The screenshot's second pill reads `4 retry attempt(s)`; my first pass transcribed it as `6`. At 3× zoom of the crop the glyphs are unambiguous, and 6/4 is exactly what the committed formula produces | numbers untouched (they were always right); the tooltips stay as a usability extra, since two adjacent counters still deserve labels | zoomed crop; a live in-process `POST /api/earth/analyst` against the same code path returns `attempts 6 / retries 4` for two providers × three attempts and `9 / 6` for three × three; `scripts/test-earth-analyst.mjs` now asserts `retries < attempts` and `retries == Σ(attempts−1)` |
 
 ## C. Potential risks (identified, not reproduced)
 
@@ -107,6 +107,43 @@ touches `config_hash`, and it provably leaves full-run hashes untouched.
 | Rainfall skill is negative everywhere | tropical convective rainfall at monthly scale is close to noise for a 12-month lookback; the climatological monthly mean is hard to beat | genuine limitation of the design and the data, not a coding error |
 | The ensemble is not consistently superior (3 of 4 "better" verdicts survive D14 + BH; aggregate MAE is *worse* than XGBoost) | equal weights by construction, no learned weighting | correct conclusion; the audit already reports it |
 | Interval coverage 0.817–1.000 (mean 0.924) around a nominal 0.90 | exchangeability broken between 2010–2019 calibration and 2020–2024 test tail | measurement, now labelled as such; adaptive conformal still open (D13) |
+
+### D.1 The Earth Intelligence lab's own statistics, checked against the source data
+
+The lab is a second engine (local, no LLM) that summarises POWER series in the browser
+language. Its output was checked, number for number, against the same series fetched
+independently from `power.larc.nasa.gov` — the island-wide point `7.8730 N, 80.7720 E`,
+`T2M`, 1981–2026, 549 monthly records, MERRA‑2, POWER v2.10.1, with only 2026‑10 and
+2026‑11 missing. Annual means were rebuilt from the `YYYY13` aggregates, giving 45
+complete years (1981–2025); 2026 was excluded as incomplete.
+
+| Quantity the lab printed | Recomputed from the raw response | Verdict |
+| --- | --- | --- |
+| mean **26.45 °C** | 26.4527 | match |
+| min **22.98 °C** (1981‑01) / max **31.41 °C** (1983‑04) | same months, same values | match |
+| OLS trend **−0.001 °C/decade** | −0.0006 | match |
+| Theil–Sen trend **−0.018 °C/decade** | −0.0182 | match |
+| baseline **26.04 °C**, "first 5 complete years (1981–1985)" | mean of 1981–1985 = 26.036 | match |
+| most recent complete year **2025**, `+0.07 °C` from that baseline | 26.11 − 26.036 = +0.074 | match |
+| first half vs second half **26.54 → 26.36 °C, −0.68 %** | 26.54 → 26.36, −0.18 °C | match |
+| 549 records, 2026 excluded as partial | 549 records, `−999` only in 202610/202611 | match |
+
+Two things that looked like defects on the screenshot and are not:
+
+1. **Two different trend numbers.** OLS and Theil–Sen are fitted to the *same* 45 annual
+   means and genuinely disagree. The least-squares line is levered by the hot early
+   window — 1983 averages 26.94 °C, driven by an April at 31.41 °C — while the median of
+   the pairwise slopes is not. Printing both is the honest presentation, and the panel
+   keeps doing it. `scripts/test-earth-analyst.mjs` now pins the property: adding one
+   extreme year moves OLS and leaves Theil–Sen untouched.
+2. **The baseline is not a climate normal.** `1981–1985` is a five-year window, not the
+   WMO 1991–2020 normal, and the panel says so in the same sentence. That is a deliberate
+   label rather than a mislabelled normal.
+
+What the same check did *not* verify: the prose the local engine generates, the
+translation of those sentences into Sinhala and Tamil (structurally tested, not
+linguistically reviewed), and any figure on the map layers or the analyst answer when it
+is produced by an LLM provider instead of the local engine.
 
 **Not demonstrated here:** I did not re-run the full 1,014 s experiment (three cities ×
 two targets × five models × five seeds). The changes that could touch a result were
@@ -222,10 +259,10 @@ not evidence of function.
    already knows the difference).
 9. **Fleet-wide rate limits** are still per process (documented, needs a shared store).
 10. **PR grooming** — close #60, #55, #20; decide on #5 (all four were left untouched).
-11. **U2 — the attempt/retry pair** shown as `6 / 6` in production. The arithmetic in
-    `server/earth/providerOrchestrator.ts` cannot produce it from the committed bundle,
-    so either the running chain double-counted an entry or the client read the same
-    field twice. One live `POST /api/earth/analyst` from a browser settles it.
+11. ~~**U2**~~ — closed, see §B.1. The pill reads `4 retry attempt(s)`, not `6`; the
+    orchestrator's arithmetic was right all along. A route-level test now pins
+    `retries < attempts` and `retries == Σ(attempts−1)`, so a real drift would be caught
+    by the suite rather than by a screenshot.
 
 ---
 

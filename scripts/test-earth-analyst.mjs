@@ -750,3 +750,122 @@ test('the dataset bullet names the host and keeps the full query in the evidence
   assert.ok(source, 'the full query stays available as a source');
   assert.match(source.url, /\?parameters=/);
 });
+
+/**
+ * The panel prints two pills side by side: "N attempt(s)" and "M retry
+ * attempt(s)". They count different things and the relationship between them is
+ * fixed by the orchestrator: retries = Σ(attempts−1) over the providers that were
+ * called, so M < N for any non-empty chain.
+ *
+ * A production screenshot was read here as "6 and 6", which is impossible; the
+ * zoomed crop says "6 and 4". This test pins the relationship at the route level
+ * so the pair can never drift into something the UI would have to explain.
+ */
+test('the served attempt and retry counts obey retries = sum(attempts - 1) per provider', async () => {
+  const express = (await import('express')).default;
+  const app = express();
+  app.use(express.json({ limit: '2mb' }));
+  app.use('/api/earth', earthRouter);
+  const server = app.listen(0, '127.0.0.1');
+  await new Promise((resolve) => server.once('listening', resolve));
+  const base = `http://127.0.0.1:${server.address().port}/api/earth`;
+
+  const failing = (id) => ({
+    id,
+    label: id,
+    model: `${id}-model`,
+    configured: true,
+    isConfigured: () => true,
+    async generate() {
+      throw new ProviderError(`${id} 503`, { status: 503 });
+    }
+  });
+
+  try {
+    __setAnalystOrchestratorForTests(
+      createOrchestrator({
+        providers: [failing('gemini'), failing('openrouter')],
+        maxAttempts: 3,
+        baseDelayMs: 1,
+        maxDelayMs: 2,
+        timeoutMs: 200,
+        deadlineMs: 3_000,
+        parseAnswer: () => null,
+        sleep: async () => {},
+        random: () => 0.5,
+        log: () => {}
+      })
+    );
+
+    const response = await fetch(`${base}/analyst`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ question: 'temperature?', lang: 'en', context: {} })
+    });
+    const body = await response.json();
+
+    assert.equal(body.attempts, 6, 'two providers x three attempts');
+    assert.equal(body.retries, 4, 'each provider retried twice');
+    assert.ok(
+      body.retries < body.attempts,
+      'retries must be strictly fewer than attempts: every retry is an attempt, and every provider contributes one non-retry attempt'
+    );
+    const perProvider = (body.providerChain || []).reduce((total, entry) => total + Math.max(0, entry.attempts - 1), 0);
+    assert.equal(perProvider, body.retries, 'the total is the per-provider sum, not the attempt count');
+  } finally {
+    server.close();
+    __setAnalystOrchestratorForTests(null);
+  }
+});
+
+/**
+ * OLS and Theil–Sen are fitted to the *same* set of complete annual means, and
+ * they are allowed to disagree — that is why both are printed side by side.
+ *
+ * The island-wide answer shows "-0.001 °C/decade (Theil–Sen -0.018)", which reads
+ * like two different series until you notice that least squares responds to
+ * leverage and a rank-based slope does not. Checked against the live POWER series
+ * for 7.8730 N / 80.7720 E, 1981–2025 (45 complete years): OLS -0.0006,
+ * Theil–Sen -0.0182, mean 26.4527 — all three match what the panel printed.
+ *
+ * These cases pin the property rather than the numbers: one extreme year moves
+ * OLS and cannot move the median of ~990 pairwise slopes.
+ */
+test('the two trend estimates share one window and diverge only by leverage', () => {
+  const pattern = [22.5, 23.5, 27.5, 28.5, 28.0, 27.0, 26.5, 26.5, 26.5, 26.0, 24.5, 23.5];
+  const build = ({ drift = 0, hot = {} } = {}) => {
+    const dates = [];
+    const values = [];
+    for (let year = 1981; year <= 2025; year += 1) {
+      for (let month = 1; month <= 12; month += 1) {
+        dates.push(`${year}-${String(month).padStart(2, '0')}`);
+        values.push(pattern[month - 1] + (year - 1981) * drift + (hot[year] || 0));
+      }
+    }
+    return analyseSeries({ code: 'T2M', unit: '°C', dates, values });
+  };
+
+  const flat = build();
+  assert.equal(flat.annual.filter((entry) => entry.complete).length, 45, '45 complete years');
+  assert.equal(flat.olsSlopePerDecade, 0);
+  assert.equal(flat.senSlopePerDecade, 0);
+
+  // A single hot year, like the real 1983 (+1.6 °C, April +6 °C).
+  const levered = build({ hot: { 1983: 3 } });
+  assert.equal(levered.annual.filter((entry) => entry.complete).length, 45, 'still the same 45 years');
+  assert.notEqual(levered.olsSlopePerDecade, 0, 'least squares feels the outlier');
+  assert.equal(levered.senSlopePerDecade, 0, 'the median pairwise slope does not');
+
+  // With a real decline underneath, both turn negative and still disagree.
+  const drifting = build({ drift: -0.02 });
+  assert.equal(drifting.olsSlopePerDecade, -0.2);
+  assert.equal(drifting.senSlopePerDecade, -0.2);
+  const both = build({ drift: -0.02, hot: { 1983: 1.6 } });
+  assert.ok(both.olsSlopePerDecade < 0 && both.senSlopePerDecade < 0, 'both report cooling');
+  assert.notEqual(
+    Number(both.olsSlopePerDecade.toFixed(3)),
+    Number(both.senSlopePerDecade.toFixed(3)),
+    'the two estimates are printed separately because they genuinely differ'
+  );
+  assert.equal(both.senSlopePerDecade, drifting.senSlopePerDecade, 'the robust slope is unchanged by the outlier');
+});
