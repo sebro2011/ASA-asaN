@@ -81,8 +81,10 @@ export const CONNECTORS: Record<ConnectorId, ConnectorDescriptor> = {
   'nasa-osdr': {
     id: 'nasa-osdr',
     label: 'NASA Open Science Data Repository (OSDR)',
-    host: 'osdr.nasa.gov',
-    docsUrl: 'https://osdr.nasa.gov/bio/api/',
+    // The `/bio/api/` host served 404s after OSDR moved to the v2 API; `host` is
+    // used to build and allow-list request URLs, so it must be the serving one.
+    host: 'visualization.osdr.nasa.gov',
+    docsUrl: 'https://visualization.osdr.nasa.gov/biodata/api/openapi.json',
     attribution: 'Data from the NASA Open Science Data Repository (OSDR), NASA Biological and Physical Sciences.',
     rateLimitPerMinute: 10,
     cacheTtlMs: 12 * 60 * 60_000,

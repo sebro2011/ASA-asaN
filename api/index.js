@@ -18761,15 +18761,21 @@ var osdr = {
   id: "nasa:osdr",
   label: "NASA Open Science Data Repository",
   kind: "science",
-  endpoint: "osdr.nasa.gov",
-  docsUrl: "https://osdr.nasa.gov/bio/api/",
+  endpoint: "visualization.osdr.nasa.gov",
+  docsUrl: "https://visualization.osdr.nasa.gov/biodata/api/openapi.json",
   requiresEnv: [],
   cost: "free",
   run: (context) => getJson2(
     context,
     "nasa:osdr",
-    "https://osdr.nasa.gov/bio/api/search?term=radiation&type=study&size=1",
-    (body) => isRecord2(body) || Array.isArray(body) ? null : "OSDR returned an unexpected payload."
+    "https://visualization.osdr.nasa.gov/biodata/api/v2/dataset/OSD-48/",
+    (body) => {
+      if (!isRecord2(body)) return "OSDR returned an unexpected payload.";
+      const datasets = Object.entries(body).filter(
+        ([accession, value]) => /^OSD-\d+$/.test(accession) && isRecord2(value) && isRecord2(value.metadata)
+      );
+      return datasets.length > 0 ? null : "OSDR returned no dataset block.";
+    }
   )
 };
 function aiProbe(id, label) {
@@ -19502,8 +19508,10 @@ var CONNECTORS = {
   "nasa-osdr": {
     id: "nasa-osdr",
     label: "NASA Open Science Data Repository (OSDR)",
-    host: "osdr.nasa.gov",
-    docsUrl: "https://osdr.nasa.gov/bio/api/",
+    // The `/bio/api/` host served 404s after OSDR moved to the v2 API; `host` is
+    // used to build and allow-list request URLs, so it must be the serving one.
+    host: "visualization.osdr.nasa.gov",
+    docsUrl: "https://visualization.osdr.nasa.gov/biodata/api/openapi.json",
     attribution: "Data from the NASA Open Science Data Repository (OSDR), NASA Biological and Physical Sciences.",
     rateLimitPerMinute: 10,
     cacheTtlMs: 12 * 60 * 6e4,
