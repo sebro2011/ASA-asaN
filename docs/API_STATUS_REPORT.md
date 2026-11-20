@@ -340,6 +340,37 @@ environment variable (or DEMO_KEY); the route is rate-limited per process. Tests
 use mocked upstream responses: live NASA availability and actual host coverage
 have not been verified.
 
+#### Live mode — `GET /api/mars/latest` (November 2026)
+
+The sol browser above is a *historical* view: it answers "what did Curiosity see
+on sol 1000". It cannot show anything recent — NASA's sol-indexed API carries no
+Perseverance at all, and its newest sol lags badly — so the section now opens on a
+second, live source.
+
+| | Sol browser (`/api/mars/photos`) | Live feed (`/api/mars/latest`) |
+| --- | --- | --- |
+| Upstream | `api.nasa.gov/mars-photos` | `mars.nasa.gov/rss/api?feed=raw_images` |
+| Rovers | curiosity, opportunity, spirit | **perseverance**, curiosity |
+| Ordering | one sol, paged | `order=sol+desc`, newest first |
+| Needs the NASA key | yes (DEMO_KEY without one) | no |
+| Cache | 30 min | 5 min |
+| Shows | sol, Earth date, camera, id | sol, **taken** and **received** UTC, camera, credit |
+
+Verified live on 2026-11-20 before shipping: the Curiosity feed returned sol 5079
+taken `2026-11-19T19:44Z` and received `2026-11-20T00:33Z`, and the Perseverance
+feed returned sol 2032. That is the honest sense in which this is "live": NASA
+downlinks in batches, so an image can reach Earth hours or days after acquisition,
+and the card shows **both** timestamps rather than implying a stream.
+
+Every field is re-checked rather than trusted: the image and page URLs must be
+https on `mars.nasa.gov` (or another `*.nasa.gov` host) with no credentials, ids
+must match `[A-Za-z0-9_-]`, sols must be integers, and both timestamps must parse.
+Failing records are counted in `omitted` instead of repaired. A 200 that is not
+JSON is reported as `MARS_FEED_INVALID_RESPONSE` (a payload problem), distinct
+from `MARS_FEED_UPSTREAM_ERROR` / `MARS_FEED_TIMEOUT` (a transport problem).
+Covered by `scripts/test-mars-photos.mjs` (six cases, including four malformed
+records and both UI modes in jsdom).
+
 ### News feed follow-up
 
 `GET /api/news` returns provider `items` (not just `articles`); the shared news

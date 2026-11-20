@@ -7600,6 +7600,9 @@ import express2 from "express";
 var ROVERS = /* @__PURE__ */ new Set(["curiosity", "opportunity", "spirit"]);
 var TTL_MS = 30 * 60 * 1e3;
 var MAX_CACHE_ENTRIES = 80;
+var FEED_TTL_MS = 5 * 60 * 1e3;
+var FEED_MAX_ENTRIES = 40;
+var FEED_CATEGORIES = { perseverance: "mars2020", curiosity: "msl" };
 function integerParam(value, min, max) {
   if (typeof value !== "string" || !/^\d+$/.test(value)) return null;
   const number = Number(value);
@@ -7639,9 +7642,141 @@ function normalizePhoto(item, sol, rover) {
     return null;
   }
 }
+var clamp = (value, max) => value.replace(/\s+/g, " ").trim().slice(0, max);
+var friendlyRover = (rover) => rover === "perseverance" ? "Perseverance" : "Curiosity";
+function safeNasaUrl(raw) {
+  if (typeof raw !== "string" || !raw.trim()) return null;
+  try {
+    const url = new URL(raw);
+    if (url.protocol !== "https:") return null;
+    if (url.username || url.password) return null;
+    if (url.hostname !== "mars.nasa.gov" && !url.hostname.endsWith(".nasa.gov")) return null;
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+function isoOrNull(raw) {
+  if (typeof raw !== "string" || !raw.trim()) return null;
+  const parsed = new Date(raw);
+  return Number.isFinite(parsed.getTime()) ? parsed.toISOString() : null;
+}
+function normalizeFeedImage(item, rover) {
+  if (!isRecord(item)) return null;
+  const { imageid, sol, camera, image_files: files, caption, credit, title, link, date_taken_utc, date_received } = item;
+  if (typeof imageid !== "string" || !/^[A-Za-z0-9_-]{4,160}$/.test(imageid)) return null;
+  if (typeof sol !== "number" || !Number.isSafeInteger(sol) || sol < 0 || sol > 1e5) return null;
+  if (!isRecord(camera) || typeof camera.instrument !== "string" || !camera.instrument.trim()) return null;
+  if (!isRecord(files)) return null;
+  const imageUrl = safeNasaUrl(files.medium) ?? safeNasaUrl(files.large) ?? safeNasaUrl(files.full_res);
+  if (!imageUrl) return null;
+  const pageUrl = safeNasaUrl(link);
+  if (!pageUrl) return null;
+  const takenUtc = isoOrNull(date_taken_utc);
+  const receivedUtc = isoOrNull(date_received);
+  if (!takenUtc || !receivedUtc) return null;
+  return {
+    id: imageid,
+    sol,
+    rover: friendlyRover(rover),
+    camera: clamp(camera.instrument, 80),
+    takenUtc,
+    receivedUtc,
+    caption: typeof caption === "string" ? clamp(caption, 400) : "",
+    credit: typeof credit === "string" ? clamp(credit, 120) : "",
+    title: typeof title === "string" ? clamp(title, 200) : "",
+    imageUrl,
+    pageUrl
+  };
+}
 function createMarsPhotosRouter({ fetchImpl = globalThis.fetch, getKey = () => process.env.NASA_API_KEY || process.env.NEXT_PUBLIC_NASA_API_KEY || "DEMO_KEY" } = {}) {
   const router = express2.Router();
   const cache4 = /* @__PURE__ */ new Map();
+  const feedCache = /* @__PURE__ */ new Map();
+  router.get("/latest", async (req, res) => {
+    const rover = req.query.rover === void 0 ? "perseverance" : req.query.rover;
+    const num = integerParam(req.query.num === void 0 ? "12" : req.query.num, 1, 24);
+    const page = integerParam(req.query.page === void 0 ? "0" : req.query.page, 0, 50);
+    if (typeof rover !== "string" || !FEED_CATEGORIES[rover] || num === null || page === null) {
+      return res.status(400).json({
+        ok: false,
+        code: "INVALID_MARS_QUERY",
+        message: "Choose perseverance or curiosity, a page size from 1 to 24, and a page from 0 to 50."
+      });
+    }
+    const cacheKey2 = `${rover}:${page}:${num}`;
+    const hit = feedCache.get(cacheKey2);
+    if (hit && hit.expiresAt > Date.now()) {
+      return res.json({
+        ok: true,
+        rover,
+        page,
+        num,
+        images: hit.images,
+        latestSol: hit.latestSol,
+        hasMore: hit.hasMore,
+        omitted: hit.omitted,
+        retrievedAt: hit.retrievedAt,
+        cached: true,
+        source: "NASA Mars raw images feed"
+      });
+    }
+    if (hit) feedCache.delete(cacheKey2);
+    const category = FEED_CATEGORIES[rover];
+    const url = `https://mars.nasa.gov/rss/api/?feed=raw_images&category=${category}&feedtype=json&num=${num}&page=${page}&order=sol+desc`;
+    try {
+      const upstream = await fetchImpl(url, { signal: AbortSignal.timeout(8e3), headers: { Accept: "application/json" } });
+      if (!upstream.ok) {
+        const limited = upstream.status === 429;
+        return res.status(limited ? 429 : 502).json({
+          ok: false,
+          code: limited ? "MARS_FEED_RATE_LIMITED" : "MARS_FEED_UPSTREAM_ERROR",
+          message: limited ? "NASA is rate limiting the raw-images feed; retry shortly." : "NASA's raw-images feed could not complete the request."
+        });
+      }
+      let body;
+      try {
+        body = await upstream.json();
+      } catch {
+        return res.status(502).json({ ok: false, code: "MARS_FEED_INVALID_RESPONSE", message: "NASA returned a response that is not JSON." });
+      }
+      const raw = isRecord(body) && Array.isArray(body.images) ? body.images : null;
+      if (!raw || raw.length > 200) {
+        return res.status(502).json({ ok: false, code: "MARS_FEED_INVALID_RESPONSE", message: "NASA returned an unexpected raw-images response." });
+      }
+      const images = raw.map((item) => normalizeFeedImage(item, rover)).filter((item) => item !== null);
+      const entry = {
+        retrievedAt: (/* @__PURE__ */ new Date()).toISOString(),
+        expiresAt: Date.now() + FEED_TTL_MS,
+        images,
+        latestSol: images.length ? images[0].sol : null,
+        hasMore: raw.length >= num,
+        omitted: raw.length - images.length
+      };
+      if (feedCache.size >= FEED_MAX_ENTRIES) feedCache.delete(feedCache.keys().next().value);
+      feedCache.set(cacheKey2, entry);
+      return res.json({
+        ok: true,
+        rover,
+        page,
+        num,
+        images,
+        latestSol: entry.latestSol,
+        hasMore: entry.hasMore,
+        omitted: entry.omitted,
+        retrievedAt: entry.retrievedAt,
+        cached: false,
+        source: "NASA Mars raw images feed"
+      });
+    } catch (error) {
+      const timedOut = error?.name === "TimeoutError" || error?.name === "AbortError";
+      return res.status(timedOut ? 504 : 502).json({
+        ok: false,
+        code: timedOut ? "MARS_FEED_TIMEOUT" : "MARS_FEED_UPSTREAM_ERROR",
+        message: timedOut ? "NASA's raw-images feed timed out." : "NASA's raw-images feed could not be reached."
+      });
+    }
+  });
   router.get("/photos", async (req, res) => {
     const rover = req.query.rover;
     const sol = integerParam(req.query.sol, 0, 1e4);
@@ -15204,7 +15339,7 @@ ${cleanBody}`)) {
       tags: JSON.stringify(tags),
       source: String(input.source || "manual").slice(0, 40),
       visibility: ["private", "task", "shared"].includes(input.visibility) ? input.visibility : "private",
-      confidence: clamp(Number(input.confidence ?? 1)),
+      confidence: clamp2(Number(input.confidence ?? 1)),
       pinned: input.pinned ? 1 : 0,
       version: 1,
       embedding: input.embedding ? JSON.stringify(input.embedding) : null,
@@ -15259,7 +15394,7 @@ ${cleanBody}`)) {
           body,
           JSON.stringify(tags),
           patch.language ?? detectLanguage3(body).language,
-          patch.confidence === void 0 ? existing.confidence : clamp(Number(patch.confidence)),
+          patch.confidence === void 0 ? existing.confidence : clamp2(Number(patch.confidence)),
           patch.pinned === void 0 ? existing.pinned : patch.pinned ? 1 : 0,
           ["private", "task", "shared"].includes(patch.visibility) ? patch.visibility : existing.visibility,
           embedding,
@@ -15511,7 +15646,7 @@ function safeArray(value) {
     return [];
   }
 }
-function clamp(value) {
+function clamp2(value) {
   if (!Number.isFinite(value)) return 1;
   return Math.min(1, Math.max(0, value));
 }
@@ -16684,9 +16819,9 @@ function createOrchestrator2({
       return true;
     });
     const resolvedLimits = {
-      maxSteps: clamp2(limits.maxSteps, 2, 12, DEFAULT_LIMITS.maxSteps),
-      maxToolCalls: clamp2(limits.maxToolCalls, 0, 8, DEFAULT_LIMITS.maxToolCalls),
-      maxIterations: clamp2(limits.maxIterations, 1, 4, DEFAULT_LIMITS.maxIterations)
+      maxSteps: clamp3(limits.maxSteps, 2, 12, DEFAULT_LIMITS.maxSteps),
+      maxToolCalls: clamp3(limits.maxToolCalls, 0, 8, DEFAULT_LIMITS.maxToolCalls),
+      maxIterations: clamp3(limits.maxIterations, 1, 4, DEFAULT_LIMITS.maxIterations)
     };
     const detected = language || detectLanguage3(text2).language;
     const plan = planFor({ objective: text2, allowedTools: requested, limits: resolvedLimits });
@@ -16998,7 +17133,7 @@ function hydrateStep(row) {
     finishedAt: row.finished_at
   };
 }
-function clamp2(value, min, max, fallback) {
+function clamp3(value, min, max, fallback) {
   const number = Number(value);
   if (!Number.isFinite(number)) return fallback;
   return Math.min(max, Math.max(min, Math.floor(number)));
