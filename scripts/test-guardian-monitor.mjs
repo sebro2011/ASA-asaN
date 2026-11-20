@@ -592,3 +592,72 @@ test('routes: unknown routes under the guardian prefix are a JSON 404', async ()
     assert.equal(response.status, 404);
   });
 });
+
+/* --------------------------- provider definitions -------------------------- */
+
+/**
+ * The monitor's own tests inject providers, which is right for testing the
+ * monitor — and is exactly why a dead URL shipped: nothing ever checked the
+ * definitions against the outside world. The dashboard showed
+ * `nasa:osdr ENDPOINT_MISSING, down, 0%` because the probe still called the
+ * retired `/bio/api/` tree, which now answers 404 on every path.
+ *
+ * These cases pin the *definition*, not the live internet: the URL a probe uses
+ * must be the documented v2 one, and the schema check must accept the payload
+ * that endpoint really returns.
+ */
+const { PROVIDER_INDEX } = await import('../server/guardian/providers.ts');
+
+const probeContext = (payload, { status = 200, text } = {}) => ({
+  fetchImpl: async (url) => {
+    probeContext.lastUrl = String(url);
+    if (text !== undefined) return new Response(text, { status });
+    return new Response(JSON.stringify(payload), { status, headers: { 'content-type': 'application/json' } });
+  },
+  env: {},
+  now: () => 1_000,
+  timeoutMs: 1_000,
+  signal: new AbortController().signal,
+});
+
+test('the OSDR probe calls the v2 API, not the retired /bio/api tree', async () => {
+  const osdr = PROVIDER_INDEX['nasa:osdr'];
+  assert.ok(osdr, 'nasa:osdr is still a registered provider');
+
+  // The real dataset shape served by /v2/dataset/OSD-48/.
+  const context = probeContext({
+    'OSD-48': { REST_URL: 'https://visualization.osdr.nasa.gov/biodata/api/v2/dataset/OSD-48/', metadata: { accession: 'OSD-48' } }
+  });
+  const outcome = await osdr.run(context);
+
+  assert.equal(outcome.status, 'ok');
+  assert.equal(outcome.code, 'OK');
+
+  const called = new URL(probeContext.lastUrl);
+  assert.equal(called.protocol, 'https:');
+  assert.equal(called.host, 'visualization.osdr.nasa.gov', 'the host that actually serves the API');
+  assert.ok(called.pathname.startsWith('/biodata/api/v2/'), `expected a v2 path, got ${called.pathname}`);
+  assert.ok(!probeContext.lastUrl.includes('/bio/api/'), 'the /bio/api tree 404s and must not come back');
+  assert.equal(osdr.endpoint, called.host, 'the endpoint shown in the dashboard is the one probed');
+});
+
+test('the OSDR probe keeps a 404 visible instead of reading it as healthy', async () => {
+  const osdr = PROVIDER_INDEX['nasa:osdr'];
+  const gone = await osdr.run(probeContext(null, { status: 404, text: '# Not Found' }));
+  assert.equal(gone.status, 'down');
+  assert.equal(gone.code, 'ENDPOINT_MISSING');
+  assert.equal(gone.httpStatus, 404);
+});
+
+test('the OSDR probe calls an unexpected payload degraded, not ok', async () => {
+  const osdr = PROVIDER_INDEX['nasa:osdr'];
+  const empty = await osdr.run(probeContext({}));
+  assert.equal(empty.status, 'degraded');
+  assert.equal(empty.code, 'SCHEMA_MISMATCH');
+
+  // A JSON body without the accession/metadata structure is not a dataset.
+  const wrong = await osdr.run(probeContext({ results: [] }));
+  assert.equal(wrong.status, 'degraded');
+  assert.equal(wrong.code, 'SCHEMA_MISMATCH');
+});
+

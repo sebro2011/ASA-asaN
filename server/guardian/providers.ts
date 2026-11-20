@@ -325,17 +325,36 @@ const jplSbdb: ProviderDefinition = {
     ),
 };
 
+/**
+ * OSDR moved: the `/bio/api/` tree it used to serve — including every path under
+ * it, docs page included — now answers 404, so the old probe reported
+ * `ENDPOINT_MISSING` and marked a healthy science source down. The API is v2 at
+ * `visualization.osdr.nasa.gov/biodata/api`, which also publishes its OpenAPI
+ * document. The probe asks for one real dataset rather than a search, because the
+ * v2 search surface takes filters and a bare JSON list would not prove that a
+ * dataset can still be read.
+ */
 const osdr: ProviderDefinition = {
   id: 'nasa:osdr',
   label: 'NASA Open Science Data Repository',
   kind: 'science',
-  endpoint: 'osdr.nasa.gov',
-  docsUrl: 'https://osdr.nasa.gov/bio/api/',
+  endpoint: 'visualization.osdr.nasa.gov',
+  docsUrl: 'https://visualization.osdr.nasa.gov/biodata/api/openapi.json',
   requiresEnv: [],
   cost: 'free',
   run: (context) =>
-    getJson(context, 'nasa:osdr', 'https://osdr.nasa.gov/bio/api/search?term=radiation&type=study&size=1', (body) =>
-      isRecord(body) || Array.isArray(body) ? null : 'OSDR returned an unexpected payload.',
+    getJson(
+      context,
+      'nasa:osdr',
+      'https://visualization.osdr.nasa.gov/biodata/api/v2/dataset/OSD-48/',
+      (body) => {
+        if (!isRecord(body)) return 'OSDR returned an unexpected payload.';
+        // A dataset response is keyed by accession and carries a `metadata` block.
+        const datasets = Object.entries(body).filter(
+          ([accession, value]) => /^OSD-\d+$/.test(accession) && isRecord(value) && isRecord(value.metadata),
+        );
+        return datasets.length > 0 ? null : 'OSDR returned no dataset block.';
+      },
     ),
 };
 

@@ -187,6 +187,31 @@ against a live Supabase project.
 | `POST /api/guardian/recovery` | admin, 5/min | recovery actions | — | verification failure re-opens the circuit; human-only actions refused | tested |
 | `GET /api/guardian/cron` | `CRON_SECRET` | monitor | — | 503 `SCHEDULE_SECRET_MISSING` when unset; 200 `ran:false` when a sweep is held | tested + mounted-app smoke (503) |
 
+### Provider probes: OSDR moved to the v2 API (November 2026)
+
+The deployed dashboard reported `nasa:osdr — ENDPOINT_MISSING, down, 0%`. The probe
+was still calling `https://osdr.nasa.gov/bio/api/search?term=…&type=study`, and the
+entire `/bio/api/` tree — the documented API root included — now answers
+`404 Not Found`. That is a real finding: the health check was reporting a healthy
+science source as down.
+
+OSDR serves v2 from a different host, `https://visualization.osdr.nasa.gov/biodata/api`,
+and publishes an OpenAPI document at `.../api/openapi.json`. The probe now reads one
+real dataset (`/v2/dataset/OSD-48/`) and requires the response to be keyed by an
+`OSD-…` accession carrying a `metadata` block, so neither a 404 nor an arbitrary JSON
+body can read as healthy. The connector registry (`server/forge/scienceConnectors.ts`)
+advertises the same host, since that field builds and allow-lists request URLs.
+
+| Item | Before | After |
+| --- | --- | --- |
+| Probe URL | `osdr.nasa.gov/bio/api/search?…` → 404 | `visualization.osdr.nasa.gov/biodata/api/v2/dataset/OSD-48/` → 200 JSON |
+| Advertised host | `osdr.nasa.gov` | `visualization.osdr.nasa.gov` |
+| Schema check | "any JSON object or array is fine" | an `OSD-…` key whose value has `metadata` |
+
+Nothing in the running application fetches OSDR, so no user-facing feature was
+affected — this was a monitor telling the truth about a dead URL. `scripts/test-guardian-monitor.mjs`
+now covers the URL host and path, the 404 case, and two malformed-payload cases.
+
 ## Proxy caching (2026-11-13)
 
 `/api/asteroids/neows`, `/api/epic` and `/api/exoplanets` used to call their
