@@ -23,6 +23,7 @@ src/
   app/            shell, sidebar, top bar, theme, hooks, nav config
   workspace/      surfaces: chat, home, news, search, settings, modules, intelligence
   explore/        ExploreApp (second, independent shell)
+  game/           COSMORA: Mars Explorer — full-screen module at /mars-game
   components/     feature components (APOD, ISS, asteroids, solar weather, 3D …)
   features/       hypothesis-forge (13 modules) incl. research workspace
   lib/            domain libraries: earth/*, forge/*, nasaApi shim, apodMedia
@@ -41,6 +42,30 @@ components/       four legacy root components, imported by path from src/explore
 
 `@/` resolves to the **repository root** (`vite.config.ts`), which is why
 `@/lib/nasaApi` and `src/lib/nasaApi.js` both exist. See audit finding T1.
+
+### The Mars game module
+
+`/mars-game` is the only route rendered outside `AppShell` — a game needs the whole
+viewport and would fight the shell for keyboard focus. It is registered as a
+`FULLSCREEN_MODULES` entry in `src/app/router.tsx` and lazy-loaded from `src/App.tsx`,
+so its chunk (99 kB) never enters the workspace or Explore entry bundles.
+
+Inside `src/game/`, the layering is strict and enforced by imports:
+
+```
+world/     pure height function + chunk builder      (no Three.js, no React)
+physics/   ground queries, slope limits, colliders, rover drive   (no Three.js)
+input/     pure key and touch reducers                (no DOM outside the reducer)
+state/     two-clock store + IndexedDB save           (no Three.js)
+science/   static, sourced mineral catalogue
+render/    Three.js and R3F: scene, terrain, sky, dust, entities
+ui/        HUD, menus and panels (DOM only)
+engine.ts  the fixed-step simulation; imports world/physics/state, never render
+```
+
+`engine.ts` never imports a renderer, and `render/` never mutates React state. That
+seam is what makes the whole simulation testable in Node and what keeps React out of
+the frame budget.
 
 ## Request flow
 

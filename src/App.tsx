@@ -23,6 +23,9 @@ import type { TabId } from './ui/navigation';
 import { NovaMark } from './app/Brand';
 
 const ExploreApp = lazy(() => import('./explore/ExploreApp'));
+// The Mars game is a full screen module of its own; it pulls three.js, so it must
+// never enter either the workspace or the Explore entry chunk.
+const MarsGame = lazy(() => import('./game/MarsGame'));
 // Chat carries the markdown + highlighter chunk; it must never enter the entry.
 const SearchSurface = lazy(() => import('./workspace/search/SearchSurface'));
 const SettingsSurface = lazy(() => import('./workspace/settings/SettingsSurface'));
@@ -191,6 +194,16 @@ export default function App() {
   // and NOVA's astronomy assistant is a tab inside Explore (as it always was).
   if (route.name === 'home') return <ExploreSurface route={{ ...route, tab: 'home' }} />;
   if (route.name === 'explore') return <ExploreSurface route={route} />;
+
+  // `/mars-game` owns the whole viewport: no sidebar, no top bar, no footer. The
+  // game provides its own way back, and the shell would steal input focus anyway.
+  if (route.name === 'marsGame') {
+    return (
+      <Suspense fallback={<ExploreLoading />}>
+        <MarsGame />
+      </Suspense>
+    );
+  }
 
   return (
     <AppShell route={route}>

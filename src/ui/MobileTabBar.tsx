@@ -9,9 +9,11 @@
  */
 
 import React, { useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Clapperboard, Grid2x2, House, Leaf, MoreHorizontal, X } from 'lucide-react';
+import { Clapperboard, Gamepad2, Grid2x2, House, Leaf, MoreHorizontal, X } from 'lucide-react';
 import { NAV_ENTRIES, NAV_GROUPS, type TabId } from './navigation';
+import { Link } from '../app/router';
 import type { SupportedLanguage } from '../i18n/translations';
 import { cx } from './primitives';
 import { useBodyScrollLock, useEscape, useFocusTrap } from '../app/hooks';
@@ -38,6 +40,7 @@ export default function MobileTabBar({
   onTabChange: (tab: TabId) => void;
   lang: SupportedLanguage;
 }) {
+  const { t } = useTranslation();
   const [menuOpen, setMenuOpen] = useState(false);
   // Same contract as the header sheet: Escape closes, Tab stays inside, and the
   // page behind does not scroll under the panel.
@@ -156,6 +159,21 @@ export default function MobileTabBar({
                   </div>
                 </div>
               ))}
+
+              {/* The game is a full-screen destination of its own, so it closes
+                  the sheet as a distinct row instead of pretending to be a
+                  fifth science group. */}
+              <Link
+                to="/mars-game"
+                onClick={() => setMenuOpen(false)}
+                className="mt-4 flex items-center gap-3 rounded-xl border border-atmo/30 bg-atmo/10 px-3.5 py-3"
+              >
+                <Gamepad2 className="h-4 w-4 shrink-0 text-atmo" strokeWidth={1.7} aria-hidden="true" />
+                <span className="min-w-0">
+                  <span className="block truncate text-[13px] font-medium text-ink">{t('navMarsGame')}</span>
+                  <span className="block truncate text-[10.5px] text-ink-4">{t('navMarsGameHint')}</span>
+                </span>
+              </Link>
             </motion.div>
           </motion.div>
         ) : null}
