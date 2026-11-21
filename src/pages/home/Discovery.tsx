@@ -12,7 +12,9 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { ArrowUpRight } from 'lucide-react';
 import type { SupportedLanguage } from '../../i18n/translations';
+import { Gamepad2 } from 'lucide-react';
 import { NAV_ENTRIES, type TabId } from '../../ui/navigation';
+import { navigate } from '../../app/router';
 
 const FEATURED: Array<{ id: TabId; index: string; metric: string; meta: string }> = [
   { id: 'earth', index: '01', metric: 'POWER + GIBS', meta: '1981 → present' },
@@ -80,6 +82,37 @@ export default function Discovery({
           );
         })}
       </div>
+
+      {/*
+        The game is not an Explore tab: it is a full-screen module with its own
+        route, so it gets its own card rather than a thirteenth cell in a grid
+        whose every other cell opens a science destination.
+      */}
+      <button
+        type="button"
+        onClick={() => navigate('/mars-game')}
+        className="group mt-3 flex w-full items-center gap-4 overflow-hidden rounded-[16px] border border-line bg-abyss/85 p-5 text-left transition-colors duration-300 hover:border-atmo/40 hover:bg-surface/70"
+      >
+        <span className="grid h-11 w-11 shrink-0 place-items-center rounded-[12px] border border-atmo/30 bg-atmo/10 text-atmo">
+          <Gamepad2 className="h-5 w-5" strokeWidth={1.6} aria-hidden="true" />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
+            <span className="text-[15px] font-semibold tracking-[-0.01em] text-ink">
+              {t('discoveryGameTitle')}
+            </span>
+            <span className="font-mono text-[9.5px] uppercase tracking-[0.16em] text-ink-4">
+              {t('discoveryGameMeta')}
+            </span>
+          </span>
+          <span className="mt-1 block text-[12px] leading-relaxed text-ink-3">{t('discoveryGameBody')}</span>
+        </span>
+        <ArrowUpRight
+          className="h-4 w-4 shrink-0 text-ink-4 transition-all duration-300 group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-atmo"
+          strokeWidth={1.8}
+          aria-hidden="true"
+        />
+      </button>
     </section>
   );
 }

@@ -17,6 +17,8 @@ export const interfaceCopyTa: Copy = {
   navSystem: 'சூரிய குடும்பம்',
   navAssistant: 'உதவியாளர்',
   navAskNova: 'NOVA-விடம் கேளுங்கள்',
+  navMarsGame: 'செவ்வாய் ஆய்வாளர்',
+  navMarsGameHint: 'திறந்த உலக 3D பயணம்',
   navMenu: 'பட்டி',
   navAllDestinations: 'அனைத்து பகுதிகள்',
   navLanguage: 'மொழி',
@@ -113,6 +115,9 @@ export const interfaceCopyTa: Copy = {
   discoveryEyebrow: 'தொடர்ந்து ஆராயுங்கள்',
   discoveryTitle: 'கருவிகள், காப்பகங்கள் மற்றும் உருவகங்கள்',
   discoveryDescription: 'பதின்மூன்று பகுதிகள்; ஒவ்வொன்றுக்கும் தனி தரவு ஒப்பந்தமும் மூல மேற்கோளும் உண்டு.',
+  discoveryGameTitle: 'செவ்வாய் ஆய்வாளர் — திறந்த உலகம்',
+  discoveryGameMeta: '3D விளையாட்டு',
+  discoveryGameBody: 'நிரலாக்கத்தால் உருவாக்கப்பட்ட செவ்வாயில் நடங்கள், ஓட்டுங்கள், மாதிரிகள் சேகரியுங்கள். நிலப்பரப்பு உண்மையான வடிவியல்; உயிர் ஆதரவு மதிப்புகள் உருவகப்படுத்துதல் என்று விளையாட்டே கூறுகிறது.',
 
   pageApodEyebrow: 'ஆராய்க · நாளின் வானியல் படம்',
   page3dEyebrow: 'ஆராய்க · 3D காட்சிப்படுத்தல்',

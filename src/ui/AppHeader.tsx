@@ -17,6 +17,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import {
   ChevronDown,
   Check,
+  Gamepad2,
   Globe2,
   Menu,
   Search,
@@ -28,6 +29,7 @@ import {
 } from 'lucide-react';
 import type { SupportedLanguage } from '../i18n/translations';
 import { NAV_ENTRIES, NAV_GROUPS, type TabId } from './navigation';
+import { Link } from '../app/router';
 import { cx } from './primitives';
 import { useBodyScrollLock, useEscape, useFocusTrap } from '../app/hooks';
 import Glass from './Glass';
@@ -88,7 +90,7 @@ export default function AppHeader({
   workspaceLabel = 'NOVA Workspace',
   onOpenChat
 }: AppHeaderProps) {
-  const { i18n } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [openGroup, setOpenGroup] = useState<string | null>(null);
   const [langOpen, setLangOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -121,6 +123,15 @@ export default function AppHeader({
 
   const go = (tab: TabId) => {
     onTabChange(tab);
+    setOpenGroup(null);
+    setMobileOpen(false);
+  };
+
+  /**
+   * The game is a full-screen module, not an Explore tab: `Link` handles the
+   * routing, this only closes whatever menu launched it.
+   */
+  const goMarsGame = () => {
     setOpenGroup(null);
     setMobileOpen(false);
   };
@@ -268,6 +279,23 @@ export default function AppHeader({
               </div>
             );
           })}
+
+          {/* The game is not an Explore tab — it owns the whole viewport at
+              /mars-game (see FULLSCREEN_MODULES). Sitting it in one of the four
+              dropdowns would put a full-screen app inside a list of science
+              destinations, so it gets its own quiet terminal instead. `Link`
+              keeps middle-click and "open in new tab" working. */}
+          <Link
+            to="/mars-game"
+            onClick={goMarsGame}
+            className={cx(
+              'ml-1 flex items-center gap-1.5 rounded-lg border border-line/80 px-2.5 py-1.5 text-[13px] font-medium text-ink-2',
+              'transition-colors hover:border-atmo/40 hover:text-ink'
+            )}
+          >
+            <Gamepad2 className="h-3.5 w-3.5" strokeWidth={1.8} aria-hidden="true" />
+            {t('navMarsGame')}
+          </Link>
         </nav>
 
         <div className="ml-auto flex shrink-0 items-center gap-2">
@@ -434,6 +462,21 @@ export default function AppHeader({
                   </div>
                 </div>
               ))}
+
+              {/* Same reasoning as the desktop terminal: the game is its own
+                  full-screen destination, so it sits above the grouped lists
+                  rather than pretending to be a science tab. */}
+              <Link
+                to="/mars-game"
+                onClick={goMarsGame}
+                className="mt-5 flex items-center gap-3 rounded-xl border border-atmo/30 bg-atmo/10 px-3.5 py-3 text-left"
+              >
+                <Gamepad2 className="h-4 w-4 shrink-0 text-atmo" strokeWidth={1.7} aria-hidden="true" />
+                <span className="min-w-0">
+                  <span className="block truncate text-[13px] font-medium text-ink">{t('navMarsGame')}</span>
+                  <span className="block truncate text-[10.5px] text-ink-4">{t('navMarsGameHint')}</span>
+                </span>
+              </Link>
 
               <div className="mt-6 flex flex-wrap gap-2">
                 {onOpenExport ? (
