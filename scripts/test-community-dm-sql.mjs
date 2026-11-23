@@ -1,0 +1,51 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import { readFile } from 'node:fs/promises';
+import { PGlite } from '@electric-sql/pglite';
+const alice='11111111-1111-4111-8111-111111111111', bob='22222222-2222-4222-8222-222222222222', eve='33333333-3333-4333-8333-333333333333', mod='44444444-4444-4444-8444-444444444444';
+
+test('direct messages default closed, require consent and isolate reports, blocks and participants',async()=>{
+ const db=new PGlite();
+ try {
+  await db.exec(`create role anon; create role authenticated; create schema auth; create table auth.users(id uuid primary key); create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $$; grant usage on schema auth,public to anon,authenticated; grant execute on function auth.uid() to anon,authenticated;`);
+  for(const file of ['../supabase/migrations/20261123000000_community_foundation.sql','../supabase/migrations/20261123000001_community_direct_messages.sql']) await db.exec(await readFile(new URL(file,import.meta.url),'utf8'));
+  await db.query('insert into auth.users(id) values($1),($2),($3),($4)',[alice,bob,eve,mod]);
+  await db.query('insert into public.community_moderators(user_id) values($1)',[mod]);
+  const role=async(id)=>{await db.exec('reset role; set role authenticated');await db.query("select set_config('request.jwt.claim.sub',$1,false)",[id]);};
+  await role(bob); await db.query("insert into public.community_profiles(display_name) values('Bob Sky')");
+  await role(mod); await db.query("select public.community_review($1,'profile','approved','Bob Sky')",[bob]);
+  await role(alice); await assert.rejects(db.query('select public.community_dm_request($1)',[bob]),/request unavailable/i);
+  await role(bob); await db.query('insert into public.community_dm_preferences(allow_requests) values(true)');
+  await role(alice);
+  const thread=(await db.query('select public.community_dm_request($1) as id',[bob])).rows[0].id;
+  await assert.rejects(db.query("insert into public.community_dm_messages(thread_id,body) values($1,'hello')",[thread]),/row-level security/i);
+  assert.equal((await db.query('select public.community_dm_answer($1,true) as ok',[thread])).rows[0].ok,false,'only recipient can accept');
+  await role(eve);
+  assert.equal((await db.query('select * from public.community_dm_threads')).rows.length,0);
+  await assert.rejects(db.query("insert into public.community_dm_messages(thread_id,body) values($1,'intrude')",[thread]),/row-level security/i);
+  assert.equal((await db.query('select public.community_dm_answer($1,true) as ok',[thread])).rows[0].ok,false);
+  await role(bob); assert.equal((await db.query('select public.community_dm_answer($1,true) as ok',[thread])).rows[0].ok,true);
+  await role(alice);
+  const msg=(await db.query("insert into public.community_dm_messages(thread_id,body) values($1,'A private message') returning id",[thread])).rows[0].id;
+  await assert.rejects(db.query('select public.community_dm_report($1,$2)',[msg,'I sent this']),/not authorized/i);
+  await assert.rejects(db.query("update public.community_dm_threads set status='accepted' where id=$1",[thread]),/permission denied/i);
+  await role(eve); assert.equal((await db.query('select * from public.community_dm_messages')).rows.length,0);
+  await assert.rejects(db.query('select public.community_dm_report($1,$2)',[msg,'Not involved']),/not authorized/i);
+  await assert.rejects(db.query('select * from public.community_dm_report_queue()'),/not authorized/i);
+  await role(bob); assert.equal((await db.query('select * from public.community_dm_messages')).rows.length,1);
+  await db.query('insert into public.community_blocks(blocked_id) values($1)',[alice]);
+  assert.equal((await db.query('select * from public.community_dm_threads')).rows.length,0);
+  assert.equal((await db.query('select * from public.community_dm_messages')).rows.length,0);
+  const report=(await db.query('select public.community_dm_report($1,$2) as id',[msg,'Report after blocking'])).rows[0].id;
+  await role(alice); assert.equal((await db.query('select * from public.community_dm_messages')).rows.length,0);
+  await assert.rejects(db.query("insert into public.community_dm_messages(thread_id,body) values($1,'blocked')",[thread]),/row-level security/i);
+  await role(mod); assert.equal((await db.query('select * from public.community_dm_report_queue()')).rows[0].reported_body,'A private message');
+  assert.equal((await db.query("select public.community_dm_resolve_report($1,'removed') as ok",[report])).rows[0].ok,true);
+  assert.equal((await db.query("select public.community_dm_resolve_report($1,'removed') as ok",[report])).rows[0].ok,false);
+  await role(bob); await db.query('delete from public.community_blocks where blocked_id=$1',[alice]);
+  assert.equal((await db.query('select * from public.community_dm_messages')).rows.length,0,'removed content stays hidden after unblocking');
+  await role(alice); assert.equal((await db.query('select * from public.community_dm_messages')).rows.length,0);
+  await db.exec("reset role; set role anon; select set_config('request.jwt.claim.sub','',false)");
+  await assert.rejects(db.query('select * from public.community_dm_messages'),/permission denied/i);
+ } finally {await db.close();}
+});

@@ -47,6 +47,7 @@ const MissionsTimeline = lazy(() =>
   import('../components/MissionsTimeline').then((m) => ({ default: m.MissionsTimeline }))
 );
 const MarsImageTagger = lazy(() => import('../components/MarsImageTagger.jsx'));
+const CommunityPage = lazy(() => import('../community/CommunityPage'));
 const MarsRoverPhotos = lazy(() => import('../components/MarsRoverPhotos'));
 const MarsArchiveExplorer = lazy(() => import('../components/MarsArchiveExplorer'));
 const SolarWeather = lazy(() => import('../components/SolarWeather.jsx'));
@@ -244,6 +245,7 @@ export default function ExploreApp({ tab, onSelectTab, onExitToWorkspace, onOpen
 
   const meta: Record<TabKey, TabMeta> = {
     home: { eyebrow: '', title: '', description: '' },
+    community: { eyebrow: '', title: ({ en: 'Space Community', si: 'අභ්‍යවකාශ ප්‍රජාව', ta: 'விண்வெளி சமூகம்' }[lang] || 'Space Community'), description: ({ en: 'Share discoveries and learn together.', si: 'සොයාගැනීම් බෙදාගෙන එකට ඉගෙන ගනිමු.', ta: 'கண்டுபிடிப்புகளைப் பகிர்ந்து ஒன்றாகக் கற்போம்.' }[lang] || 'Share discoveries and learn together.') },
     'space-shorts': {
       eyebrow: t('ssEyebrow'),
       title: t('ssTitle'),
@@ -450,6 +452,7 @@ export default function ExploreApp({ tab, onSelectTab, onExitToWorkspace, onOpen
                   }
                 >
                 <Suspense fallback={<DestinationSkeleton />}>
+                {activeTab === 'community' && <CommunityPage lang={lang} />}
                 {activeTab === 'space-shorts' && <SpaceShortsPage />}
 
                 {activeTab === 'apod' && (

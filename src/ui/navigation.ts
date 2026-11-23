@@ -21,7 +21,8 @@ import {
   Satellite,
   Sparkles,
   Target,
-  Clapperboard
+  Clapperboard,
+  UsersRound
 } from 'lucide-react';
 import type { SupportedLanguage } from '../i18n/translations';
 
@@ -29,6 +30,7 @@ export type TabId =
   | 'home'
   | 'apod'
   | 'space-shorts'
+  | 'community'
   | '3d'
   | 'asteroids'
   | 'epic'
@@ -51,6 +53,11 @@ export interface NavEntry {
 }
 
 export const NAV_ENTRIES: NavEntry[] = [
+  {
+    id: 'community', icon: UsersRound, group: 'explore',
+    labels: { en: 'Community', si: 'ප්‍රජාව', ta: 'சமூகம்' },
+    hint: { en: 'Share space discoveries', si: 'අභ්‍යවකාශ සොයාගැනීම් බෙදාගන්න', ta: 'விண்வெளி கண்டுபிடிப்புகளைப் பகிருங்கள்' }
+  },
   {
     id: 'space-shorts',
     icon: Clapperboard,

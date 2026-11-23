@@ -23,7 +23,7 @@
     "test:ai-viewer": "node --import tsx --test scripts/test-ai-earth-viewer.mjs",
     "test:apod": "node --import tsx --test --test-force-exit scripts/test-apod-media.mjs && node --import tsx --test --test-force-exit scripts/test-apod-unavailable-dom.mjs && node --import tsx --test --test-force-exit scripts/test-apod-science.mjs",
     "test:api-routes": "node --import tsx --test --test-force-exit scripts/test-api-routes.mjs && node --import tsx --test --test-force-exit scripts/test-neows-integrity.mjs && node --import tsx --test --test-force-exit scripts/test-translation-chat.mjs && node --import tsx --test --test-force-exit scripts/test-mars-photos.mjs && node --import tsx --test scripts/test-news-feed-integrity.mjs",
-    "test:community": "node --import tsx --test scripts/test-community.mjs scripts/test-community-sql.mjs",
+    "test:community": "node --import tsx --test scripts/test-community.mjs scripts/test-community-sql.mjs scripts/test-community-foundation-sql.mjs scripts/test-community-dm-sql.mjs scripts/test-community-safety-ui.mjs",
     "test:earth": "node --import tsx --test scripts/test-earth-intelligence.mjs",
     "test:stats": "node --import tsx --test scripts/test-climate-statistics.mjs",
     "test:stats-calibration": "node scripts/research/trend-method-calibration.mjs",

@@ -90,3 +90,5 @@ These describe the tree as it was and were moved here from the repository root
 - [`audits/PHASE1_AUDIT_REPORT.md`](audits/PHASE1_AUDIT_REPORT.md)
 - [`audits/PHASE7_VALIDATION_REPORT.md`](audits/PHASE7_VALIDATION_REPORT.md)
 - [`PHASE7_FINAL_REPORT.md`](PHASE7_FINAL_REPORT.md)
+
+- [Community platform foundation progress (not release-ready)](community-platform-progress.md)
