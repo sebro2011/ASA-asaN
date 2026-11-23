@@ -52,6 +52,13 @@ test('parseRoute keeps detail ids and rejects extra segments', () => {
   assert.equal(parseRoute('/knowledge/extra').name, 'notFound');
 });
 
+test('removed game route is not found while science routes remain available', () => {
+  assert.deepEqual(parseRoute('/mars-game'), { name: 'notFound', path: '/mars-game' });
+  assert.equal(parseRoute('/mars-game/extra').name, 'notFound');
+  assert.equal(parseRoute('/explore/missions').name, 'explore');
+  assert.equal(parseRoute('/explore/missions').tab, 'missions');
+});
+
 test('explore routes preserve all destinations and the legacy cosmovision URL', () => {
   assert.deepEqual(parseRoute('/explore'), { name: 'explore', tab: 'home', path: '/explore' });
   assert.deepEqual(parseRoute('/cosmovision'), {
