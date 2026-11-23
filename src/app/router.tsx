@@ -42,8 +42,6 @@ export type RouteName =
   | 'search'
   | 'profile'
   | 'explore'
-  /** COSMORA: Mars Explorer — a full-screen game module, outside the shell. */
-  | 'marsGame'
   | 'notFound';
 
 export interface AppRoute {
@@ -63,17 +61,6 @@ const DETAIL_SEGMENTS: Record<string, RouteName> = {
   writing: 'writing',
   research: 'research',
   code: 'code',
-};
-
-/**
- * Full-screen modules that deliberately render outside AppShell.
- *
- * The map is keyed by the first path segment (`/mars-game`), not by name, because
- * `mars-game` is not a valid RouteName and must not become one: the shell's
- * navigation table is about documents and science surfaces, not games.
- */
-const FULLSCREEN_MODULES: Record<string, RouteName> = {
-  'mars-game': 'marsGame',
 };
 
 const FLAT_SEGMENTS: Record<string, RouteName> = {
@@ -150,8 +137,6 @@ export function parseRoute(pathname: string): AppRoute {
   }
 
   if (parts.length === 1) {
-    const fullscreen = FULLSCREEN_MODULES[parts[0]];
-    if (fullscreen) return { name: fullscreen, path };
     const flat = FLAT_SEGMENTS[parts[0]];
     if (flat) return { name: flat, path };
     return { name: 'notFound', path };
@@ -168,7 +153,6 @@ export function parseRoute(pathname: string): AppRoute {
 /** Canonical pathname for a workspace destination. */
 export function routeHref(name: RouteName, options: { id?: string; tab?: TabId } = {}): string {
   if (name === 'home') return '/';
-  if (name === 'marsGame') return '/mars-game';
   if (name === 'workspace') return '/workspace';
   if (name === 'notFound') return '/404';
   if (name === 'explore') {

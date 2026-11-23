@@ -18,8 +18,6 @@ export const interfaceCopyEn: Copy = {
   navSystem: 'Solar system',
   navAssistant: 'Assistant',
   navAskNova: 'Ask NOVA',
-  navMarsGame: 'Mars Explorer',
-  navMarsGameHint: 'Open-world 3D expedition',
   navMenu: 'Menu',
   navAllDestinations: 'All destinations',
   navLanguage: 'Language',
@@ -122,9 +120,6 @@ export const interfaceCopyEn: Copy = {
   discoveryEyebrow: 'Continue exploring',
   discoveryTitle: 'Instruments, archives and simulators',
   discoveryDescription: 'Thirteen destinations, each with its own data contract and source attribution.',
-  discoveryGameTitle: 'Mars Explorer — open world',
-  discoveryGameMeta: '3D GAME',
-  discoveryGameBody: 'Walk, drive and sample a procedurally generated Mars. The terrain is real geometry; the life-support figures are a simulation, and the game says so.',
 
   /* page framing */
   pageApodEyebrow: 'Explore · Astronomy Picture of the Day',

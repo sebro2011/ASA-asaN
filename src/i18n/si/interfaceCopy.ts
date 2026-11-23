@@ -17,8 +17,6 @@ export const interfaceCopySi: Copy = {
   navSystem: 'සෞරග්‍රහ මණ්ඩලය',
   navAssistant: 'සහායක',
   navAskNova: 'NOVA වෙතින් අසන්න',
-  navMarsGame: 'අඟහරු ගවේෂකයා',
-  navMarsGameHint: 'විවෘත ලෝක 3D ගවේෂණය',
   navMenu: 'මෙනුව',
   navAllDestinations: 'සියලු අංශ',
   navLanguage: 'භාෂාව',
@@ -115,9 +113,6 @@ export const interfaceCopySi: Copy = {
   discoveryEyebrow: 'දිගටම ගවේෂණය කරන්න',
   discoveryTitle: 'මෙවලම්, ලේඛනාගාර සහ අනුකරණ',
   discoveryDescription: 'අංශ දහතුනක්; එක් එක් අංශයට තමන්ගේම දත්ත ගිවිසුමක් සහ මූලාශ්‍ර උපහාරයක් ඇත.',
-  discoveryGameTitle: 'අඟහරු ගවේෂකයා — විවෘත ලෝකය',
-  discoveryGameMeta: '3D ක්‍රීඩාව',
-  discoveryGameBody: 'ක්‍රමලේඛනයෙන් ජනිත අඟහරු මතුපිටක ඇවිදින්න, රිය පදවන්න, නියදි එකතු කරන්න. භූමිය සැබෑ ජ්‍යාමිතියකි; ජීව ආධාරක අගයන් අනුකරණයක් බව ක්‍රීඩාවම පවසයි.',
 
   pageApodEyebrow: 'ගවේෂණය · දවසේ තාරකා ඡායාරූපය',
   page3dEyebrow: 'ගවේෂණය · 3D දෘශ්‍යකරණය',

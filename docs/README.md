@@ -15,9 +15,6 @@ older phase reports are kept for provenance and are marked at the top of the fil
 | [`TEST_RESULTS.md`](TEST_RESULTS.md) | What was actually run, and what it proves |
 | [`API_STATUS_REPORT.md`](API_STATUS_REPORT.md) | Every route: source, cache, failure mode, live status |
 | [`DEVELOPMENT_CHANGELOG.md`](DEVELOPMENT_CHANGELOG.md) | Dated changes with their verification |
-| [`MARS_GAME_PLAN.md`](MARS_GAME_PLAN.md) | COSMORA: Mars Explorer — audit, architecture decisions, phases, and the honesty contract |
-| [`MARS_GAME_TEST_REPORT.md`](MARS_GAME_TEST_REPORT.md) | What the game's tests prove, what they cannot, and how to deploy and check it |
-| [`MARS_GAME_PHASE3_REPORT.md`](MARS_GAME_PHASE3_REPORT.md) | Phase 3 terrain diagnosis, controls, missions and verification |
 
 ## Architecture and operations
 
