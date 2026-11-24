@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 
 const dataset = JSON.parse(readFileSync(new URL('./fixtures/nova-eval-cases.v1.json', import.meta.url), 'utf8'));
 const LANGUAGES = ['en', 'si', 'ta'];
@@ -50,6 +50,8 @@ test('licensing and source provenance are explicit and do not grant training or 
   assert.equal(dataset.provenance.datasetLicense, 'No separate license is granted by this draft.');
   assert.equal(dataset.provenance.externalSourceContentIncluded, false);
   assert.equal(dataset.provenance.externalImagesOrAudioIncluded, false);
+  assert.match(dataset.provenance.repositorySourceRevision, /^[a-f0-9]{40}$/u);
+  assert.equal(dataset.provenance.multilingualSemanticReview, 'PENDING_FLUENT_REVIEW');
   assert.ok(dataset.provenance.notPermittedByThisDraft.some((item) => /pretraining|fine-tuning/i.test(item)));
   assert.ok(dataset.provenance.rightsReview.includes('Pending'));
 
@@ -57,6 +59,12 @@ test('licensing and source provenance are explicit and do not grant training or 
   for (const source of dataset.sources) {
     assert.ok(source.reference || source.url, `${source.id} has a locator`);
     assert.ok(source.usage, `${source.id} has a usage note`);
+    for (const locator of [source.reference, source.listedInRepositoryAt].filter(Boolean)) {
+      for (const repositoryPath of locator.split(';')) {
+        const file = repositoryPath.trim().split('#')[0];
+        assert.ok(existsSync(new URL(`../${file}`, import.meta.url)), `${source.id} repository locator ${file} exists`);
+      }
+    }
     if (source.url) {
       assert.match(source.referenceStatus || '', /not fetched|not requested|no request made|not reviewed/i,
         `${source.id} must not be represented as externally verified`);
@@ -76,6 +84,9 @@ test('metrics are measurable and factual scoring waits for source review', () =>
   }
   assert.match(metrics.multilingual, /pass rate|1-5/i);
   assert.match(metrics.responseConsistency, /Jaccard/i);
+  assert.match(metrics.responseConsistency, /10 run pairs/i);
+  assert.match(metrics.responseConsistency, /Both empty sets score 1/i);
+  assert.match(metrics.hallucinationRate, /fraction of cases/i);
   assert.match(metrics.zeroDenominatorHandling, /NA/i);
   assert.match(metrics.reviewRule, /reference and usage review are complete/i);
   assert.ok(metrics.claimLabels.includes('unsupported'));

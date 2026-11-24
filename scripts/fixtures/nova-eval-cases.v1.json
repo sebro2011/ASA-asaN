@@ -15,6 +15,8 @@
     "sourceLocatorsAreNotSourceSnapshots": true,
     "rootRepositoryLicense": "UNLICENSED",
     "datasetLicense": "No separate license is granted by this draft.",
+    "repositorySourceRevision": "1b7f6784f3352f2602216fd438af3594f60bd4cc",
+    "multilingualSemanticReview": "PENDING_FLUENT_REVIEW",
     "permittedUse": [
       "Internal NOVA evaluation-case review within this repository.",
       "A future human-scored evaluation only after source-rights review is complete and the user separately authorizes evaluation. This draft does not select a model or authorize model downloads."
@@ -31,14 +33,6 @@
       "kind": "internal-policy",
       "reference": "server/novaChat.js#makeSystemPrompt",
       "supports": "Do not claim live NASA telemetry, current web access, or unsupplied data; state uncertainty when facts may have changed.",
-      "reviewStatus": "present-in-repository",
-      "usage": "Evaluation requirement only; repository is UNLICENSED."
-    },
-    {
-      "id": "nova-chat-context-policy",
-      "kind": "internal-implementation-and-test",
-      "reference": "server/novaChat.js; scripts/test-nova-local-inference.mjs",
-      "supports": "Bounded multi-turn context is forwarded to the selected Local runtime.",
       "reviewStatus": "present-in-repository",
       "usage": "Evaluation requirement only; repository is UNLICENSED."
     },
@@ -110,9 +104,9 @@
     "claimLabels": ["supported", "contradicted", "unsupported", "unverifiable"],
     "factualAccuracy": "supported factual claim atoms / (supported + contradicted + unsupported factual claim atoms); exclude unverifiable claims from the denominator and report their count separately",
     "requiredFactCoverage": "supported required rubric points / all reviewed required rubric points",
-    "hallucinationRate": "(unsupported + contradicted factual claim atoms) / all assessable factual claim atoms; also report critical-hallucination case rate separately",
+    "hallucinationRate": "(unsupported + contradicted factual claim atoms) / all assessable factual claim atoms; also report the fraction of cases with at least one such claim",
     "multilingual": "Per-language target-language adherence pass rate; plus human 1-5 ratings for grammar, idiomaticity, technical-term fidelity, and coherence. Report each language separately and the cross-language spread in required-fact coverage.",
-    "responseConsistency": "Across five repeat runs per case at fixed settings, report mean pairwise Jaccard similarity of normalized supported core-claim sets and the fraction of run-pairs with a contradiction.",
+    "responseConsistency": "Across five identical-input runs per case at fixed settings, report mean pairwise Jaccard similarity of adjudicated, normalized supported core-claim sets over all 10 run pairs and the fraction of pairs with a contradiction. Both empty sets score 1; exactly one empty set scores 0.",
     "zeroDenominatorHandling": "Report a metric as NA when its denominator is zero; report the excluded/unverifiable count and denominator for every aggregate.",
     "reviewRule": "Do not calculate factual metrics for a case until its reference and usage review are complete. Do not set acceptance thresholds after seeing model outputs."
   },
@@ -233,8 +227,8 @@
       "id": "multiturn-context-gravitational-waves",
       "domain": "multilingual-context",
       "topic": "follow-up resolution and language retention",
-      "sourceIds": ["nova-chat-context-policy", "esa-lisa-pathfinder"],
-      "referenceReview": "internal-context-policy-reviewed; science-reference-pending",
+      "sourceIds": ["esa-lisa-pathfinder"],
+      "referenceReview": "prompt-context-defined-in-fixture; science-reference-pending",
       "turns": {
         "en": [
           {"role": "user", "content": "In this conversation, let 'they' refer to gravitational waves."},
