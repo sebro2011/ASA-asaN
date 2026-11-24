@@ -113,3 +113,30 @@ class ExtremeTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+class AuditRegressionTests(unittest.TestCase):
+    def test_skill_score_uses_one_mask_for_all_three_series(self):
+        truth = np.array([0., 1., 2., 3., 4.])
+        pred = np.array([0., np.nan, 2., 4., 4.])
+        reference = np.array([1., 1., np.nan, 1., 1.])
+        self.assertAlmostEqual(metrics.skill_score(truth, pred, reference), 1 - 1 / 14)
+        with self.assertRaises(ValueError):
+            metrics.skill_score(truth, pred, reference[:-1])
+
+    def test_guard_flags_even_one_near_zero_value_and_undefined_metrics(self):
+        summary = metrics.summarise(np.array([0.] + [2.] * 99), np.ones(100))
+        self.assertEqual(summary['mape_zero_guard_used'], 1.0)
+        self.assertAlmostEqual(summary['mape_zero_band_fraction'], .01)
+        constant = metrics.summarise(np.ones(10), np.ones(10))
+        self.assertEqual(constant['r2_undefined'], 1.0)
+        self.assertEqual(constant['pearson_undefined'], 1.0)
+
+    def test_exact_split_conformal_order_statistic_and_small_samples(self):
+        from cosmora_v3.uncertainty import conformal_quantile, calibrate_residuals, calibrate
+        self.assertEqual(conformal_quantile(np.arange(1., 101.), .1), 91.)
+        with self.assertRaises(ValueError): conformal_quantile(np.ones(5), .1)
+        with self.assertRaises(ValueError): conformal_quantile(np.ones(20), 0)
+        fitted = calibrate_residuals(np.r_[np.ones(10), np.nan], .1)
+        self.assertEqual(fitted.n_calibration, 10)
+        self.assertTrue(np.isfinite(fitted.gaussian_sigma))
+        with self.assertRaises(ValueError): calibrate(np.ones(2), np.ones(3), .1)

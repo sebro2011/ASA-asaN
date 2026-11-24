@@ -85,6 +85,22 @@ class ManifestScopeTests(unittest.TestCase):
 
             return json.loads(path.read_text(encoding="utf-8"))
 
+    def test_unverified_cache_is_not_reported_as_scientific(self) -> None:
+        from cosmora_v3.data import Provenance
+        from cosmora_v3.report import _banner
+        import json
+        import tempfile
+        from pathlib import Path
+
+        prov = Provenance("site", "cache", "url", "unknown", "digest", 60, "2000-01", "2004-12", 0)
+        with tempfile.TemporaryDirectory() as tmp:
+            path = write_manifest(Path(tmp), self.CONFIG, [prov], synthetic=False, quick=True, timing={})
+            manifest = json.loads(path.read_text())
+        self.assertFalse(manifest["scientific_results"])
+        self.assertEqual(manifest["data_provenance"], "NASA_POWER_UNVERIFIED_CACHE")
+        self.assertIn("UNVERIFIED CACHE", _banner(manifest))
+        self.assertNotIn("synthetic data", _banner(manifest))
+
     def test_configured_scope_is_named_as_configured(self) -> None:
         manifest = self._manifest({"locations_executed": ["colombo"]})
         self.assertEqual(manifest["locations_configured"], ["colombo", "kandy", "jaffna"])

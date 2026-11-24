@@ -71,14 +71,19 @@ def mae_daily_scale_mape(y_true: np.ndarray, y_pred: np.ndarray) -> tuple[float,
     if not len(t):
         return float("nan"), True
     band = np.maximum(np.abs(t), ZERO_BAND)
-    guard_used = bool(np.mean(np.abs(t) < ZERO_BAND) > 0.05)
+    guard_used = bool(np.any(np.abs(t) < ZERO_BAND))
     return float(100.0 * np.mean(np.abs(p - t) / band)), guard_used
 
 
 def skill_score(y_true: np.ndarray, y_pred: np.ndarray, y_reference: np.ndarray) -> float:
     """1 - MSE_model / MSE_reference. Positive means better than the reference."""
-    t, p = _clean(y_true, y_pred)
-    _, r = _clean(y_true, y_reference)
+    t = np.asarray(y_true, dtype="float64").reshape(-1)
+    p = np.asarray(y_pred, dtype="float64").reshape(-1)
+    r = np.asarray(y_reference, dtype="float64").reshape(-1)
+    if not (t.shape == p.shape == r.shape):
+        raise ValueError(f"shape mismatch: y={t.shape} pred={p.shape} reference={r.shape}")
+    mask = np.isfinite(t) & np.isfinite(p) & np.isfinite(r)
+    t, p, r = t[mask], p[mask], r[mask]
     if len(t) < 3:
         return float("nan")
     mse_ref = float(np.mean((t - r) ** 2))
@@ -155,6 +160,9 @@ def summarise(y_true: np.ndarray, y_pred: np.ndarray, *, reference: Optional[np.
         "pearson": pearson(y_true, y_pred),
         "mape_pct": mape_value,
         "mape_zero_guard_used": float(guard),
+        "mape_zero_band_fraction": float(np.mean(np.abs(scored) < ZERO_BAND)) if len(scored) else float("nan"),
+        "r2_undefined": float(not np.isfinite(r2(y_true, y_pred))),
+        "pearson_undefined": float(not np.isfinite(pearson(y_true, y_pred))),
         "n": float(len(scored)),
     }
     if reference is not None:

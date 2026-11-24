@@ -2,7 +2,12 @@
 
 Three files, one per city. These are the **source data** for the numbers in
 `../../docs/FINAL_SCIENTIFIC_AUDIT.md` §2.5. They are committed so that a clone can
-re-run the experiment without network access.
+re-run the experiment without network access. These hand-transcribed legacy files do
+not contain a request signature: the loader now rejects them by default. Use
+`--force-refresh` from a host with POWER access to download signed cache records,
+or explicitly set `power.allow_unverified_legacy_cache` to `true` for exploratory
+reproduction. Such runs are marked as unverified, not scientific results. A request
+signature is metadata for cache matching, not cryptographic proof of origin.
 
 | File | Coordinates returned by POWER | Elevation | SHA-256 |
 | --- | --- | --- | --- |

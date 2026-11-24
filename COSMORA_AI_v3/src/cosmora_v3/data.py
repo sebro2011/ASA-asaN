@@ -188,12 +188,18 @@ def fetch_location(
         payload = json.loads(cache_file.read_text(encoding="utf-8"))
         source = "cache"
         retrieved = payload.get("_cosmora_retrieved_utc", "unknown")
-        # D19: the cache filename encodes only the location and the window, so a
-        # payload written for (parameters, community, base_url) A was served to
-        # request B. A signature stored inside the payload can be checked; caches
-        # written before this change carry none, and are accepted as legacy
-        # rather than silently re-interpreted as a match.
+        # The cache filename encodes only the location and window. A cache
+        # without a verifiable signature must not silently answer an
+        # arbitrary request. Legacy use requires an explicit research opt-in.
         stored = payload.get("_cosmora_request")
+        if stored is None and power_cfg.get("allow_unverified_legacy_cache") is not True:
+            raise DataUnavailable(
+                f"{location['id']}: cached payload at {cache_file.name} has no request signature. "
+                "Use --force-refresh to fetch a verifiable response; for exploratory work only, "
+                "set power.allow_unverified_legacy_cache to true."
+            )
+        if stored is not None and not isinstance(stored, dict):
+            raise DataUnavailable(f"{location['id']}: invalid cached request signature; refresh the cache")
         if isinstance(stored, dict) and stored != signature:
             raise DataUnavailable(
                 f"{location['id']}: cached payload at {cache_file.name} was fetched for a "
@@ -225,7 +231,7 @@ def fetch_location(
     # window served from a 300-month cache looked complete. Record the shortfall
     # instead of trusting the request.
     configured_months = (int(power_cfg["end_year"]) - int(power_cfg["start_year"]) + 1) * 12
-    months_short = max(0, configured_months - (len(frame) + dropped + annual_rows))
+    months_short = max(0, configured_months - (len(frame) + dropped))
     duplicate_rows = int(_payload_month_occurrences(payload, power_cfg) - len(frame) - dropped - annual_rows)
 
     provenance = Provenance(
