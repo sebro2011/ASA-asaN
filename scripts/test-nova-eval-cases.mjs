@@ -66,11 +66,40 @@ test('licensing and source provenance are explicit and do not grant training or 
       }
     }
     if (source.url) {
+      assert.equal(source.checkedAtUtc, null, `${source.id} has no fabricated verification date`);
+      assert.equal(source.sourceVersionOrDate, null, `${source.id} has no fabricated source version`);
       assert.match(source.referenceStatus || '', /not fetched|not requested|no request made|not reviewed/i,
         `${source.id} must not be represented as externally verified`);
       assert.match(source.rightsStatus || '', /not reviewed/i, `${source.id} rights status remains visible`);
       assert.equal(source.contentIncluded, undefined, 'source content is not embedded in the case file');
     }
+  }
+});
+
+test('candidate source-to-rubric map covers every criterion without claiming verification', () => {
+  const rubricMap = dataset.rubricEvidenceMap;
+  assert.equal(rubricMap.status, 'DRAFT_CANDIDATE_MAP_UNVERIFIED');
+  assert.match(rubricMap.mappingRule, /not verified evidence/i);
+  assert.equal(rubricMap.cases.length, dataset.cases.length);
+
+  const mapsByCase = new Map(rubricMap.cases.map((entry) => [entry.caseId, entry]));
+  for (const evaluationCase of dataset.cases) {
+    const evidence = mapsByCase.get(evaluationCase.id);
+    assert.ok(evidence, `${evaluationCase.id} has an evidence map`);
+    assert.equal(evidence.mustCover.length, evaluationCase.mustCover.length, `${evaluationCase.id} maps every required point`);
+    assert.equal(evidence.mustAvoid.length, evaluationCase.mustAvoid.length, `${evaluationCase.id} maps every avoid point`);
+
+    const mappedSourceIds = new Set(evidence.contextOnlySourceIds);
+    for (const criterion of [...evidence.mustCover, ...evidence.mustAvoid]) {
+      assert.ok(criterion.basis, `${evaluationCase.id} criterion has a basis`);
+      assert.ok(Array.isArray(criterion.sourceIds), `${evaluationCase.id} criterion has sourceIds`);
+      for (const sourceId of criterion.sourceIds) {
+        assert.ok(SOURCE_IDS.has(sourceId), `${evaluationCase.id} maps known source ${sourceId}`);
+        mappedSourceIds.add(sourceId);
+      }
+    }
+    assert.deepEqual([...mappedSourceIds].sort(), [...evaluationCase.sourceIds].sort(),
+      `${evaluationCase.id} source list exactly matches rubric and context-only map`);
   }
 });
 

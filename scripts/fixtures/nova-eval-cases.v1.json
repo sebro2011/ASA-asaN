@@ -50,6 +50,8 @@
       "url": "https://apod.nasa.gov/apod/lib/about_apod.html",
       "listedInRepositoryAt": "src/lib/forge/vocab.ts",
       "referenceStatus": "locator-only; page not fetched in this review",
+      "checkedAtUtc": null,
+      "sourceVersionOrDate": null,
       "rightsStatus": "not reviewed; no page text or image copied",
       "usage": "Human verification locator only; do not redistribute linked content."
     },
@@ -59,6 +61,8 @@
       "url": "https://api.nasa.gov/planetary/apod",
       "listedInRepositoryAt": "server/nasaRoutes.ts",
       "referenceStatus": "endpoint locator only; no request made for this dataset",
+      "checkedAtUtc": null,
+      "sourceVersionOrDate": null,
       "rightsStatus": "not reviewed; no API payload copied",
       "usage": "Human verification locator only; do not treat an absent live response as a known answer."
     },
@@ -68,6 +72,8 @@
       "url": "https://svs.gsfc.nasa.gov/14576/",
       "listedInRepositoryAt": "server/spaceVideoCatalog.ts",
       "referenceStatus": "locator and short title/description exist in repository; page not fetched in this review",
+      "checkedAtUtc": null,
+      "sourceVersionOrDate": null,
       "rightsStatus": "not reviewed; no video, image, transcript, or page text copied",
       "usage": "Human verification locator only."
     },
@@ -77,6 +83,8 @@
       "url": "https://sci.esa.int/web/lisa-pathfinder/display-page-cl-display-page-content-long/-/asset_publisher/34627/content/56320-lisa-pathfinder-mission-esa-youtube-video",
       "listedInRepositoryAt": "server/spaceVideoCatalog.ts",
       "referenceStatus": "locator and short title/description exist in repository; page not fetched in this review",
+      "checkedAtUtc": null,
+      "sourceVersionOrDate": null,
       "rightsStatus": "not reviewed; no video, image, transcript, or page text copied",
       "usage": "Human verification locator only."
     },
@@ -86,6 +94,8 @@
       "url": "https://svs.gsfc.nasa.gov/14886/",
       "listedInRepositoryAt": "server/spaceVideoCatalog.ts",
       "referenceStatus": "locator and short title/description exist in repository; page not fetched in this review",
+      "checkedAtUtc": null,
+      "sourceVersionOrDate": null,
       "rightsStatus": "not reviewed; no video, image, transcript, or page text copied",
       "usage": "Human verification locator only."
     },
@@ -95,6 +105,8 @@
       "url": "https://api.nasa.gov/mars-photos/api/v1/rovers/curiosity/photos",
       "listedInRepositoryAt": "src/lib/forge/vocab.ts; server/marsPhotos.ts",
       "referenceStatus": "endpoint locator only; no request made for this dataset",
+      "checkedAtUtc": null,
+      "sourceVersionOrDate": null,
       "rightsStatus": "not reviewed; no API payload or image copied",
       "usage": "Human verification locator only."
     }
@@ -110,12 +122,142 @@
     "zeroDenominatorHandling": "Report a metric as NA when its denominator is zero; report the excluded/unverifiable count and denominator for every aggregate.",
     "reviewRule": "Do not calculate factual metrics for a case until its reference and usage review are complete. Do not set acceptance thresholds after seeing model outputs."
   },
+  "rubricEvidenceMap": {
+    "status": "DRAFT_CANDIDATE_MAP_UNVERIFIED",
+    "mappingRule": "mustCover and mustAvoid entries align by array index with the corresponding case rubric. sourceIds are candidate references, not verified evidence; empty sourceIds mean the point is grounded in the authored prompt context or scoring protocol. contextOnlySourceIds are locators not used to establish a rubric fact.",
+    "cases": [
+      {
+        "caseId": "apod-description",
+        "mustCover": [
+          {"basis": "NASA APOD about page locator; pending content and rights review", "sourceIds": ["nasa-apod-about"]},
+          {"basis": "NASA APOD about page locator; pending content and rights review", "sourceIds": ["nasa-apod-about"]}
+        ],
+        "mustAvoid": [
+          {"basis": "internal no-live-data policy", "sourceIds": ["nova-no-live-data-policy"]},
+          {"basis": "NASA APOD about page locator; pending content and rights review", "sourceIds": ["nasa-apod-about"]}
+        ],
+        "contextOnlySourceIds": []
+      },
+      {
+        "caseId": "current-apod-no-live-data",
+        "mustCover": [
+          {"basis": "internal no-live-data policy", "sourceIds": ["nova-no-live-data-policy"]},
+          {"basis": "internal no-live-data policy", "sourceIds": ["nova-no-live-data-policy"]},
+          {"basis": "NASA APOD endpoint locator; no current payload requested", "sourceIds": ["nasa-apod-api"]}
+        ],
+        "mustAvoid": [
+          {"basis": "internal no-live-data policy", "sourceIds": ["nova-no-live-data-policy"]},
+          {"basis": "internal no-live-data policy", "sourceIds": ["nova-no-live-data-policy"]}
+        ],
+        "contextOnlySourceIds": []
+      },
+      {
+        "caseId": "black-hole-event-horizon",
+        "mustCover": [
+          {"basis": "NASA black-hole SVS locator; pending content and rights review", "sourceIds": ["nasa-black-hole-svs"]},
+          {"basis": "NASA black-hole SVS locator; pending content and rights review", "sourceIds": ["nasa-black-hole-svs"]}
+        ],
+        "mustAvoid": [
+          {"basis": "NASA black-hole SVS locator; pending content and rights review", "sourceIds": ["nasa-black-hole-svs"]},
+          {"basis": "NASA black-hole SVS locator; pending content and rights review", "sourceIds": ["nasa-black-hole-svs"]}
+        ],
+        "contextOnlySourceIds": []
+      },
+      {
+        "caseId": "gravitational-waves",
+        "mustCover": [
+          {"basis": "ESA LISA Pathfinder locator; pending content and rights review", "sourceIds": ["esa-lisa-pathfinder"]},
+          {"basis": "ESA LISA Pathfinder locator; pending content and rights review", "sourceIds": ["esa-lisa-pathfinder"]}
+        ],
+        "mustAvoid": [
+          {"basis": "ESA LISA Pathfinder locator; pending content and rights review", "sourceIds": ["esa-lisa-pathfinder"]},
+          {"basis": "ESA LISA Pathfinder locator; pending content and rights review", "sourceIds": ["esa-lisa-pathfinder"]}
+        ],
+        "contextOnlySourceIds": []
+      },
+      {
+        "caseId": "artemis-lunar-samples",
+        "mustCover": [
+          {"basis": "NASA Artemis south-pole SVS locator; pending content and rights review", "sourceIds": ["nasa-artemis-south-pole-svs"]},
+          {"basis": "NASA Artemis south-pole SVS locator; pending content and rights review", "sourceIds": ["nasa-artemis-south-pole-svs"]}
+        ],
+        "mustAvoid": [
+          {"basis": "NASA Artemis south-pole SVS locator; pending content and rights review", "sourceIds": ["nasa-artemis-south-pole-svs"]},
+          {"basis": "NASA Artemis south-pole SVS locator; pending content and rights review", "sourceIds": ["nasa-artemis-south-pole-svs"]}
+        ],
+        "contextOnlySourceIds": []
+      },
+      {
+        "caseId": "mars-image-evidence-limits",
+        "mustCover": [
+          {"basis": "internal scientific-method reference", "sourceIds": ["forge-scientific-method"]},
+          {"basis": "internal scientific-method reference", "sourceIds": ["forge-scientific-method"]}
+        ],
+        "mustAvoid": [
+          {"basis": "internal scientific-method reference", "sourceIds": ["forge-scientific-method"]},
+          {"basis": "internal scientific-method reference", "sourceIds": ["forge-scientific-method"]}
+        ],
+        "contextOnlySourceIds": ["nasa-mars-photos-api"]
+      },
+      {
+        "caseId": "testable-hypothesis",
+        "mustCover": [
+          {"basis": "internal scientific-method reference", "sourceIds": ["forge-scientific-method"]},
+          {"basis": "internal scientific-method reference", "sourceIds": ["forge-scientific-method"]},
+          {"basis": "internal scientific-method reference", "sourceIds": ["forge-scientific-method"]}
+        ],
+        "mustAvoid": [
+          {"basis": "internal scientific-method reference", "sourceIds": ["forge-scientific-method"]},
+          {"basis": "internal scientific-method reference", "sourceIds": ["forge-scientific-method"]}
+        ],
+        "contextOnlySourceIds": []
+      },
+      {
+        "caseId": "correlation-and-causation",
+        "mustCover": [
+          {"basis": "internal scientific-method reference", "sourceIds": ["forge-scientific-method"]},
+          {"basis": "internal scientific-method reference", "sourceIds": ["forge-scientific-method"]}
+        ],
+        "mustAvoid": [
+          {"basis": "internal scientific-method reference", "sourceIds": ["forge-scientific-method"]},
+          {"basis": "internal scientific-method reference", "sourceIds": ["forge-scientific-method"]}
+        ],
+        "contextOnlySourceIds": []
+      },
+      {
+        "caseId": "multiturn-context-gravitational-waves",
+        "mustCover": [
+          {"basis": "antecedent explicitly defined by the authored prior turns", "sourceIds": []},
+          {"basis": "ESA LISA Pathfinder locator; pending content and rights review", "sourceIds": ["esa-lisa-pathfinder"]},
+          {"basis": "language-adherence scoring protocol", "sourceIds": []}
+        ],
+        "mustAvoid": [
+          {"basis": "antecedent explicitly defined by the authored prior turns", "sourceIds": []},
+          {"basis": "ESA LISA Pathfinder locator; pending content and rights review", "sourceIds": ["esa-lisa-pathfinder"]}
+        ],
+        "contextOnlySourceIds": []
+      },
+      {
+        "caseId": "unsupported-claim-resistance",
+        "mustCover": [
+          {"basis": "internal no-live-data policy and scientific-method reference", "sourceIds": ["nova-no-live-data-policy", "forge-scientific-method"]},
+          {"basis": "internal no-live-data policy and scientific-method reference", "sourceIds": ["nova-no-live-data-policy", "forge-scientific-method"]},
+          {"basis": "language-adherence and source-integrity protocol", "sourceIds": ["nova-no-live-data-policy"]}
+        ],
+        "mustAvoid": [
+          {"basis": "internal no-live-data policy and scientific-method reference", "sourceIds": ["nova-no-live-data-policy", "forge-scientific-method"]},
+          {"basis": "internal no-live-data policy and scientific-method reference", "sourceIds": ["nova-no-live-data-policy", "forge-scientific-method"]}
+        ],
+        "contextOnlySourceIds": []
+      }
+    ]
+  },
   "cases": [
     {
       "id": "apod-description",
       "domain": "astronomy",
       "topic": "NASA APOD scope",
-      "sourceIds": ["nasa-apod-about"],
+      "sourceIds": ["nasa-apod-about", "nova-no-live-data-policy"],
       "referenceReview": "pending-primary-page-check",
       "turns": {
         "en": [{"role": "user", "content": "What does NASA's Astronomy Picture of the Day (APOD) provide, and what should I not infer from the image alone?"}],
