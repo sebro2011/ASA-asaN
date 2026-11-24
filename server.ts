@@ -154,15 +154,25 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-// Initialize Google Gemini API client
-const ai = new GoogleGenAI({
-  apiKey: process.env.GEMINI_API_KEY,
-  httpOptions: {
-    headers: {
-      'User-Agent': 'aistudio-build',
+// Initialize Google Gemini API client only when a server API key is configured.
+// Without a key the application keeps working: every Gemini call site degrades
+// to its bundled local / deterministic fallback (never crashes, never leaks a key).
+let ai: InstanceType<typeof GoogleGenAI> | null = null;
+if (process.env.GEMINI_API_KEY) {
+  ai = new GoogleGenAI({
+    apiKey: process.env.GEMINI_API_KEY,
+    httpOptions: {
+      headers: {
+        'User-Agent': 'aistudio-build',
+      },
     },
-  },
-});
+  });
+} else {
+  console.warn(
+    '[Gemini] GEMINI_API_KEY is not configured on the server. ' +
+      'Gemini-backed features fall back to the bundled local engines.'
+  );
+}
 
 // Translation cache in memory: `${targetLang}_${hash}` -> { title, explanation }
 const translationCache = new Map<string, { title: string; explanation: string }>();
@@ -747,6 +757,7 @@ Explanation to translate: "${explanation}"`;
 
     // Attempt Gemini call with fast 2.5s timeout; fall back instantly on high demand/503
     try {
+      if (!ai) throw new Error('Gemini API key is not configured on the server');
       const geminiCall = ai.models.generateContent({
         model: 'gemini-3.8-flash',
         contents: prompt,
@@ -1823,6 +1834,7 @@ Provide a comprehensive, authoritative response formatted in ${targetLang}:
 
 Use clear, scientifically precise vocabulary in ${targetLang} with Sinhala/Tamil astronomical terms where appropriate.`;
 
+    if (!ai) throw new Error('Gemini API key is not configured on the server');
     const response = await ai.models.generateContent({
       model: 'gemini-3.8-flash',
       contents: prompt,
@@ -1967,7 +1979,7 @@ const handleNasaAiEndpoint = async (req: express.Request, res: express.Response)
 
   const targetInstruction = SYSTEM_INSTRUCTIONS[lang] || SYSTEM_INSTRUCTIONS.en;
 
-  if (process.env.GEMINI_API_KEY) {
+  if (ai) {
     let contentsPayload: any = userPrompt;
 
     if (Array.isArray(history) && history.length > 0) {
