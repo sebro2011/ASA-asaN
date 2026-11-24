@@ -116,6 +116,7 @@ class D18PayloadDigest(unittest.TestCase):
     def test_the_manifest_digest_matches_the_file_a_reader_has(self) -> None:
         config = lk_config()
         for location in config["locations"]:
+            config["power"]["allow_unverified_legacy_cache"] = True
             _, provenance = fetch_location(location, config)
             path = ROOT / "data" / "cache" / f"power_{location['id']}_2000_2024.json"
             self.assertTrue(path.exists(), f"committed cache missing: {path.name}")
@@ -129,6 +130,7 @@ class D18PayloadDigest(unittest.TestCase):
         config = lk_config()
         readme = (ROOT / "data" / "cache" / "README.md").read_text(encoding="utf-8")
         for location in config["locations"]:
+            config["power"]["allow_unverified_legacy_cache"] = True
             _, provenance = fetch_location(location, config)
             self.assertIn(provenance.payload_sha256, readme)
 
@@ -159,9 +161,12 @@ class D19CacheSignature(unittest.TestCase):
                 fetch_location(location, config, cache_root=Path(tmp))
             self.assertIn("different request", str(caught.exception))
 
-    def test_a_legacy_cache_without_a_signature_is_accepted_and_flagged(self) -> None:
+    def test_a_legacy_cache_requires_explicit_opt_in_and_is_flagged(self) -> None:
         config = lk_config()
         location = config["locations"][0]
+        with self.assertRaises(DataUnavailable):
+            fetch_location(location, config)
+        config["power"]["allow_unverified_legacy_cache"] = True
         _, provenance = fetch_location(location, config)
         self.assertFalse(
             provenance.request_signature_checked,
@@ -185,6 +190,8 @@ class D22DuplicateMonths(unittest.TestCase):
         # A second key that parses to the same month (2015-03), carrying the same
         # value: the same observation listed twice.
         series["2015-03"] = 26.03
+        series["201013"] = 26.0
+        del series["201001"]
         payload["properties"]["parameter"]["T2M"] = series
 
         config = {
@@ -192,6 +199,7 @@ class D22DuplicateMonths(unittest.TestCase):
             "start_year": 2010,
             "end_year": 2019,
             "cache_dir": "data/cache",
+            "allow_unverified_legacy_cache": True,
             "base_url": "https://example.invalid",
             "community": "RE",
             "fill_values": [-999],
@@ -202,7 +210,9 @@ class D22DuplicateMonths(unittest.TestCase):
             cache.mkdir(parents=True)
             (cache / "power_test_2010_2019.json").write_text(json.dumps(payload), encoding="utf-8")
             frame, provenance = fetch_location(location, {"power": config}, cache_root=Path(tmp))
-        self.assertEqual(len(frame), 120, "120 distinct months, not 121 rows")
+        self.assertEqual(len(frame), 119)
+        self.assertEqual(provenance.months_short, 1, "annual summaries do not fill missing months")
+        self.assertEqual(provenance.annual_rows_excluded, 1)
         self.assertEqual(provenance.duplicate_month_rows, 1)
         self.assertAlmostEqual(float(frame.loc[pd.Timestamp("2015-03-01"), "t2m"]), 26.03)
 
@@ -215,7 +225,7 @@ class D22DuplicateMonths(unittest.TestCase):
         payload = {"properties": {"parameter": {"T2M": series}}, "header": {"title": "test"}}
         config = {
             "parameters": {"t2m": "T2M"}, "start_year": 2010, "end_year": 2019,
-            "cache_dir": "data/cache", "base_url": "https://example.invalid",
+            "cache_dir": "data/cache", "allow_unverified_legacy_cache": True, "base_url": "https://example.invalid",
             "community": "RE", "fill_values": [-999],
         }
         with tempfile.TemporaryDirectory() as tmp:

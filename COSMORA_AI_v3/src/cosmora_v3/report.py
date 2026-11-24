@@ -49,14 +49,15 @@ def write_manifest(
     timing: Dict[str, Any],
     extra: Optional[Dict[str, Any]] = None,
 ) -> Path:
+    unverified_cache = not synthetic and any(not prov.request_signature_checked for prov in provenance)
     manifest = {
         "package": "COSMORA_AI_v3",
         "version": __version__,
         "created_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "config_hash": config["config_hash"],
         "config_path": config.get("_source_path"),
-        "data_provenance": "SYNTHETIC" if synthetic else "NASA_POWER",
-        "scientific_results": not synthetic,
+        "data_provenance": "SYNTHETIC" if synthetic else "NASA_POWER_UNVERIFIED_CACHE" if unverified_cache else "NASA_POWER",
+        "scientific_results": not synthetic and not unverified_cache,
         "quick_mode": quick,
         "seeds": config["seeds"],
         # Configured, not executed: a run may be restricted with --locations. The
@@ -145,6 +146,8 @@ def _banner(manifest: Dict[str, Any]) -> str:
             '<div class="banner ok">NASA POWER observations · '
             f'config {manifest["config_hash"]} · generated {manifest["created_utc"]}</div>'
         )
+    if manifest.get("data_provenance") == "NASA_POWER_UNVERIFIED_CACHE":
+        return '<div class="banner warn"><strong>UNVERIFIED CACHE — NOT SCIENTIFIC RESULTS.</strong> Request identity could not be verified.</div>'
     return (
         '<div class="banner warn"><strong>ENGINE CHECK — NOT SCIENTIFIC RESULTS.</strong> '
         "These numbers were produced on synthetic data to verify that the pipeline runs. "
@@ -386,7 +389,9 @@ def render_markdown_report(
             + ", ".join(f"{k}={str(v)[:12]}" for k, v in manifest["dataset_file_sha256"].items())
         )
     lines += [""]
-    if not manifest["scientific_results"]:
+    if manifest.get("data_provenance") == "NASA_POWER_UNVERIFIED_CACHE":
+        lines += ["> **UNVERIFIED CACHE — not scientific results.** Request identity could not be verified.", ""]
+    elif not manifest["scientific_results"]:
         lines += [
             "> **ENGINE CHECK — not scientific results.**",
             "> This run used synthetic data to verify the pipeline. No statement below",

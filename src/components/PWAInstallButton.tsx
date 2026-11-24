@@ -28,9 +28,9 @@ const COPY: Record<string, Copy> = {
     installIos: 'Install on iOS',
     iosHeading: 'Install on iPhone / iPad',
     iosClose: 'Close install guide',
-    step1: 'Tap the <strong>Share button</strong> (square with an upward arrow) in the Safari toolbar.',
-    step2: 'Scroll down and tap <strong>“Add to Home Screen”</strong> (+).',
-    step3: 'Tap <strong>Add</strong> in the top-right corner to launch COSMORA offline anytime.',
+    step1: 'Tap the Share button (square with an upward arrow) in the Safari toolbar.',
+    step2: 'Scroll down and tap “Add to Home Screen” (+).',
+    step3: 'Tap Add in the top-right corner to launch COSMORA offline anytime.',
     gotIt: 'Got It'
   },
   si: {
@@ -39,9 +39,9 @@ const COPY: Record<string, Copy> = {
     installIos: 'iOS මත ස්ථාපනය කරන්න',
     iosHeading: 'iPhone / iPad මත ස්ථාපනය',
     iosClose: 'ස්ථාපන මාර්ගෝපදේශය වසන්න',
-    step1: 'Safari මෙවලම් තීරුවේ <strong>Share බොත්තම</strong> (ඉහළ ඊතලය සහිත චතුරස්‍රය) තට්ටු කරන්න.',
-    step2: 'පහළට අනුචලනය කර <strong>“මුල් තිරයට එක් කරන්න”</strong> (+) තට්ටු කරන්න.',
-    step3: 'ඉහළ දකුණු කෙළවරේ <strong>එක් කරන්න</strong> තට්ටු කරන්න — එවිට COSMORA ඕනෑම වේලාවක නොබැඳිව විවෘත කළ හැක.',
+    step1: 'Safari මෙවලම් තීරුවේ Share බොත්තම (ඉහළ ඊතලය සහිත චතුරස්‍රය) තට්ටු කරන්න.',
+    step2: 'පහළට අනුචලනය කර “මුල් තිරයට එක් කරන්න” (+) තට්ටු කරන්න.',
+    step3: 'ඉහළ දකුණු කෙළවරේ එක් කරන්න තට්ටු කරන්න — එවිට COSMORA ඕනෑම වේලාවක නොබැඳිව විවෘත කළ හැක.',
     gotIt: 'හරි'
   },
   ta: {
@@ -50,9 +50,9 @@ const COPY: Record<string, Copy> = {
     installIos: 'iOS-இல் நிறுவு',
     iosHeading: 'iPhone / iPad-இல் நிறுவல்',
     iosClose: 'நிறுவல் வழிகாட்டியை மூடு',
-    step1: 'Safari கருவிப்பட்டியில் உள்ள <strong>பகிர்வு பொத்தானை</strong> (மேல் அம்புக்குறி கொண்ட சதுரம்) தட்டவும்.',
-    step2: 'கீழே உருட்டி <strong>“முகப்புத் திரையில் சேர்”</strong> (+) என்பதைத் தட்டவும்.',
-    step3: 'மேல் வலது மூலையில் <strong>சேர்</strong> என்பதைத் தட்டவும் — COSMORA செயலியை எந்த நேரத்திலும் ஆஃப்லைனில் திறக்கலாம்.',
+    step1: 'Safari கருவிப்பட்டியில் உள்ள பகிர்வு பொத்தானை (மேல் அம்புக்குறி கொண்ட சதுரம்) தட்டவும்.',
+    step2: 'கீழே உருட்டி “முகப்புத் திரையில் சேர்” (+) என்பதைத் தட்டவும்.',
+    step3: 'மேல் வலது மூலையில் சேர் என்பதைத் தட்டவும் — COSMORA செயலியை எந்த நேரத்திலும் ஆஃப்லைனில் திறக்கலாம்.',
     gotIt: 'சரி'
   }
 };
@@ -119,15 +119,15 @@ export const PWAInstallButton: React.FC<PWAInstallButtonProps> = ({
               <div className="space-y-3 text-xs leading-relaxed text-ink-2">
                 <p className="flex items-start gap-2">
                   <span className="w-5 h-5 rounded-full bg-cyan-500/20 text-cyan-400 flex items-center justify-center shrink-0 font-mono font-bold">1</span>
-                  <span dangerouslySetInnerHTML={{ __html: copy.step1 }} />
+                  <span>{copy.step1}</span>
                 </p>
                 <p className="flex items-start gap-2">
                   <span className="w-5 h-5 rounded-full bg-cyan-500/20 text-cyan-400 flex items-center justify-center shrink-0 font-mono font-bold">2</span>
-                  <span dangerouslySetInnerHTML={{ __html: copy.step2 }} />
+                  <span>{copy.step2}</span>
                 </p>
                 <p className="flex items-start gap-2">
                   <span className="w-5 h-5 rounded-full bg-cyan-500/20 text-cyan-400 flex items-center justify-center shrink-0 font-mono font-bold">3</span>
-                  <span dangerouslySetInnerHTML={{ __html: copy.step3 }} />
+                  <span>{copy.step3}</span>
                 </p>
               </div>
 

@@ -8,7 +8,7 @@ coverage was never measured.
 This module measures it. ``SplitConformal`` takes residuals from the walk-forward
 **validation** folds (never the test tail), computes the finite-sample quantile
 
-    q = quantile(|r|, ceil((n+1)(1-alpha)) / n)
+    q = the ceil((n+1)(1-alpha))-th smallest |r|
 
 and the interval is ``prediction ± q``. The test tail then reports *empirical*
 coverage, mean width and the Winkler score — so a claim of "90% intervals" is a
@@ -32,14 +32,17 @@ from .metrics import interval_score
 
 def conformal_quantile(residuals: np.ndarray, alpha: float) -> float:
     """Finite-sample split-conformal quantile of absolute residuals."""
+    if not 0.0 < alpha < 1.0:
+        raise ValueError("alpha must be strictly between 0 and 1")
     abs_residuals = np.abs(np.asarray(residuals, dtype="float64").reshape(-1))
     abs_residuals = abs_residuals[np.isfinite(abs_residuals)]
     n = len(abs_residuals)
     if n == 0:
         raise ValueError("cannot calibrate on zero residuals")
-    rank = math.ceil((n + 1) * (1.0 - alpha)) / n
-    rank = min(rank, 1.0)
-    return float(np.quantile(abs_residuals, rank, method="higher"))
+    rank = math.ceil((n + 1) * (1.0 - alpha))
+    if rank > n:
+        raise ValueError("too few calibration residuals for the requested coverage")
+    return float(np.partition(abs_residuals, rank - 1)[rank - 1])
 
 
 @dataclass
@@ -69,13 +72,17 @@ class SplitConformal:
 
 
 def calibrate(predictions: np.ndarray, observations: np.ndarray, alpha: float) -> SplitConformal:
-    residuals = np.asarray(observations, dtype="float64") - np.asarray(predictions, dtype="float64")
-    return calibrate_residuals(residuals, alpha)
+    observations = np.asarray(observations, dtype="float64").reshape(-1)
+    predictions = np.asarray(predictions, dtype="float64").reshape(-1)
+    if observations.shape != predictions.shape:
+        raise ValueError("predictions and observations must have identical shapes")
+    return calibrate_residuals(observations - predictions, alpha)
 
 
 def calibrate_residuals(residuals: np.ndarray, alpha: float) -> SplitConformal:
     """Build a calibrated interval directly from signed validation residuals."""
     residuals = np.asarray(residuals, dtype="float64").reshape(-1)
+    residuals = residuals[np.isfinite(residuals)]
     sigma = float(np.std(residuals, ddof=1)) if len(residuals) > 1 else 0.0
     return SplitConformal(
         alpha=alpha,
