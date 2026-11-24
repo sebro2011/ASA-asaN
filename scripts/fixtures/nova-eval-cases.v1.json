@@ -4,6 +4,13 @@
   "datasetVersion": "0.1.0-draft",
   "createdOn": "2026-11-24",
   "status": "DRAFT_SOURCE_REVIEW_REQUIRED",
+  "executionScope": "MODEL_INDEPENDENT_PREPARATION",
+  "modelOperations": {
+    "modelSelected": false,
+    "weightsDownloaded": false,
+    "trainingStarted": false,
+    "evaluationRun": false
+  },
   "languages": ["en", "si", "ta"],
   "caseCount": 10,
   "localizedPromptCount": 30,

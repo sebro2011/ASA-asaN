@@ -9,6 +9,13 @@ const SOURCE_IDS = new Set(dataset.sources.map((source) => source.id));
 test('draft evaluation set has ten shared cases and thirty localized prompts', () => {
   assert.equal(dataset.schemaVersion, 1);
   assert.equal(dataset.status, 'DRAFT_SOURCE_REVIEW_REQUIRED');
+  assert.equal(dataset.executionScope, 'MODEL_INDEPENDENT_PREPARATION');
+  assert.deepEqual(dataset.modelOperations, {
+    modelSelected: false,
+    weightsDownloaded: false,
+    trainingStarted: false,
+    evaluationRun: false,
+  });
   assert.equal(dataset.caseCount, 10);
   assert.equal(dataset.cases.length, dataset.caseCount);
   assert.equal(dataset.localizedPromptCount, 30);
