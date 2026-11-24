@@ -33,6 +33,7 @@ older phase reports are kept for provenance and are marked at the top of the fil
 - [`NOVA_API_REFERENCE.md`](NOVA_API_REFERENCE.md) — endpoints and request shapes
 - [`NOVA_SECURITY_MODEL.md`](NOVA_SECURITY_MODEL.md) — keys, prompt handling, what is server-side
 - [`NOVA_EVALUATION_FRAMEWORK.md`](NOVA_EVALUATION_FRAMEWORK.md) — how answers are judged
+- [`NOVA_PHASE2_EVALUATION_PLAN.md`](NOVA_PHASE2_EVALUATION_PLAN.md) — Phase 2 gates, repository provenance audit, and local-model evaluation protocol
 - [`NOVA_WORKSPACE_V5.md`](NOVA_WORKSPACE_V5.md) — workspace surfaces
 - [`NOVA_MEMORY_SYSTEM.md`](NOVA_MEMORY_SYSTEM.md), [`NOVA_SKILL_EVOLUTION.md`](NOVA_SKILL_EVOLUTION.md), [`NOVA_RESEARCH_AND_NOVELTY.md`](NOVA_RESEARCH_AND_NOVELTY.md), [`NOVA_LIFE_TECHNICAL_SPEC.md`](NOVA_LIFE_TECHNICAL_SPEC.md)
 - [`NOVA_DEVELOPMENT_REPORT.md`](NOVA_DEVELOPMENT_REPORT.md), [`NOVA_OPENROUTER.md`](NOVA_OPENROUTER.md)
