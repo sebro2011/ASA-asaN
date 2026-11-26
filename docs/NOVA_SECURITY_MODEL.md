@@ -6,8 +6,10 @@ approvals for the four dangerous capabilities, path confinement, secret
 redaction, untrusted-content inspection, and an append-only audit log.
 
 > **Scope, stated up front.** This is a *capability-based* control system for a
-> single-user local install. It does not implement multi-tenant roles, and it is
-> not an OS sandbox. §8 lists exactly what that excludes.
+> single-owner install. Hosted requests are verified against Supabase Auth and
+> must match `NOVA_LIFE_OWNER_ID`; offline local development can opt into a
+> loopback-only bypass. It does not implement multi-tenant roles and is not an OS
+> sandbox. §8 lists exactly what that excludes.
 
 ---
 
@@ -47,9 +49,12 @@ Revoking `memory.read` immediately makes `GET /memory` answer **403
 
 ## 3. Approvals
 
-`require(capability, { approvalId })` checks two independent things: the grant,
-and — for the four approval-gated capabilities — an `user_approvals` row whose
-`decision` is `approved`. Without it the error is `APPROVAL_REQUIRED` (403).
+`require(capability, { approvalId, approvalContext })` checks the capability grant
+and, for approval-gated actions, an approved `user_approvals` row whose subject
+and optional note match the exact action context. It also requires that row to be
+the latest decision for that subject, so a later rejection or revocation defeats
+an older approval. Missing, unrelated or revoked approval returns
+`APPROVAL_REQUIRED` (403).
 
 Approvals are written by exactly one function, `security.decide()`, reachable
 from the user-facing endpoints `POST /security/approvals` and
@@ -59,17 +64,23 @@ cannot approve its own claim".
 
 Decisions: `approved`, `rejected`, `revoked`. Anything else → `INVALID_DECISION`.
 `approvalFor(type, id)` returns the newest decision; a later `revoked` overrides
-an earlier `approved`.
+an earlier `approved`. Skill approvals use `subjectId: '<skillId>:v<version>'`,
+so approving or revoking one version does not authorize another.
+
+Cloud generation and streaming require both the `transmit.external` grant and a
+matching, latest approval. Missing grant returns `PERMISSION_DENIED`; an absent,
+unrelated or revoked approval returns `APPROVAL_REQUIRED` before any provider
+request is sent.
 
 ## 4. Tool allowlists
 
 | Guard | Behaviour |
 | --- | --- |
 | Tool registry | five ids only: `project.list`, `project.read`, `project.search`, `tests.run`, `web.fetch`; anything else → `UNKNOWN_TOOL` |
-| Script allowlist | `tests.run` accepts only `test`, `test:workspace`, `test:workspace-modules`, `test:workspace-astronomy`, `test:nova-chat` → otherwise `SCRIPT_NOT_ALLOWED`; no shell metacharacters, no arbitrary command |
+| Script allowlist | `tests.run` accepts only fixed npm script names → otherwise `SCRIPT_NOT_ALLOWED`; those scripts can still execute edited repository code, so this is not a sandbox |
 | Execution switch | `NOVA_LIFE_ALLOW_EXECUTE=1` required; otherwise `TOOL_DISABLED` (the execution itself is off, not merely unpermitted) |
 | Fetch hosts | `api.github.com`, `export.arxiv.org`, `api.spaceflightnewsapi.net`; HTTPS only → `HOST_NOT_ALLOWED` |
-| Path confinement | every path resolved with `resolveInside(root, …)`; `..`, absolute paths and NUL bytes → `PATH_OUTSIDE_ROOT` (403) |
+| Path confinement | every path is resolved under `root`; traversal and NUL bytes are refused, and existing symlinks are rejected before reads/writes |
 | Secret files | `.env`, keys, credentials → `SECRET_FILE_BLOCKED` |
 | Size | `FILE_TOO_LARGE` over the read cap; changesets capped at 20 files / 400 KB |
 
@@ -127,23 +138,23 @@ to manipulation, and the orchestration caps exist partly because of that.
 
 ## 8. What is *not* protected — read this before deploying
 
-- **No user authentication on `/api/nova/life`.** The engine runs as the single
-  local user `local`; the router is rate-limited (120 requests/minute per key)
-  like the other AI endpoints but sits behind the same deployment-level access as
-  the rest of the app. If you expose NOVA publicly, put it behind the platform's
-  auth (Vercel/Supabase session) — the life router assumes one trusted operator.
-- **No role hierarchy.** Access is capability-based, not role-based (admin /
-  editor / viewer are not modelled). Supabase RLS on the `life_*` tables scopes
-  rows by `auth.uid()` for hosted access; the local SQLite engine uses `user_id`
-  scoping without a login.
-- **Not an OS sandbox.** `simulation.js` copies files to a temp directory and
-  diffs them. It limits what an operation touches; it does not contain a hostile
-  binary or a malicious script. `tests.run` executes allowlisted npm scripts with
-  the privileges of the server process.
-- **Path checks are lexical, not physical.** `resolveInside()` normalises the
-  string but does not call `realpath`, so a symlink inside the project pointing
-  outside it is not detected. Keep untrusted symlinks out of the workspace, or
-  mount the app read-only where that matters.
+- **Single-owner only.** Hosted `/api/nova/life` requests are checked against
+  Supabase Auth and must match `NOVA_LIFE_OWNER_ID`. There is no role hierarchy
+  (admin / editor / viewer), no multi-user data partitioning, and no Supabase
+  RLS layer for the local SQLite store. Do not share the configured owner account.
+- **Local bypass is deliberately narrow.**
+  `NOVA_LIFE_ALLOW_UNAUTHENTICATED_LOCAL=1` works only outside production, when
+  no Supabase auth settings are configured, and when the TCP peer is loopback.
+  It is intended for offline development, not a public or LAN-facing deployment.
+- **Not an OS sandbox.** Simulation previews are read-only, bounded, refuse
+  sensitive paths and reject existing symlinks. Temporary workspaces exclude
+  sensitive files and symlinks, but `tests.run` still executes edited project
+  code with the server process's privileges. Keep `NOVA_LIFE_ALLOW_EXECUTE` off
+  unless that code and host are trusted; do not run the server as root.
+- **Filesystem checks are not race-free.** Paths are lexically confined and
+  existing symlink components are checked before operations, but a hostile local
+  process able to mutate the project concurrently can still race filesystem
+  checks. Use read-only mounts and OS-level isolation where that threat matters.
 - **No network egress firewall.** Outbound calls are limited to allowlisted hosts
   in `web.fetch`; provider adapters call the endpoints you configure. There is no
   packet-level control.
@@ -155,7 +166,9 @@ to manipulation, and the orchestration caps exist partly because of that.
 | Variable | Security effect |
 | --- | --- |
 | `NOVA_LOCAL_ONLY=1` | every cloud provider refuses before any request is made (`LOCAL_ONLY_BLOCKED`); no local provider → `LOCAL_ONLY_NO_PROVIDER` |
-| `NOVA_LIFE_ALLOW_EXECUTE=1` | enables the `tests.run` tool at all |
+| `NOVA_LIFE_OWNER_ID` | required hosted identity; only this Supabase Auth user may call the engine |
+| `NOVA_LIFE_ALLOW_UNAUTHENTICATED_LOCAL=1` | explicit non-production loopback bypass, only with no Supabase auth settings |
+| `NOVA_LIFE_ALLOW_EXECUTE=1` | enables allowlisted test execution (not a sandbox) |
 | `NOVA_LIFE_DB` | database location (keep it out of the web root) |
 | `NOVA_RESOURCE_PROFILE`, `NOVA_GPU_VRAM_GB` | resource limits; declared, never guessed |
 

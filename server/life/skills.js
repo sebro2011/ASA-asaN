@@ -62,6 +62,20 @@ export function createSkillService({ store, security, graph = null, clock = () =
         createdAt: row.created_at,
       }));
 
+  const versionApprovalContext = (id, version) => ({
+    subjectType: 'skill',
+    subjectId: `${id}:v${version}`,
+  });
+
+  const requireVersionApproval = (id, version) => {
+    const context = versionApprovalContext(id, version);
+    const approval = security.approvalFor(context.subjectType, context.subjectId);
+    if (!approval || !security.isApprovalValid(approval.id, context)) {
+      throw new LifeError('APPROVAL_REQUIRED', 'This exact skill version has not been approved, or its approval was revoked.', { status: 403 });
+    }
+    return approval;
+  };
+
   const hydrate = (row) => ({
     id: row.id,
     name: row.name,
@@ -272,9 +286,13 @@ export function createSkillService({ store, security, graph = null, clock = () =
     if (skill.status !== 'verification') {
       throw new LifeError('INVALID_TRANSITION', 'Only a verified skill can be sent for approval.', { status: 409 });
     }
+    const version = versionsFor(id)[0];
+    if (!version) throw new LifeError('VERSION_NOT_FOUND', 'This skill has no version to approve.', { status: 404 });
+    const approvalContext = versionApprovalContext(id, version.version);
+    security.require('skills.activate');
     store.run('update skills set status = ?, updated_at = ? where id = ?', ['user_approval', nowIso(clock), id]);
-    const approval = security.requestApproval({ subjectType: 'skill', subjectId: id, note: skill.name });
-    return { skill: hydrate(getRow(id)), approval };
+    const approval = security.requestApproval({ ...approvalContext, note: `${skill.name} v${version.version}` });
+    return { skill: hydrate(getRow(id)), approval, approvalContext };
   };
 
   const approve = (id, { decision = 'approved', note = null } = {}) => {
@@ -282,7 +300,11 @@ export function createSkillService({ store, security, graph = null, clock = () =
     if (skill.status !== 'user_approval') {
       throw new LifeError('INVALID_TRANSITION', 'That skill is not waiting for approval.', { status: 409 });
     }
-    const approval = security.decide({ subjectType: 'skill', subjectId: id, decision, note });
+    const version = versionsFor(id)[0];
+    if (!version) throw new LifeError('VERSION_NOT_FOUND', 'This skill has no version to approve.', { status: 404 });
+    security.require('skills.activate');
+    const approvalContext = versionApprovalContext(id, version.version);
+    const approval = security.decide({ ...approvalContext, decision, note });
     if (decision === 'rejected') {
       store.run('update skills set status = ?, updated_at = ? where id = ?', ['rejected', nowIso(clock), id]);
     }
@@ -291,11 +313,10 @@ export function createSkillService({ store, security, graph = null, clock = () =
 
   const activate = (id) => {
     const skill = getRow(id);
-    const approval = security.approvalFor('skill', id);
-    if (!approval || approval.decision !== 'approved') {
-      throw new LifeError('APPROVAL_REQUIRED', 'A skill cannot become active without a recorded approval.', { status: 403 });
-    }
+    security.require('skills.activate');
     const version = versionsFor(id)[0];
+    if (!version) throw new LifeError('VERSION_NOT_FOUND', 'This skill has no version to activate.', { status: 404 });
+    const approval = requireVersionApproval(id, version.version);
     const verification = version?.verification;
     if (!verification || !verification.passed) {
       throw new LifeError('NOT_VERIFIED', 'The newest version has not passed sandbox testing.', { status: 409 });
@@ -338,8 +359,10 @@ export function createSkillService({ store, security, graph = null, clock = () =
     if (skill.status !== 'active' && skill.status !== 'deprecated') {
       throw new LifeError('INVALID_TRANSITION', 'Only an active skill can be rolled back.', { status: 409 });
     }
+    security.require('skills.activate');
     const target = store.queryOne('select * from skill_versions where skill_id = ? and version = ?', [id, Number(version)]);
     if (!target) throw new LifeError('VERSION_NOT_FOUND', 'No such skill version.', { status: 404 });
+    const approval = requireVersionApproval(id, target.version);
     const verification = target.verification ? safeParse(target.verification) : null;
     if (!verification?.passed) {
       throw new LifeError('NOT_VERIFIED', 'That version did not pass verification, so it cannot be activated.', { status: 409 });

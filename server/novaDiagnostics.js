@@ -27,6 +27,7 @@ import {
   geminiGenerationConfig,
   OPENROUTER_FREE_MODEL,
 } from './novaChat.js';
+import { getNovaLocalInferenceConfig } from './novaLocalInference.js';
 
 // One probe may now take longer than the old 6 s: probes run in parallel, so the
 // worst case for the whole endpoint is a single timeout, not the sum of three.
@@ -324,15 +325,25 @@ export function createDiagnosticsHandler({
     };
     const secrets = Object.values(keys).filter(Boolean);
 
+    const localInference = getNovaLocalInferenceConfig({ env });
     const providers = {
-      local: {
-        provider: 'NOVA Local Space Engine',
-        configured: true,
-        endpoint: 'in-process',
-        model: 'nasa-local-engine',
-        status: 'ok',
-        code: 'OK',
-      },
+      local: localInference.configured
+        ? {
+            provider: `${localInference.provider} (local)`,
+            configured: true,
+            endpoint: 'loopback local runtime',
+            model: localInference.model,
+            status: 'configured',
+            code: 'NOT_PROBED',
+          }
+        : {
+            provider: 'NOVA Local Space Engine',
+            configured: true,
+            endpoint: 'in-process',
+            model: 'nasa-local-engine',
+            status: 'ok',
+            code: 'OK',
+          },
     };
 
     const wantProbe = deep && now() - lastProbeAt >= PROBE_COOLDOWN_MS;
@@ -554,6 +565,13 @@ export function createDiagnosticsHandler({
       // The budgets the deployment is really running: a stale build answers with
       // the old 8 s / 18 s pair, which is how a "fix" can look merged and absent.
       budgets: { upstreamTimeoutMs: UPSTREAM_TIMEOUT_MS, chainBudgetMs: AUTO_CHAIN_BUDGET_MS },
+      localInference: {
+        mode: localInference.mode,
+        configured: localInference.configured,
+        provider: localInference.provider,
+        model: localInference.model,
+        code: localInference.code,
+      },
       providers,
       ...(chatSelfTest ? { chatSelfTest } : {}),
     };

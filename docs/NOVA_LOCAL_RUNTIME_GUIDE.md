@@ -10,12 +10,39 @@ providers it can reach, how it picks a model, and what it refuses to do.
 | Part | Process | Notes |
 | --- | --- | --- |
 | NOVA app + `/api/nova/life` | `server.ts` (Node, Express) | one process; the life router owns a SQLite file |
+| Workspace chat, explicit `Local` | same Node app → `server/novaLocalInference.js` → shared L.I.F.E. Model Fabric | loopback-only local adapters; model id must be explicitly configured; no hosted-provider fallback |
 | NOVA UI `/intelligence` | served by the same app | the browser only calls `/api/nova/life/*` |
 | Model provider | separate process, e.g. Ollama on `127.0.0.1:11434` | the app does not start or download models |
 | Database | SQLite file at `NOVA_LIFE_DB` or `<cwd>/.nova-life/life.sqlite` | WAL mode; FTS5 when the Node build has it |
 
 There is no daemon, no scheduler and no background indexing loop. Everything
 happens in response to a request.
+
+### Workspace chat Local mode
+
+`POST /api/nova/chat` with `provider: "local"` uses an explicitly configured
+local model through the L.I.F.E. Model Fabric's Ollama, OpenAI-compatible, or
+llama.cpp adapter. It sends the bounded chat history (plus NOVA's system
+instruction) to a **loopback IP only**. The chat-local fabric forces
+`NOVA_LOCAL_ONLY=1`, blocks non-loopback URLs, and refuses redirects; it never
+calls Arena, OpenRouter, or Gemini. If the local model is configured but cannot
+answer, the existing deterministic space engine answers with a safe local-runtime
+failure code. With no model id configured, the deterministic engine remains the
+normal Local-mode implementation. Auto mode's existing provider order and
+fallback are unchanged.
+
+An external model served by Ollama/llama.cpp is reported by its actual runtime
+and model id. It is not described as independently trained NOVA. The chat does
+not download models, start a model server, or select a default model size.
+
+Loopback is resolved from the **server process**, not the reader's browser. A
+remote/Vercel deployment can reach only a model server on that deployment host;
+`127.0.0.1` does not tunnel to a reader's PC. To use a model installed on a
+workstation, run the app server on that same workstation. Phase 1 does not add a
+remote bridge or expose a LAN model endpoint. This boundary verifies the app's
+outbound destination, not the local server's internal behavior: an operator must
+also trust that the loopback model server does not itself proxy prompts to a
+hosted service.
 
 ## 2. Environment
 
@@ -33,12 +60,15 @@ NOVA_GPU_VRAM_GB=8               # only if you actually have one
 NOVA_GPU_VENDOR=nvidia
 
 # local model servers
+NOVA_CHAT_LOCAL_PROVIDER=ollama                 # ollama | openai-compatible | llama-cpp
 OLLAMA_BASE_URL=http://127.0.0.1:11434
-NOVA_LOCAL_MODEL=llama3.1:8b
-NOVA_LOCAL_CONTEXT=8192
+NOVA_LOCAL_MODEL=                               # leave blank until target-PC preflight and operator choice
+NOVA_LOCAL_CONTEXT=                             # optional; tune only after preflight
 OPENAI_COMPAT_BASE_URL=http://127.0.0.1:8000     # vLLM / LM Studio / llama-server
+OPENAI_COMPAT_API_KEY=                           # optional local-server credential; server-side only
 LLAMA_CPP_BASE_URL=http://127.0.0.1:8080
-NOVA_LOCAL_TIMEOUT_MS=60000
+LLAMA_CPP_MODEL=                                # set only after target-PC preflight
+NOVA_LOCAL_TIMEOUT_MS=15000
 
 # optional cloud (only used when configured and LOCAL_ONLY is off)
 OPENROUTER_API_KEY=
@@ -46,26 +76,41 @@ GEMINI_API_KEY=
 NOVA_GEMINI_MODEL=
 ```
 
-`NOVA_ALLOW_REMOTE_LOCAL=1` is required if you point `OLLAMA_BASE_URL` at a
-non-loopback host; otherwise the adapter treats a remote "local" endpoint as a
-cloud endpoint for policy purposes.
+The separate L.I.F.E. API has its own remote-local configuration. It does not
+weaken the workspace chat's loopback-only Local-mode boundary.
 
-## 3. Starting a local model server
+## 3. Target-machine hardware preflight
 
-Ollama (the adapter uses `/api/tags` for the model list, `/api/chat` for
-generation, `/api/ps` for loaded models, `/` for health):
+Run this on the PC that will host inference or training, not in the Arena
+workspace sandbox:
+
+```bash
+python3 scripts/nova_hardware_preflight.py
+```
+
+It reports CPU, RAM, free disk, and accelerator details when PyTorch or
+`nvidia-smi` can read them. It is read-only: it does not inspect environment
+variables, contact the network, download/load a model, select a model size, or
+start training. If PyTorch and `nvidia-smi` are both absent, GPU detection is
+incomplete; report the GPU/VRAM from the target operating system's own tools
+before choosing a model. No model-size recommendation is made here.
+
+## 4. Starting a local model server
+
+Start only a model server and model that the target-PC preflight supports. This
+repository does not pull or select model weights. For example, an operator may
+start an already-installed Ollama service:
 
 ```bash
 ollama serve
-ollama pull llama3.2:3b      # a small model for a laptop
 curl -s http://127.0.0.1:11434/api/tags | head
 ```
 
-llama.cpp server, vLLM or LM Studio (OpenAI-compatible, `/v1/models` and
-`/v1/chat/completions`):
+For an already-installed llama.cpp model, use the model path and runtime
+settings chosen after reviewing the target-PC preflight:
 
 ```bash
-llama-server -m ./models/qwen2.5-7b-instruct.gguf --port 8080
+llama-server -m /path/to/operator-selected-model.gguf --port 8080
 curl -s http://127.0.0.1:8080/v1/models
 ```
 
@@ -95,7 +140,13 @@ window, so an 8k-context profile cannot ask a model for 32k tokens.
 `estimateModelMemoryGb({parametersB, quantisationBits, contextTokens})` are
 available for pre-flight checks. They estimate; they do not guarantee a fit.
 
-## 5. Model selection
+## 6. Model selection
+
+This table documents the existing `/api/nova/life/providers/select` preference
+lists only. It is not a target-PC model recommendation and does not replace the
+preflight above. Review the actual PC inventory before pulling or selecting any
+listed model. Workspace chat's explicit `Local` mode does not use this automatic
+selector; it requires an operator-configured model id.
 
 `POST /api/nova/life/providers/select` with `{ complexity, json, tools }` walks the
 configured providers in order (local first) and returns the first that satisfies
@@ -107,10 +158,10 @@ the request:
 | `standard` | `llama3.1:8b`, `qwen2.5:7b`, `mistral:7b`, `gemma2:9b` |
 | `complex` | `qwen2.5:14b`, `llama3.1:8b`, `mistral-nemo:12b` |
 
-`NOVA_LOCAL_MODEL` overrides the choice entirely. Observed behaviour on a test
-host without a GPU: `standard` resolves to `llama3.2:3b` because it is the
-smallest configured capable model — the engine does not pretend to run an 8B
-model on a machine that cannot hold it.
+`NOVA_LOCAL_MODEL` overrides the choice entirely. The preference list and the
+existing profile/weight estimates are not a verified VRAM-fit guarantee for a
+particular PC. The target-machine preflight must be reviewed before the operator
+chooses or downloads a model.
 
 Providers: `ollama`, `openai-compatible`, `llama-cpp`, `openrouter`, `gemini`.
 Cloud providers require `transmit.external` **and** a recorded approval per call;

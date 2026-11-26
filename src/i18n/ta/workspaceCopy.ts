@@ -343,7 +343,12 @@ export const workspaceCopyTa: Copy = {
   wsChatErrHistoryLong: 'இந்த உரையாடல் மிக நீளமானது. புதிய உரையாடலைத் தொடங்கவும்.',
   wsChatErrTooLarge: 'செய்தி மிகப் பெரியது. சுருக்கி மீண்டும் முயற்சிக்கவும்.',
   wsChatErrInvalid: 'கோரிக்கை செல்லாதது. மீண்டும் முயற்சிக்கவும்.',
-  wsChatOfflineNote: 'இணையமில்லா (offline) பதில் — இணைய AI சேவைகள் பதிலளிக்கவில்லை.',
+  wsChatOfflineNote: 'இணையமில்லா (offline) பதில் — எந்த AI மாதிரியும் பதில் அளிக்கவில்லை.',
+  wsChatSourcesLabel: 'ஆதாரங்கள்',
+  wsChatSourcesToggle: 'சேமித்த ஆதாரங்களைப் பயன்படுத்து',
+  wsChatSourcesHint: 'இயக்கினால், பொருந்தும் பகுதிகள் கோரிக்கையில் சேர்க்கப்படும். Auto அல்லது hosted வழங்குநர்களுக்கு அவை அனுப்பப்படலாம்; Local hosted வழங்குநர் வழியைத் தவிர்க்கும்.',
+  wsChatSourceDevice: 'இந்தச் சாதனத்தில் உள்ள விண்மீன் நூலகம்',
+  wsChatSourcePrivate: 'தனிப்பட்ட அறிவு நூலகம்',
   wsChatErrUnknown: 'NOVA இதைச் செயலாக்க முடியவில்லை. மீண்டும் முயற்சிக்கவும்.',
 
   /* ------------------------------------------------- thinking ladder (v5) */

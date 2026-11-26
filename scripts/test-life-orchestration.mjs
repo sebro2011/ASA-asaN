@@ -6,7 +6,7 @@
  * Run: node --import tsx --test --test-force-exit scripts/test-life-orchestration.mjs
  */
 import assert from 'node:assert/strict';
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync } from 'node:fs';
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
@@ -92,16 +92,48 @@ test('an allowlisted test script runs without a shell and reports its real exit 
 
     // Execution needs both a grant and a recorded approval — in that order.
     life.security.setGrant('tools.execute', true);
-    const approval = life.security.decide({ subjectType: 'task', subjectId: 'task-x', decision: 'approved' });
+    const approvalContext = { subjectType: 'task', subjectId: 'task-x', note: 'tests.run' };
+    const approval = life.security.decide({ ...approvalContext, decision: 'approved' });
     await assert.rejects(
       () => registry.invoke('tests.run', { script: 'test' }, {}),
       (error) => error.code === 'APPROVAL_REQUIRED',
     );
-    const result = await registry.invoke('tests.run', { script: 'test' }, { approvalId: approval.id });
+    const result = await registry.invoke('tests.run', { script: 'test' }, { approvalId: approval.id, approvalContext });
     assert.equal(result.exitCode, 0);
     assert.equal(result.passed, true);
     assert.match(result.output, /ran test/);
     assert.deepEqual(calls, ['test']);
+
+    life.security.decide({ ...approvalContext, decision: 'revoked' });
+    await assert.rejects(
+      () => registry.invoke('tests.run', { script: 'test' }, { approvalId: approval.id, approvalContext }),
+      (error) => error.code === 'APPROVAL_REQUIRED',
+    );
+    assert.deepEqual(calls, ['test'], 'a revoked approval is never reused');
+  } finally {
+    life.close();
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('task reads and cancellations honour their separate capability grants', () => {
+  const root = project();
+  const life = engine(root);
+  try {
+    const task = life.orchestrator.createTask({ objective: 'Review the project' });
+    assert.throws(
+      () => life.security.setGrant('tasks.write', 'false'),
+      (error) => error.code === 'INVALID_GRANT',
+    );
+    assert.equal(life.security.isGranted('tasks.write'), true, 'a truthy string cannot silently retain or create a grant');
+    life.security.setGrant('tasks.write', false);
+    assert.throws(() => life.orchestrator.cancelTask(task.id), (error) => error.code === 'PERMISSION_DENIED');
+
+    life.security.setGrant('tasks.write', true);
+    life.security.setGrant('tasks.read', false);
+    assert.throws(() => life.orchestrator.getTask(task.id), (error) => error.code === 'PERMISSION_DENIED');
+    assert.throws(() => life.orchestrator.listTasks(), (error) => error.code === 'PERMISSION_DENIED');
+    assert.throws(() => life.orchestrator.createTask({ objective: 'This should be denied' }), (error) => error.code === 'PERMISSION_DENIED');
   } finally {
     life.close();
     rmSync(root, { recursive: true, force: true });
@@ -254,6 +286,9 @@ test('a skill cannot become active without testing and a recorded approval', asy
     assert.ok(pending.approval.id);
     const approved = life.skills.approve(skill.id, { decision: 'approved', note: 'reviewed' });
     assert.equal(approved.approval.decision, 'approved');
+    life.security.setGrant('skills.activate', false);
+    assert.throws(() => life.skills.activate(skill.id), (error) => error.code === 'PERMISSION_DENIED');
+    life.security.setGrant('skills.activate', true);
 
     const active = life.skills.activate(skill.id);
     assert.equal(active.status, 'active');
@@ -270,11 +305,19 @@ test('a skill cannot become active without testing and a recorded approval', asy
     life.skills.submit(skill.id);
     const tested2 = await life.skills.test(skill.id);
     assert.equal(tested2.passed, true);
+    assert.throws(
+      () => life.skills.activate(skill.id),
+      (error) => error.code === 'APPROVAL_REQUIRED',
+      'approval for version one must not authorize version two',
+    );
     life.skills.requestApproval(skill.id);
     life.skills.approve(skill.id, { decision: 'approved' });
     const v2 = life.skills.activate(skill.id);
     assert.equal(v2.currentVersion, 2);
 
+    life.security.setGrant('skills.activate', false);
+    assert.throws(() => life.skills.rollback(skill.id, 1), (error) => error.code === 'PERMISSION_DENIED');
+    life.security.setGrant('skills.activate', true);
     const rolledBack = life.skills.rollback(skill.id, 1);
     assert.equal(rolledBack.currentVersion, 1);
     assert.ok(life.security.auditLog().some((event) => event.kind === 'skill.rolled_back'));
@@ -333,7 +376,8 @@ test('apply refuses a read-only workspace instead of throwing a filesystem error
   const life = engine(root);
   try {
     life.security.setGrant('simulation.apply', true);
-    const approval = life.security.decide({ subjectType: 'simulation', subjectId: 'ro-1', decision: 'approved' });
+    const beforeReadOnlyPreview = await life.simulation.preview({ files: [{ path: 'src/app.ts', next: 'export const answer = 43;\n' }] });
+    const approval = life.security.decide({ ...beforeReadOnlyPreview.approvalContext, decision: 'approved' });
 
     // A serverless deployment mounts the project read-only; the engine must say
     // so plainly rather than surfacing EACCES/EROFS from deep inside the write.
@@ -362,7 +406,12 @@ test('simulation previews, applies with approval and rolls back', async () => {
   try {
     const target = 'src/app.ts';
     const next = 'export const answer = 43;\n// retry logic reviewed\n';
-    const preview = await life.simulation.preview({ files: [{ path: target, next }] });
+    const preview = await life.simulation.preview({
+      files: [
+        { path: target, next },
+        { path: 'src/new-file.ts', next: 'export const created = true;\n' },
+      ],
+    });
     assert.equal(preview.dryRun, true);
     assert.equal(preview.applied, false);
     assert.equal(preview.files[0].existed, true);
@@ -384,7 +433,22 @@ test('simulation previews, applies with approval and rolls back', async () => {
       (error) => error.code === 'PATH_OUTSIDE_ROOT',
     );
 
-    const approval = life.security.decide({ subjectType: 'simulation', subjectId: 'sim-1', decision: 'approved' });
+    const wrongApproval = life.security.decide({
+      subjectType: 'simulation',
+      subjectId: 'apply:another-change',
+      note: 'simulation.apply',
+      decision: 'approved',
+    });
+    await assert.rejects(
+      () => life.simulation.apply({ files: [{ path: target, next }], approvalId: wrongApproval.id }),
+      (error) => error.code === 'APPROVAL_REQUIRED',
+    );
+
+    const approval = life.security.decide({ ...preview.approvalContext, decision: 'approved' });
+    await assert.rejects(
+      () => life.simulation.apply({ files: [{ path: target, next: `${next}// altered after preview` }], approvalId: approval.id }),
+      (error) => error.code === 'APPROVAL_REQUIRED',
+    );
     const applied = await life.simulation.apply({
       files: [
         { path: target, next },
@@ -396,7 +460,12 @@ test('simulation previews, applies with approval and rolls back', async () => {
     assert.match(readFileSync(join(root, target), 'utf8'), /answer = 43/);
     assert.equal(existsSync(join(root, 'src/new-file.ts')), true);
 
-    const rolled = await life.simulation.rollback(applied.changeSetId);
+    await assert.rejects(
+      () => life.simulation.rollback(applied.changeSetId),
+      (error) => error.code === 'APPROVAL_REQUIRED',
+    );
+    const rollbackApproval = life.security.decide({ ...applied.rollbackApprovalContext, decision: 'approved' });
+    const rolled = await life.simulation.rollback(applied.changeSetId, rollbackApproval.id);
     assert.equal(rolled.restored.length, 2);
     assert.match(readFileSync(join(root, target), 'utf8'), /answer = 42/);
     assert.equal(existsSync(join(root, 'src/new-file.ts')), false);
@@ -415,6 +484,92 @@ test('simulation previews, applies with approval and rolls back', async () => {
   } finally {
     life.close();
     rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('simulation approval becomes stale when the source file changes after preview', async () => {
+  const root = project();
+  const life = engine(root);
+  try {
+    life.security.setGrant('simulation.apply', true);
+    const files = [{ path: 'src/app.ts', next: 'export const answer = 43;\n' }];
+    const preview = await life.simulation.preview({ files });
+    const approval = life.security.decide({ ...preview.approvalContext, decision: 'approved' });
+
+    writeFileSync(join(root, 'src/app.ts'), 'export const answer = 41;\n');
+    await assert.rejects(
+      () => life.simulation.apply({ files, approvalId: approval.id }),
+      (error) => error.code === 'APPROVAL_REQUIRED',
+    );
+    assert.match(readFileSync(join(root, 'src/app.ts'), 'utf8'), /answer = 41/);
+  } finally {
+    life.close();
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('simulation rollback refuses to overwrite edits made after the approved apply', async () => {
+  const root = project();
+  const life = engine(root);
+  try {
+    life.security.setGrant('simulation.apply', true);
+    const files = [{ path: 'src/app.ts', next: 'export const answer = 43;\n' }];
+    const preview = await life.simulation.preview({ files });
+    const applyApproval = life.security.decide({ ...preview.approvalContext, decision: 'approved' });
+    const applied = await life.simulation.apply({ files, approvalId: applyApproval.id });
+    const rollbackApproval = life.security.decide({ ...applied.rollbackApprovalContext, decision: 'approved' });
+
+    writeFileSync(join(root, 'src/app.ts'), 'export const answer = 99; // newer edit\n');
+    await assert.rejects(
+      () => life.simulation.rollback(applied.changeSetId, rollbackApproval.id),
+      (error) => error.code === 'STALE_CHANGESET',
+    );
+    assert.match(readFileSync(join(root, 'src/app.ts'), 'utf8'), /answer = 99/);
+  } finally {
+    life.close();
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('simulation previews and working copies block symlinks and sensitive files', async () => {
+  const root = project();
+  const outside = mkdtempSync(join(tmpdir(), 'nova-life-outside-'));
+  const secretPath = join(outside, 'private.txt');
+  const outsideDirectory = join(outside, 'external-dir');
+  const linkPath = join(root, 'src/linked.txt');
+  const directoryLinkPath = join(root, 'src/external-dir');
+  mkdirSync(outsideDirectory);
+  writeFileSync(secretPath, 'outside-only secret');
+  writeFileSync(join(outsideDirectory, 'leak.md'), 'outside directory content');
+  symlinkSync(secretPath, linkPath);
+  symlinkSync(outsideDirectory, directoryLinkPath, 'dir');
+  const life = engine(root);
+  let workspace = null;
+  try {
+    await assert.rejects(
+      () => life.tools.invoke('project.list', { path: 'src/external-dir' }),
+      (error) => error.code === 'SYMLINK_PATH_BLOCKED',
+    );
+    await assert.rejects(
+      () => life.simulation.preview({ files: [{ path: 'src/linked.txt', next: 'replacement' }] }),
+      (error) => error.code === 'SYMLINK_PATH_BLOCKED',
+    );
+    await assert.rejects(
+      () => life.simulation.preview({ files: [{ path: '.env', next: 'GEMINI_API_KEY=replace' }] }),
+      (error) => error.code === 'SECRET_FILE_BLOCKED',
+    );
+
+    workspace = await life.simulation.createWorkspace({
+      files: [{ path: 'src/new-file.ts', next: 'export const safe = true;\n' }],
+      copyProject: true,
+    });
+    assert.equal(existsSync(join(workspace.path, 'src/linked.txt')), false);
+    assert.equal(existsSync(join(workspace.path, '.env')), false);
+  } finally {
+    if (workspace) await life.simulation.cleanup(workspace.id);
+    life.close();
+    rmSync(root, { recursive: true, force: true });
+    rmSync(outside, { recursive: true, force: true });
   }
 });
 

@@ -357,7 +357,8 @@ mountGuardian(app);
 
 // NOVA NEXUS / L.I.F.E. — local-first intelligence engine. It owns its own
 // SQLite file, starts read-only for anything risky, and never shells out unless
-// NOVA_LIFE_ALLOW_EXECUTE=1. Rate-limited like the other AI endpoints.
+// NOVA_LIFE_ALLOW_EXECUTE=1. Hosted requests are Supabase-owner authenticated;
+// the optional offline bypass is loopback-only. Rate-limited like other AI APIs.
 app.use(
   '/api/nova/life',
   rateLimit({ windowMs: 60_000, max: 120, keyPrefix: 'nova-life' }),

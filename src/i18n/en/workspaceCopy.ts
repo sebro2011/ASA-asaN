@@ -342,7 +342,12 @@ export const workspaceCopyEn: Copy = {
   wsChatErrHistoryLong: 'This conversation is too long for the model. Start a new conversation.',
   wsChatErrTooLarge: 'That message is too large. Shorten it and retry.',
   wsChatErrInvalid: 'That request was not valid. Please retry.',
-  wsChatOfflineNote: 'Answered offline — the online providers did not respond.',
+  wsChatOfflineNote: 'Answered offline — no AI model returned a reply.',
+  wsChatSourcesLabel: 'Sources',
+  wsChatSourcesToggle: 'Use saved sources',
+  wsChatSourcesHint: 'When enabled, matching excerpts are included in the request. Auto or hosted providers may receive them; Local avoids hosted-provider routing.',
+  wsChatSourceDevice: 'Star Library on this device',
+  wsChatSourcePrivate: 'private knowledge library',
   wsChatErrUnknown: 'NOVA could not process this request. Please retry.',
 
   /* ------------------------------------------------- thinking ladder (v5) */

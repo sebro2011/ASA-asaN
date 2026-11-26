@@ -137,6 +137,9 @@ test('retention expires working memories and keeps durable ones', () => {
   const working = life.memory.list({ category: 'working' })[0];
   assert.ok(working.expiresAt, 'working memory has an expiry');
   life.store.run('update memories set expires_at = ? where id = ?', ['2000-01-01T00:00:00.000Z', working.id]);
+  life.security.setGrant('memory.delete', false);
+  assert.throws(() => life.memory.expire(), (error) => error.code === 'PERMISSION_DENIED');
+  life.security.setGrant('memory.delete', true);
   const result = life.memory.expire();
   assert.equal(result.removed, 1);
   assert.equal(life.memory.counts().byCategory.working, 0);

@@ -70,24 +70,30 @@ Codes used by the engine, grouped:
 
 - Validation: `INVALID_INPUT`, `INVALID_CATEGORY`, `INVALID_MEMORY_TITLE`,
   `INVALID_MEMORY_BODY`, `INVALID_OBJECTIVE`, `INVALID_TASK`, `INVALID_SKILL`,
-  `INVALID_TRANSITION`, `INVALID_DECISION`, `INVALID_EXPERIENCE`, `INVALID_EVIDENCE`,
-  `INVALID_EVIDENCE_KIND`, `INVALID_RELATION`, `INVALID_ENTITY_ID`,
-  `INVALID_ENTITY_TYPE`, `INVALID_CHANGESET`, `INVALID_URL`.
+  `INVALID_TRANSITION`, `INVALID_DECISION`, `INVALID_GRANT`, `INVALID_PATH`,
+  `INVALID_EXPERIENCE`, `INVALID_EVIDENCE`, `INVALID_EVIDENCE_KIND`,
+  `INVALID_RELATION`, `INVALID_ENTITY_ID`, `INVALID_ENTITY_TYPE`,
+  `INVALID_CHANGESET`, `DUPLICATE_PATH`, `INVALID_URL`.
 - Not found: `MEMORY_NOT_FOUND`, `TASK_NOT_FOUND`, `SKILL_NOT_FOUND`,
   `EXPERIENCE_NOT_FOUND`, `VERSION_NOT_FOUND`, `CHANGESET_NOT_FOUND`,
-  `WORKSPACE_NOT_FOUND`, `FILE_NOT_FOUND`.
+  `WORKSPACE_NOT_FOUND`, `FILE_NOT_FOUND`, `BACKUP_NOT_FOUND`.
 - Permission: `PERMISSION_DENIED`, `APPROVAL_REQUIRED`, `UNKNOWN_PERMISSION`,
   `TOOL_DISABLED`, `EXECUTION_DISABLED`, `LOCAL_ONLY_BLOCKED`,
   `LOCAL_ONLY_NO_PROVIDER`.
-- Safety: `PATH_OUTSIDE_ROOT`, `SECRET_FILE_BLOCKED`, `SECRET_IN_MEMORY`,
-  `HOST_NOT_ALLOWED`, `SCRIPT_NOT_ALLOWED`, `FILE_TOO_LARGE`,
-  `CHANGESET_TOO_LARGE`, `SELF_LINK`, `SKILL_REJECTED`, `SECRET_IN_MEMORY`,
-  `READ_ONLY_FILESYSTEM`.
+- Safety and state: `PATH_OUTSIDE_ROOT`, `PATH_INVALID`, `SYMLINK_PATH_BLOCKED`,
+  `SECRET_FILE_BLOCKED`, `SECRET_IN_MEMORY`, `HOST_NOT_ALLOWED`,
+  `SCRIPT_NOT_ALLOWED`, `FILE_TOO_LARGE`, `PREVIEW_TOO_LARGE`,
+  `CHANGESET_TOO_LARGE`, `NOT_A_FILE`, `STALE_PREVIEW`, `STALE_CHANGESET`,
+  `BACKUP_INVALID`, `APPLY_FAILED`, `ROLLBACK_FAILED`, `SELF_LINK`,
+  `SKILL_REJECTED`, `READ_ONLY_FILESYSTEM`.
 - Providers: `NO_PROVIDER`, `PROVIDER_NOT_CONFIGURED`, `PROVIDER_UNREACHABLE`,
   `PROVIDER_ERROR`, `AI_TIMEOUT`, `UNKNOWN_PROVIDER`, `STREAM_UNSUPPORTED`.
 - Lifecycle: `TASK_FINISHED`, `CANCELLED`, `EXPERIENCE_NOT_REPLAYABLE`,
   `NOT_VERIFIED`, `SKILL_NOT_ACTIVE`, `NO_TEST_CASES`, `NO_VERSION`,
   `SKILLS_UNAVAILABLE`, `BACKUP_FAILED`.
+- Hosted authentication (router boundary): `LIFE_AUTH_REQUIRED`,
+  `LIFE_AUTH_INVALID`, `LIFE_OWNER_ONLY`, `LIFE_AUTH_NOT_CONFIGURED`,
+  `LIFE_AUTH_UNAVAILABLE`, `LIFE_AUTH_BUSY`.
 
 `LifeError` carries `code`, `status` and optional `details`; the router maps
 `error.status` and never leaks a stack.
@@ -240,10 +246,13 @@ Lifecycle: `discovered → draft → sandbox_testing → verification → user_a
   (`lineDiff(before, after)`); limits: **20 files**, **400 KB** per changeset.
 - `POST /simulation/run-tests` runs an allowlisted script inside the temp copy
   and records output as evidence of kind `simulation`/`test`.
-- `POST /simulation/apply` requires `simulation.apply` plus a recorded approval
-  and copies the temp files over the workspace; `POST /simulation/rollback`
-  restores the previous content.
-- The temp directory is **not** an OS sandbox. It limits blast radius and gives
+- `POST /simulation/apply` requires `simulation.apply` plus an approval bound to
+  the exact proposed content and current file contents. Rollback requires a new,
+  changeset-bound approval. Backups are created before writes and restoration is
+  best-effort if a write fails.
+- The temp directory is **not** an OS sandbox. Allowlisted test scripts execute
+  edited project code with the server process's privileges when enabled.
+- The temp directory limits blast radius and gives
   you a diff to review; it does not contain a hostile binary. This is stated in
   the preview `note`, in `/simulation`'s limits, and in the UI.
 

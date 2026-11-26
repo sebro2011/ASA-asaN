@@ -2,6 +2,11 @@
 
 Base URL: `/api/nova/life`. Rate limit: 120 requests per minute per key
 (`rateLimit({ windowMs: 60_000, max: 120 })`). Content type: JSON in, JSON out.
+Hosted deployments require `Authorization: Bearer <Supabase access token>` and
+`NOVA_LIFE_OWNER_ID`; each token is verified with Supabase Auth and only the
+configured owner is accepted. An offline local install may explicitly set
+`NOVA_LIFE_ALLOW_UNAUTHENTICATED_LOCAL=1` in non-production, without Supabase
+settings, for loopback requests only.
 
 Every error is `{ error, code, details? }`; see `NOVA_LIFE_TECHNICAL_SPEC.md` §3
 for the code list. A permission refusal is 403, an approval refusal is 403 with
@@ -42,7 +47,7 @@ Selection prefers the smallest configured local model that satisfies the request
 | POST | `/memory` | `{ category, title, body, language?, tags?, confidence?, pinned?, visibility?, expiresAt? }` | `{ memory, duplicate? }`; 422 `SECRET_IN_MEMORY`, 400 `INVALID_MEMORY_TITLE` |
 | GET | `/memory/search?q=&category=&limit=10` | — | `{ query, strategy, results: [{ memory, score, components {keyword, recency, confidence, pinned, vector} }] }` |
 | POST | `/memory/summarize` | `{ category?, limit? }` | `{ summary, used[], method: 'extractive' }` |
-| POST | `/memory/expire` | — | `{ expired: [ids] }` |
+| POST | `/memory/expire` | — | `{ removed }`; requires the `memory.delete` grant |
 | GET | `/memory/:id` | — | `{ memory, versions[] }` |
 | PATCH | `/memory/:id` | any mutable field | `{ memory }` (version incremented) |
 | POST | `/memory/:id/correct` | `{ body?, reason? }` | `{ memory, correction }` |
@@ -82,10 +87,10 @@ Selection prefers the smallest configured local model that satisfies the request
 | PATCH | `/skills/:id` | `{ instructions?, steps?, testCases? }` | `{ skill }` — on an active skill this creates a new draft version |
 | POST | `/skills/:id/submit` | — | `{ skill }` → `sandbox_testing`; 422 `NO_TEST_CASES`, 422 `SKILL_REJECTED` |
 | POST | `/skills/:id/test` | — | `{ skill, runId, passed, checks[], executed: false }` |
-| POST | `/skills/:id/request-approval` | — | `{ skill, approval }` → `user_approval` |
-| POST | `/skills/:id/approve` | `{ decision: 'approved'\|'rejected', note? }` | `{ skill, approval }` |
-| POST | `/skills/:id/activate` | — | `{ skill }`; 403 `APPROVAL_REQUIRED`, 409 `NOT_VERIFIED` |
-| POST | `/skills/:id/rollback` | `{ version }` | `{ skill }` |
+| POST | `/skills/:id/request-approval` | — | `{ skill, approval, approvalContext }` → `user_approval`; the context identifies the exact version |
+| POST | `/skills/:id/approve` | `{ decision: 'approved'\\|'rejected'\\|'revoked', note? }` | `{ skill, approval }`; requires the `skills.activate` grant and records the decision for the pending exact version |
+| POST | `/skills/:id/activate` | — | `{ skill }`; requires the `skills.activate` grant and approval for the exact version; 403 `PERMISSION_DENIED`/`APPROVAL_REQUIRED`, 409 `NOT_VERIFIED` |
+| POST | `/skills/:id/rollback` | `{ version }` | `{ skill }`; requires the `skills.activate` grant and prior approval for the exact target version |
 | POST | `/skills/:id/deprecate` | — | `{ skill }` |
 
 ## Verification and evidence
@@ -101,7 +106,7 @@ Selection prefers the smallest configured local model that satisfies the request
 | Method | Path | Request | Response |
 | --- | --- | --- | --- |
 | GET | `/security` | — | `{ permissions[], audit[], capabilities[], simulation[], tools[], executionEnabled }` |
-| POST | `/security/grants` | `{ capability, granted }` | updated `permissions[]`; 400 `UNKNOWN_PERMISSION` |
+| POST | `/security/grants` | `{ capability, granted: boolean }` | updated `permissions[]`; 400 `INVALID_GRANT` for a non-boolean or `UNKNOWN_PERMISSION` |
 | POST | `/security/approvals` | `{ subjectType, subjectId, decision: 'approved'\|'rejected'\|'revoked', note? }` | `{ approval }` |
 | GET | `/security/audit?limit=100` | — | `{ events[] }` newest first (max 500) |
 
@@ -110,15 +115,18 @@ Selection prefers the smallest configured local model that satisfies the request
 | Method | Path | Request | Response |
 | --- | --- | --- | --- |
 | GET | `/simulation` | — | `{ workspaces[], changeSets[], executionEnabled }` |
-| POST | `/simulation/preview` | `{ files: [{ path, next }] }` | `{ dryRun: true, applied: false, files: [{ path, existed, beforeBytes, afterBytes, added, removed, diff }], totals, note }` — writes nothing |
-| POST | `/simulation/workspace` | `{ files, copyProject? }` | `{ id, path, files[], copied }` |
-| POST | `/simulation/run-tests` | `{ workspaceId, script, approvalId? }` | `{ workspaceId, script, exitCode, passed, durationMs, output }` |
-| POST | `/simulation/apply` | `{ files, approvalId, tests? }` | `{ changeSetId, applied[], backupDir, tests }`; 403 `APPROVAL_REQUIRED`; 409 `READ_ONLY_FILESYSTEM` when the workspace cannot be written (serverless) |
-| POST | `/simulation/rollback` | `{ changeSetId }` | `{ restored[] }` |
+| POST | `/simulation/preview` | `{ files: [{ path, next }] }` | `{ dryRun: true, applied: false, files: [{ path, existed, beforeBytes, afterBytes, added, removed, diff }], totals, approvalContext, note }` — read-only; approval context is bound to this exact diff |
+| POST | `/simulation/workspace` | `{ files, copyProject? }` | `{ id, files[], copied, approvalContexts[] }` — no server filesystem path is returned |
+| POST | `/simulation/run-tests` | `{ workspaceId, script, approvalId? }` | `{ workspaceId, script, exitCode, passed, durationMs, output }`; approval binds to the workspace and script |
+| POST | `/simulation/apply` | `{ files, approvalId, tests? }` | `{ changeSetId, applied[], rollbackApprovalContext, tests }`; approval must match the exact preview and current file contents; 403 `APPROVAL_REQUIRED`; 409 `STALE_PREVIEW` if contents change during apply or `READ_ONLY_FILESYSTEM` on a read-only workspace |
+| POST | `/simulation/rollback` | `{ changeSetId, approvalId }` | `{ restored[] }`; requires a separate approval bound to that changeset and returns 409 `STALE_CHANGESET` rather than overwriting files changed after apply |
 
-Limits: 20 files, 400 KB per changeset; simulation scripts are limited to
-`test:workspace`, `test:workspace-modules`, `test:nova-chat`. The temporary workspace is **not** an OS
-sandbox — the response carries that note.
+Limits: at most 20 files and 400 KB of proposed UTF-8 content per changeset;
+diffs are capped at 500 lines per file. Credential files, `.nova-life`,
+`node_modules` and existing symlink paths are refused. Simulation scripts are
+limited to `test:workspace`, `test:workspace-modules`, `test:nova-chat`. A
+temporary workspace is **not** an OS sandbox; edited code can run with the
+server process's privileges when execution is enabled.
 
 ## Benchmarks and graph
 

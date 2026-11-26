@@ -100,6 +100,7 @@ export function createOrchestrator({
     allowedTools = DEFAULT_TOOLS,
     limits = {},
   } = {}) => {
+    security.require('tasks.read');
     security.require('tasks.write');
     const text = String(objective || '').trim();
     if (text.length < 3) throw new LifeError('INVALID_OBJECTIVE', 'Describe the objective in a few words.', { status: 400 });
@@ -146,6 +147,7 @@ export function createOrchestrator({
   };
 
   const getTask = (id, { steps = true } = {}) => {
+    security.require('tasks.read');
     const row = store.queryOne('select * from tasks where id = ? and user_id = ?', [id, userId]);
     if (!row) throw new LifeError('TASK_NOT_FOUND', 'No such task.', { status: 404 });
     const task = hydrateTask(row);
@@ -157,12 +159,16 @@ export function createOrchestrator({
     return task;
   };
 
-  const listTasks = ({ limit = 20 } = {}) =>
-    store
+  const listTasks = ({ limit = 20 } = {}) => {
+    security.require('tasks.read');
+    return store
       .queryAll('select * from tasks where user_id = ? order by created_at desc limit ?', [userId, Math.min(Number(limit) || 20, 100)])
       .map(hydrateTask);
+  };
 
   const cancelTask = (id) => {
+    security.require('tasks.read');
+    security.require('tasks.write');
     const task = getTask(id, { steps: false });
     if (['completed', 'failed', 'cancelled'].includes(task.status)) return task;
     store.run('update tasks set status = ?, updated_at = ? where id = ? and user_id = ?', ['cancelled', now(), id, userId]);
@@ -183,6 +189,7 @@ export function createOrchestrator({
   };
 
   const run = async (taskId, { approvalId = null, toolApprovals = {}, execute = null } = {}) => {
+    security.require('tasks.read');
     security.require('tasks.write');
     const task = getTask(taskId);
     if (['completed', 'cancelled'].includes(task.status)) {
@@ -255,8 +262,9 @@ export function createOrchestrator({
           if (tool.level === 'execute' || tool.level === 'network') {
             const capability = tool.level === 'execute' ? 'tools.execute' : 'network.fetch';
             const supplied = toolApprovals[step.tool] ?? (tool.level === 'execute' ? approvalId : null);
+            const approvalContext = { subjectType: 'task', subjectId: task.id, note: step.tool };
             try {
-              security.require(capability, { approvalId: supplied });
+              security.require(capability, { approvalId: supplied, approvalContext });
             } catch (error) {
               const pending = pendingApproval(task, step.tool, capability);
               store.run('update task_steps set status = ?, error = ?, finished_at = ? where id = ?', [
@@ -271,7 +279,12 @@ export function createOrchestrator({
           toolCalls.set(step.tool, calls + 1);
           toolCallCount += 1;
           const input = toolInput(step.tool, task, step);
-          const result = await tools.invoke(step.tool, input, { approvalId: toolApprovals[step.tool] ?? approvalId });
+          const result = await tools.invoke(step.tool, input, {
+            approvalId: toolApprovals[step.tool] ?? approvalId,
+            ...(tool.level === 'execute' || tool.level === 'network'
+              ? { approvalContext: { subjectType: 'task', subjectId: task.id, note: step.tool } }
+              : {}),
+          });
           outputs.push({ step: step.id, kind: 'tool', tool: step.tool, input, result });
           store.run('update task_steps set status = ?, input = ?, output = ?, finished_at = ? where id = ?', [
             'completed',

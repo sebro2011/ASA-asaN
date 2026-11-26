@@ -2,21 +2,44 @@
  * HTTP surface for the L.I.F.E. engine.
  *
  * Conventions match the rest of the app: JSON in, JSON out, `{ error, code }` on
- * failure, no secrets or absolute paths in responses. The engine is
- * single-user (`local`); a multi-user deployment must put these routes behind
- * authentication and the Supabase RLS migration.
+ * failure, no secrets or absolute paths in responses. The local SQLite engine
+ * is single-owner: hosted requests must present a verified Supabase session for
+ * NOVA_LIFE_OWNER_ID; an explicit loopback-only development mode is available
+ * for an offline local install.
  */
 import express from 'express';
 import { createLifeEngine } from './index.js';
+import { createLifeAuthenticator } from './auth.js';
 import { LifeError } from './modelFabric.js';
 
-export function createLifeRouter({ engine = null, env = process.env, root = process.cwd() } = {}) {
+export { createLifeAuthenticator } from './auth.js';
+
+export function createLifeRouter({
+  engine = null,
+  env = process.env,
+  root = process.cwd(),
+  fetchImpl = (...args) => fetch(...args),
+  authenticate = createLifeAuthenticator({ env, fetchImpl }),
+} = {}) {
   const router = express.Router();
   let instance = engine;
   const getEngine = () => {
     if (!instance) instance = createLifeEngine({ env, root });
     return instance;
   };
+
+  router.use(async (req, res, next) => {
+    try {
+      req.lifeUser = await authenticate(req);
+      return next();
+    } catch (error) {
+      const status = error?.status === 403 || error?.status === 503 ? error.status : 401;
+      return res.status(status).json({
+        error: error?.message || 'Sign in to use NOVA Intelligence.',
+        code: error?.code || 'LIFE_AUTH_REQUIRED',
+      });
+    }
+  });
 
   const wrap = (handler) => async (req, res) => {
     try {
@@ -25,10 +48,16 @@ export function createLifeRouter({ engine = null, env = process.env, root = proc
       if (result === undefined) return res.status(204).end();
       return res.json(result);
     } catch (error) {
-      const status = error instanceof LifeError ? error.status : error?.code === 'PERMISSION_DENIED' ? 403 : error?.code === 'APPROVAL_REQUIRED' ? 403 : 500;
+      const status = error instanceof LifeError
+        ? error.status
+        : error?.code === 'PERMISSION_DENIED' || error?.code === 'APPROVAL_REQUIRED'
+          ? 403
+          : error?.code === 'UNKNOWN_CAPABILITY' || error?.code === 'INVALID_DECISION' || error?.code === 'INVALID_GRANT'
+            ? 400
+            : 500;
       const body = {
         error: error?.message || 'Engine error',
-        code: error?.code || 'LIFE_ERROR',
+        code: error?.code === 'UNKNOWN_CAPABILITY' ? 'UNKNOWN_PERMISSION' : error?.code || 'LIFE_ERROR',
         ...(error?.capability ? { capability: error.capability.id } : {}),
         ...(error?.details ? { details: error.details } : {}),
       };
@@ -148,7 +177,12 @@ export function createLifeRouter({ engine = null, env = process.env, root = proc
     tools: life.tools.list(),
     executionEnabled: String(env.NOVA_LIFE_ALLOW_EXECUTE || '') === '1',
   })));
-  router.post('/security/grants', wrap((req, _res, life) => life.security.setGrant(String(req.body?.capability || ''), Boolean(req.body?.granted))));
+  router.post('/security/grants', wrap((req, _res, life) => {
+    if (typeof req.body?.granted !== 'boolean') {
+      throw new LifeError('INVALID_GRANT', 'A capability grant must be a boolean.', { status: 400 });
+    }
+    return life.security.setGrant(String(req.body?.capability || ''), req.body.granted);
+  }));
   router.post('/security/approvals', wrap((req, _res, life) =>
     life.security.decide({
       subjectType: req.body?.subjectType,
@@ -163,16 +197,27 @@ export function createLifeRouter({ engine = null, env = process.env, root = proc
 
   router.get('/simulation', wrap((_req, _res, life) => life.simulation.list()));
   router.post('/simulation/preview', wrap(async (req, _res, life) => life.simulation.preview({ files: req.body?.files })));
-  router.post('/simulation/workspace', wrap(async (req, _res, life) =>
-    life.simulation.createWorkspace({ files: req.body?.files, copyProject: Boolean(req.body?.copyProject) }),
-  ));
+  router.post('/simulation/workspace', wrap(async (req, _res, life) => {
+    const workspace = await life.simulation.createWorkspace({
+      files: req.body?.files,
+      copyProject: req.body?.copyProject === true,
+    });
+    return {
+      id: workspace.id,
+      files: workspace.files.map((file) => file.split(String.fromCharCode(92)).join('/')),
+      copied: workspace.copied,
+      approvalContexts: workspace.approvalContexts,
+    };
+  }));
   router.post('/simulation/run-tests', wrap(async (req, _res, life) =>
     life.simulation.runTests({ workspaceId: req.body?.workspaceId, script: req.body?.script, approvalId: req.body?.approvalId ?? null }),
   ));
   router.post('/simulation/apply', wrap(async (req, _res, life) =>
     life.simulation.apply({ files: req.body?.files, approvalId: req.body?.approvalId ?? null, tests: req.body?.tests ?? null }),
   ));
-  router.post('/simulation/rollback', wrap(async (req, _res, life) => life.simulation.rollback(String(req.body?.changeSetId || ''))));
+  router.post('/simulation/rollback', wrap(async (req, _res, life) =>
+    life.simulation.rollback(String(req.body?.changeSetId || ''), req.body?.approvalId ?? null),
+  ));
 
   /* --------------------------------------------------------- benchmarks */
 
@@ -182,6 +227,7 @@ export function createLifeRouter({ engine = null, env = process.env, root = proc
   /* -------------------------------------------------------------- graph */
 
   router.get('/graph', wrap((req, _res, life) => {
+    life.security.require('memory.read');
     if (req.query.type && req.query.id) {
       return life.graph.neighbors(String(req.query.type), String(req.query.id), {
         depth: Number(req.query.depth) || 1,
@@ -190,18 +236,28 @@ export function createLifeRouter({ engine = null, env = process.env, root = proc
     }
     return life.graph.stats();
   }));
-  router.post('/graph/link', wrap((req, _res, life) => life.graph.link(req.body || {})));
+  router.post('/graph/link', wrap((req, _res, life) => {
+    life.security.require('memory.write');
+    return life.graph.link(req.body || {});
+  }));
 
   /* --------------------------------------------------------------- data */
 
   router.get('/export', wrap((_req, res, life) => {
+    life.security.require('memory.read');
     res.setHeader('Content-Disposition', 'attachment; filename="nova-life-export.json"');
     return life.store.exportAll();
   }));
-  router.delete('/data', wrap((_req, _res, life) => life.store.deleteUser('local')));
+  router.delete('/data', wrap((_req, _res, life) => {
+    life.security.require('memory.delete');
+    return life.store.deleteUser('local');
+  }));
   router.post('/backup', wrap((_req, _res, life) => {
+    life.security.require('memory.read');
     try {
-      return { path: 'local backup created', file: life.store.backup().split('/').pop() };
+      const file = life.store.backup().split('/').pop();
+      life.security.audit('data.backed_up', { subject: file });
+      return { path: 'local backup created', file };
     } catch (error) {
       throw new LifeError('BACKUP_FAILED', error.message, { status: 500 });
     }

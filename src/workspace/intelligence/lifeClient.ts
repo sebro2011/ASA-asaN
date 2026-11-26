@@ -6,8 +6,22 @@
  * can explain *why* (permission, approval, local-only) instead of showing a
  * generic error.
  */
+import { AUTH_STORAGE_KEY } from '../../data/supabaseClient';
 
 const BASE = '/api/nova/life';
+
+function savedAccessToken(): string | null {
+  try {
+    if (typeof localStorage === 'undefined') return null;
+    const raw = localStorage.getItem(AUTH_STORAGE_KEY);
+    if (!raw) return null;
+    const session = JSON.parse(raw) as { access_token?: unknown };
+    const token = session?.access_token;
+    return typeof token === 'string' && /^[A-Za-z0-9._~+\/-]{16,8192}$/.test(token) ? token : null;
+  } catch {
+    return null;
+  }
+}
 
 export class LifeApiError extends Error {
   code: string;
@@ -24,9 +38,14 @@ export class LifeApiError extends Error {
 }
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const accessToken = savedAccessToken();
   const response = await fetch(`${BASE}${path}`, {
     ...init,
-    headers: { 'content-type': 'application/json', ...(init.headers || {}) },
+    headers: {
+      'content-type': 'application/json',
+      ...(accessToken ? { authorization: `Bearer ${accessToken}` } : {}),
+      ...(init.headers || {}),
+    },
     credentials: 'same-origin',
   });
   const body = await response.json().catch(() => null);

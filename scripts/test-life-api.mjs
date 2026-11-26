@@ -15,7 +15,7 @@ import { join } from 'node:path';
 import { after, before, test } from 'node:test';
 import express from 'express';
 import { createLifeEngine } from '../server/life/index.js';
-import { createLifeRouter } from '../server/life/router.js';
+import { createLifeAuthenticator, createLifeRouter } from '../server/life/router.js';
 
 let root;
 let engine;
@@ -29,7 +29,23 @@ before(async () => {
   engine = createLifeEngine({ inMemory: true, root, env: { NOVA_LOCAL_ONLY: '1' } });
   const app = express();
   app.use(express.json());
-  app.use('/api/nova/life', createLifeRouter({ engine }));
+  const authEnv = {
+    NODE_ENV: 'test',
+    SUPABASE_URL: 'https://life-test.supabase.co',
+    SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_test_key_for_life_api',
+    NOVA_LIFE_OWNER_ID: 'owner-1',
+  };
+  const authFetch = async (_url, init) => {
+    const token = init.headers.authorization;
+    if (token === 'Bearer test-owner-token') {
+      return { ok: true, status: 200, json: async () => ({ id: 'owner-1' }) };
+    }
+    if (token === 'Bearer other-owner-token') {
+      return { ok: true, status: 200, json: async () => ({ id: 'owner-2' }) };
+    }
+    return { ok: false, status: 401, json: async () => ({}) };
+  };
+  app.use('/api/nova/life', createLifeRouter({ engine, env: authEnv, fetchImpl: authFetch }));
   server = createServer(app);
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   base = `http://127.0.0.1:${server.address().port}/api/nova/life`;
@@ -44,11 +60,53 @@ after(async () => {
 async function call(path, options = {}) {
   const response = await fetch(`${base}${path}`, {
     ...options,
-    headers: { 'content-type': 'application/json', ...(options.headers || {}) },
+    headers: {
+      'content-type': 'application/json',
+      authorization: 'Bearer test-owner-token',
+      ...(options.headers || {}),
+    },
   });
   const body = await response.json().catch(() => null);
   return { status: response.status, body };
 }
+
+test('L.I.F.E. requires the configured owner session on every route', async () => {
+  assert.equal((await call('/status', { headers: { authorization: '' } })).status, 401);
+  const unauthenticated = await call('/security', { headers: { authorization: '' } });
+  assert.equal(unauthenticated.body.code, 'LIFE_AUTH_REQUIRED');
+
+  const otherOwner = await call('/status', { headers: { authorization: 'Bearer other-owner-token' } });
+  assert.equal(otherOwner.status, 403);
+  assert.equal(otherOwner.body.code, 'LIFE_OWNER_ONLY');
+
+  const invalid = await call('/status', { headers: { authorization: 'Bearer invalid-owner-token' } });
+  assert.equal(invalid.status, 401);
+  assert.equal(invalid.body.code, 'LIFE_AUTH_INVALID');
+
+  assert.equal((await call('/status')).status, 200);
+});
+
+test('unauthenticated local mode is explicit, development-only and loopback-only', async () => {
+  const localAuth = createLifeAuthenticator({
+    env: { NODE_ENV: 'development', NOVA_LIFE_ALLOW_UNAUTHENTICATED_LOCAL: '1' },
+    fetchImpl: async () => { throw new Error('must not contact Supabase'); },
+  });
+  const local = await localAuth({ headers: {}, socket: { remoteAddress: '127.0.0.1' } });
+  assert.equal(local.id, 'local');
+
+  await assert.rejects(
+    () => localAuth({ headers: {}, socket: { remoteAddress: '192.168.1.8' } }),
+    (error) => error.code === 'LIFE_AUTH_REQUIRED',
+  );
+
+  const productionAuth = createLifeAuthenticator({
+    env: { NODE_ENV: 'production', NOVA_LIFE_ALLOW_UNAUTHENTICATED_LOCAL: '1' },
+  });
+  await assert.rejects(
+    () => productionAuth({ headers: {}, socket: { remoteAddress: '127.0.0.1' } }),
+    (error) => error.code === 'LIFE_AUTH_REQUIRED',
+  );
+});
 
 test('status, config and security describe the running engine', async () => {
   const status = await call('/status');
@@ -114,6 +172,20 @@ test('errors carry a code and a status a client can act on', async () => {
   assert.equal(invalid.status, 400);
   assert.equal(invalid.body.code, 'INVALID_MEMORY_TITLE');
 
+  const malformedGrant = await call('/security/grants', {
+    method: 'POST',
+    body: JSON.stringify({ capability: 'transmit.external', granted: 'false' }),
+  });
+  assert.equal(malformedGrant.status, 400);
+  assert.equal(malformedGrant.body.code, 'INVALID_GRANT');
+  assert.equal((await call('/security')).body.permissions.find((entry) => entry.id === 'transmit.external').granted, false);
+  const unknownGrant = await call('/security/grants', {
+    method: 'POST',
+    body: JSON.stringify({ capability: 'not-a-capability', granted: true }),
+  });
+  assert.equal(unknownGrant.status, 400);
+  assert.equal(unknownGrant.body.code, 'UNKNOWN_PERMISSION');
+
   await call('/security/grants', { method: 'POST', body: JSON.stringify({ capability: 'memory.read', granted: false }) });
   const denied = await call('/memory');
   assert.equal(denied.status, 403);
@@ -170,10 +242,15 @@ test('the skill lifecycle is enforced by the API, not just the UI', async () => 
   assert.equal(tested.body.passed, true);
   assert.equal(tested.body.skill.status, 'verification');
 
-  await call(`/skills/${id}/request-approval`, { method: 'POST' });
+  const approvalRequest = await call(`/skills/${id}/request-approval`, { method: 'POST' });
+  assert.equal(approvalRequest.status, 200);
   const approval = await call('/security/approvals', {
     method: 'POST',
-    body: JSON.stringify({ subjectType: 'skill', subjectId: id, decision: 'approved', note: 'reviewed in test' }),
+    body: JSON.stringify({
+      ...approvalRequest.body.approvalContext,
+      decision: 'approved',
+      note: 'reviewed in test',
+    }),
   });
   assert.equal(approval.status, 200);
   const activated = await call(`/skills/${id}/activate`, { method: 'POST' });

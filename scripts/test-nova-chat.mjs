@@ -414,6 +414,102 @@ test('the local provider runs the built-in trilingual knowledge engine without a
   assert.equal(calledProvider, false);
 });
 
+test('explicit Local receives saved excerpts without any hosted-provider call', async () => {
+  let localRequest;
+  let hostedCalls = 0;
+  const handler = createNovaChatHandler({
+    localInference: {
+      generate: async ({ messages }) => {
+        localRequest = messages;
+        return { ok: true, provider: 'Ollama (local)', model: 'selected-local-model', text: 'The note says the Moon orbits Earth. [Source 1]' };
+      },
+    },
+    getApiKey: () => TEST_API_KEY,
+    getGeminiApiKey: () => 'gemini-test-key',
+    getArenaApiKey: () => 'arena-test-key',
+    fetchImpl: async () => { hostedCalls += 1; throw new Error('Local must not use hosted providers'); },
+  });
+
+  const response = await handler({
+    body: {
+      ...sampleBody,
+      provider: 'local',
+      evidence: [{ id: 'device-moon', source: 'device-library', title: 'Moon notes', content: 'The Moon orbits Earth.' }],
+    },
+    ip: '198.51.100.67',
+  });
+
+  assert.equal(response.status, 200);
+  assert.equal(localRequest[0].role, 'system');
+  assert.equal(localRequest[1].role, 'user');
+  assert.match(localRequest[1].content, /The Moon orbits Earth/);
+  assert.equal(response.body.provider, 'Ollama (local)');
+  assert.deepEqual(response.body.sources, [{ id: 'device-moon', source: 'device-library', title: 'Moon notes' }]);
+  assert.equal(hostedCalls, 0);
+});
+
+test('saved-source evidence is bounded, isolated from system instructions, and returned as citations', async () => {
+  let capturedPayload;
+  const handler = createTestHandler({
+    fetchImpl: async (_url, options) => {
+      capturedPayload = JSON.parse(options.body);
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          model: 'example/evidence-test:free',
+          choices: [{ message: { role: 'assistant', content: 'The note identifies lunar soil as regolith. [Source 1]' } }],
+        }),
+      };
+    },
+  });
+  const secret = 'sk-abcdefghijklmnop';
+  const response = await handler({
+    body: {
+      ...sampleBody,
+      evidence: [{
+        id: 'guide-1',
+        source: 'device-library',
+        title: 'Lunar field guide',
+        content: `Lunar soil is called regolith. ${secret}`,
+      }],
+    },
+    ip: '198.51.100.64',
+  });
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(response.body.sources, [{ id: 'guide-1', source: 'device-library', title: 'Lunar field guide' }]);
+  assert.equal(capturedPayload.messages[1].role, 'user', 'saved excerpts are not concatenated into the system prompt');
+  assert.match(capturedPayload.messages[1].content, /Lunar soil is called regolith/);
+  assert.match(capturedPayload.messages[1].content, /REDACTED/);
+  assert.equal(capturedPayload.messages[1].content.includes(secret), false);
+  assert.match(capturedPayload.messages[0].content, /untrusted data/i);
+  assert.equal(capturedPayload.messages[0].content.includes('Lunar field guide'), false);
+  assert.equal(capturedPayload.messages[2].content, sampleBody.messages[0].content);
+});
+
+test('chat rejects malformed or excessive saved-source evidence before any provider call', async () => {
+  let upstreamCalls = 0;
+  const handler = createTestHandler({ fetchImpl: async () => { upstreamCalls += 1; return successFetch()(); } });
+  const malformed = await handler({
+    body: { ...sampleBody, evidence: [{ id: 'bad/id', source: 'private-library', title: 'A', content: 'B' }] },
+    ip: '198.51.100.65',
+  });
+  const excessive = await handler({
+    body: {
+      ...sampleBody,
+      evidence: Array.from({ length: 6 }, (_, index) => ({ id: `source-${index}`, source: 'device-library', title: 'Source', content: 'Text' })),
+    },
+    ip: '198.51.100.66',
+  });
+
+  assert.equal(malformed.status, 400);
+  assert.equal(malformed.body.code, 'INVALID_EVIDENCE');
+  assert.equal(excessive.status, 413);
+  assert.equal(excessive.body.code, 'EVIDENCE_TOO_LARGE');
+  assert.equal(upstreamCalls, 0);
+});
+
 test('Gemini uses the server-only key header and translates conversation roles to Gemini format', async () => {
   let capturedRequest;
   const handler = createNovaChatHandler({
