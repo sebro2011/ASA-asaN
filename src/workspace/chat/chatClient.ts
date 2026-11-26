@@ -20,11 +20,17 @@ export interface ChatTurn {
   content: string;
 }
 
-/** One online provider that was tried and failed while answering offline. */
+/** One provider or local-runtime attempt that failed before the fallback answer. */
 export interface ChatFallbackHop {
   provider: string;
   code: string;
   status: number;
+}
+
+export interface ChatCitation {
+  id: string;
+  source: 'device-library' | 'private-library';
+  title: string;
 }
 
 export interface ChatReply {
@@ -35,8 +41,10 @@ export interface ChatReply {
   thinking: ChatThinking;
   suggestions: string[];
   fallback: boolean;
-  /** Empty unless `fallback` — then it says which providers failed and how. */
+  /** Empty unless `fallback` — then it says which provider/runtime hops failed. */
   fallbackChain: ChatFallbackHop[];
+  /** Citations are derived from the bounded evidence sent with this request. */
+  sources: ChatCitation[];
 }
 
 export type ChatErrorCode =
@@ -164,9 +172,17 @@ export function chatErrorKey(code: ChatErrorCode): string {
   }
 }
 
+export interface ChatEvidenceInput {
+  id: string;
+  source: 'device-library' | 'private-library';
+  title: string;
+  content: string;
+}
+
 export interface SendChatOptions {
   messages: ChatTurn[];
   lang: string;
+  evidence?: ChatEvidenceInput[];
   provider?: ChatProvider;
   /** Reasoning depth. `auto` keeps the deployment's default behaviour. */
   thinking?: ChatThinking;
@@ -176,6 +192,7 @@ export interface SendChatOptions {
 export async function sendChat({
   messages,
   lang,
+  evidence = [],
   provider = 'auto',
   thinking = 'auto',
   signal,
@@ -185,7 +202,7 @@ export async function sendChat({
     response = await fetch('/api/nova/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify({ messages, lang, provider, thinking }),
+      body: JSON.stringify({ messages, lang, provider, thinking, ...(evidence.length ? { evidence } : {}) }),
       signal,
     });
   } catch {
@@ -222,8 +239,21 @@ export async function sendChat({
         : [],
       fallback: body.fallback === true,
       fallbackChain: normaliseFallbackChain(body.fallbackChain),
+      sources: normaliseCitations(body.sources),
     },
   };
+}
+
+function normaliseCitations(value: unknown): ChatCitation[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object')
+    .flatMap((item) => {
+      if (typeof item.id !== 'string' || typeof item.title !== 'string') return [];
+      if (item.source !== 'device-library' && item.source !== 'private-library') return [];
+      return [{ id: item.id.slice(0, 128), source: item.source, title: item.title.slice(0, 160) }];
+    })
+    .slice(0, 5);
 }
 
 function normaliseFallbackChain(value: unknown): ChatFallbackHop[] {
@@ -260,10 +290,18 @@ export function describeFallbackChain(chain: ChatFallbackHop[]): string {
     .join(' | ');
 }
 
-/** Match the server's 12-message and 20 KiB text limits, including the new turn. */
+/** Match the server's message-count and bounded text limits, including the new turn. */
 export const HISTORY_WINDOW = 12;
 
-export function historyWindow(messages: ChatTurn[]): ChatTurn[] {
+export interface HistoryWindowLimits {
+  maxTextBytes?: number;
+  maxSerializedBytes?: number;
+}
+
+export function historyWindow(
+  messages: ChatTurn[],
+  { maxTextBytes = 20 * 1024, maxSerializedBytes = 23 * 1024 }: HistoryWindowLimits = {},
+): ChatTurn[] {
   const usable = messages.filter((message) =>
     (message.role === 'user' || message.role === 'assistant') && typeof message.content === 'string' && message.content.trim(),
   );
@@ -276,10 +314,10 @@ export function historyWindow(messages: ChatTurn[]): ChatTurn[] {
   for (let index = usable.length - 2; index >= 0 && result.length < HISTORY_WINDOW; index -= 1) {
     const message = usable[index];
     const bytes = encoder.encode(message.content).length;
-    if (message.content.length > 4_000 || textBytes + bytes > 20 * 1024) break;
-    // JSON escaping may add many bytes (e.g. quotes or newlines). Leave room
-    // for the rest of the request under the server's 24 KiB ceiling.
-    if (encoder.encode(JSON.stringify([message, ...result])).length > 23 * 1024) break;
+    if (message.content.length > 4_000 || textBytes + bytes > maxTextBytes) break;
+    // JSON escaping may add many bytes (e.g. quotes or newlines); callers that
+    // attach evidence reserve more of the request's 24 KiB ceiling for it.
+    if (encoder.encode(JSON.stringify([message, ...result])).length > maxSerializedBytes) break;
     result.unshift(message);
     textBytes += bytes;
   }

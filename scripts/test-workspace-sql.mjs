@@ -32,6 +32,10 @@ const storageSql = await readFile(
   new URL('../supabase/migrations/20261105_nova_workspace_storage.sql', import.meta.url),
   'utf8',
 );
+const ragSql = await readFile(
+  new URL('../supabase/migrations/20261107_nova_knowledge_rag.sql', import.meta.url),
+  'utf8',
+);
 
 /** Supabase-managed objects that the migrations reference. */
 const shimSql = `
@@ -87,6 +91,7 @@ async function freshDatabase() {
   await db.exec(schemaSql);
   await db.exec(searchSql);
   await db.exec(storageSql);
+  await db.exec(ragSql);
   // Two confirmed accounts. The trigger must create their profiles.
   await db.query('insert into auth.users (id, email) values ($1, $3), ($2, $4)', [
     ALICE,
@@ -116,6 +121,7 @@ test('migrations are idempotent and bootstrap profiles from auth.users', async (
     await db.exec(schemaSql);
     await db.exec(searchSql);
     await db.exec(storageSql);
+    await db.exec(ragSql);
 
     const profiles = await db.query('select id, locale, theme from public.profiles order by id');
     assert.equal(profiles.rows.length, 2, 'one profile per account, created by trigger');
@@ -131,9 +137,9 @@ test('migrations are idempotent and bootstrap profiles from auth.users', async (
       select tablename, rowsecurity from pg_tables
        where schemaname = 'public'
          and tablename in ('profiles','projects','conversations','messages','message_revisions',
-                           'documents','document_revisions','knowledge_files','tasks')
+                           'documents','document_revisions','knowledge_files','knowledge_chunks','tasks')
        order by tablename`);
-    assert.equal(tables.rows.length, 9);
+    assert.equal(tables.rows.length, 10);
     for (const row of tables.rows) assert.equal(row.rowsecurity, true, `${row.tablename} has RLS`);
   } finally {
     await db.close();
@@ -153,6 +159,7 @@ test('anonymous callers reach nothing', async () => {
       'documents',
       'document_revisions',
       'knowledge_files',
+      'knowledge_chunks',
       'tasks',
     ]) {
       await assert.rejects(
@@ -566,6 +573,86 @@ test('full-text search ranks matches and stays inside RLS', async () => {
   }
 });
 
+test('knowledge text is chunked, retrievable and private to its owner', async () => {
+  const db = await freshDatabase();
+  try {
+    await asOwner(db);
+    const aliceFile = await db.query(
+      `insert into public.knowledge_files (user_id, name, mime, size_bytes, storage_path, extracted_text, index_status)
+       values ($1, 'Lunar field guide', 'text/markdown', 120, $2, $3, 'ready') returning id`,
+      [ALICE, `${ALICE}/lunar-guide.md`, 'The lunar regolith contains silicate dust. Radiation shielding protects astronauts during transit.'],
+    );
+    await db.query(
+      `insert into public.knowledge_files (user_id, name, mime, size_bytes, storage_path, extracted_text, index_status)
+       values ($1, 'Private Mars note', 'text/plain', 80, $2, $3, 'ready')`,
+      [BOB, `${BOB}/mars-note.txt`, 'Private radiation shielding plans for Bob.'],
+    );
+    const boundaryText = `${'x'.repeat(1600)}Z`;
+    const boundaryFile = await db.query(
+      `insert into public.knowledge_files (user_id, name, mime, size_bytes, storage_path, extracted_text, index_status)
+       values ($1, 'Chunk boundary', 'text/plain', $4, $2, $3, 'ready') returning id`,
+      [ALICE, `${ALICE}/boundary.txt`, boundaryText, boundaryText.length],
+    );
+    const literalFile = await db.query(
+      `insert into public.knowledge_files (user_id, name, mime, size_bytes, storage_path, extracted_text, index_status)
+       values ($1, 'Literal wildcard', 'text/plain', 40, $2, $3, 'ready') returning id`,
+      [ALICE, `${ALICE}/literal-wildcard.txt`, 'This note contains the literal marker %_ and nothing special.'],
+    );
+    await db.query(
+      `insert into public.knowledge_files (user_id, name, mime, size_bytes, storage_path, extracted_text, index_status)
+       values ($1, 'Wildcard decoy', 'text/plain', 24, $2, $3, 'ready')`,
+      [ALICE, `${ALICE}/wildcard-decoy.txt`, 'Ordinary text without punctuation.'],
+    );
+
+    const chunkCount = await db.query(
+      'select count(*)::int as n from public.knowledge_chunks where knowledge_file_id = $1',
+      [aliceFile.rows[0].id],
+    );
+    assert.equal(chunkCount.rows[0].n, 1, 'the indexing trigger creates a chunk');
+    const boundaryChunks = await db.query(
+      'select chunk_index, content from public.knowledge_chunks where knowledge_file_id = $1 order by chunk_index',
+      [boundaryFile.rows[0].id],
+    );
+    assert.equal(boundaryChunks.rows.length, 2, 'one trailing character after a full chunk is indexed');
+    assert.equal(boundaryChunks.rows[0].content.length, 1600);
+    assert.equal(boundaryChunks.rows[1].content, `${'x'.repeat(200)}Z`, 'adjacent chunks retain the configured overlap');
+
+    await asUser(db, ALICE);
+    const retrieved = await db.query("select * from public.nova_retrieve_knowledge('lunar regolith', 5)");
+    assert.equal(retrieved.rows.length, 1);
+    assert.equal(retrieved.rows[0].knowledge_file_id, aliceFile.rows[0].id);
+    assert.match(retrieved.rows[0].content, /silicate dust/);
+
+    const searched = await db.query("select kind, id, title from public.nova_search('lunar regolith')");
+    assert.ok(searched.rows.some((row) => row.kind === 'knowledge' && row.id === aliceFile.rows[0].id));
+    assert.ok(!searched.rows.some((row) => row.title === 'Private Mars note'));
+
+    const literalRetrieve = await db.query("select title from public.nova_retrieve_knowledge('%_', 5)");
+    assert.deepEqual(literalRetrieve.rows.map((row) => row.title), ['Literal wildcard'],
+      'LIKE wildcard characters are searched literally, not as broad patterns');
+    const literalSearch = await db.query("select kind, id, title from public.nova_search('%_')");
+    assert.deepEqual(literalSearch.rows.map((row) => row.id), [literalFile.rows[0].id]);
+
+    await asUser(db, BOB);
+    const bobChunks = await db.query('select knowledge_file_id from public.knowledge_chunks');
+    assert.equal(bobChunks.rows.length, 1, 'RLS hides Alice\'s chunk');
+    assert.ok(!bobChunks.rows.some((row) => row.knowledge_file_id === aliceFile.rows[0].id));
+    const bobSearch = await db.query("select title from public.nova_search('radiation shielding')");
+    assert.ok(bobSearch.rows.some((row) => row.title === 'Private Mars note'));
+    await assert.rejects(
+      db.query(
+        `insert into public.knowledge_chunks (knowledge_file_id, user_id, chunk_index, content)
+         values ($1, $2, 99, 'forged')`,
+        [aliceFile.rows[0].id, BOB],
+      ),
+      /permission denied|row-level security/i,
+      'clients cannot forge or write indexed chunks',
+    );
+  } finally {
+    await db.close();
+  }
+});
+
 test('search falls back to substrings, ignores noise, clamps the limit', async () => {
   const db = await freshDatabase();
   try {
@@ -611,6 +698,11 @@ test('the search function is closed to anonymous callers', async () => {
       db.query("select * from public.nova_search('anything')"),
       /permission denied/i,
       'anon cannot execute nova_search',
+    );
+    await assert.rejects(
+      db.query("select * from public.nova_retrieve_knowledge('private note')"),
+      /permission denied/i,
+      'anon cannot execute private knowledge retrieval',
     );
   } finally {
     await db.close();

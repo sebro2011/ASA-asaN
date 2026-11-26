@@ -127,9 +127,15 @@ const BENCH = {
 };
 
 function stubFetch({ failStatus = false, calls = [] } = {}) {
+  window.localStorage.setItem('nova-auth', JSON.stringify({ access_token: 'test-owner-access-token' }));
   globalThis.fetch = async (input, init = {}) => {
     const url = String(input);
-    calls.push({ url, method: init.method || 'GET', body: init.body ? JSON.parse(init.body) : null });
+    calls.push({
+      url,
+      method: init.method || 'GET',
+      body: init.body ? JSON.parse(init.body) : null,
+      authorization: init.headers?.authorization || null,
+    });
     const json = (body, status = 200) => ({ ok: status < 400, status, json: async () => body, headers: { get: () => 'application/json' } });
 
     if (url.endsWith('/status')) {
@@ -201,10 +207,12 @@ const clickTab = async (app, label) => {
 
 test('the overview shows the mode, hardware and counts the API returned', async () => {
   installDom();
-  stubFetch();
+  const calls = [];
+  stubFetch({ calls });
   const app = await mount();
   try {
     assert.match(app.text(), /NOVA Intelligence/);
+    assert.ok(calls.some((call) => call.url.endsWith('/status') && call.authorization === 'Bearer test-owner-access-token'));
     assert.match(app.text(), /LOCAL_ONLY/);
     assert.match(app.text(), /Balanced/);
     assert.match(app.text(), /sqlite/);

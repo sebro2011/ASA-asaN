@@ -79,6 +79,8 @@ const envPatterns = [
   /getProcessEnv\(\)\.([A-Z0-9_]+)/g,
   /\benv\.([A-Z][A-Z0-9_]{2,})\b/g,
   /envValue\(env,\s*'([A-Z0-9_]+)'\)/g,
+  /\benvString\(env,\s*'([A-Z][A-Z0-9_]{2,})'\s*\)/g,
+  /\benv\?\.([A-Z][A-Z0-9_]{2,})\b/g,
   // `key('NAME')` — the news sources read keys through this helper.
   /\bkey\(\s*'([A-Z][A-Z0-9_]{2,})'\s*\)/g,
   // `export const X_KEY_ENV = 'NAME'` — a name that is only reached through a

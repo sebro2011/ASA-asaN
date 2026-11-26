@@ -13,6 +13,7 @@ import type {
   ConversationRow,
   DocumentRow,
   DocumentKind,
+  KnowledgeFileRow,
   MessageRow,
   ProfileRow,
   ProjectRow,
@@ -411,6 +412,32 @@ export function taskRepo(client: SupabaseClient) {
 
 /* ------------------------------------------------------------------ knowledge */
 
+const MAX_INDEXED_TEXT_CHARS = 200_000;
+const INDEXABLE_EXTENSIONS = new Set(['.txt', '.md', '.markdown', '.csv', '.tsv', '.json', '.log', '.dat']);
+const INDEXABLE_MIME_TYPES = new Set([
+  'text/plain',
+  'text/markdown',
+  'text/csv',
+  'text/tab-separated-values',
+  'application/json',
+]);
+
+async function extractIndexableText(file: { name: string; mime: string; bytes: Blob | ArrayBuffer | Uint8Array }): Promise<string | null> {
+  const mime = file.mime.split(';', 1)[0].trim().toLowerCase();
+  const extension = file.name.slice(file.name.lastIndexOf('.')).toLowerCase();
+  if (!INDEXABLE_EXTENSIONS.has(extension) && !INDEXABLE_MIME_TYPES.has(mime)) return null;
+  let text: string;
+  if (typeof Blob !== 'undefined' && file.bytes instanceof Blob) {
+    text = await file.bytes.text();
+  } else {
+    const bytes = file.bytes instanceof ArrayBuffer ? new Uint8Array(file.bytes) : file.bytes;
+    text = new TextDecoder('utf-8', { fatal: false }).decode(bytes);
+  }
+  // PostgreSQL text cannot contain NUL. NFC keeps Sinhala/Tamil search stable.
+  const clean = text.split(String.fromCharCode(0)).join('').normalize('NFC').trim();
+  return clean ? clean.slice(0, MAX_INDEXED_TEXT_CHARS) : null;
+}
+
 export function knowledgeRepo(client: SupabaseClient) {
   return {
     /**
@@ -433,6 +460,7 @@ export function knowledgeRepo(client: SupabaseClient) {
 
       const safeName = file.name.replace(/[^\w.\-]+/g, '_').slice(0, 120) || 'file';
       const path = `${userId}/${crypto.randomUUID()}-${safeName}`;
+      const extractedText = await extractIndexableText(file).catch(() => null);
 
       const { error: uploadError } = await client.storage
         .from(KNOWLEDGE_BUCKET)
@@ -448,6 +476,8 @@ export function knowledgeRepo(client: SupabaseClient) {
           mime: file.mime.slice(0, 120),
           size_bytes: size,
           storage_path: path,
+          extracted_text: extractedText,
+          index_status: extractedText ? 'ready' : 'metadata_only',
         })
         .select('*')
         .single();
@@ -458,7 +488,44 @@ export function knowledgeRepo(client: SupabaseClient) {
         await client.storage.from(KNOWLEDGE_BUCKET).remove([path]);
         throw toRepositoryError(error);
       }
-      return data;
+      return data as KnowledgeFileRow;
+    },
+
+    async list(limit = 100): Promise<KnowledgeFileRow[]> {
+      const { data, error } = await client
+        .from('knowledge_files')
+        .select('id,user_id,project_id,name,mime,size_bytes,storage_path,extracted_text,index_status,created_at')
+        .order('created_at', { ascending: false })
+        .limit(Math.min(Math.max(Number(limit) || 100, 1), 200));
+      if (error) throw toRepositoryError(error);
+      return (data as KnowledgeFileRow[] | null) ?? [];
+    },
+
+    async retrieve(query: string, limit = 3): Promise<Array<{
+      knowledge_file_id: string;
+      chunk_id: string;
+      title: string;
+      content: string;
+      rank: number;
+      chunk_index: number;
+      created_at: string;
+    }>> {
+      const trimmed = query.trim();
+      if (trimmed.length < 2) return [];
+      const { data, error } = await client.rpc('nova_retrieve_knowledge', {
+        query: trimmed,
+        match_limit: Math.min(Math.max(Number(limit) || 3, 1), 8),
+      });
+      if (error) throw toRepositoryError(error);
+      return (Array.isArray(data) ? data : []) as Array<{
+        knowledge_file_id: string;
+        chunk_id: string;
+        title: string;
+        content: string;
+        rank: number;
+        chunk_index: number;
+        created_at: string;
+      }>;
     },
 
     async remove(userId: string, id: string, storagePath: string): Promise<void> {

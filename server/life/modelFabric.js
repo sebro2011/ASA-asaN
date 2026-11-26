@@ -40,8 +40,8 @@ export function createModelFabric({
   fetchImpl = (...args) => fetch(...args),
   hardware = detectHardware({ env }),
   clock = () => new Date(),
-  // Cloud calls need a *recorded* approval, not just a truthy id.
-  approvalCheck = null,
+  // Every cloud call must pass the security kernel's grant and approval gates.
+  authorizeTransmission = null,
 } = {}) {
   const localOnly = String(env.NOVA_LOCAL_ONLY || '').toLowerCase() === '1' || env.NOVA_LOCAL_ONLY === 'true';
   const inflight = new Map();
@@ -245,6 +245,7 @@ export function createModelFabric({
       timeoutMs = null,
       requestId = null,
       approvalId = null,
+      approvalContext = null,
     } = request;
 
     const selection = providerId
@@ -261,17 +262,11 @@ export function createModelFabric({
         })()
       : selectModel({ complexity: request.complexity || 'standard', requireJson: json, needTools: Boolean(tools) });
 
-    const cloudApproved = approvalId
-      ? approvalCheck
-        ? Boolean(approvalCheck(approvalId))
-        : true
-      : false;
-    if (selection.kind === 'cloud' && !cloudApproved) {
-      throw new LifeError(
-        'APPROVAL_REQUIRED',
-        'Sending content to a cloud model needs an explicit approval for this task.',
-        { status: 403, provider: selection.provider },
-      );
+    if (selection.kind === 'cloud') {
+      if (typeof authorizeTransmission !== 'function') {
+        throw new LifeError('PERMISSION_DENIED', 'Cloud transmission is not authorized by this engine.', { status: 403, provider: selection.provider });
+      }
+      authorizeTransmission(approvalId, approvalContext);
     }
 
     const provider = byId.get(selection.provider);
@@ -322,6 +317,7 @@ export function createModelFabric({
       maxTokens = 800,
       timeoutMs = null,
       approvalId = null,
+      approvalContext = null,
     } = request;
 
     const provider = providerId ? resolve(providerId) : byId.get(selectModel().provider);
@@ -329,9 +325,11 @@ export function createModelFabric({
     if (!provider.capabilities.stream) {
       throw new LifeError('STREAM_UNSUPPORTED', `${provider.label} does not stream.`, { status: 400, provider: provider.id });
     }
-    const cloudApproved = approvalId ? (approvalCheck ? Boolean(approvalCheck(approvalId)) : true) : false;
-    if (provider.kind === 'cloud' && !cloudApproved) {
-      throw new LifeError('APPROVAL_REQUIRED', 'Cloud streaming needs an explicit approval.', { status: 403, provider: provider.id });
+    if (provider.kind === 'cloud') {
+      if (typeof authorizeTransmission !== 'function') {
+        throw new LifeError('PERMISSION_DENIED', 'Cloud transmission is not authorized by this engine.', { status: 403, provider: provider.id });
+      }
+      authorizeTransmission(approvalId, approvalContext);
     }
     const controller = new AbortController();
     const id = `stream_${Date.now().toString(36)}`;

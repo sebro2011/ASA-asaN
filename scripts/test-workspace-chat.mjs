@@ -34,7 +34,7 @@ const PROFILE = {
 
 function createFakeClient(seed = {}) {
   const rows = {
-    profiles: [{ ...PROFILE }],
+    profiles: [{ ...PROFILE, ...(seed.profile || {}) }],
     conversations: seed.conversations ?? [],
     messages: seed.messages ?? [],
   };
@@ -429,6 +429,70 @@ test('sending a message creates the conversation and persists both turns', async
   }
 });
 
+test('chat retrieves device-library excerpts and persists translated citation references', async () => {
+  const dom = installDom();
+  try {
+    window.localStorage.setItem('nova_module_records_v1', JSON.stringify({
+      version: 1,
+      records: [
+        {
+          id: 'moon-orbit-primer',
+          module: 'library',
+          createdAt: '2026-01-01T00:00:00.000Z',
+          updatedAt: '2026-01-02T00:00:00.000Z',
+          data: { name: 'Moon orbit primer', text: 'The Moon has an orbit around Earth. The orbit determines orbital period and the Moon orbits Earth. The Moon orbit is stable.' },
+        },
+        {
+          id: 'moon-guide-1',
+          module: 'library',
+          createdAt: '2026-01-01T00:00:00.000Z',
+          updatedAt: '2026-01-02T00:00:00.000Z',
+          data: { name: 'Moon guide', text: 'The Moon orbits Earth and has no substantial atmosphere.' },
+        },
+      ],
+    }));
+    const fetches = stubFetch({
+      chatResponse: {
+        body: {
+          text: 'Your saved note says the Moon orbits Earth. [Source 2]',
+          provider: 'Local engine',
+          model: 'nasa-local-engine',
+          sources: [
+            { id: 'moon-orbit-primer', source: 'device-library', title: 'Moon orbit primer' },
+            { id: 'moon-guide-1', source: 'device-library', title: 'Moon guide' },
+          ],
+        },
+      },
+    });
+    const { client, calls } = createFakeClient();
+    const app = await mountChat({ client });
+    await app.act(async () => {
+      document.querySelector('#nova-chat-use-sources').click();
+    });
+    await typeInto(app.act, document.querySelector('#nova-chat-composer'), 'What does the Moon note say about orbit?');
+    await submit(app.act, document.querySelector('form'));
+
+    const chat = fetches.find((call) => call.url.includes('/api/nova/chat'));
+    assert.equal(chat.body.evidence.length, 2);
+    assert.equal(chat.body.evidence[0].id, 'moon-orbit-primer');
+    assert.equal(chat.body.evidence[0].source, 'device-library');
+    assert.equal(chat.body.evidence[0].title, 'Moon orbit primer');
+    assert.equal(chat.body.evidence[1].id, 'moon-guide-1');
+    assert.equal(chat.body.evidence[1].title, 'Moon guide');
+    assert.match(chat.body.evidence[1].content, /Moon orbits Earth/);
+
+    const assistant = calls.insert.find((call) => call.table === 'messages' && call.row.role === 'assistant');
+    assert.match(assistant.row.content, /Sources/);
+    assert.match(assistant.row.content, /\[Source 2\].*Moon guide/);
+    assert.doesNotMatch(assistant.row.content, /\[Source 1\].*Moon orbit primer/);
+    assert.match(app.text(), /Moon guide/);
+    await app.unmount();
+  } finally {
+    window.localStorage.removeItem('nova_module_records_v1');
+    dom.window.close();
+  }
+});
+
 test('the composer sends the chosen thinking level, and remembers it', async () => {
   const dom = installDom();
   try {
@@ -704,7 +768,7 @@ test('a provider refusal names the provider, the code and the HTTP status', asyn
   }
 });
 
-test('an offline answer says it is offline and lists the providers that failed', async () => {
+test('an offline answer says it is offline and lists the failed provider hops', async () => {
   const dom = installDom();
   try {
     stubFetch({
@@ -735,6 +799,44 @@ test('an offline answer says it is offline and lists the providers that failed',
     assert.match(app.text(), /PROVIDER_AUTH_ERROR/);
     assert.match(app.text(), /HTTP 401/);
     assert.match(app.text(), /UPSTREAM_RATE_LIMITED/);
+    await app.unmount();
+  } finally {
+    dom.window.close();
+  }
+});
+
+test('a Local-mode fallback explains its local runtime failure without blaming hosted AI', async () => {
+  const dom = installDom();
+  try {
+    stubFetch({
+      chatResponse: {
+        status: 200,
+        body: {
+          text: 'A deterministic space-engine answer.',
+          provider: 'NOVA Local Space Engine',
+          model: 'nasa-local-engine',
+          fallback: true,
+          suggestions: [],
+          fallbackChain: [
+            { provider: 'Local model runtime', code: 'PROVIDER_UNREACHABLE', status: 503 },
+          ],
+        },
+      },
+    });
+    const { client } = createFakeClient({
+      profile: { preferred_provider: 'local' },
+      conversations: [conversation('c1', 'Local thread')],
+    });
+
+    const app = await mountChat({ client, path: '/chat/c1' });
+    await typeInto(app.act, document.querySelector('#nova-chat-composer'), 'hi');
+    await submit(app.act, document.querySelector('form'));
+
+    assert.match(app.text(), /Answered offline/);
+    assert.match(app.text(), /Local model runtime/);
+    assert.match(app.text(), /PROVIDER_UNREACHABLE/);
+    assert.match(app.text(), /HTTP 503/);
+    assert.doesNotMatch(app.text(), /online providers did not respond/i);
     await app.unmount();
   } finally {
     dom.window.close();

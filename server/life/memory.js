@@ -39,6 +39,7 @@ export function createMemoryService({ store, security, fabric = null, clock = ()
   const now = () => nowIso(clock);
 
   const expire = () => {
+    security.require('memory.delete');
     const stamp = now();
     const expired = store.queryAll(
       'select id from memories where user_id = ? and expires_at is not null and expires_at <= ?',

@@ -4826,6 +4826,1053 @@ function generateLocalSpaceResponse(userQuery = "", userLang) {
   };
 }
 
+// server/novaLocalInference.js
+import { isIP } from "node:net";
+
+// server/life/hardware.js
+import os from "node:os";
+var PROFILES = {
+  low: {
+    id: "low",
+    label: "Low resource",
+    contextTokens: 2048,
+    maxConcurrentModels: 1,
+    maxConcurrentTasks: 1,
+    backgroundJobs: 0,
+    notes: ["One model at a time", "Small context", "Lazy loading", "No background indexing"]
+  },
+  balanced: {
+    id: "balanced",
+    label: "Balanced",
+    contextTokens: 8192,
+    maxConcurrentModels: 1,
+    maxConcurrentTasks: 2,
+    backgroundJobs: 1,
+    notes: ["Adaptive routing", "On-demand embeddings", "Throttled background work"]
+  },
+  high: {
+    id: "high",
+    label: "High performance",
+    contextTokens: 32768,
+    maxConcurrentModels: 2,
+    maxConcurrentTasks: 4,
+    backgroundJobs: 2,
+    notes: ["GPU preferred", "Larger context", "Controlled parallelism"]
+  }
+};
+var GB = 1024 ** 3;
+function envProfile(env) {
+  const value = (env.NOVA_RESOURCE_PROFILE || "").toLowerCase();
+  return value === "low" || value === "balanced" || value === "high" ? value : null;
+}
+function gpuFromEnv(env) {
+  const vram = Number(env.NOVA_GPU_VRAM_GB);
+  if (!Number.isFinite(vram) || vram <= 0) return null;
+  return { vendor: env.NOVA_GPU_VENDOR || "unknown", vramGb: vram, source: "env" };
+}
+function detectHardware({
+  env = process.env,
+  cpus = () => os.cpus(),
+  totalmem = () => os.totalmem(),
+  freemem = () => os.freemem(),
+  loadavg = () => os.loadavg()
+} = {}) {
+  const cpuList = safe(cpus, []) || [];
+  const totalRamGb = round3(safe(totalmem, 0) / GB);
+  const freeRamGb = round3(safe(freemem, 0) / GB);
+  const gpu = gpuFromEnv(env);
+  const load1 = round3((safe(loadavg, [0]) || [0])[0] ?? 0);
+  const cpuCount = cpuList.length || 1;
+  const forced = envProfile(env);
+  const reported = {
+    cpuCount,
+    cpuModel: cpuList[0]?.model?.trim() || "unknown",
+    totalRamGb,
+    freeRamGb,
+    load1,
+    loadPerCpu: round3(load1 / cpuCount),
+    gpu,
+    platform: process.platform,
+    arch: process.arch,
+    node: process.version
+  };
+  const profileId = forced || inferProfile(reported);
+  return {
+    ...reported,
+    profile: PROFILES[profileId],
+    profileSource: forced ? "env" : "detected"
+  };
+}
+function inferProfile({ totalRamGb, freeRamGb, gpu, loadPerCpu = 0 }) {
+  const vram = gpu?.vramGb ?? 0;
+  if (totalRamGb >= 32 && (vram >= 8 || loadPerCpu < 1.5)) return "high";
+  if (totalRamGb >= 12) return "balanced";
+  if (totalRamGb >= 8 && freeRamGb >= 3) return "balanced";
+  return "low";
+}
+function contextBudget(hardware, requested) {
+  const limit = hardware?.profile?.contextTokens ?? PROFILES.low.contextTokens;
+  const value = Number(requested);
+  if (!Number.isFinite(value) || value <= 0) return limit;
+  return Math.min(Math.floor(value), limit);
+}
+function safe(fn, fallback) {
+  try {
+    return fn();
+  } catch {
+    return fallback;
+  }
+}
+function round3(value) {
+  return Math.round(Number(value || 0) * 10) / 10;
+}
+
+// server/life/modelFabric.js
+var LifeError = class extends Error {
+  constructor(code, message, { status = 400, provider = null, details = null } = {}) {
+    super(message);
+    this.name = "LifeError";
+    this.code = code;
+    this.status = status;
+    this.provider = provider;
+    this.details = details;
+  }
+};
+var DEFAULT_TIMEOUT_MS = 6e4;
+var MAX_TIMEOUT_MS = 18e4;
+var LOCAL_MODEL_PREFERENCE = {
+  simple: ["llama3.2:3b", "qwen2.5:3b", "phi3:mini", "gemma2:2b"],
+  standard: ["llama3.1:8b", "qwen2.5:7b", "mistral:7b", "gemma2:9b"],
+  complex: ["qwen2.5:14b", "llama3.1:8b", "mistral-nemo:12b"]
+};
+function createModelFabric({
+  env = process.env,
+  fetchImpl = (...args) => fetch(...args),
+  hardware = detectHardware({ env }),
+  clock = () => /* @__PURE__ */ new Date(),
+  // Cloud calls need a *recorded* approval, not just a truthy id.
+  approvalCheck = null
+} = {}) {
+  const localOnly = String(env.NOVA_LOCAL_ONLY || "").toLowerCase() === "1" || env.NOVA_LOCAL_ONLY === "true";
+  const inflight = /* @__PURE__ */ new Map();
+  const healthCache = /* @__PURE__ */ new Map();
+  const providers = buildProviders(env, fetchImpl);
+  const byId = new Map(providers.map((provider) => [provider.id, provider]));
+  const list = () => providers.map((provider) => ({
+    id: provider.id,
+    label: provider.label,
+    kind: provider.kind,
+    model: provider.defaultModel,
+    baseUrl: provider.kind === "cloud" ? provider.baseUrl : provider.baseUrl,
+    configured: provider.configured(),
+    localOnlyBlocks: localOnly && provider.kind === "cloud"
+  }));
+  const resolve = (providerId) => {
+    if (!providerId) return null;
+    const provider = byId.get(providerId);
+    if (!provider) throw new LifeError("UNKNOWN_PROVIDER", `Unknown provider: ${providerId}`, { status: 400 });
+    return provider;
+  };
+  const usable = () => providers.filter((provider) => provider.configured() && (!localOnly || provider.kind === "local"));
+  function assertUsable(provider) {
+    if (localOnly && provider.kind === "cloud") {
+      throw new LifeError(
+        "LOCAL_ONLY_BLOCKED",
+        `${provider.label} is a cloud provider and LOCAL_ONLY is enabled. Nothing was sent.`,
+        { status: 409, provider: provider.id }
+      );
+    }
+    if (!provider.configured()) {
+      throw new LifeError("PROVIDER_NOT_CONFIGURED", `${provider.label} is not configured.`, {
+        status: 409,
+        provider: provider.id
+      });
+    }
+  }
+  const capabilities = async (providerId) => {
+    const provider = resolve(providerId);
+    const base = provider.capabilities;
+    try {
+      const models = await provider.models();
+      return { ...base, models, available: true };
+    } catch (error) {
+      return { ...base, models: [], available: false, error: error.message };
+    }
+  };
+  const health = async ({ force = false } = {}) => {
+    const results = [];
+    for (const provider of providers) {
+      const cached2 = healthCache.get(provider.id);
+      if (!force && cached2 && Date.now() - cached2.at < 15e3) {
+        results.push(cached2.value);
+        continue;
+      }
+      const started = Date.now();
+      let value;
+      if (localOnly && provider.kind === "cloud") {
+        value = {
+          id: provider.id,
+          label: provider.label,
+          kind: provider.kind,
+          status: "blocked",
+          ok: false,
+          latencyMs: null,
+          models: [],
+          detail: "LOCAL_ONLY"
+        };
+      } else if (!provider.configured()) {
+        value = {
+          id: provider.id,
+          label: provider.label,
+          kind: provider.kind,
+          status: "unconfigured",
+          ok: false,
+          latencyMs: null,
+          models: [],
+          detail: "NO_CREDENTIALS"
+        };
+      } else {
+        try {
+          const models = await provider.models();
+          value = {
+            id: provider.id,
+            label: provider.label,
+            kind: provider.kind,
+            status: "ok",
+            ok: true,
+            latencyMs: Date.now() - started,
+            models,
+            detail: null
+          };
+        } catch (error) {
+          value = {
+            id: provider.id,
+            label: provider.label,
+            kind: provider.kind,
+            status: "error",
+            ok: false,
+            latencyMs: Date.now() - started,
+            models: [],
+            detail: error.code || error.message
+          };
+        }
+      }
+      healthCache.set(provider.id, { at: Date.now(), value });
+      results.push(value);
+    }
+    const localOk = results.some((entry) => entry.kind === "local" && entry.ok);
+    return {
+      localOnly,
+      localAvailable: localOk,
+      providers: results,
+      checkedAt: clock().toISOString(),
+      hardware: hardware.profile
+    };
+  };
+  const discover = async () => {
+    const discovered = [];
+    for (const provider of usable()) {
+      try {
+        for (const model of await provider.models()) {
+          discovered.push({ provider: provider.id, kind: provider.kind, model });
+        }
+      } catch {
+      }
+    }
+    return discovered;
+  };
+  const selectModel = ({ complexity = "standard", providerId = null, requireJson = false, needTools = false } = {}) => {
+    const candidates = providerId ? [resolve(providerId)] : usable();
+    for (const provider of candidates) {
+      if (!provider) continue;
+      if (localOnly && provider.kind === "cloud") continue;
+      if (requireJson && !provider.capabilities.json) continue;
+      if (needTools && !provider.capabilities.tools) continue;
+      const preferred = provider.preferredModel(complexity) || provider.defaultModel;
+      if (!preferred) continue;
+      return {
+        provider: provider.id,
+        kind: provider.kind,
+        model: preferred,
+        complexity,
+        contextWindow: Math.min(provider.capabilities.contextWindow, hardware.profile.contextTokens * 4),
+        timeoutMs: provider.capabilities.timeoutMs
+      };
+    }
+    if (localOnly) {
+      throw new LifeError(
+        "LOCAL_ONLY_NO_PROVIDER",
+        "LOCAL_ONLY is enabled and no local model is reachable. Start Ollama or an OpenAI-compatible local server.",
+        { status: 503 }
+      );
+    }
+    throw new LifeError("NO_PROVIDER", "No model provider is configured for this request.", { status: 503 });
+  };
+  const fitContext = (messages, { contextWindow = 8192 } = {}) => {
+    const list2 = Array.isArray(messages) ? messages : [];
+    const systems = list2.filter((message) => message.role === "system");
+    const rest = list2.filter((message) => message.role !== "system");
+    const budget = Math.max(256, Math.floor(contextWindow * 0.75));
+    const kept = [];
+    let used = systems.reduce((sum, message) => sum + estimateTokens(message.content), 0);
+    for (let index = rest.length - 1; index >= 0; index -= 1) {
+      const cost = estimateTokens(rest[index].content);
+      if (used + cost > budget && kept.length > 0) break;
+      kept.unshift(rest[index]);
+      used += cost;
+    }
+    return { messages: [...systems, ...kept], dropped: rest.length - kept.length, estimatedTokens: used };
+  };
+  async function generate(request = {}) {
+    const {
+      provider: providerId = null,
+      model = null,
+      messages = [],
+      temperature = 0.2,
+      maxTokens = 800,
+      json = false,
+      tools = null,
+      timeoutMs = null,
+      requestId = null,
+      approvalId = null
+    } = request;
+    const selection = providerId ? (() => {
+      const provider2 = resolve(providerId);
+      assertUsable(provider2);
+      return {
+        provider: provider2.id,
+        kind: provider2.kind,
+        model: model || provider2.preferredModel("standard") || provider2.defaultModel,
+        contextWindow: provider2.capabilities.contextWindow,
+        timeoutMs: provider2.capabilities.timeoutMs
+      };
+    })() : selectModel({ complexity: request.complexity || "standard", requireJson: json, needTools: Boolean(tools) });
+    const cloudApproved = approvalId ? approvalCheck ? Boolean(approvalCheck(approvalId)) : true : false;
+    if (selection.kind === "cloud" && !cloudApproved) {
+      throw new LifeError(
+        "APPROVAL_REQUIRED",
+        "Sending content to a cloud model needs an explicit approval for this task.",
+        { status: 403, provider: selection.provider }
+      );
+    }
+    const provider = byId.get(selection.provider);
+    assertUsable(provider);
+    const fitted = fitContext(messages, { contextWindow: contextBudget(hardware, selection.contextWindow) });
+    const controller = new AbortController();
+    const id = requestId || `req_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+    const budget = Math.min(MAX_TIMEOUT_MS, Math.max(100, Number(timeoutMs) || selection.timeoutMs || DEFAULT_TIMEOUT_MS));
+    const timer = setTimeout(() => controller.abort(new Error("AI_TIMEOUT")), budget);
+    inflight.set(id, { controller, provider: provider.id, startedAt: Date.now() });
+    try {
+      const result2 = await provider.generate({
+        model: selection.model,
+        messages: fitted.messages,
+        temperature,
+        maxTokens,
+        json,
+        tools,
+        signal: controller.signal
+      });
+      return {
+        ...result2,
+        requestId: id,
+        provider: provider.id,
+        kind: provider.kind,
+        model: selection.model,
+        droppedMessages: fitted.dropped,
+        contextWindow: contextBudget(hardware, selection.contextWindow),
+        localOnly
+      };
+    } catch (error) {
+      const wrapped = toLifeError(error, provider.id, controller.signal);
+      throw wrapped;
+    } finally {
+      clearTimeout(timer);
+      inflight.delete(id);
+    }
+  }
+  async function* stream(request = {}) {
+    const {
+      provider: providerId = null,
+      model = null,
+      messages = [],
+      temperature = 0.2,
+      maxTokens = 800,
+      timeoutMs = null,
+      approvalId = null
+    } = request;
+    const provider = providerId ? resolve(providerId) : byId.get(selectModel().provider);
+    assertUsable(provider);
+    if (!provider.capabilities.stream) {
+      throw new LifeError("STREAM_UNSUPPORTED", `${provider.label} does not stream.`, { status: 400, provider: provider.id });
+    }
+    const cloudApproved = approvalId ? approvalCheck ? Boolean(approvalCheck(approvalId)) : true : false;
+    if (provider.kind === "cloud" && !cloudApproved) {
+      throw new LifeError("APPROVAL_REQUIRED", "Cloud streaming needs an explicit approval.", { status: 403, provider: provider.id });
+    }
+    const controller = new AbortController();
+    const id = `stream_${Date.now().toString(36)}`;
+    const budget = Math.min(MAX_TIMEOUT_MS, Number(timeoutMs) || provider.capabilities.timeoutMs);
+    const timer = setTimeout(() => controller.abort(new Error("AI_TIMEOUT")), budget);
+    inflight.set(id, { controller, provider: provider.id, startedAt: Date.now() });
+    try {
+      const fitted = fitContext(messages, { contextWindow: contextBudget(hardware, provider.capabilities.contextWindow) });
+      for await (const chunk of provider.stream({
+        model: model || provider.defaultModel,
+        messages: fitted.messages,
+        temperature,
+        maxTokens,
+        signal: controller.signal
+      })) {
+        yield { ...chunk, requestId: id, provider: provider.id };
+      }
+    } finally {
+      clearTimeout(timer);
+      inflight.delete(id);
+    }
+  }
+  const cancel = async (requestId) => {
+    const entry = inflight.get(requestId);
+    if (!entry) return { cancelled: false, requestId };
+    entry.controller.abort(new Error("CANCELLED"));
+    inflight.delete(requestId);
+    return { cancelled: true, requestId };
+  };
+  return {
+    localOnly,
+    providers: list,
+    health,
+    capabilities,
+    discover,
+    selectModel,
+    fitContext,
+    generate,
+    stream,
+    cancel,
+    hardware,
+    inflight: () => [...inflight.keys()],
+    /** Embeddings are optional: memory retrieval works without them. */
+    embed: async (text2, { providerId = "ollama" } = {}) => {
+      const provider = resolve(providerId);
+      if (!provider || !provider.capabilities.embeddings) return null;
+      try {
+        return await provider.embed(text2);
+      } catch {
+        return null;
+      }
+    }
+  };
+}
+function estimateTokens(content) {
+  const text2 = typeof content === "string" ? content : JSON.stringify(content ?? "");
+  return Math.ceil(text2.length / 4);
+}
+function toLifeError(error, provider, signal) {
+  if (error instanceof LifeError) return error;
+  if (error?.name === "AbortError" || signal?.aborted) {
+    const reason = String(signal?.reason?.message || "");
+    if (reason === "CANCELLED") return new LifeError("CANCELLED", "The request was cancelled.", { status: 499, provider });
+    return new LifeError("AI_TIMEOUT", "The local model did not answer in time.", { status: 504, provider });
+  }
+  if (error?.code === "ECONNREFUSED" || /fetch failed|ECONNREFUSED/i.test(error?.message || "")) {
+    return new LifeError("PROVIDER_UNREACHABLE", "The provider refused the connection.", { status: 503, provider });
+  }
+  return new LifeError("PROVIDER_ERROR", error?.message || "Provider failure", { status: 502, provider });
+}
+function trimSlash(url) {
+  return String(url || "").replace(/\/+$/, "");
+}
+function buildProviders(env, fetchImpl) {
+  const ollamaBase = trimSlash(env.OLLAMA_BASE_URL || "http://127.0.0.1:11434");
+  const openaiBase = trimSlash(env.OPENAI_COMPAT_BASE_URL || env.LOCAL_OPENAI_BASE_URL || "");
+  const llamaBase = trimSlash(env.LLAMA_CPP_BASE_URL || "http://127.0.0.1:8080");
+  const openrouterKey = env.OPENROUTER_API_KEY || "";
+  const geminiKey = env.GEMINI_API_KEY || "";
+  const allowNetworkLocal = String(env.NOVA_ALLOW_REMOTE_LOCAL || "").toLowerCase() === "1";
+  const list = [
+    {
+      id: "ollama",
+      label: "Ollama",
+      kind: "local",
+      baseUrl: ollamaBase,
+      defaultModel: env.NOVA_LOCAL_MODEL || "llama3.1:8b",
+      capabilities: {
+        stream: true,
+        json: true,
+        tools: true,
+        embeddings: true,
+        contextWindow: Number(env.NOVA_LOCAL_CONTEXT || 8192),
+        maxOutputTokens: 4096,
+        timeoutMs: Number(env.NOVA_LOCAL_TIMEOUT_MS || 6e4),
+        local: true
+      },
+      configured: () => Boolean(ollamaBase),
+      preferredModel: (complexity) => env.NOVA_LOCAL_MODEL || LOCAL_MODEL_PREFERENCE[complexity]?.[0] || "llama3.1:8b",
+      models: async () => {
+        const response = await fetchImpl(`${ollamaBase}/api/tags`, { method: "GET" });
+        if (!response.ok) throw Object.assign(new Error("OLLAMA_TAGS_FAILED"), { code: "OLLAMA_TAGS_FAILED" });
+        const body = await response.json();
+        return (body.models || []).map((model) => model.name).filter(Boolean);
+      },
+      generate: async ({ model, messages, temperature, maxTokens, json, tools, signal }) => {
+        const response = await fetchImpl(`${ollamaBase}/api/chat`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            model,
+            messages,
+            stream: false,
+            options: { temperature, num_predict: maxTokens },
+            ...json ? { format: "json" } : {},
+            ...tools ? { tools } : {}
+          }),
+          signal
+        });
+        if (!response.ok) throw new LifeError("PROVIDER_ERROR", `Ollama answered ${response.status}`, { provider: "ollama" });
+        const body = await response.json();
+        return {
+          text: body.message?.content ?? "",
+          toolCalls: body.message?.tool_calls ?? [],
+          usage: {
+            promptTokens: body.prompt_eval_count ?? null,
+            completionTokens: body.eval_count ?? null
+          },
+          raw: null
+        };
+      },
+      stream: async function* ({ model, messages, temperature, maxTokens, signal }) {
+        const response = await fetchImpl(`${ollamaBase}/api/chat`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ model, messages, stream: true, options: { temperature, num_predict: maxTokens } }),
+          signal
+        });
+        if (!response.ok || !response.body) throw new LifeError("PROVIDER_ERROR", `Ollama answered ${response.status}`);
+        for await (const line of ndjsonLines(response.body, signal)) {
+          if (line.message?.content) yield { delta: line.message.content, done: Boolean(line.done) };
+        }
+      },
+      embed: async (text2) => {
+        const response = await fetchImpl(`${ollamaBase}/api/embeddings`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ model: env.NOVA_EMBED_MODEL || "nomic-embed-text", prompt: text2 })
+        });
+        if (!response.ok) return null;
+        const body = await response.json();
+        return Array.isArray(body.embedding) ? body.embedding : null;
+      }
+    },
+    {
+      id: "openai-compatible",
+      label: "Local OpenAI-compatible",
+      kind: "local",
+      baseUrl: openaiBase,
+      defaultModel: env.NOVA_LOCAL_MODEL || "local-model",
+      capabilities: {
+        stream: true,
+        json: true,
+        tools: true,
+        embeddings: false,
+        contextWindow: Number(env.NOVA_LOCAL_CONTEXT || 8192),
+        maxOutputTokens: 4096,
+        timeoutMs: Number(env.NOVA_LOCAL_TIMEOUT_MS || 6e4),
+        local: true
+      },
+      configured: () => Boolean(openaiBase),
+      preferredModel: () => env.NOVA_LOCAL_MODEL || "local-model",
+      models: async () => {
+        const response = await fetchImpl(`${openaiBase}/models`, {
+          headers: env.OPENAI_COMPAT_API_KEY ? { authorization: `Bearer ${env.OPENAI_COMPAT_API_KEY}` } : {}
+        });
+        if (!response.ok) throw new Error("MODELS_FAILED");
+        const body = await response.json();
+        return (body.data || []).map((entry) => entry.id).filter(Boolean);
+      },
+      generate: async ({ model, messages, temperature, maxTokens, json, tools, signal }) => openAiChat({ fetchImpl, baseUrl: openaiBase, key: env.OPENAI_COMPAT_API_KEY, model, messages, temperature, maxTokens, json, tools, signal, provider: "openai-compatible" }),
+      stream: async function* ({ model, messages, temperature, maxTokens, signal }) {
+        yield* openAiStream({
+          fetchImpl,
+          baseUrl: openaiBase,
+          key: env.OPENAI_COMPAT_API_KEY,
+          model,
+          messages,
+          temperature,
+          maxTokens,
+          signal
+        });
+      }
+    },
+    {
+      id: "llama-cpp",
+      label: "llama.cpp server",
+      kind: "local",
+      baseUrl: llamaBase,
+      defaultModel: env.LLAMA_CPP_MODEL || "local-model",
+      capabilities: {
+        stream: true,
+        json: true,
+        tools: false,
+        embeddings: false,
+        contextWindow: Number(env.NOVA_LOCAL_CONTEXT || 4096),
+        maxOutputTokens: 2048,
+        timeoutMs: Number(env.NOVA_LOCAL_TIMEOUT_MS || 6e4),
+        local: true
+      },
+      configured: () => Boolean(llamaBase) && Boolean(env.LLAMA_CPP_ENABLED || env.LLAMA_CPP_BASE_URL),
+      preferredModel: () => env.LLAMA_CPP_MODEL || "local-model",
+      models: async () => {
+        const response = await fetchImpl(`${llamaBase}/v1/models`);
+        if (!response.ok) throw new Error("MODELS_FAILED");
+        const body = await response.json();
+        return (body.data || []).map((entry) => entry.id).filter(Boolean);
+      },
+      generate: async ({ model, messages, temperature, maxTokens, json, signal }) => openAiChat({
+        fetchImpl,
+        baseUrl: `${llamaBase}/v1`,
+        model,
+        messages,
+        temperature,
+        maxTokens,
+        json,
+        signal,
+        provider: "llama-cpp"
+      }),
+      stream: async function* ({ model, messages, temperature, maxTokens, signal }) {
+        yield* openAiStream({ fetchImpl, baseUrl: `${llamaBase}/v1`, model, messages, temperature, maxTokens, signal });
+      }
+    },
+    {
+      id: "openrouter",
+      label: "OpenRouter",
+      kind: "cloud",
+      baseUrl: "https://openrouter.ai/api/v1",
+      defaultModel: env.NOVA_OPENROUTER_MODEL || "openrouter/free",
+      capabilities: {
+        stream: true,
+        json: true,
+        tools: true,
+        embeddings: false,
+        contextWindow: 32e3,
+        maxOutputTokens: 4096,
+        timeoutMs: 9e4,
+        local: false
+      },
+      configured: () => Boolean(openrouterKey),
+      preferredModel: () => env.NOVA_OPENROUTER_MODEL || "openrouter/free",
+      models: async () => {
+        const response = await fetchImpl("https://openrouter.ai/api/v1/models", {
+          headers: { authorization: `Bearer ${openrouterKey}` }
+        });
+        if (!response.ok) throw new Error("MODELS_FAILED");
+        const body = await response.json();
+        return (body.data || []).slice(0, 200).map((entry) => entry.id);
+      },
+      generate: async ({ model, messages, temperature, maxTokens, json, tools, signal }) => openAiChat({
+        fetchImpl,
+        baseUrl: "https://openrouter.ai/api/v1",
+        key: openrouterKey,
+        model,
+        messages,
+        temperature,
+        maxTokens,
+        json,
+        tools,
+        signal,
+        provider: "openrouter",
+        extraHeaders: { "HTTP-Referer": env.APP_URL || "https://nova.local", "X-Title": "NOVA NEXUS" }
+      }),
+      stream: async function* ({ model, messages, temperature, maxTokens, signal }) {
+        yield* openAiStream({
+          fetchImpl,
+          baseUrl: "https://openrouter.ai/api/v1",
+          key: openrouterKey,
+          model,
+          messages,
+          temperature,
+          maxTokens,
+          signal
+        });
+      }
+    },
+    {
+      id: "gemini",
+      label: "Google Gemini",
+      kind: "cloud",
+      baseUrl: "https://generativelanguage.googleapis.com/v1beta",
+      defaultModel: env.NOVA_GEMINI_MODEL || "gemini-3.8-flash",
+      capabilities: {
+        stream: false,
+        json: true,
+        tools: false,
+        embeddings: false,
+        contextWindow: 32e3,
+        maxOutputTokens: 4096,
+        timeoutMs: 9e4,
+        local: false
+      },
+      configured: () => Boolean(geminiKey),
+      preferredModel: () => env.NOVA_GEMINI_MODEL || "gemini-3.8-flash",
+      models: async () => {
+        const response = await fetchImpl(
+          `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(geminiKey)}`
+        );
+        if (!response.ok) throw new Error("MODELS_FAILED");
+        const body = await response.json();
+        return (body.models || []).map((entry) => String(entry.name || "").replace(/^models\//, "")).filter(Boolean);
+      },
+      generate: async ({ model, messages, temperature, maxTokens, json, signal }) => {
+        const system = messages.filter((message) => message.role === "system").map((message) => message.content).join("\n\n");
+        const contents = messages.filter((message) => message.role !== "system").map((message) => ({
+          role: message.role === "assistant" ? "model" : "user",
+          parts: [{ text: String(message.content ?? "") }]
+        }));
+        const response = await fetchImpl(
+          `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(geminiKey)}`,
+          {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              ...system ? { systemInstruction: { parts: [{ text: system }] } } : {},
+              contents,
+              generationConfig: {
+                temperature,
+                maxOutputTokens: maxTokens,
+                ...json ? { responseMimeType: "application/json" } : {}
+              }
+            }),
+            signal
+          }
+        );
+        if (!response.ok) throw new LifeError("PROVIDER_ERROR", `Gemini answered ${response.status}`, { provider: "gemini" });
+        const body = await response.json();
+        const text2 = (body.candidates?.[0]?.content?.parts || []).map((part) => part.text || "").join("");
+        return {
+          text: text2,
+          toolCalls: [],
+          usage: {
+            promptTokens: body.usageMetadata?.promptTokenCount ?? null,
+            completionTokens: body.usageMetadata?.candidatesTokenCount ?? null
+          },
+          raw: null
+        };
+      }
+    }
+  ];
+  if (allowNetworkLocal) {
+  }
+  return list;
+}
+async function openAiChat({
+  fetchImpl,
+  baseUrl,
+  key: key2 = null,
+  model,
+  messages,
+  temperature,
+  maxTokens,
+  json,
+  tools,
+  signal,
+  provider,
+  extraHeaders = {}
+}) {
+  const response = await fetchImpl(`${baseUrl}/chat/completions`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      ...key2 ? { authorization: `Bearer ${key2}` } : {},
+      ...extraHeaders
+    },
+    body: JSON.stringify({
+      model,
+      messages,
+      temperature,
+      max_tokens: maxTokens,
+      ...json ? { response_format: { type: "json_object" } } : {},
+      ...tools ? { tools } : {}
+    }),
+    signal
+  });
+  if (!response.ok) throw new LifeError("PROVIDER_ERROR", `${provider} answered ${response.status}`, { provider });
+  const body = await response.json();
+  const message = body.choices?.[0]?.message || {};
+  return {
+    text: typeof message.content === "string" ? message.content : extractOpenAiText(message.content),
+    toolCalls: message.tool_calls || [],
+    usage: {
+      promptTokens: body.usage?.prompt_tokens ?? null,
+      completionTokens: body.usage?.completion_tokens ?? null
+    },
+    raw: null
+  };
+}
+async function* openAiStream({ fetchImpl, baseUrl, key: key2 = null, model, messages, temperature, maxTokens, signal }) {
+  const response = await fetchImpl(`${baseUrl}/chat/completions`, {
+    method: "POST",
+    headers: { "content-type": "application/json", ...key2 ? { authorization: `Bearer ${key2}` } : {} },
+    body: JSON.stringify({ model, messages, temperature, max_tokens: maxTokens, stream: true }),
+    signal
+  });
+  if (!response.ok || !response.body) throw new LifeError("PROVIDER_ERROR", `Stream answered ${response.status}`);
+  for await (const event of sseData(response.body, signal)) {
+    if (event === "[DONE]") {
+      yield { delta: "", done: true };
+      return;
+    }
+    try {
+      const parsed = JSON.parse(event);
+      const delta = parsed.choices?.[0]?.delta?.content;
+      if (delta) yield { delta, done: false };
+    } catch {
+    }
+  }
+}
+function extractOpenAiText(content) {
+  if (!Array.isArray(content)) return "";
+  return content.map((part) => part?.text || "").join("");
+}
+async function* ndjsonLines(body, signal) {
+  const decoder = new TextDecoder();
+  let buffer = "";
+  for await (const chunk of iterate(body, signal)) {
+    buffer += decoder.decode(chunk, { stream: true });
+    let index = buffer.indexOf("\n");
+    while (index >= 0) {
+      const line = buffer.slice(0, index).trim();
+      buffer = buffer.slice(index + 1);
+      if (line) {
+        try {
+          yield JSON.parse(line);
+        } catch {
+        }
+      }
+      index = buffer.indexOf("\n");
+    }
+  }
+  if (buffer.trim()) {
+    try {
+      yield JSON.parse(buffer.trim());
+    } catch {
+    }
+  }
+}
+async function* sseData(body, signal) {
+  const decoder = new TextDecoder();
+  let buffer = "";
+  for await (const chunk of iterate(body, signal)) {
+    buffer += decoder.decode(chunk, { stream: true });
+    let index = buffer.indexOf("\n");
+    while (index >= 0) {
+      const line = buffer.slice(0, index).trim();
+      buffer = buffer.slice(index + 1);
+      if (line.startsWith("data:")) yield line.slice(5).trim();
+      index = buffer.indexOf("\n");
+    }
+  }
+}
+async function* iterate(stream, signal) {
+  const iterator = stream[Symbol.asyncIterator] ? stream[Symbol.asyncIterator]() : null;
+  if (iterator) {
+    while (true) {
+      if (signal?.aborted) return;
+      const { value, done } = await iterator.next();
+      if (done) return;
+      yield value;
+    }
+  }
+}
+
+// server/novaLocalInference.js
+var LOCAL_PROVIDERS = /* @__PURE__ */ new Set(["ollama", "openai-compatible", "llama-cpp"]);
+var LOCAL_PROVIDER_LABELS = {
+  ollama: "Ollama (local)",
+  "openai-compatible": "OpenAI-compatible local runtime",
+  "llama-cpp": "llama.cpp (local)"
+};
+function envString(env, name) {
+  return typeof env?.[name] === "string" ? env[name].trim() : "";
+}
+function envEnabled(value) {
+  return ["1", "true", "yes", "on"].includes(String(value || "").trim().toLowerCase());
+}
+function validModelId(value) {
+  const model = typeof value === "string" ? value.trim() : "";
+  if (!model || model.length > 160 || /[\u0000-\u001f\u007f]/.test(model)) return null;
+  return model;
+}
+function isLoopbackModelEndpoint(value) {
+  try {
+    const url = new URL(String(value || ""));
+    if (!["http:", "https:"].includes(url.protocol)) return false;
+    if (url.username || url.password || url.search || url.hash) return false;
+    const host = url.hostname.replace(/^\[|\]$/g, "").toLowerCase();
+    if (isIP(host) === 4) {
+      const octets = host.split(".").map(Number);
+      return octets.length === 4 && octets.every((part) => part >= 0 && part <= 255) && octets[0] === 127;
+    }
+    return isIP(host) === 6 && host === "::1";
+  } catch {
+    return false;
+  }
+}
+function providerEndpoint(env, provider) {
+  if (provider === "ollama") return envString(env, "OLLAMA_BASE_URL") || "http://127.0.0.1:11434";
+  if (provider === "openai-compatible") {
+    return envString(env, "OPENAI_COMPAT_BASE_URL") || envString(env, "LOCAL_OPENAI_BASE_URL");
+  }
+  if (provider === "llama-cpp") return envString(env, "LLAMA_CPP_BASE_URL") || "http://127.0.0.1:8080";
+  return "";
+}
+function getNovaLocalInferenceConfig({ env = process.env } = {}) {
+  const providerValue = envString(env, "NOVA_CHAT_LOCAL_PROVIDER") || "ollama";
+  const provider = providerValue.toLowerCase();
+  if (!LOCAL_PROVIDERS.has(provider)) {
+    return {
+      mode: "deterministic",
+      configured: false,
+      provider: null,
+      model: null,
+      code: "LOCAL_MODEL_PROVIDER_INVALID",
+      status: 400
+    };
+  }
+  const rawModel = provider === "llama-cpp" ? envString(env, "NOVA_LOCAL_MODEL") || envString(env, "LLAMA_CPP_MODEL") : envString(env, "NOVA_LOCAL_MODEL");
+  const model = validModelId(rawModel);
+  if (rawModel && !model) {
+    return {
+      mode: "deterministic",
+      configured: false,
+      provider: null,
+      model: null,
+      code: "LOCAL_MODEL_ID_INVALID",
+      status: 400
+    };
+  }
+  if (!model) {
+    return {
+      mode: "deterministic",
+      configured: false,
+      provider: null,
+      model: null,
+      code: "LOCAL_MODEL_NOT_CONFIGURED",
+      status: 0
+    };
+  }
+  const endpoint = providerEndpoint(env, provider);
+  const explicitlyEnabled = provider !== "llama-cpp" || envEnabled(env?.LLAMA_CPP_ENABLED) || Boolean(envString(env, "LLAMA_CPP_BASE_URL"));
+  if (!endpoint || !explicitlyEnabled) {
+    return {
+      mode: "deterministic",
+      configured: false,
+      provider: null,
+      model: null,
+      code: "LOCAL_MODEL_ENDPOINT_NOT_CONFIGURED",
+      status: 0
+    };
+  }
+  if (!isLoopbackModelEndpoint(endpoint)) {
+    return {
+      mode: "deterministic",
+      configured: false,
+      provider: null,
+      model: null,
+      code: "LOCAL_MODEL_REMOTE_BLOCKED",
+      status: 403
+    };
+  }
+  return { mode: "local-model", configured: true, provider, model, code: "OK", status: 200 };
+}
+function guardedLocalFetch(fetchImpl) {
+  return async (input, init = {}) => {
+    const rawUrl = typeof input === "string" || input instanceof URL ? String(input) : typeof input?.url === "string" ? input.url : "";
+    if (!isLoopbackModelEndpoint(rawUrl)) {
+      const error = new Error("LOCAL_MODEL_REMOTE_BLOCKED");
+      error.code = "LOCAL_MODEL_REMOTE_BLOCKED";
+      throw error;
+    }
+    return fetchImpl(input, { ...init, redirect: "manual" });
+  };
+}
+function safeErrorCode(error) {
+  const code = typeof error?.code === "string" ? error.code : "";
+  return /^[A-Z][A-Z0-9_]{0,63}$/.test(code) ? code : "LOCAL_MODEL_UNAVAILABLE";
+}
+function safeStatus(error) {
+  const status = Number(error?.status);
+  return Number.isInteger(status) && status >= 400 && status <= 599 ? status : 503;
+}
+function createNovaLocalInference({
+  env = process.env,
+  fetchImpl = (...args) => globalThis.fetch(...args),
+  modelFabric = null,
+  createFabric = createModelFabric
+} = {}) {
+  const configuration = getNovaLocalInferenceConfig({ env });
+  const localEnv = {
+    NOVA_LOCAL_ONLY: "1",
+    NOVA_RESOURCE_PROFILE: env?.NOVA_RESOURCE_PROFILE,
+    NOVA_GPU_VRAM_GB: env?.NOVA_GPU_VRAM_GB,
+    NOVA_GPU_VENDOR: env?.NOVA_GPU_VENDOR,
+    NOVA_LOCAL_MODEL: configuration.model || "",
+    NOVA_LOCAL_CONTEXT: envString(env, "NOVA_LOCAL_CONTEXT"),
+    NOVA_LOCAL_TIMEOUT_MS: envString(env, "NOVA_LOCAL_TIMEOUT_MS"),
+    OLLAMA_BASE_URL: envString(env, "OLLAMA_BASE_URL") || "http://127.0.0.1:11434",
+    OPENAI_COMPAT_BASE_URL: envString(env, "OPENAI_COMPAT_BASE_URL"),
+    LOCAL_OPENAI_BASE_URL: envString(env, "LOCAL_OPENAI_BASE_URL"),
+    LLAMA_CPP_BASE_URL: envString(env, "LLAMA_CPP_BASE_URL") || "http://127.0.0.1:8080",
+    LLAMA_CPP_ENABLED: envString(env, "LLAMA_CPP_ENABLED"),
+    LLAMA_CPP_MODEL: envString(env, "LLAMA_CPP_MODEL"),
+    ...configuration.provider === "openai-compatible" && envString(env, "OPENAI_COMPAT_API_KEY") ? { OPENAI_COMPAT_API_KEY: envString(env, "OPENAI_COMPAT_API_KEY") } : {}
+  };
+  const fabric = modelFabric || createFabric({
+    env: localEnv,
+    fetchImpl: guardedLocalFetch(fetchImpl)
+  });
+  return {
+    configuration: { ...configuration },
+    async generate({ messages = [], timeoutMs = 15e3 } = {}) {
+      if (!configuration.configured) {
+        return {
+          ok: false,
+          attempted: false,
+          code: configuration.code,
+          status: configuration.status
+        };
+      }
+      try {
+        const output = await fabric.generate({
+          provider: configuration.provider,
+          model: configuration.model,
+          messages,
+          temperature: 0.2,
+          maxTokens: 800,
+          timeoutMs
+        });
+        if (output?.kind !== "local" || output?.provider !== configuration.provider) {
+          return { ok: false, attempted: true, code: "LOCAL_MODEL_PROVIDER_MISMATCH", status: 502 };
+        }
+        const text2 = typeof output.text === "string" ? output.text.trim().slice(0, 2e4) : "";
+        if (!text2) return { ok: false, attempted: true, code: "EMPTY_LOCAL_MODEL_RESPONSE", status: 502 };
+        return {
+          ok: true,
+          attempted: true,
+          text: text2,
+          provider: LOCAL_PROVIDER_LABELS[configuration.provider],
+          model: configuration.model
+        };
+      } catch (error) {
+        return {
+          ok: false,
+          attempted: true,
+          code: safeErrorCode(error),
+          status: safeStatus(error)
+        };
+      }
+    }
+  };
+}
+
 // server/novaThinking.js
 var NOVA_THINKING_LEVELS = ["auto", "flash", "flash-thinking", "thinking", "deep-thinking"];
 var DEFAULT_THINKING_LEVEL = "auto";
@@ -5300,10 +6347,25 @@ function getLocalResponse(query, language, { fallback = false, chain = [], think
     lang: language,
     thinking,
     fallback,
-    // Why every online provider was skipped: safe (codes and statuses only) and
-    // essential, because an offline answer that does not say why is a dead end.
+    // Why every online provider was skipped or the optional local model was
+    // unavailable: safe (codes and statuses only), never upstream text or keys.
     ...chain.length ? { fallbackChain: chain } : {},
     intent: local.intent
+  });
+}
+function getLocalModelResponse(text2, provider, model, language, thinking) {
+  const parsed = extractSuggestions(text2, language);
+  if (!parsed.text) return null;
+  return result(200, {
+    text: parsed.text,
+    suggestions: parsed.suggestions,
+    // This is the external local runtime's actual model id, not a claim that
+    // these weights were trained by NOVA.
+    model,
+    provider,
+    lang: language,
+    thinking,
+    fallback: false
   });
 }
 function sleep(ms) {
@@ -5820,6 +6882,7 @@ function getNovaPublicConfig({ env = getProcessEnv() } = {}) {
   const openrouter = typeof env.OPENROUTER_API_KEY === "string" && Boolean(env.OPENROUTER_API_KEY.trim());
   const gemini = typeof env.GEMINI_API_KEY === "string" && Boolean(env.GEMINI_API_KEY.trim());
   const arena = typeof env.ARENA_API_KEY === "string" && Boolean(env.ARENA_API_KEY.trim());
+  const localInference = getNovaLocalInferenceConfig({ env });
   return {
     providers: {
       auto: true,
@@ -5827,6 +6890,14 @@ function getNovaPublicConfig({ env = getProcessEnv() } = {}) {
       gemini,
       openrouter,
       arena
+    },
+    // Safe metadata only: no endpoint URL, credential, or user transcript.
+    localInference: {
+      mode: localInference.mode,
+      configured: localInference.configured,
+      provider: localInference.provider,
+      model: localInference.model,
+      code: localInference.code
     },
     // Ordered thinking ladder (auto → deep). Keys never appear here.
     thinking: publicThinkingCatalog({ onlineConfigured: openrouter || gemini || arena, env }),
@@ -5849,9 +6920,15 @@ function createNovaChatHandler({
   getArenaModel = () => getProcessEnv().NOVA_ARENA_MODEL,
   rateLimiter = createNovaRateLimiter(),
   timeoutMs = UPSTREAM_TIMEOUT_MS,
-  budgetMs = AUTO_CHAIN_BUDGET_MS
+  budgetMs = AUTO_CHAIN_BUDGET_MS,
+  localInference = null
 } = {}) {
   const readOpenRouterKey = getOpenRouterApiKey || getApiKey || (() => getProcessEnv().OPENROUTER_API_KEY);
+  let localRuntime = localInference;
+  const getLocalRuntime = () => {
+    if (!localRuntime) localRuntime = createNovaLocalInference({ env: getProcessEnv(), fetchImpl });
+    return localRuntime;
+  };
   const chainBudgetMs = Math.max(1e3, Number(budgetMs) || AUTO_CHAIN_BUDGET_MS);
   return async function handleNovaChatRequest2({ body, ip = "unknown", contentLength } = {}) {
     const parsed = parseRequestBody(body, contentLength);
@@ -5868,8 +6945,34 @@ function createNovaChatHandler({
       );
     }
     if (validated.provider === "local") {
+      const messages = [
+        { role: "system", content: makeSystemPrompt(validated.language, validated.thinking) },
+        ...validated.messages
+      ];
+      let localResult;
+      try {
+        localResult = await getLocalRuntime().generate({ messages, timeoutMs });
+      } catch {
+        localResult = { ok: false, attempted: true, code: "LOCAL_MODEL_UNAVAILABLE", status: 503 };
+      }
+      if (localResult?.ok === true && typeof localResult.text === "string" && localResult.text.trim()) {
+        const reply = getLocalModelResponse(
+          localResult.text,
+          cleanModelName(localResult.provider, "Local model runtime"),
+          cleanModelName(localResult.model, "local-model"),
+          validated.language,
+          validated.thinking
+        );
+        if (reply) return reply;
+        localResult = { ok: false, attempted: true, code: "EMPTY_LOCAL_MODEL_RESPONSE", status: 502 };
+      }
+      const localCode = typeof localResult?.code === "string" && /^[A-Z][A-Z0-9_]{0,63}$/.test(localResult.code) ? localResult.code : "LOCAL_MODEL_UNAVAILABLE";
+      const localStatus = Number.isInteger(Number(localResult?.status)) && Number(localResult.status) >= 400 && Number(localResult.status) <= 599 ? Number(localResult.status) : 503;
+      const localFallback = localResult?.attempted === true || localCode !== "LOCAL_MODEL_NOT_CONFIGURED";
       return getLocalResponse(validated.messages.at(-1).content, validated.language, {
-        thinking: validated.thinking
+        thinking: validated.thinking,
+        fallback: localFallback,
+        chain: localFallback ? [{ provider: "Local model runtime", code: localCode, status: localStatus }] : []
       });
     }
     const keys = {
@@ -6190,8 +7293,16 @@ function createDiagnosticsHandler({
       arena: envValue(env, "NOVA_ARENA_MODEL") || "arena_smart.aria"
     };
     const secrets = Object.values(keys).filter(Boolean);
+    const localInference = getNovaLocalInferenceConfig({ env });
     const providers = {
-      local: {
+      local: localInference.configured ? {
+        provider: `${localInference.provider} (local)`,
+        configured: true,
+        endpoint: "loopback local runtime",
+        model: localInference.model,
+        status: "configured",
+        code: "NOT_PROBED"
+      } : {
         provider: "NOVA Local Space Engine",
         configured: true,
         endpoint: "in-process",
@@ -6369,6 +7480,13 @@ function createDiagnosticsHandler({
       // The budgets the deployment is really running: a stale build answers with
       // the old 8 s / 18 s pair, which is how a "fix" can look merged and absent.
       budgets: { upstreamTimeoutMs: UPSTREAM_TIMEOUT_MS, chainBudgetMs: AUTO_CHAIN_BUDGET_MS },
+      localInference: {
+        mode: localInference.mode,
+        configured: localInference.configured,
+        provider: localInference.provider,
+        model: localInference.model,
+        code: localInference.code
+      },
       providers,
       ...chatSelfTest ? { chatSelfTest } : {}
     };
@@ -10728,7 +11846,7 @@ function effectMagnitude(r) {
   if (magnitude >= 0.3) return "weak";
   return "none";
 }
-function round3(value, digits = 4) {
+function round4(value, digits = 4) {
   if (value === null || !Number.isFinite(value)) return null;
   const factor = 10 ** digits;
   return Math.round(value * factor) / factor;
@@ -11460,7 +12578,7 @@ function runAnalyses(request, datasets, language = request.language) {
     analysis.results = Object.fromEntries(
       Object.entries(analysis.results).map(([key2, value]) => [
         key2,
-        typeof value === "number" ? round3(value, 6) : value
+        typeof value === "number" ? round4(value, 6) : value
       ])
     );
     analyses.push(analysis);
@@ -12488,7 +13606,7 @@ function normaliseMarsPhotos(input, date) {
 }
 
 // server/forge/connectors.ts
-var DEFAULT_TIMEOUT_MS = 12e3;
+var DEFAULT_TIMEOUT_MS2 = 12e3;
 var MAX_CACHE_ENTRIES3 = 200;
 var TTL_MS2 = {
   "noaa-swpc-kp": 10 * 6e4,
@@ -12523,7 +13641,7 @@ async function fetchText(url, options, cacheKey2, ttlMs) {
     return { ok: true, text: cached2.value, status: 200, retrievedAt: new Date(nowMs).toISOString() };
   }
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), options.timeoutMs ?? DEFAULT_TIMEOUT_MS);
+  const timeout = setTimeout(() => controller.abort(), options.timeoutMs ?? DEFAULT_TIMEOUT_MS2);
   const retrieveStart = nowMs;
   try {
     const response = await (options.fetchImpl ?? fetch)(url, {
@@ -14298,860 +15416,6 @@ function safeJson(value) {
     return JSON.parse(value);
   } catch {
     return {};
-  }
-}
-
-// server/life/hardware.js
-import os from "node:os";
-var PROFILES = {
-  low: {
-    id: "low",
-    label: "Low resource",
-    contextTokens: 2048,
-    maxConcurrentModels: 1,
-    maxConcurrentTasks: 1,
-    backgroundJobs: 0,
-    notes: ["One model at a time", "Small context", "Lazy loading", "No background indexing"]
-  },
-  balanced: {
-    id: "balanced",
-    label: "Balanced",
-    contextTokens: 8192,
-    maxConcurrentModels: 1,
-    maxConcurrentTasks: 2,
-    backgroundJobs: 1,
-    notes: ["Adaptive routing", "On-demand embeddings", "Throttled background work"]
-  },
-  high: {
-    id: "high",
-    label: "High performance",
-    contextTokens: 32768,
-    maxConcurrentModels: 2,
-    maxConcurrentTasks: 4,
-    backgroundJobs: 2,
-    notes: ["GPU preferred", "Larger context", "Controlled parallelism"]
-  }
-};
-var GB = 1024 ** 3;
-function envProfile(env) {
-  const value = (env.NOVA_RESOURCE_PROFILE || "").toLowerCase();
-  return value === "low" || value === "balanced" || value === "high" ? value : null;
-}
-function gpuFromEnv(env) {
-  const vram = Number(env.NOVA_GPU_VRAM_GB);
-  if (!Number.isFinite(vram) || vram <= 0) return null;
-  return { vendor: env.NOVA_GPU_VENDOR || "unknown", vramGb: vram, source: "env" };
-}
-function detectHardware({
-  env = process.env,
-  cpus = () => os.cpus(),
-  totalmem = () => os.totalmem(),
-  freemem = () => os.freemem(),
-  loadavg = () => os.loadavg()
-} = {}) {
-  const cpuList = safe(cpus, []) || [];
-  const totalRamGb = round4(safe(totalmem, 0) / GB);
-  const freeRamGb = round4(safe(freemem, 0) / GB);
-  const gpu = gpuFromEnv(env);
-  const load1 = round4((safe(loadavg, [0]) || [0])[0] ?? 0);
-  const cpuCount = cpuList.length || 1;
-  const forced = envProfile(env);
-  const reported = {
-    cpuCount,
-    cpuModel: cpuList[0]?.model?.trim() || "unknown",
-    totalRamGb,
-    freeRamGb,
-    load1,
-    loadPerCpu: round4(load1 / cpuCount),
-    gpu,
-    platform: process.platform,
-    arch: process.arch,
-    node: process.version
-  };
-  const profileId = forced || inferProfile(reported);
-  return {
-    ...reported,
-    profile: PROFILES[profileId],
-    profileSource: forced ? "env" : "detected"
-  };
-}
-function inferProfile({ totalRamGb, freeRamGb, gpu, loadPerCpu = 0 }) {
-  const vram = gpu?.vramGb ?? 0;
-  if (totalRamGb >= 32 && (vram >= 8 || loadPerCpu < 1.5)) return "high";
-  if (totalRamGb >= 12) return "balanced";
-  if (totalRamGb >= 8 && freeRamGb >= 3) return "balanced";
-  return "low";
-}
-function contextBudget(hardware, requested) {
-  const limit = hardware?.profile?.contextTokens ?? PROFILES.low.contextTokens;
-  const value = Number(requested);
-  if (!Number.isFinite(value) || value <= 0) return limit;
-  return Math.min(Math.floor(value), limit);
-}
-function safe(fn, fallback) {
-  try {
-    return fn();
-  } catch {
-    return fallback;
-  }
-}
-function round4(value) {
-  return Math.round(Number(value || 0) * 10) / 10;
-}
-
-// server/life/modelFabric.js
-var LifeError = class extends Error {
-  constructor(code, message, { status = 400, provider = null, details = null } = {}) {
-    super(message);
-    this.name = "LifeError";
-    this.code = code;
-    this.status = status;
-    this.provider = provider;
-    this.details = details;
-  }
-};
-var DEFAULT_TIMEOUT_MS2 = 6e4;
-var MAX_TIMEOUT_MS = 18e4;
-var LOCAL_MODEL_PREFERENCE = {
-  simple: ["llama3.2:3b", "qwen2.5:3b", "phi3:mini", "gemma2:2b"],
-  standard: ["llama3.1:8b", "qwen2.5:7b", "mistral:7b", "gemma2:9b"],
-  complex: ["qwen2.5:14b", "llama3.1:8b", "mistral-nemo:12b"]
-};
-function createModelFabric({
-  env = process.env,
-  fetchImpl = (...args) => fetch(...args),
-  hardware = detectHardware({ env }),
-  clock = () => /* @__PURE__ */ new Date(),
-  // Cloud calls need a *recorded* approval, not just a truthy id.
-  approvalCheck = null
-} = {}) {
-  const localOnly = String(env.NOVA_LOCAL_ONLY || "").toLowerCase() === "1" || env.NOVA_LOCAL_ONLY === "true";
-  const inflight = /* @__PURE__ */ new Map();
-  const healthCache = /* @__PURE__ */ new Map();
-  const providers = buildProviders(env, fetchImpl);
-  const byId = new Map(providers.map((provider) => [provider.id, provider]));
-  const list = () => providers.map((provider) => ({
-    id: provider.id,
-    label: provider.label,
-    kind: provider.kind,
-    model: provider.defaultModel,
-    baseUrl: provider.kind === "cloud" ? provider.baseUrl : provider.baseUrl,
-    configured: provider.configured(),
-    localOnlyBlocks: localOnly && provider.kind === "cloud"
-  }));
-  const resolve = (providerId) => {
-    if (!providerId) return null;
-    const provider = byId.get(providerId);
-    if (!provider) throw new LifeError("UNKNOWN_PROVIDER", `Unknown provider: ${providerId}`, { status: 400 });
-    return provider;
-  };
-  const usable = () => providers.filter((provider) => provider.configured() && (!localOnly || provider.kind === "local"));
-  function assertUsable(provider) {
-    if (localOnly && provider.kind === "cloud") {
-      throw new LifeError(
-        "LOCAL_ONLY_BLOCKED",
-        `${provider.label} is a cloud provider and LOCAL_ONLY is enabled. Nothing was sent.`,
-        { status: 409, provider: provider.id }
-      );
-    }
-    if (!provider.configured()) {
-      throw new LifeError("PROVIDER_NOT_CONFIGURED", `${provider.label} is not configured.`, {
-        status: 409,
-        provider: provider.id
-      });
-    }
-  }
-  const capabilities = async (providerId) => {
-    const provider = resolve(providerId);
-    const base = provider.capabilities;
-    try {
-      const models = await provider.models();
-      return { ...base, models, available: true };
-    } catch (error) {
-      return { ...base, models: [], available: false, error: error.message };
-    }
-  };
-  const health = async ({ force = false } = {}) => {
-    const results = [];
-    for (const provider of providers) {
-      const cached2 = healthCache.get(provider.id);
-      if (!force && cached2 && Date.now() - cached2.at < 15e3) {
-        results.push(cached2.value);
-        continue;
-      }
-      const started = Date.now();
-      let value;
-      if (localOnly && provider.kind === "cloud") {
-        value = {
-          id: provider.id,
-          label: provider.label,
-          kind: provider.kind,
-          status: "blocked",
-          ok: false,
-          latencyMs: null,
-          models: [],
-          detail: "LOCAL_ONLY"
-        };
-      } else if (!provider.configured()) {
-        value = {
-          id: provider.id,
-          label: provider.label,
-          kind: provider.kind,
-          status: "unconfigured",
-          ok: false,
-          latencyMs: null,
-          models: [],
-          detail: "NO_CREDENTIALS"
-        };
-      } else {
-        try {
-          const models = await provider.models();
-          value = {
-            id: provider.id,
-            label: provider.label,
-            kind: provider.kind,
-            status: "ok",
-            ok: true,
-            latencyMs: Date.now() - started,
-            models,
-            detail: null
-          };
-        } catch (error) {
-          value = {
-            id: provider.id,
-            label: provider.label,
-            kind: provider.kind,
-            status: "error",
-            ok: false,
-            latencyMs: Date.now() - started,
-            models: [],
-            detail: error.code || error.message
-          };
-        }
-      }
-      healthCache.set(provider.id, { at: Date.now(), value });
-      results.push(value);
-    }
-    const localOk = results.some((entry) => entry.kind === "local" && entry.ok);
-    return {
-      localOnly,
-      localAvailable: localOk,
-      providers: results,
-      checkedAt: clock().toISOString(),
-      hardware: hardware.profile
-    };
-  };
-  const discover = async () => {
-    const discovered = [];
-    for (const provider of usable()) {
-      try {
-        for (const model of await provider.models()) {
-          discovered.push({ provider: provider.id, kind: provider.kind, model });
-        }
-      } catch {
-      }
-    }
-    return discovered;
-  };
-  const selectModel = ({ complexity = "standard", providerId = null, requireJson = false, needTools = false } = {}) => {
-    const candidates = providerId ? [resolve(providerId)] : usable();
-    for (const provider of candidates) {
-      if (!provider) continue;
-      if (localOnly && provider.kind === "cloud") continue;
-      if (requireJson && !provider.capabilities.json) continue;
-      if (needTools && !provider.capabilities.tools) continue;
-      const preferred = provider.preferredModel(complexity) || provider.defaultModel;
-      if (!preferred) continue;
-      return {
-        provider: provider.id,
-        kind: provider.kind,
-        model: preferred,
-        complexity,
-        contextWindow: Math.min(provider.capabilities.contextWindow, hardware.profile.contextTokens * 4),
-        timeoutMs: provider.capabilities.timeoutMs
-      };
-    }
-    if (localOnly) {
-      throw new LifeError(
-        "LOCAL_ONLY_NO_PROVIDER",
-        "LOCAL_ONLY is enabled and no local model is reachable. Start Ollama or an OpenAI-compatible local server.",
-        { status: 503 }
-      );
-    }
-    throw new LifeError("NO_PROVIDER", "No model provider is configured for this request.", { status: 503 });
-  };
-  const fitContext = (messages, { contextWindow = 8192 } = {}) => {
-    const list2 = Array.isArray(messages) ? messages : [];
-    const systems = list2.filter((message) => message.role === "system");
-    const rest = list2.filter((message) => message.role !== "system");
-    const budget = Math.max(256, Math.floor(contextWindow * 0.75));
-    const kept = [];
-    let used = systems.reduce((sum, message) => sum + estimateTokens(message.content), 0);
-    for (let index = rest.length - 1; index >= 0; index -= 1) {
-      const cost = estimateTokens(rest[index].content);
-      if (used + cost > budget && kept.length > 0) break;
-      kept.unshift(rest[index]);
-      used += cost;
-    }
-    return { messages: [...systems, ...kept], dropped: rest.length - kept.length, estimatedTokens: used };
-  };
-  async function generate(request = {}) {
-    const {
-      provider: providerId = null,
-      model = null,
-      messages = [],
-      temperature = 0.2,
-      maxTokens = 800,
-      json = false,
-      tools = null,
-      timeoutMs = null,
-      requestId = null,
-      approvalId = null
-    } = request;
-    const selection = providerId ? (() => {
-      const provider2 = resolve(providerId);
-      assertUsable(provider2);
-      return {
-        provider: provider2.id,
-        kind: provider2.kind,
-        model: model || provider2.preferredModel("standard") || provider2.defaultModel,
-        contextWindow: provider2.capabilities.contextWindow,
-        timeoutMs: provider2.capabilities.timeoutMs
-      };
-    })() : selectModel({ complexity: request.complexity || "standard", requireJson: json, needTools: Boolean(tools) });
-    const cloudApproved = approvalId ? approvalCheck ? Boolean(approvalCheck(approvalId)) : true : false;
-    if (selection.kind === "cloud" && !cloudApproved) {
-      throw new LifeError(
-        "APPROVAL_REQUIRED",
-        "Sending content to a cloud model needs an explicit approval for this task.",
-        { status: 403, provider: selection.provider }
-      );
-    }
-    const provider = byId.get(selection.provider);
-    assertUsable(provider);
-    const fitted = fitContext(messages, { contextWindow: contextBudget(hardware, selection.contextWindow) });
-    const controller = new AbortController();
-    const id = requestId || `req_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
-    const budget = Math.min(MAX_TIMEOUT_MS, Math.max(100, Number(timeoutMs) || selection.timeoutMs || DEFAULT_TIMEOUT_MS2));
-    const timer = setTimeout(() => controller.abort(new Error("AI_TIMEOUT")), budget);
-    inflight.set(id, { controller, provider: provider.id, startedAt: Date.now() });
-    try {
-      const result2 = await provider.generate({
-        model: selection.model,
-        messages: fitted.messages,
-        temperature,
-        maxTokens,
-        json,
-        tools,
-        signal: controller.signal
-      });
-      return {
-        ...result2,
-        requestId: id,
-        provider: provider.id,
-        kind: provider.kind,
-        model: selection.model,
-        droppedMessages: fitted.dropped,
-        contextWindow: contextBudget(hardware, selection.contextWindow),
-        localOnly
-      };
-    } catch (error) {
-      const wrapped = toLifeError(error, provider.id, controller.signal);
-      throw wrapped;
-    } finally {
-      clearTimeout(timer);
-      inflight.delete(id);
-    }
-  }
-  async function* stream(request = {}) {
-    const {
-      provider: providerId = null,
-      model = null,
-      messages = [],
-      temperature = 0.2,
-      maxTokens = 800,
-      timeoutMs = null,
-      approvalId = null
-    } = request;
-    const provider = providerId ? resolve(providerId) : byId.get(selectModel().provider);
-    assertUsable(provider);
-    if (!provider.capabilities.stream) {
-      throw new LifeError("STREAM_UNSUPPORTED", `${provider.label} does not stream.`, { status: 400, provider: provider.id });
-    }
-    const cloudApproved = approvalId ? approvalCheck ? Boolean(approvalCheck(approvalId)) : true : false;
-    if (provider.kind === "cloud" && !cloudApproved) {
-      throw new LifeError("APPROVAL_REQUIRED", "Cloud streaming needs an explicit approval.", { status: 403, provider: provider.id });
-    }
-    const controller = new AbortController();
-    const id = `stream_${Date.now().toString(36)}`;
-    const budget = Math.min(MAX_TIMEOUT_MS, Number(timeoutMs) || provider.capabilities.timeoutMs);
-    const timer = setTimeout(() => controller.abort(new Error("AI_TIMEOUT")), budget);
-    inflight.set(id, { controller, provider: provider.id, startedAt: Date.now() });
-    try {
-      const fitted = fitContext(messages, { contextWindow: contextBudget(hardware, provider.capabilities.contextWindow) });
-      for await (const chunk of provider.stream({
-        model: model || provider.defaultModel,
-        messages: fitted.messages,
-        temperature,
-        maxTokens,
-        signal: controller.signal
-      })) {
-        yield { ...chunk, requestId: id, provider: provider.id };
-      }
-    } finally {
-      clearTimeout(timer);
-      inflight.delete(id);
-    }
-  }
-  const cancel = async (requestId) => {
-    const entry = inflight.get(requestId);
-    if (!entry) return { cancelled: false, requestId };
-    entry.controller.abort(new Error("CANCELLED"));
-    inflight.delete(requestId);
-    return { cancelled: true, requestId };
-  };
-  return {
-    localOnly,
-    providers: list,
-    health,
-    capabilities,
-    discover,
-    selectModel,
-    fitContext,
-    generate,
-    stream,
-    cancel,
-    hardware,
-    inflight: () => [...inflight.keys()],
-    /** Embeddings are optional: memory retrieval works without them. */
-    embed: async (text2, { providerId = "ollama" } = {}) => {
-      const provider = resolve(providerId);
-      if (!provider || !provider.capabilities.embeddings) return null;
-      try {
-        return await provider.embed(text2);
-      } catch {
-        return null;
-      }
-    }
-  };
-}
-function estimateTokens(content) {
-  const text2 = typeof content === "string" ? content : JSON.stringify(content ?? "");
-  return Math.ceil(text2.length / 4);
-}
-function toLifeError(error, provider, signal) {
-  if (error instanceof LifeError) return error;
-  if (error?.name === "AbortError" || signal?.aborted) {
-    const reason = String(signal?.reason?.message || "");
-    if (reason === "CANCELLED") return new LifeError("CANCELLED", "The request was cancelled.", { status: 499, provider });
-    return new LifeError("AI_TIMEOUT", "The local model did not answer in time.", { status: 504, provider });
-  }
-  if (error?.code === "ECONNREFUSED" || /fetch failed|ECONNREFUSED/i.test(error?.message || "")) {
-    return new LifeError("PROVIDER_UNREACHABLE", "The provider refused the connection.", { status: 503, provider });
-  }
-  return new LifeError("PROVIDER_ERROR", error?.message || "Provider failure", { status: 502, provider });
-}
-function trimSlash(url) {
-  return String(url || "").replace(/\/+$/, "");
-}
-function buildProviders(env, fetchImpl) {
-  const ollamaBase = trimSlash(env.OLLAMA_BASE_URL || "http://127.0.0.1:11434");
-  const openaiBase = trimSlash(env.OPENAI_COMPAT_BASE_URL || env.LOCAL_OPENAI_BASE_URL || "");
-  const llamaBase = trimSlash(env.LLAMA_CPP_BASE_URL || "http://127.0.0.1:8080");
-  const openrouterKey = env.OPENROUTER_API_KEY || "";
-  const geminiKey = env.GEMINI_API_KEY || "";
-  const allowNetworkLocal = String(env.NOVA_ALLOW_REMOTE_LOCAL || "").toLowerCase() === "1";
-  const list = [
-    {
-      id: "ollama",
-      label: "Ollama",
-      kind: "local",
-      baseUrl: ollamaBase,
-      defaultModel: env.NOVA_LOCAL_MODEL || "llama3.1:8b",
-      capabilities: {
-        stream: true,
-        json: true,
-        tools: true,
-        embeddings: true,
-        contextWindow: Number(env.NOVA_LOCAL_CONTEXT || 8192),
-        maxOutputTokens: 4096,
-        timeoutMs: Number(env.NOVA_LOCAL_TIMEOUT_MS || 6e4),
-        local: true
-      },
-      configured: () => Boolean(ollamaBase),
-      preferredModel: (complexity) => env.NOVA_LOCAL_MODEL || LOCAL_MODEL_PREFERENCE[complexity]?.[0] || "llama3.1:8b",
-      models: async () => {
-        const response = await fetchImpl(`${ollamaBase}/api/tags`, { method: "GET" });
-        if (!response.ok) throw Object.assign(new Error("OLLAMA_TAGS_FAILED"), { code: "OLLAMA_TAGS_FAILED" });
-        const body = await response.json();
-        return (body.models || []).map((model) => model.name).filter(Boolean);
-      },
-      generate: async ({ model, messages, temperature, maxTokens, json, tools, signal }) => {
-        const response = await fetchImpl(`${ollamaBase}/api/chat`, {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            model,
-            messages,
-            stream: false,
-            options: { temperature, num_predict: maxTokens },
-            ...json ? { format: "json" } : {},
-            ...tools ? { tools } : {}
-          }),
-          signal
-        });
-        if (!response.ok) throw new LifeError("PROVIDER_ERROR", `Ollama answered ${response.status}`, { provider: "ollama" });
-        const body = await response.json();
-        return {
-          text: body.message?.content ?? "",
-          toolCalls: body.message?.tool_calls ?? [],
-          usage: {
-            promptTokens: body.prompt_eval_count ?? null,
-            completionTokens: body.eval_count ?? null
-          },
-          raw: null
-        };
-      },
-      stream: async function* ({ model, messages, temperature, maxTokens, signal }) {
-        const response = await fetchImpl(`${ollamaBase}/api/chat`, {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ model, messages, stream: true, options: { temperature, num_predict: maxTokens } }),
-          signal
-        });
-        if (!response.ok || !response.body) throw new LifeError("PROVIDER_ERROR", `Ollama answered ${response.status}`);
-        for await (const line of ndjsonLines(response.body, signal)) {
-          if (line.message?.content) yield { delta: line.message.content, done: Boolean(line.done) };
-        }
-      },
-      embed: async (text2) => {
-        const response = await fetchImpl(`${ollamaBase}/api/embeddings`, {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ model: env.NOVA_EMBED_MODEL || "nomic-embed-text", prompt: text2 })
-        });
-        if (!response.ok) return null;
-        const body = await response.json();
-        return Array.isArray(body.embedding) ? body.embedding : null;
-      }
-    },
-    {
-      id: "openai-compatible",
-      label: "Local OpenAI-compatible",
-      kind: "local",
-      baseUrl: openaiBase,
-      defaultModel: env.NOVA_LOCAL_MODEL || "local-model",
-      capabilities: {
-        stream: true,
-        json: true,
-        tools: true,
-        embeddings: false,
-        contextWindow: Number(env.NOVA_LOCAL_CONTEXT || 8192),
-        maxOutputTokens: 4096,
-        timeoutMs: Number(env.NOVA_LOCAL_TIMEOUT_MS || 6e4),
-        local: true
-      },
-      configured: () => Boolean(openaiBase),
-      preferredModel: () => env.NOVA_LOCAL_MODEL || "local-model",
-      models: async () => {
-        const response = await fetchImpl(`${openaiBase}/models`, {
-          headers: env.OPENAI_COMPAT_API_KEY ? { authorization: `Bearer ${env.OPENAI_COMPAT_API_KEY}` } : {}
-        });
-        if (!response.ok) throw new Error("MODELS_FAILED");
-        const body = await response.json();
-        return (body.data || []).map((entry) => entry.id).filter(Boolean);
-      },
-      generate: async ({ model, messages, temperature, maxTokens, json, tools, signal }) => openAiChat({ fetchImpl, baseUrl: openaiBase, key: env.OPENAI_COMPAT_API_KEY, model, messages, temperature, maxTokens, json, tools, signal, provider: "openai-compatible" }),
-      stream: async function* ({ model, messages, temperature, maxTokens, signal }) {
-        yield* openAiStream({
-          fetchImpl,
-          baseUrl: openaiBase,
-          key: env.OPENAI_COMPAT_API_KEY,
-          model,
-          messages,
-          temperature,
-          maxTokens,
-          signal
-        });
-      }
-    },
-    {
-      id: "llama-cpp",
-      label: "llama.cpp server",
-      kind: "local",
-      baseUrl: llamaBase,
-      defaultModel: env.LLAMA_CPP_MODEL || "local-model",
-      capabilities: {
-        stream: true,
-        json: true,
-        tools: false,
-        embeddings: false,
-        contextWindow: Number(env.NOVA_LOCAL_CONTEXT || 4096),
-        maxOutputTokens: 2048,
-        timeoutMs: Number(env.NOVA_LOCAL_TIMEOUT_MS || 6e4),
-        local: true
-      },
-      configured: () => Boolean(llamaBase) && Boolean(env.LLAMA_CPP_ENABLED || env.LLAMA_CPP_BASE_URL),
-      preferredModel: () => env.LLAMA_CPP_MODEL || "local-model",
-      models: async () => {
-        const response = await fetchImpl(`${llamaBase}/v1/models`);
-        if (!response.ok) throw new Error("MODELS_FAILED");
-        const body = await response.json();
-        return (body.data || []).map((entry) => entry.id).filter(Boolean);
-      },
-      generate: async ({ model, messages, temperature, maxTokens, json, signal }) => openAiChat({
-        fetchImpl,
-        baseUrl: `${llamaBase}/v1`,
-        model,
-        messages,
-        temperature,
-        maxTokens,
-        json,
-        signal,
-        provider: "llama-cpp"
-      }),
-      stream: async function* ({ model, messages, temperature, maxTokens, signal }) {
-        yield* openAiStream({ fetchImpl, baseUrl: `${llamaBase}/v1`, model, messages, temperature, maxTokens, signal });
-      }
-    },
-    {
-      id: "openrouter",
-      label: "OpenRouter",
-      kind: "cloud",
-      baseUrl: "https://openrouter.ai/api/v1",
-      defaultModel: env.NOVA_OPENROUTER_MODEL || "openrouter/free",
-      capabilities: {
-        stream: true,
-        json: true,
-        tools: true,
-        embeddings: false,
-        contextWindow: 32e3,
-        maxOutputTokens: 4096,
-        timeoutMs: 9e4,
-        local: false
-      },
-      configured: () => Boolean(openrouterKey),
-      preferredModel: () => env.NOVA_OPENROUTER_MODEL || "openrouter/free",
-      models: async () => {
-        const response = await fetchImpl("https://openrouter.ai/api/v1/models", {
-          headers: { authorization: `Bearer ${openrouterKey}` }
-        });
-        if (!response.ok) throw new Error("MODELS_FAILED");
-        const body = await response.json();
-        return (body.data || []).slice(0, 200).map((entry) => entry.id);
-      },
-      generate: async ({ model, messages, temperature, maxTokens, json, tools, signal }) => openAiChat({
-        fetchImpl,
-        baseUrl: "https://openrouter.ai/api/v1",
-        key: openrouterKey,
-        model,
-        messages,
-        temperature,
-        maxTokens,
-        json,
-        tools,
-        signal,
-        provider: "openrouter",
-        extraHeaders: { "HTTP-Referer": env.APP_URL || "https://nova.local", "X-Title": "NOVA NEXUS" }
-      }),
-      stream: async function* ({ model, messages, temperature, maxTokens, signal }) {
-        yield* openAiStream({
-          fetchImpl,
-          baseUrl: "https://openrouter.ai/api/v1",
-          key: openrouterKey,
-          model,
-          messages,
-          temperature,
-          maxTokens,
-          signal
-        });
-      }
-    },
-    {
-      id: "gemini",
-      label: "Google Gemini",
-      kind: "cloud",
-      baseUrl: "https://generativelanguage.googleapis.com/v1beta",
-      defaultModel: env.NOVA_GEMINI_MODEL || "gemini-3.8-flash",
-      capabilities: {
-        stream: false,
-        json: true,
-        tools: false,
-        embeddings: false,
-        contextWindow: 32e3,
-        maxOutputTokens: 4096,
-        timeoutMs: 9e4,
-        local: false
-      },
-      configured: () => Boolean(geminiKey),
-      preferredModel: () => env.NOVA_GEMINI_MODEL || "gemini-3.8-flash",
-      models: async () => {
-        const response = await fetchImpl(
-          `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(geminiKey)}`
-        );
-        if (!response.ok) throw new Error("MODELS_FAILED");
-        const body = await response.json();
-        return (body.models || []).map((entry) => String(entry.name || "").replace(/^models\//, "")).filter(Boolean);
-      },
-      generate: async ({ model, messages, temperature, maxTokens, json, signal }) => {
-        const system = messages.filter((message) => message.role === "system").map((message) => message.content).join("\n\n");
-        const contents = messages.filter((message) => message.role !== "system").map((message) => ({
-          role: message.role === "assistant" ? "model" : "user",
-          parts: [{ text: String(message.content ?? "") }]
-        }));
-        const response = await fetchImpl(
-          `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(geminiKey)}`,
-          {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({
-              ...system ? { systemInstruction: { parts: [{ text: system }] } } : {},
-              contents,
-              generationConfig: {
-                temperature,
-                maxOutputTokens: maxTokens,
-                ...json ? { responseMimeType: "application/json" } : {}
-              }
-            }),
-            signal
-          }
-        );
-        if (!response.ok) throw new LifeError("PROVIDER_ERROR", `Gemini answered ${response.status}`, { provider: "gemini" });
-        const body = await response.json();
-        const text2 = (body.candidates?.[0]?.content?.parts || []).map((part) => part.text || "").join("");
-        return {
-          text: text2,
-          toolCalls: [],
-          usage: {
-            promptTokens: body.usageMetadata?.promptTokenCount ?? null,
-            completionTokens: body.usageMetadata?.candidatesTokenCount ?? null
-          },
-          raw: null
-        };
-      }
-    }
-  ];
-  if (allowNetworkLocal) {
-  }
-  return list;
-}
-async function openAiChat({
-  fetchImpl,
-  baseUrl,
-  key: key2 = null,
-  model,
-  messages,
-  temperature,
-  maxTokens,
-  json,
-  tools,
-  signal,
-  provider,
-  extraHeaders = {}
-}) {
-  const response = await fetchImpl(`${baseUrl}/chat/completions`, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      ...key2 ? { authorization: `Bearer ${key2}` } : {},
-      ...extraHeaders
-    },
-    body: JSON.stringify({
-      model,
-      messages,
-      temperature,
-      max_tokens: maxTokens,
-      ...json ? { response_format: { type: "json_object" } } : {},
-      ...tools ? { tools } : {}
-    }),
-    signal
-  });
-  if (!response.ok) throw new LifeError("PROVIDER_ERROR", `${provider} answered ${response.status}`, { provider });
-  const body = await response.json();
-  const message = body.choices?.[0]?.message || {};
-  return {
-    text: typeof message.content === "string" ? message.content : extractOpenAiText(message.content),
-    toolCalls: message.tool_calls || [],
-    usage: {
-      promptTokens: body.usage?.prompt_tokens ?? null,
-      completionTokens: body.usage?.completion_tokens ?? null
-    },
-    raw: null
-  };
-}
-async function* openAiStream({ fetchImpl, baseUrl, key: key2 = null, model, messages, temperature, maxTokens, signal }) {
-  const response = await fetchImpl(`${baseUrl}/chat/completions`, {
-    method: "POST",
-    headers: { "content-type": "application/json", ...key2 ? { authorization: `Bearer ${key2}` } : {} },
-    body: JSON.stringify({ model, messages, temperature, max_tokens: maxTokens, stream: true }),
-    signal
-  });
-  if (!response.ok || !response.body) throw new LifeError("PROVIDER_ERROR", `Stream answered ${response.status}`);
-  for await (const event of sseData(response.body, signal)) {
-    if (event === "[DONE]") {
-      yield { delta: "", done: true };
-      return;
-    }
-    try {
-      const parsed = JSON.parse(event);
-      const delta = parsed.choices?.[0]?.delta?.content;
-      if (delta) yield { delta, done: false };
-    } catch {
-    }
-  }
-}
-function extractOpenAiText(content) {
-  if (!Array.isArray(content)) return "";
-  return content.map((part) => part?.text || "").join("");
-}
-async function* ndjsonLines(body, signal) {
-  const decoder = new TextDecoder();
-  let buffer = "";
-  for await (const chunk of iterate(body, signal)) {
-    buffer += decoder.decode(chunk, { stream: true });
-    let index = buffer.indexOf("\n");
-    while (index >= 0) {
-      const line = buffer.slice(0, index).trim();
-      buffer = buffer.slice(index + 1);
-      if (line) {
-        try {
-          yield JSON.parse(line);
-        } catch {
-        }
-      }
-      index = buffer.indexOf("\n");
-    }
-  }
-  if (buffer.trim()) {
-    try {
-      yield JSON.parse(buffer.trim());
-    } catch {
-    }
-  }
-}
-async function* sseData(body, signal) {
-  const decoder = new TextDecoder();
-  let buffer = "";
-  for await (const chunk of iterate(body, signal)) {
-    buffer += decoder.decode(chunk, { stream: true });
-    let index = buffer.indexOf("\n");
-    while (index >= 0) {
-      const line = buffer.slice(0, index).trim();
-      buffer = buffer.slice(index + 1);
-      if (line.startsWith("data:")) yield line.slice(5).trim();
-      index = buffer.indexOf("\n");
-    }
-  }
-}
-async function* iterate(stream, signal) {
-  const iterator = stream[Symbol.asyncIterator] ? stream[Symbol.asyncIterator]() : null;
-  if (iterator) {
-    while (true) {
-      if (signal?.aborted) return;
-      const { value, done } = await iterator.next();
-      if (done) return;
-      yield value;
-    }
   }
 }
 

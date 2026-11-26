@@ -3,15 +3,17 @@
  *
  * Three rules this file enforces, in code rather than in prose:
  *
- *   1. Nothing is granted by default. The only implicit capability is reading
- *      the engine's own records (`read`). Writing, executing, network access and
- *      transmitting data each need a stored grant.
+ *   1. At boot, the owner receives baseline grants for their own memory, tasks,
+ *      project reads and skill activation. Execution, network access and data
+ *      transmission are never granted by default.
  *   2. Higher-risk capabilities need a *recorded* user decision. A model cannot
  *      approve its own action; `require()` throws unless an approval row exists.
  *   3. Everything untrusted — memories, documents, model output — passes through
  *      `sanitizeUntrusted()` first, which redacts secrets and flags injection
  *      attempts without silently deleting the content.
  */
+import { lstat } from 'node:fs/promises';
+import { isAbsolute, join, relative as pathRelative, resolve as pathResolve, sep } from 'node:path';
 import { nowIso, randomId } from './store.js';
 
 /** Ordered by risk: each level implies the lower ones are *not* automatically granted. */
@@ -117,15 +119,51 @@ export function sanitizeUntrusted(input, { maxChars = 20_000 } = {}) {
 
 /* --------------------------------------------------------- path handling */
 
-/** Resolve `candidate` inside `root`, or throw. Blocks `..`, absolute paths and null bytes. */
+/** Resolve `candidate` inside `root`, or throw. NUL bytes and traversal are refused. */
 export function resolveInside(root, candidate) {
   const value = typeof candidate === 'string' ? candidate : '';
   if (!value || value.includes('\0')) throw new Error('PATH_INVALID');
-  const normalisedRoot = root.endsWith('/') ? root : `${root}/`;
-  const url = new URL(value.replace(/^\.\//, ''), `file://${normalisedRoot}`);
-  const resolved = decodeURIComponent(url.pathname);
-  if (!resolved.startsWith(normalisedRoot)) throw new Error('PATH_OUTSIDE_ROOT');
+  const normalisedRoot = pathResolve(root);
+  const resolved = pathResolve(normalisedRoot, value);
+  const fromRoot = pathRelative(normalisedRoot, resolved);
+  if (fromRoot === '..' || fromRoot.startsWith(`..${sep}`) || isAbsolute(fromRoot)) {
+    throw new Error('PATH_OUTSIDE_ROOT');
+  }
   return resolved;
+}
+
+/**
+ * Reject symlinks at every existing path component below a trusted project root.
+ * The lexical jail in resolveInside is not sufficient when the filesystem can
+ * redirect a safe-looking path to an unrelated file.
+ */
+export async function assertNoSymlinkPath(root, target) {
+  const normalisedRoot = pathResolve(root);
+  const resolvedTarget = pathResolve(target);
+  const fromRoot = pathRelative(normalisedRoot, resolvedTarget);
+  if (fromRoot === '..' || fromRoot.startsWith(`..${sep}`) || isAbsolute(fromRoot)) {
+    throw new Error('PATH_OUTSIDE_ROOT');
+  }
+
+  const rootInfo = await lstat(normalisedRoot);
+  if (rootInfo.isSymbolicLink()) throw new Error('SYMLINK_PATH_BLOCKED');
+  if (!rootInfo.isDirectory()) throw new Error('PATH_NOT_DIRECTORY');
+
+  if (!fromRoot) return;
+  const parts = fromRoot.split(sep).filter(Boolean);
+  let current = normalisedRoot;
+  for (let index = 0; index < parts.length; index += 1) {
+    current = join(current, parts[index]);
+    let info;
+    try {
+      info = await lstat(current);
+    } catch (error) {
+      if (error?.code === 'ENOENT' || error?.code === 'ENOTDIR') return;
+      throw error;
+    }
+    if (info.isSymbolicLink()) throw new Error('SYMLINK_PATH_BLOCKED');
+    if (index < parts.length - 1 && !info.isDirectory()) throw new Error('PATH_NOT_DIRECTORY');
+  }
 }
 
 /** Human-readable relative path for the API (never leaks the absolute root). */
@@ -141,7 +179,11 @@ export function createSecurityKernel({ store, clock = () => new Date(), userId =
 
   const capability = (id) => {
     const found = CAPABILITY_BY_ID.get(id);
-    if (!found) throw new Error(`UNKNOWN_CAPABILITY:${id}`);
+    if (!found) {
+      const error = new Error(`UNKNOWN_CAPABILITY:${id}`);
+      error.code = 'UNKNOWN_CAPABILITY';
+      throw error;
+    }
     return found;
   };
 
@@ -171,6 +213,12 @@ export function createSecurityKernel({ store, clock = () => new Date(), userId =
 
   /** Grant or revoke a capability. `read` is granted by default at boot. */
   const setGrant = (capabilityId, granted) => {
+    if (typeof granted !== 'boolean') {
+      const error = new Error('A capability grant must be a boolean.');
+      error.code = 'INVALID_GRANT';
+      error.status = 400;
+      throw error;
+    }
     const found = capability(capabilityId);
     store.run(
       `insert into tool_permissions (id, user_id, tool, granted, level, updated_at)
@@ -218,8 +266,33 @@ export function createSecurityKernel({ store, clock = () => new Date(), userId =
 
   const isGranted = (capabilityId) => grants().get(capabilityId) === true;
 
-  /** Throws unless granted (and, for risky capabilities, approved). */
-  const require = (capabilityId, { approvalId = null } = {}) => {
+  /** Check the latest approval, bound to the exact operation that requested it. */
+  const isApprovalValid = (approvalId, approvalContext) => {
+    if (
+      typeof approvalId !== 'string' ||
+      !approvalContext ||
+      typeof approvalContext.subjectType !== 'string' ||
+      typeof approvalContext.subjectId !== 'string'
+    ) {
+      return false;
+    }
+    const approval = getApproval(approvalId);
+    if (!approval || approval.decision !== 'approved') return false;
+    if (
+      approval.subject_type !== approvalContext.subjectType ||
+      approval.subject_id !== approvalContext.subjectId ||
+      (Object.hasOwn(approvalContext, 'note') && approval.note !== approvalContext.note)
+    ) {
+      return false;
+    }
+    // A newer rejection/revocation for this operation invalidates any older
+    // approved row, even if a caller still presents the old approval id.
+    const latest = approvalFor(approvalContext.subjectType, approvalContext.subjectId);
+    return latest?.id === approval.id && latest.decision === 'approved';
+  };
+
+  /** Throws unless granted (and, for risky capabilities, approved for this exact action). */
+  const require = (capabilityId, { approvalId = null, approvalContext = null } = {}) => {
     const found = capability(capabilityId);
     if (!isGranted(capabilityId)) {
       const error = new Error(`PERMISSION_DENIED:${capabilityId}`);
@@ -227,15 +300,11 @@ export function createSecurityKernel({ store, clock = () => new Date(), userId =
       error.capability = found;
       throw error;
     }
-    if (APPROVAL_REQUIRED.has(capabilityId)) {
-      const approval = approvalId ? getApproval(approvalId) : null;
-      const valid = approval && approval.decision === 'approved';
-      if (!valid) {
-        const error = new Error(`APPROVAL_REQUIRED:${capabilityId}`);
-        error.code = 'APPROVAL_REQUIRED';
-        error.capability = found;
-        throw error;
-      }
+    if (APPROVAL_REQUIRED.has(capabilityId) && !isApprovalValid(approvalId, approvalContext)) {
+      const error = new Error(`APPROVAL_REQUIRED:${capabilityId}`);
+      error.code = 'APPROVAL_REQUIRED';
+      error.capability = found;
+      throw error;
     }
     return true;
   };
@@ -258,7 +327,11 @@ export function createSecurityKernel({ store, clock = () => new Date(), userId =
   };
 
   const decide = ({ subjectType, subjectId, decision, note = null }) => {
-    if (!['approved', 'rejected', 'revoked'].includes(decision)) throw new Error('INVALID_DECISION');
+    if (!['approved', 'rejected', 'revoked'].includes(decision)) {
+      const error = new Error('INVALID_DECISION');
+      error.code = 'INVALID_DECISION';
+      throw error;
+    }
     const record = {
       id: randomId('approval'),
       user_id: userId,
@@ -287,7 +360,7 @@ export function createSecurityKernel({ store, clock = () => new Date(), userId =
   /** The newest decision for a subject; `revoked` wins over an older approval. */
   const approvalFor = (subjectType, subjectId) =>
     store.queryOne(
-      'select * from user_approvals where user_id = ? and subject_type = ? and subject_id = ? order by created_at desc limit 1',
+      'select * from user_approvals where user_id = ? and subject_type = ? and subject_id = ? order by created_at desc, rowid desc limit 1',
       [userId, subjectType, subjectId],
     ) ?? null;
 
@@ -307,6 +380,7 @@ export function createSecurityKernel({ store, clock = () => new Date(), userId =
     listGrants,
     setGrant,
     isGranted,
+    isApprovalValid,
     require,
     ensureDefaults,
     audit,

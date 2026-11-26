@@ -342,7 +342,12 @@ export const workspaceCopySi: Copy = {
   wsChatErrHistoryLong: 'මෙම සංවාදය ආකෘතියට දිග වැඩියි. නව සංවාදයක් අරඹන්න.',
   wsChatErrTooLarge: 'එම පණිවිඩය විශාල වැඩියි. කෙටි කර නැවත උත්සාහ කරන්න.',
   wsChatErrInvalid: 'එම ඉල්ලීම වලංගු නොවේ. නැවත උත්සාහ කරන්න.',
-  wsChatOfflineNote: 'නොබැඳි (offline) පිළිතුරක් — මාර්ගගත AI සේවා ප්‍රතිචාර දුන්නේ නැත.',
+  wsChatOfflineNote: 'නොබැඳි (offline) පිළිතුරක් — කිසිදු AI ආකෘතියකින් පිළිතුරක් ලැබුණේ නැත.',
+  wsChatSourcesLabel: 'මූලාශ්‍ර',
+  wsChatSourcesToggle: 'සුරැකි මූලාශ්‍ර භාවිත කරන්න',
+  wsChatSourcesHint: 'සක්‍රිය කළ විට, ගැළපෙන කොටස් ඉල්ලීමට එක් වේ. Auto හෝ hosted සැපයුම්කරුවන්ට ඒවා ලැබිය හැක; Local hosted සැපයුම් මාර්ගය මඟ හරියි.',
+  wsChatSourceDevice: 'මෙම උපාංගයේ තාරකා පුස්තකාලය',
+  wsChatSourcePrivate: 'පුද්ගලික දැනුම් පුස්තකාලය',
   wsChatErrUnknown: 'NOVA ට මෙය සකසන්න නොහැකි විය. නැවත උත්සාහ කරන්න.',
 
   /* ------------------------------------------------- thinking ladder (v5) */

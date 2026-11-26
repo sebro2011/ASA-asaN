@@ -193,18 +193,51 @@ test('a cloud call needs a recorded approval, not just an id', async () => {
 
   await assert.rejects(
     () => life.fabric.generate({ provider: 'openrouter', messages: [{ role: 'user', content: 'hi' }] }),
+    (error) => error.code === 'PERMISSION_DENIED',
+  );
+  assert.equal(calls, 0);
+
+  life.security.setGrant('transmit.external', true);
+  await assert.rejects(
+    () => life.fabric.generate({ provider: 'openrouter', messages: [{ role: 'user', content: 'hi' }] }),
     (error) => error.code === 'APPROVAL_REQUIRED',
   );
   assert.equal(calls, 0);
 
-  const approval = life.security.decide({ subjectType: 'task', subjectId: 'task-1', decision: 'approved' });
+  const approvalContext = { subjectType: 'task', subjectId: 'task-1', note: 'transmit.external' };
+  const unrelated = life.security.decide({ subjectType: 'task', subjectId: 'task-other', decision: 'approved', note: 'transmit.external' });
+  await assert.rejects(
+    () => life.fabric.generate({
+      provider: 'openrouter',
+      messages: [{ role: 'user', content: 'hi' }],
+      approvalId: unrelated.id,
+      approvalContext,
+    }),
+    (error) => error.code === 'APPROVAL_REQUIRED',
+  );
+  assert.equal(calls, 0, 'an approval for another task cannot authorize this transmission');
+
+  const approval = life.security.decide({ ...approvalContext, decision: 'approved' });
   const result = await life.fabric.generate({
     provider: 'openrouter',
     messages: [{ role: 'user', content: 'hi' }],
     approvalId: approval.id,
+    approvalContext,
   });
   assert.equal(result.text, 'cloud answer');
   assert.equal(calls, 1);
+
+  life.security.setGrant('transmit.external', false);
+  await assert.rejects(
+    () => life.fabric.generate({
+      provider: 'openrouter',
+      messages: [{ role: 'user', content: 'hi again' }],
+      approvalId: approval.id,
+      approvalContext,
+    }),
+    (error) => error.code === 'PERMISSION_DENIED',
+  );
+  assert.equal(calls, 1, 'revoking the transmission grant prevents a previously approved send');
   life.close();
 });
 

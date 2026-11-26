@@ -45,6 +45,7 @@ import {
   X,
 } from 'lucide-react';
 import { useAuth } from '../../auth/AuthProvider';
+import { knowledgeRepo } from '../../data/repositories';
 import { Link, navigate, useRoute } from '../../app/router';
 import { useProviderConfig } from '../useProviderConfig';
 import {
@@ -57,7 +58,10 @@ import {
   type ChatTurn,
 } from './chatClient';
 import { useConversations, useThread } from './useChatData';
+import { citedSources, withCitationReferences } from './citations';
 import { isChatLocalOnly } from './chatStorage';
+import { readRecords } from '../modules/records';
+import { cloudChunksToEvidence, mergeEvidence, retrieveDeviceLibrary } from './retrieval';
 import { takePrompt, takeThinking } from './pendingPrompt';
 import MessageBody from './MessageBody';
 import ThinkingMenu from './ThinkingMenu';
@@ -174,6 +178,7 @@ export default function ChatSurface() {
   const [mode, setMode] = useState<'chat' | 'forge'>('chat');
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
+  const [includeSavedSources, setIncludeSavedSources] = useState(false);
   const [filter, setFilter] = useState('');
   const [showArchived, setShowArchived] = useState(false);
   const [showList, setShowList] = useState(false);
@@ -234,6 +239,22 @@ export default function ChatSurface() {
   const lastAssistant = [...thread.messages].reverse().find((row) => row.role === 'assistant');
   const currentThinking = thinkingMeta(thinking);
 
+  const retrieveEvidence = useCallback(async (query: string) => {
+    const device = retrieveDeviceLibrary(query, readRecords(), 3);
+    let cloud: ReturnType<typeof cloudChunksToEvidence> = [];
+    // Cloud knowledge retrieval is owner-scoped by Supabase RLS and is opt-in
+    // through the composer checkbox; device-only chats skip this cloud read.
+    if (client && userId && !isChatLocalOnly()) {
+      try {
+        const chunks = await knowledgeRepo(client).retrieve(query, 3);
+        cloud = cloudChunksToEvidence(chunks);
+      } catch {
+        // Search/index/RPC failures must not prevent the user's chat from working.
+      }
+    }
+    return mergeEvidence(device, cloud);
+  }, [client, userId]);
+
   useEffect(
     () => () => {
       if (copyTimer.current) window.clearTimeout(copyTimer.current);
@@ -271,13 +292,15 @@ export default function ChatSurface() {
    * immediately.
    */
   const requestReply = useCallback(
-    async (history: ChatTurn[], targetId: string | null, level: ThinkingLevel) => {
+    async (history: ChatTurn[], targetId: string | null, level: ThinkingLevel, query: string, useSavedSources: boolean) => {
       const controller = new AbortController();
       abortRef.current = controller;
 
+      const evidence = useSavedSources ? await retrieveEvidence(query) : [];
       const result = await sendChat({
         messages: history,
         lang: locale.slice(0, 2),
+        evidence,
         provider,
         thinking: level,
         signal: controller.signal,
@@ -297,15 +320,20 @@ export default function ChatSurface() {
       }
 
       if (result.ok) {
-        // An offline answer must say so in the transcript, and the server says why
-        // every online provider was skipped. Both survive a reload.
+        // A deterministic fallback must say so in the transcript, and the server
+        // records the safe reason for each failed provider/runtime hop.
         const chain = describeFallbackChain(result.reply.fallbackChain);
         const offlineNote = result.reply.fallback
           ? [t('wsChatOfflineNote'), chain].filter(Boolean).join(' — ')
           : '';
+        const citedReply = withCitationReferences(result.reply.text, citedSources(result.reply.text, result.reply.sources), {
+          heading: t('wsChatSourcesLabel'),
+          device: t('wsChatSourceDevice'),
+          private: t('wsChatSourcePrivate'),
+        });
         const saved = await thread.append({
           role: 'assistant',
-          content: offlineNote ? `${result.reply.text}\n\n${offlineNote}` : result.reply.text,
+          content: offlineNote ? [citedReply, offlineNote].join(`${String.fromCharCode(10)}${String.fromCharCode(10)}`) : citedReply,
           provider: result.reply.provider,
           model: result.reply.model,
           conversationId: targetId ?? undefined,
@@ -325,7 +353,7 @@ export default function ChatSurface() {
       void conversations.reload();
       setSending(false);
     },
-    [locale, provider, t, thread, conversations],
+    [locale, provider, t, thread, conversations, retrieveEvidence],
   );
 
   const send = useCallback(
@@ -354,14 +382,17 @@ export default function ChatSurface() {
 
       await thread.append({ role: 'user', content: text, conversationId: targetId });
 
-      const history: ChatTurn[] = historyWindow([
-        ...thread.messages.map((row) => ({ role: row.role, content: row.content })),
-        { role: 'user' as const, content: text },
-      ]);
+      const history: ChatTurn[] = historyWindow(
+        [
+          ...thread.messages.map((row) => ({ role: row.role, content: row.content })),
+          { role: 'user' as const, content: text },
+        ],
+        includeSavedSources ? { maxTextBytes: 10 * 1024, maxSerializedBytes: 15 * 1024 } : undefined,
+      );
 
-      await requestReply(history, targetId, level);
+      await requestReply(history, targetId, level, text, includeSavedSources);
     },
-    [draft, sending, thinking, unavailable, conversationId, conversations, thread, requestReply],
+    [draft, sending, thinking, unavailable, conversationId, conversations, thread, requestReply, includeSavedSources],
   );
 
   /**
@@ -380,9 +411,10 @@ export default function ChatSurface() {
       rows
         .filter((row) => row.id !== lastReply?.id)
         .map((row) => ({ role: row.role, content: row.content })),
+      includeSavedSources ? { maxTextBytes: 10 * 1024, maxSerializedBytes: 15 * 1024 } : undefined,
     );
-    await requestReply(history, conversationId, thinking);
-  }, [sending, conversationId, thread, requestReply, thinking]);
+    await requestReply(history, conversationId, thinking, lastUser.content, includeSavedSources);
+  }, [sending, conversationId, thread, requestReply, thinking, includeSavedSources]);
 
   const stop = useCallback(() => {
     abortRef.current?.abort();
@@ -973,6 +1005,24 @@ export default function ChatSurface() {
             placeholder={t('wsChatComposerPlaceholder')}
             className="nova-chat-composer__input"
           />
+          <div className="mt-1 px-1">
+            <label htmlFor="nova-chat-use-sources" className="inline-flex cursor-pointer items-center gap-1.5 text-[11px] font-medium text-ws-text-2">
+              <input
+                id="nova-chat-use-sources"
+                type="checkbox"
+                checked={includeSavedSources}
+                disabled={sending}
+                onChange={(event) => setIncludeSavedSources(event.target.checked)}
+                aria-describedby="nova-chat-sources-hint"
+                className="size-3.5 rounded border-ws-line"
+                style={{ accentColor: 'var(--color-ws-accent-solid)' }}
+              />
+              {t('wsChatSourcesToggle')}
+            </label>
+            <p id="nova-chat-sources-hint" className="mt-0.5 text-[10.5px] leading-relaxed text-ws-text-3">
+              {t('wsChatSourcesHint')}
+            </p>
+          </div>
           <div className="nova-chat-composer__bar">
             <div className="nova-chat-composer__controls">
               <label className="nova-chat-composer__provider">

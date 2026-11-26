@@ -39,7 +39,8 @@ export function createLifeEngine({
     fetchImpl,
     hardware,
     clock,
-    approvalCheck: (id) => security.getApproval(id)?.decision === 'approved',
+    authorizeTransmission: (approvalId, approvalContext) =>
+      security.require('transmit.external', { approvalId, approvalContext }),
   });
   const graph = createGraphService({ store, clock, userId });
   const memory = createMemoryService({ store, security, fabric, clock, userId });

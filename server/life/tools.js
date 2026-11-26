@@ -13,7 +13,7 @@ import { execFile } from 'node:child_process';
 import { readFile, readdir, stat } from 'node:fs/promises';
 import { join, relative } from 'node:path';
 import { LifeError } from './modelFabric.js';
-import { resolveInside, sanitizeUntrusted } from './security.js';
+import { assertNoSymlinkPath, resolveInside, sanitizeUntrusted } from './security.js';
 
 const MAX_READ_BYTES = 200_000;
 const MAX_LIST = 400;
@@ -29,7 +29,7 @@ const ALLOWED_TEST_SCRIPTS = new Set([
   'test:nova-chat',
 ]);
 
-const SECRET_FILE = /(^|\/)(\.env(\..*)?|\.git\/|id_rsa|id_ed25519|.*\.pem|.*\.key|credentials\.json|\.netrc)$/i;
+const SECRET_FILE = /(^|[\\/])(?:\.env(?:\.[^\\/]*)?|\.git|\.nova-life|node_modules|id_rsa|id_ed25519|[^\\/]*\.(?:pem|key)|credentials\.json|\.netrc)(?:[\\/]|$)/i;
 
 const ALLOWED_FETCH_HOSTS = new Set(['api.github.com', 'export.arxiv.org', 'api.spaceflightnewsapi.net']);
 
@@ -63,6 +63,19 @@ export function createToolRegistry({
     }
   };
 
+  const assertPhysicalPath = async (absolute) => {
+    try {
+      await assertNoSymlinkPath(root, absolute);
+    } catch (error) {
+      const code = error?.message === 'SYMLINK_PATH_BLOCKED'
+        ? 'SYMLINK_PATH_BLOCKED'
+        : error?.message === 'PATH_OUTSIDE_ROOT'
+          ? 'PATH_OUTSIDE_ROOT'
+          : 'PATH_INVALID';
+      throw new LifeError(code, 'Symbolic links and paths outside the project are not readable.', { status: 403 });
+    }
+  };
+
   register({
     id: 'project.list',
     level: 'read',
@@ -70,9 +83,11 @@ export function createToolRegistry({
     inputSchema: { type: 'object', properties: { path: { type: 'string' } } },
     async run({ path: subPath = '' } = {}) {
       const start = withinRoot(subPath || '.');
+      await assertPhysicalPath(start);
       const files = [];
       const walk = async (dir, depth) => {
         if (files.length >= MAX_LIST || depth > 6) return;
+        await assertPhysicalPath(dir);
         let entries;
         try {
           entries = await readdir(dir, { withFileTypes: true });
@@ -83,9 +98,10 @@ export function createToolRegistry({
           if (files.length >= MAX_LIST) return;
           if (entry.name.startsWith('.') && entry.name !== '.env.example') continue;
           if (IGNORED_DIRS.has(entry.name)) continue;
+          if (entry.isSymbolicLink()) continue;
           const absolute = join(dir, entry.name);
           if (entry.isDirectory()) await walk(absolute, depth + 1);
-          else files.push(relative(root, absolute));
+          else if (entry.isFile()) files.push(relative(root, absolute));
         }
       };
       await walk(start, 0);
@@ -104,6 +120,7 @@ export function createToolRegistry({
         throw new LifeError('SECRET_FILE_BLOCKED', 'Credential and key files are never readable by the engine.', { status: 403 });
       }
       const absolute = withinRoot(filePath);
+      await assertPhysicalPath(absolute);
       const info = await stat(absolute).catch(() => null);
       if (!info || !info.isFile()) throw new LifeError('FILE_NOT_FOUND', 'No such file.', { status: 404 });
       if (info.size > MAX_READ_BYTES) {
@@ -141,7 +158,9 @@ export function createToolRegistry({
         if (!/\.(ts|tsx|js|jsx|mjs|cjs|json|md|css|sql|yml|yaml)$/.test(file)) continue;
         let content;
         try {
-          content = await readFile(join(root, file), 'utf8');
+          const absolute = join(root, file);
+          await assertPhysicalPath(absolute);
+          content = await readFile(absolute, 'utf8');
         } catch {
           continue;
         }
@@ -164,7 +183,7 @@ export function createToolRegistry({
       required: ['script'],
     },
     enabled: () => executeEnabled,
-    async run({ script } = {}, { approvalId = null } = {}) {
+    async run({ script } = {}, { approvalId = null, approvalContext = null } = {}) {
       if (!executeEnabled) {
         throw new LifeError('EXECUTION_DISABLED', 'Code execution is disabled. Set NOVA_LIFE_ALLOW_EXECUTE=1 to enable it.', {
           status: 403,
@@ -175,7 +194,7 @@ export function createToolRegistry({
           status: 403,
         });
       }
-      security.require('tools.execute', { approvalId });
+      security.require('tools.execute', { approvalId, approvalContext });
       const started = Date.now();
       const result = await runCommand({ root, script, timeoutMs: 180_000 });
       const output = sanitizeUntrusted(`${result.stdout}\n${result.stderr}`.trim(), { maxChars: MAX_OUTPUT });
@@ -196,8 +215,8 @@ export function createToolRegistry({
     level: 'network',
     description: 'Fetch an allowlisted HTTPS URL. Off by default; needs network permission and approval.',
     inputSchema: { type: 'object', properties: { url: { type: 'string' } }, required: ['url'] },
-    async run({ url } = {}, { approvalId = null } = {}) {
-      security.require('network.fetch', { approvalId });
+    async run({ url } = {}, { approvalId = null, approvalContext = null } = {}) {
+      security.require('network.fetch', { approvalId, approvalContext });
       let parsed;
       try {
         parsed = new URL(String(url));

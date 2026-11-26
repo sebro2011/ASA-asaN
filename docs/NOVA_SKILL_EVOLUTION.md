@@ -94,9 +94,9 @@ skill is marked `rejected` with the signal recorded.
 | Step | Endpoint | Effect |
 | --- | --- | --- |
 | request | `POST /skills/:id/request-approval` | only from `verification`; creates an approval request, state → `user_approval` |
-| decide (scoped) | `POST /skills/:id/approve` with `{ decision, note }` | records the decision for that skill; `rejected` moves it to `rejected` |
-| decide (generic) | `POST /security/approvals` with `{ subjectType: 'skill', subjectId, decision }` | same table, used by the Security Center |
-| activate | `POST /skills/:id/activate` | requires the approval row; without it → **403 `APPROVAL_REQUIRED`** |
+| decide (scoped) | `POST /skills/:id/approve` with `{ decision, note }` | records the decision for the exact current version; `rejected` moves it to `rejected` |
+| decide (generic) | `POST /security/approvals` with the returned `{ subjectType: 'skill', subjectId: '<skillId>:v<version>' }` plus `decision` | same table, used by the Security Center |
+| activate | `POST /skills/:id/activate` | requires the latest approval for that exact version and the `skills.activate` grant; without it → **403 `APPROVAL_REQUIRED`** |
 
 The engine has no path where a provider or model output writes an approval. The
 approval table is written only by the user-facing decision endpoint, and every
@@ -108,8 +108,9 @@ revocable in the Security Center).
 ## 6. Rollback and deprecation
 
 - `POST /skills/:id/rollback { version }` re-points the skill at an earlier
-  version and records the change; it refuses a version that does not exist
-  (`VERSION_NOT_FOUND`).
+  version and records the change; it requires the `skills.activate` grant and a
+  still-valid approval for that exact, previously verified version. It refuses
+  a missing version (`VERSION_NOT_FOUND`) or revoked approval.
 - `POST /skills/:id/deprecate` stops service without deleting history. A
   deprecated skill cannot run; its versions and runs stay for audit.
 - `skill_runs` records each test/activation attempt with its timestamp and

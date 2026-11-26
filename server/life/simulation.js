@@ -2,22 +2,34 @@
  * Predictive Simulation Engine — dry runs, previews and reversible changes.
  *
  * Honest scope: this is a *file-change simulation*, not a physical or behavioural
- * model. It shows exactly what would change, can run the project's own tests in
- * an isolated copy, and can roll the change back. It never executes arbitrary
- * shell commands and never writes to the project without a recorded approval.
+ * model. It shows bounded diffs, can run allowlisted project tests in a temporary
+ * copy, and can roll the change back with separate approval. Test scripts still
+ * execute edited project code; execution is disabled by default and is not an OS
+ * sandbox. The real project is never written without a changeset-bound approval.
  */
 import { execFile } from 'node:child_process';
-import { cp, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
-import { existsSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { cp, lstat, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { lstatSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join, relative } from 'node:path';
+import { dirname, join, relative, sep } from 'node:path';
 import { LifeError } from './modelFabric.js';
-import { resolveInside } from './security.js';
+import { assertNoSymlinkPath, resolveInside } from './security.js';
 import { nowIso, randomId } from './store.js';
 
 const MAX_FILES = 20;
 const MAX_BYTES = 400_000;
+const MAX_DIFF_LINES = 500;
 const ALLOWED_SCRIPTS = new Set(['test:workspace', 'test:workspace-modules', 'test:nova-chat']);
+const SENSITIVE_PATH = /(^|[\\/])(?:\.env(?:\.[^\\/]+)?|\.git|\.nova-life|node_modules|id_rsa|id_ed25519|[^\\/]+\.(?:pem|key)|credentials\.json|\.netrc)(?=$|[\\/])/i;
+
+function simulationApplyApprovalContext(entries, currentContent) {
+  const canonical = entries
+    .map(({ path, next }) => ({ path, before: currentContent.get(path) ?? null, next }))
+    .sort((left, right) => left.path.localeCompare(right.path));
+  const digest = createHash('sha256').update(JSON.stringify(canonical)).digest('hex');
+  return { subjectType: 'simulation', subjectId: `apply:${digest}`, note: 'simulation.apply' };
+}
 
 export function createSimulationService({
   root,
@@ -39,32 +51,87 @@ export function createSimulationService({
     if (files.length > MAX_FILES) {
       throw new LifeError('CHANGESET_TOO_LARGE', `At most ${MAX_FILES} files per simulation.`, { status: 413 });
     }
+    const seen = new Set();
+    let totalBytes = 0;
     return files.map((file) => {
-      const path = String(file?.path || '');
+      if (!file || typeof file !== 'object' || Array.isArray(file) || typeof file.path !== 'string' || typeof file.next !== 'string') {
+        throw new LifeError('INVALID_CHANGESET', 'Each file change needs a path and string content.', { status: 400 });
+      }
+      const inputPath = file.path;
+      if (!inputPath.trim() || inputPath.length > 1_024) {
+        throw new LifeError('INVALID_PATH', 'Each simulation path must be a non-empty path under 1024 characters.', { status: 400 });
+      }
       let absolute;
       try {
-        absolute = resolveInside(root, path);
-      } catch {
-        throw new LifeError('PATH_OUTSIDE_ROOT', `Refused: ${path} is outside the project.`, { status: 403 });
+        absolute = resolveInside(root, inputPath);
+      } catch (error) {
+        const code = error?.message === 'PATH_INVALID' ? 'PATH_INVALID' : 'PATH_OUTSIDE_ROOT';
+        throw new LifeError(code, `Refused: ${inputPath} is outside the project.`, { status: 403 });
       }
-      const next = typeof file.next === 'string' ? file.next : '';
-      if (next.length > MAX_BYTES) throw new LifeError('FILE_TOO_LARGE', `${path} is larger than ${MAX_BYTES} bytes.`, { status: 413 });
-      return { path: relative(root, absolute), absolute, next };
+      const path = relative(root, absolute);
+      const displayPath = path.split(sep).join('/');
+      if (SENSITIVE_PATH.test(displayPath)) {
+        throw new LifeError('SECRET_FILE_BLOCKED', 'Simulation cannot preview or change credential, engine-data or dependency paths.', { status: 403 });
+      }
+      if (seen.has(path)) {
+        throw new LifeError('DUPLICATE_PATH', 'A changeset may mention each path only once.', { status: 400 });
+      }
+      seen.add(path);
+      const nextBytes = Buffer.byteLength(file.next, 'utf8');
+      totalBytes += nextBytes;
+      if (nextBytes > MAX_BYTES || totalBytes > MAX_BYTES) {
+        throw new LifeError('CHANGESET_TOO_LARGE', `Simulation content is limited to ${MAX_BYTES} UTF-8 bytes total.`, { status: 413 });
+      }
+      return { path, displayPath, absolute, next: file.next, nextBytes };
     });
   };
+
+  const assertPathWithoutSymlinks = async (allowedRoot, path) => {
+    try {
+      await assertNoSymlinkPath(allowedRoot, path);
+    } catch (error) {
+      const code = error?.message === 'PATH_OUTSIDE_ROOT'
+        ? 'PATH_OUTSIDE_ROOT'
+        : error?.message === 'SYMLINK_PATH_BLOCKED'
+          ? 'SYMLINK_PATH_BLOCKED'
+          : 'PATH_INVALID';
+      throw new LifeError(code, 'Simulation refuses paths that leave the workspace or traverse a symlink.', { status: 403 });
+    }
+  };
+  const assertSafePath = (path) => assertPathWithoutSymlinks(root, path);
 
   /** Read-only: show the current content, the proposed content and a line diff. */
   const preview = async ({ files } = {}) => {
     const entries = normaliseFiles(files);
     const results = [];
+    const currentContent = new Map();
+    let inspectedBytes = entries.reduce((sum, entry) => sum + entry.nextBytes, 0);
     for (const entry of entries) {
-      const before = await readFile(entry.absolute, 'utf8').catch(() => '');
+      await assertSafePath(entry.absolute);
+      let info = null;
+      try {
+        info = await lstat(entry.absolute);
+      } catch (error) {
+        if (error?.code !== 'ENOENT') throw error;
+      }
+      if (info && !info.isFile()) {
+        throw new LifeError('NOT_A_FILE', `${entry.displayPath} is not a regular file.`, { status: 400 });
+      }
+      if (info?.size > MAX_BYTES) {
+        throw new LifeError('FILE_TOO_LARGE', `${entry.displayPath} exceeds the preview read limit.`, { status: 413 });
+      }
+      if (info) inspectedBytes += info.size;
+      if (inspectedBytes > MAX_BYTES * 2) {
+        throw new LifeError('PREVIEW_TOO_LARGE', 'The current and proposed content exceed the preview budget.', { status: 413 });
+      }
+      const before = info ? await readFile(entry.absolute, 'utf8') : '';
+      currentContent.set(entry.path, info ? before : null);
       const diff = lineDiff(before, entry.next);
       results.push({
-        path: entry.path,
-        existed: before.length > 0,
-        beforeBytes: Buffer.byteLength(before),
-        afterBytes: Buffer.byteLength(entry.next),
+        path: entry.displayPath,
+        existed: Boolean(info),
+        beforeBytes: info?.size ?? 0,
+        afterBytes: entry.nextBytes,
         added: diff.added,
         removed: diff.removed,
         diff: diff.lines,
@@ -78,6 +145,7 @@ export function createSimulationService({
         (sum, file) => ({ added: sum.added + file.added, removed: sum.removed + file.removed }),
         { added: 0, removed: 0 },
       ),
+      approvalContext: simulationApplyApprovalContext(entries, currentContent),
       note: 'Preview only. Nothing has been written.',
     };
   };
@@ -88,20 +156,43 @@ export function createSimulationService({
     const id = randomId('sim');
     const path = await mkdtemp(join(baseTmp, 'nova-life-sim-'));
     if (copyProject) {
-      // A working copy lets tests run against real imports; node_modules are not
-      // copied (too large) — the scripts run from the project instead.
+      // Do not copy credentials, the engine's own database, dependencies or
+      // symlinks into a workspace that may later execute project tests.
       await cp(root, path, {
         recursive: true,
-        filter: (source) => !/node_modules|\.git|dist|build|coverage/.test(source),
+        filter: (source) => {
+          const relativeSource = relative(root, source);
+          if (!relativeSource) return true;
+          const portablePath = relativeSource.split(sep).join('/');
+          if (SENSITIVE_PATH.test(portablePath) || /(^|\/)(?:dist|build|coverage|\.next|\.venv|__pycache__)(\/|$)/.test(portablePath)) return false;
+          try {
+            return !lstatSync(source).isSymbolicLink();
+          } catch {
+            return false;
+          }
+        },
       });
     }
     for (const entry of entries) {
       const target = join(path, entry.path);
+      await assertPathWithoutSymlinks(path, target);
+      await mkdirp(dirname(target));
+      await assertPathWithoutSymlinks(path, target);
       await writeFile(target, entry.next, 'utf8');
     }
     workspaces.set(id, { id, path, files: entries.map((entry) => entry.path), createdAt: nowIso(clock), copied: copyProject });
     security.audit('simulation.workspace_created', { subject: id, detail: { files: entries.length, copied: copyProject } });
-    return { id, path, files: workspaces.get(id).files, copied: copyProject };
+    return {
+      id,
+      path,
+      files: workspaces.get(id).files,
+      copied: copyProject,
+      approvalContexts: [...ALLOWED_SCRIPTS].map((script) => ({
+        subjectType: 'simulation',
+        subjectId: id,
+        note: `run:${script}`,
+      })),
+    };
   };
 
   const runTests = async ({ workspaceId, script = 'test:workspace', approvalId = null } = {}) => {
@@ -111,7 +202,10 @@ export function createSimulationService({
     if (!ALLOWED_SCRIPTS.has(script)) {
       throw new LifeError('SCRIPT_NOT_ALLOWED', `Only ${[...ALLOWED_SCRIPTS].join(', ')} may run.`, { status: 403 });
     }
-    security.require('tools.execute', { approvalId });
+    security.require('tools.execute', {
+      approvalId,
+      approvalContext: { subjectType: 'simulation', subjectId: workspace.id, note: `run:${script}` },
+    });
     const started = Date.now();
     const result = await runCommand({ root: workspace.path, script, timeoutMs: 180_000 });
     return {
@@ -134,21 +228,70 @@ export function createSimulationService({
 
   /** True when the project directory accepts writes (serverless mounts it read-only). */
   const projectWritable = async () => {
-    const probe = join(root, '.nova-life', '.write-probe');
+    const probe = join(root, '.nova-life', `.write-probe-${randomId('probe')}`);
+    await assertSafePath(probe);
     try {
       await mkdirp(dirname(probe));
-      await writeFile(probe, '', 'utf8');
+      await assertSafePath(probe);
+      await writeFile(probe, '', { encoding: 'utf8', flag: 'wx' });
       await rm(probe, { force: true });
       return true;
-    } catch {
+    } catch (error) {
+      if (error instanceof LifeError) throw error;
+      await rm(probe, { force: true }).catch(() => {});
       return false;
     }
   };
 
-  /** Apply a change set to the real project. Requires an approval record. */
+  const assertUnchangedSinceApproval = async (item) => {
+    await assertSafePath(item.entry.absolute);
+    let info = null;
+    try {
+      info = await lstat(item.entry.absolute);
+    } catch (error) {
+      if (error?.code !== 'ENOENT') throw error;
+    }
+    if (info && !info.isFile()) {
+      throw new LifeError('NOT_A_FILE', `${item.entry.displayPath} is not a regular file.`, { status: 400 });
+    }
+    if (info?.size > MAX_BYTES) {
+      throw new LifeError('STALE_PREVIEW', `${item.entry.displayPath} changed after its approved preview. Preview and approve it again.`, { status: 409 });
+    }
+    const current = info ? await readFile(item.entry.absolute, 'utf8') : null;
+    if (current !== item.before) {
+      throw new LifeError('STALE_PREVIEW', `${item.entry.displayPath} changed after its approved preview. Preview and approve it again.`, { status: 409 });
+    }
+  };
+
+  /** Apply a change set to the real project. Requires an approval for this exact diff. */
   const apply = async ({ files, approvalId = null, tests = null } = {}) => {
     const entries = normaliseFiles(files);
-    security.require('simulation.apply', { approvalId });
+    const prepared = [];
+    const currentContent = new Map();
+
+    // Bind approval to the current bytes as well as the proposed content, so a
+    // stale preview cannot silently overwrite a newer file version.
+    for (const entry of entries) {
+      await assertSafePath(entry.absolute);
+      let info = null;
+      try {
+        info = await lstat(entry.absolute);
+      } catch (error) {
+        if (error?.code !== 'ENOENT') throw error;
+      }
+      if (info && !info.isFile()) {
+        throw new LifeError('NOT_A_FILE', `${entry.displayPath} is not a regular file.`, { status: 400 });
+      }
+      if (info?.size > MAX_BYTES) {
+        throw new LifeError('FILE_TOO_LARGE', `${entry.displayPath} exceeds the apply read limit.`, { status: 413 });
+      }
+      const before = info ? await readFile(entry.absolute, 'utf8') : null;
+      currentContent.set(entry.path, before);
+      prepared.push({ entry, before, backup: null, existed: Boolean(info) });
+    }
+
+    const approvalContext = simulationApplyApprovalContext(entries, currentContent);
+    security.require('simulation.apply', { approvalId, approvalContext });
     if (!(await projectWritable())) {
       throw new LifeError(
         'READ_ONLY_FILESYSTEM',
@@ -156,55 +299,193 @@ export function createSimulationService({
         { status: 409 },
       );
     }
+
+    for (const item of prepared) await assertUnchangedSinceApproval(item);
+
     const changeSetId = randomId('changeset');
     const backupDir = join(root, '.nova-life', 'backups', changeSetId);
-    const applied = [];
-    for (const entry of entries) {
-      const existed = existsSync(entry.absolute);
-      const before = existed ? await readFile(entry.absolute, 'utf8') : null;
-      if (before !== null) {
-        const backupPath = join(backupDir, entry.path);
-        await mkdirp(dirname(backupPath));
-        await writeFile(backupPath, before, 'utf8');
+    await assertSafePath(backupDir);
+    await mkdirp(backupDir);
+    await assertSafePath(backupDir);
+    try {
+      for (const item of prepared) {
+        if (item.before === null) continue;
+        item.backup = join(backupDir, item.entry.path);
+        await assertPathWithoutSymlinks(root, item.backup);
+        await mkdirp(dirname(item.backup));
+        await assertPathWithoutSymlinks(root, item.backup);
+        await writeFile(item.backup, item.before, { encoding: 'utf8', flag: 'wx' });
       }
-      await mkdirp(dirname(entry.absolute));
-      await writeFile(entry.absolute, entry.next, 'utf8');
-      applied.push({ path: entry.path, existed, backup: before === null ? null : join(backupDir, entry.path) });
+    } catch (error) {
+      await rm(backupDir, { recursive: true, force: true }).catch(() => {});
+      throw new LifeError('BACKUP_FAILED', 'The changes could not be backed up safely; no project file was modified.', { status: 500, details: { cause: error?.code || 'IO_ERROR' } });
     }
-    changeSets.set(changeSetId, { id: changeSetId, backupDir, files: applied, appliedAt: nowIso(clock), tests });
+
+    const applied = [];
+    try {
+      for (const item of prepared) {
+        await assertUnchangedSinceApproval(item);
+        await mkdirp(dirname(item.entry.absolute));
+        await assertSafePath(item.entry.absolute);
+        applied.push(item);
+        await writeFile(item.entry.absolute, item.entry.next, 'utf8');
+      }
+    } catch (error) {
+      let rollbackFailed = false;
+      for (const item of applied.reverse()) {
+        try {
+          await assertSafePath(item.entry.absolute);
+          if (item.existed) await writeFile(item.entry.absolute, item.before, 'utf8');
+          else await rm(item.entry.absolute, { force: true });
+        } catch {
+          rollbackFailed = true;
+          // Best-effort restoration; the original write error remains the cause.
+        }
+      }
+      await rm(backupDir, { recursive: true, force: true }).catch(() => {});
+      if (error instanceof LifeError && !rollbackFailed) throw error;
+      throw new LifeError('APPLY_FAILED', 'The changeset could not be fully applied; completed writes were rolled back where possible.', { status: 500, details: { cause: error?.code || 'IO_ERROR' } });
+    }
+
+    const storedFiles = prepared.map(({ entry, backup, existed, before }) => ({
+      path: entry.path,
+      displayPath: entry.displayPath,
+      existed,
+      before,
+      after: entry.next,
+      backup,
+    }));
+    changeSets.set(changeSetId, { id: changeSetId, backupDir, files: storedFiles, appliedAt: nowIso(clock), tests });
     security.audit('simulation.applied', {
       severity: 'warning',
       subject: changeSetId,
-      detail: { files: applied.map((file) => file.path), approvalId },
+      detail: { files: storedFiles.map((file) => file.displayPath), approvalId },
     });
-    return { changeSetId, applied, backupDir, tests };
+    return {
+      changeSetId,
+      applied: storedFiles.map(({ displayPath, existed }) => ({ path: displayPath, existed })),
+      rollbackApprovalContext: rollbackApprovalContext(changeSetId),
+      tests,
+    };
   };
 
-  const rollback = async (changeSetId) => {
+  const rollbackApprovalContext = (changeSetId) => ({
+    subjectType: 'simulation',
+    subjectId: `rollback:${changeSetId}`,
+    note: 'simulation.rollback',
+  });
+
+  const rollback = async (changeSetId, approvalId = null) => {
     const changeSet = changeSets.get(changeSetId);
     if (!changeSet) throw new LifeError('CHANGESET_NOT_FOUND', 'No such change set in this session.', { status: 404 });
-    const restored = [];
+    security.require('simulation.apply', { approvalId, approvalContext: rollbackApprovalContext(changeSetId) });
+
+    // A rollback must not overwrite edits made after the approved apply. Verify
+    // every current file and backup before the first restore begins.
+    const prepared = [];
     for (const file of changeSet.files) {
-      const absolute = join(root, file.path);
-      if (file.backup && existsSync(file.backup)) {
-        const before = await readFile(file.backup, 'utf8');
-        await writeFile(absolute, before, 'utf8');
-        restored.push({ path: file.path, restored: true });
-      } else if (!file.existed) {
-        await rm(absolute, { force: true });
-        restored.push({ path: file.path, removed: true });
+      const absolute = resolveInside(root, file.path);
+      await assertSafePath(absolute);
+      let info = null;
+      try {
+        info = await lstat(absolute);
+      } catch (error) {
+        if (error?.code !== 'ENOENT') throw error;
       }
+      if (!info?.isFile() || info.size > MAX_BYTES) {
+        throw new LifeError('STALE_CHANGESET', `${file.displayPath} no longer matches the applied change.`, { status: 409 });
+      }
+      const current = await readFile(absolute, 'utf8');
+      if (current !== file.after) {
+        throw new LifeError('STALE_CHANGESET', `${file.displayPath} changed after apply; it was not overwritten.`, { status: 409 });
+      }
+
+      let before = null;
+      if (file.existed) {
+        if (!file.backup) throw new LifeError('BACKUP_NOT_FOUND', 'A required rollback backup is missing.', { status: 409 });
+        await assertSafePath(file.backup);
+        const backupInfo = await lstat(file.backup).catch((error) => {
+          if (error?.code === 'ENOENT') return null;
+          throw error;
+        });
+        if (!backupInfo?.isFile() || backupInfo.size > MAX_BYTES) {
+          throw new LifeError('BACKUP_NOT_FOUND', 'A required rollback backup is missing or unsafe.', { status: 409 });
+        }
+        before = await readFile(file.backup, 'utf8');
+        if (before !== file.before) {
+          throw new LifeError('BACKUP_INVALID', 'A rollback backup no longer matches the approved change set.', { status: 409 });
+        }
+      }
+      prepared.push({ file, absolute, before });
     }
+
+    const restored = [];
+    const changed = [];
+    try {
+      for (const item of prepared) {
+        await assertSafePath(item.absolute);
+        let info = null;
+        try {
+          info = await lstat(item.absolute);
+        } catch (error) {
+          if (error?.code !== 'ENOENT') throw error;
+        }
+        const current = info?.isFile() ? await readFile(item.absolute, 'utf8') : null;
+        if (current !== item.file.after) {
+          throw new LifeError('STALE_CHANGESET', `${item.file.displayPath} changed during rollback.`, { status: 409 });
+        }
+        changed.push(item);
+        if (item.file.existed) {
+          await writeFile(item.absolute, item.before, 'utf8');
+          restored.push({ path: item.file.displayPath, restored: true });
+        } else {
+          await rm(item.absolute, { force: true });
+          restored.push({ path: item.file.displayPath, removed: true });
+        }
+      }
+    } catch (error) {
+      let compensationFailed = false;
+      for (const item of changed.reverse()) {
+        try {
+          await assertSafePath(item.absolute);
+          let info = null;
+          try {
+            info = await lstat(item.absolute);
+          } catch (lookupError) {
+            if (lookupError?.code !== 'ENOENT') throw lookupError;
+          }
+          const current = info?.isFile() ? await readFile(item.absolute, 'utf8') : null;
+          const rollbackValue = item.file.existed ? item.before : null;
+          if (current === rollbackValue) {
+            await writeFile(item.absolute, item.file.after, 'utf8');
+          } else if (current !== item.file.after) {
+            // Leave any concurrent, unrelated edit intact rather than clobber it.
+            compensationFailed = true;
+          }
+        } catch {
+          compensationFailed = true;
+        }
+      }
+      if (error instanceof LifeError && !compensationFailed) throw error;
+      throw new LifeError('ROLLBACK_FAILED', 'Rollback could not be completed; the original applied contents were restored where safe.', { status: 500, details: { cause: error?.code || 'IO_ERROR' } });
+    }
+
     security.audit('simulation.rolled_back', { severity: 'warning', subject: changeSetId, detail: { restored: restored.length } });
     return { changeSetId, restored };
   };
 
   const list = () => ({
-    workspaces: [...workspaces.values()],
+    workspaces: [...workspaces.values()].map((workspace) => ({
+      id: workspace.id,
+      files: workspace.files.map((path) => path.split(sep).join('/')),
+      createdAt: workspace.createdAt,
+      copied: workspace.copied,
+    })),
     changeSets: [...changeSets.values()].map((changeSet) => ({
       id: changeSet.id,
       appliedAt: changeSet.appliedAt,
-      files: changeSet.files.map((file) => file.path),
+      files: changeSet.files.map((file) => file.displayPath),
+      rollbackApprovalContext: rollbackApprovalContext(changeSet.id),
     })),
     executionEnabled: executeEnabled,
   });
@@ -215,7 +496,7 @@ export function createSimulationService({
 export function lineDiff(before, after) {
   const a = String(before ?? '').split('\n');
   const b = String(after ?? '').split('\n');
-  const max = 2000;
+  const max = MAX_DIFF_LINES;
   const left = a.slice(0, max);
   const right = b.slice(0, max);
   // Longest common subsequence, capped: files are small and this is preview-only.
@@ -255,7 +536,7 @@ export function lineDiff(before, after) {
     added += 1;
     j += 1;
   }
-  if (a.length > max || b.length > max) lines.push('# diff truncated at 2000 lines');
+  if (a.length > max || b.length > max) lines.push(`# diff truncated at ${MAX_DIFF_LINES} lines`);
   return { lines, added, removed };
 }
 
@@ -286,7 +567,8 @@ async function defaultRunCommand({ root, script, timeoutMs }) {
 export const SIMULATION_LIMITS = {
   maxFiles: MAX_FILES,
   maxBytes: MAX_BYTES,
+  maxDiffLines: MAX_DIFF_LINES,
   isolation: 'temporary directory copy (not an OS sandbox)',
   scripts: [...ALLOWED_SCRIPTS],
-  note: 'A temporary directory is not a security boundary. Execution is disabled unless NOVA_LIFE_ALLOW_EXECUTE=1 and requires an approval.',
+  note: 'Execution is disabled unless NOVA_LIFE_ALLOW_EXECUTE=1 and requires an approval bound to the workspace and script. A temporary directory is not a security boundary.',
 };

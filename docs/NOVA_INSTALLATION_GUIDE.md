@@ -14,7 +14,7 @@ breaking the existing app. Written for the repository at
 | npm | 10+ | scripts |
 | Disk | ~300 MB with `node_modules`; the database starts empty | |
 | Optional | Ollama ≥ 0.3, or llama.cpp / vLLM / LM Studio | actual local generation |
-| Optional | Supabase project | only if you want the cloud mirror of the records |
+| Optional | Supabase project | hosted sign-in and owner-gated L.I.F.E. API; offline local mode does not need it |
 
 `node:sqlite` prints an ExperimentalWarning on Node 22. It is expected and does
 not affect behaviour.
@@ -74,13 +74,22 @@ Start from `.env.example`. The values that matter for NEXUS:
 NOVA_LIFE_DB=/absolute/path/life.sqlite
 NOVA_LOCAL_ONLY=1
 NOVA_LIFE_ALLOW_EXECUTE=0
+NOVA_LIFE_ALLOW_UNAUTHENTICATED_LOCAL=1  # local development only; loopback-only and ignored in production
 NOVA_RESOURCE_PROFILE=balanced
+
+# For a hosted deployment, leave the local bypass off and configure all three:
+# SUPABASE_URL=https://<project>.supabase.co
+# SUPABASE_PUBLISHABLE_KEY=<publishable key>
+# NOVA_LIFE_OWNER_ID=<owner user's Supabase Auth UUID>
 OLLAMA_BASE_URL=http://127.0.0.1:11434
 NOVA_LOCAL_MODEL=llama3.2:3b
 ```
 
 Never put provider keys in client code; they are read server-side only. No key
-value is returned by any endpoint.
+value is returned by any endpoint. Hosted `/api/nova/life` requests carry the
+Supabase session bearer and the server verifies it with Supabase Auth before
+comparing the returned user id with `NOVA_LIFE_OWNER_ID`. The offline bypass is
+for loopback development only and must not be enabled in production.
 
 ## 5. First run checklist
 
