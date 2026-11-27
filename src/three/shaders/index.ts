@@ -1,34 +1,38 @@
 /**
- * Modular GLSL entry point for browser/Vite bundles.
+ * Modular GLSL entry point for browser/Vite bundles and Node/tsx DOM tests.
  *
- * Imports `.glsl` files using Vite's native `?raw` pipeline so shaders stay
- * zero-plugin, offline-bundled, and CSP-compliant.
+ * All shader source strings live canonically in `src/three/shaders/*.glsl` and
+ * are mirrored byte-for-byte in `./glslSources.ts` (verified in CI by
+ * `scripts/test-3d-foundation.mjs`) so React components importing this module
+ * work seamlessly in both Vite builds and Node/jsdom tests without custom loaders.
  */
 
-import commonGlsl from './common.glsl?raw';
-import earthVertexGlsl from './earth.vert.glsl?raw';
-import earthSurfaceFragmentGlsl from './earthSurface.frag.glsl?raw';
-import earthCloudsFragmentGlsl from './earthClouds.frag.glsl?raw';
-import earthAtmosphereFragmentGlsl from './earthAtmosphere.frag.glsl?raw';
-import planetAtmosphereFragmentGlsl from './planetAtmosphere.frag.glsl?raw';
-import starfieldVertexGlsl from './starfield.vert.glsl?raw';
-import starfieldFragmentGlsl from './starfield.frag.glsl?raw';
+import {
+  COMMON_RAW,
+  EARTH_ATMOSPHERE_FRAGMENT_RAW,
+  EARTH_CLOUDS_FRAGMENT_RAW,
+  EARTH_SURFACE_FRAGMENT_RAW,
+  EARTH_VERTEX_RAW,
+  PLANET_ATMOSPHERE_FRAGMENT_RAW,
+  STARFIELD_FRAGMENT_RAW,
+  STARFIELD_VERTEX_RAW,
+} from './glslSources';
 import { composeShader } from './shaderUtils';
 
-export const COMMON_GLSL: string = commonGlsl;
+export const COMMON_GLSL: string = COMMON_RAW;
 
 /** Composed GLSL programs for the Phase 2 Hero Orbital Earth & Celestial Earth scenes. */
-export const EARTH_VERTEX_GLSL: string = earthVertexGlsl;
-export const EARTH_SURFACE_FRAGMENT_GLSL: string = composeShader([commonGlsl, earthSurfaceFragmentGlsl]);
-export const EARTH_CLOUDS_FRAGMENT_GLSL: string = composeShader([commonGlsl, earthCloudsFragmentGlsl]);
-export const EARTH_ATMOSPHERE_FRAGMENT_GLSL: string = composeShader([commonGlsl, earthAtmosphereFragmentGlsl]);
+export const EARTH_VERTEX_GLSL: string = EARTH_VERTEX_RAW;
+export const EARTH_SURFACE_FRAGMENT_GLSL: string = composeShader([COMMON_RAW, EARTH_SURFACE_FRAGMENT_RAW]);
+export const EARTH_CLOUDS_FRAGMENT_GLSL: string = composeShader([COMMON_RAW, EARTH_CLOUDS_FRAGMENT_RAW]);
+export const EARTH_ATMOSPHERE_FRAGMENT_GLSL: string = composeShader([COMMON_RAW, EARTH_ATMOSPHERE_FRAGMENT_RAW]);
 
-/** Composed GLSL program for parameterized planetary/Mars Rayleigh & dust haze shells. */
-export const PLANET_ATMOSPHERE_FRAGMENT_GLSL: string = composeShader([commonGlsl, planetAtmosphereFragmentGlsl]);
+/** Composed GLSL program for parameterized planetary/Mars/exoplanet Rayleigh & dust haze shells. */
+export const PLANET_ATMOSPHERE_FRAGMENT_GLSL: string = composeShader([COMMON_RAW, PLANET_ATMOSPHERE_FRAGMENT_RAW]);
 
 /** Composed GLSL programs for lightweight orbital background starfields. */
-export const STARFIELD_VERTEX_GLSL: string = starfieldVertexGlsl;
-export const STARFIELD_FRAGMENT_GLSL: string = starfieldFragmentGlsl;
+export const STARFIELD_VERTEX_GLSL: string = STARFIELD_VERTEX_RAW;
+export const STARFIELD_FRAGMENT_GLSL: string = STARFIELD_FRAGMENT_RAW;
 
 export {
   composeShader,

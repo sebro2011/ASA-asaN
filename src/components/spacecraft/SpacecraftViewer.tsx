@@ -178,8 +178,9 @@ export default function SpacecraftViewer({ lang = 'en' }: { lang?: SupportedLang
     setResetToken((n) => n + 1);
   }, []);
 
+  const canMeasureCanvas = typeof ResizeObserver !== 'undefined';
   const showCanvas =
-    supportsWebGL && viewerConfig.enableWebGL && !isOptimizedModeActive && !contextLost;
+    canMeasureCanvas && supportsWebGL && viewerConfig.enableWebGL && !isOptimizedModeActive && !contextLost;
 
   return (
     <div ref={hostRef} className="overflow-hidden rounded-3xl border border-cyan-500/30 bg-abyss">
@@ -287,7 +288,10 @@ export default function SpacecraftViewer({ lang = 'en' }: { lang?: SupportedLang
               reducedMotion={reducedMotion}
             />
 
-            <ModelErrorBoundary fallback={<FallbackPlanet radius={1.6} color="#38bdf8" wireframe />}>
+            <ModelErrorBoundary
+              resetKey={selected.id}
+              fallback={<FallbackPlanet radius={1.6} color="#38bdf8" wireframe reducedMotion={reducedMotion} />}
+            >
               <Suspense
                 fallback={
                   <Html center>

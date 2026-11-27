@@ -362,7 +362,9 @@ export default function OrbitalEarth({ className = '', still = false }: OrbitalE
     };
   }, []);
 
-  const showCanvas = supportsWebGL && config.enableWebGL && !contextLost && !isOptimizedModeActive;
+  const canMeasureCanvas = typeof ResizeObserver !== 'undefined';
+  const showCanvas =
+    canMeasureCanvas && supportsWebGL && config.enableWebGL && !contextLost && !isOptimizedModeActive;
   const activeFrameloop = inView && tabVisible && !(reducedMotion || still) ? 'always' : 'demand';
 
   return (

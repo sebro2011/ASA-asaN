@@ -6,22 +6,25 @@ import * as THREE from 'three';
 
 /**
  * FallbackPlanet Component
- * 
- * Styled glowing Mesh Sphere with Wireframe and translucent atmospheric halo.
+ *
+ * Styled glowing wireframe sphere with translucent atmospheric halo.
  * Renders automatically as a 3D fallback if any GLB model fails to load, returns a 404,
  * or suffers network latency.
  */
-export function FallbackPlanet({ 
-  radius = 2.4, 
-  color = '#38bdf8', 
-  haloColor = '#0284c7', 
+export function FallbackPlanet({
+  radius = 2.4,
+  color = '#38bdf8',
+  haloColor = '#0284c7',
   autoRotate = true,
-  wireframe = true
+  reducedMotion = false,
+  wireframe = true,
 }) {
   const meshRef = useRef();
   const haloRef = useRef();
 
-  useFrame((_, delta) => {
+  useFrame((_, rawDelta) => {
+    if (reducedMotion) return;
+    const delta = Math.min(rawDelta, 0.1);
     if (autoRotate && meshRef.current) {
       meshRef.current.rotation.y += delta * 0.4;
       meshRef.current.rotation.x += delta * 0.15;
@@ -73,9 +76,10 @@ export function FallbackPlanet({
 
 /**
  * ModelErrorBoundary Class
- * 
- * React Error Boundary that catches 3D GLTF/GLB network 404 errors or rendering crashes
- * and renders FallbackPlanet safely.
+ *
+ * React Error Boundary that catches 3D GLTF/GLB network errors or rendering crashes
+ * and renders FallbackPlanet safely. Passing `resetKey` clears an earlier failure
+ * when the user switches to another model.
  */
 export class ModelErrorBoundary extends Component {
   constructor(props) {
@@ -85,6 +89,12 @@ export class ModelErrorBoundary extends Component {
 
   static getDerivedStateFromError(error) {
     return { hasError: true, error };
+  }
+
+  componentDidUpdate(prevProps) {
+    if (this.state.hasError && prevProps.resetKey !== this.props.resetKey) {
+      this.setState({ hasError: false, error: null });
+    }
   }
 
   componentDidCatch(error, errorInfo) {

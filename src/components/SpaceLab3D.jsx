@@ -682,8 +682,11 @@ function SpaceLab3D({ lang = 'en' }) {
             />
 
             {/* Active Celestial Model with 3D Fallback Planet Error Boundary */}
-            <ModelErrorBoundary fallback={<FallbackPlanet radius={2.4} color="#0ea5e9" wireframe={true} />}>
-              <Suspense fallback={<FallbackPlanet radius={2.4} color="#0ea5e9" wireframe={true} />}>
+            <ModelErrorBoundary
+              resetKey={selectedTargetId}
+              fallback={<FallbackPlanet radius={2.4} color="#0ea5e9" wireframe={true} reducedMotion={reducedMotion} />}
+            >
+              <Suspense fallback={<FallbackPlanet radius={2.4} color="#0ea5e9" wireframe={true} reducedMotion={reducedMotion} />}>
                 <Float
                   speed={reducedMotion ? 0 : currentTarget.type === 'spacecraft' ? 1.1 : 0.2}
                   rotationIntensity={reducedMotion ? 0 : 0.08}

@@ -30,6 +30,16 @@ import {
   resetWebGLProbeCache,
 } from '../src/hooks/useDevicePerformance.ts';
 import {
+  COMMON_RAW,
+  EARTH_ATMOSPHERE_FRAGMENT_RAW,
+  EARTH_CLOUDS_FRAGMENT_RAW,
+  EARTH_SURFACE_FRAGMENT_RAW,
+  EARTH_VERTEX_RAW,
+  PLANET_ATMOSPHERE_FRAGMENT_RAW,
+  STARFIELD_FRAGMENT_RAW,
+  STARFIELD_VERTEX_RAW,
+} from '../src/three/shaders/glslSources.ts';
+import {
   composeShader,
   createManagedShaderMaterial,
   createUniforms,
@@ -240,7 +250,26 @@ test('GLSL infrastructure files, ?raw typings, composer and validator work end-t
   }
 
   const shaderIndex = readFileSync('src/three/shaders/index.ts', 'utf8');
-  assert.match(shaderIndex, /common\.glsl\?raw/, 'shader index must import common.glsl via native Vite ?raw');
+  assert.match(shaderIndex, /from '\.\/glslSources'/, 'shader index must import universal glslSources mirror');
+
+  // Enforce exact byte-for-byte parity between canonical *.glsl files and glslSources.ts
+  const pairs = [
+    ['common.glsl', COMMON_RAW],
+    ['earth.vert.glsl', EARTH_VERTEX_RAW],
+    ['earthSurface.frag.glsl', EARTH_SURFACE_FRAGMENT_RAW],
+    ['earthClouds.frag.glsl', EARTH_CLOUDS_FRAGMENT_RAW],
+    ['earthAtmosphere.frag.glsl', EARTH_ATMOSPHERE_FRAGMENT_RAW],
+    ['planetAtmosphere.frag.glsl', PLANET_ATMOSPHERE_FRAGMENT_RAW],
+    ['starfield.vert.glsl', STARFIELD_VERTEX_RAW],
+    ['starfield.frag.glsl', STARFIELD_FRAGMENT_RAW],
+  ];
+  for (const [filename, rawExport] of pairs) {
+    assert.equal(
+      rawExport,
+      readFileSync(`src/three/shaders/${filename}`, 'utf8'),
+      `src/three/shaders/glslSources.ts must match src/three/shaders/${filename} byte-for-byte`
+    );
+  }
 
   const commonGlsl = readFileSync('src/three/shaders/common.glsl', 'utf8');
   assert.equal(validateGlslSource(commonGlsl, { requireMain: false }).valid, true);

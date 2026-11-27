@@ -2,174 +2,109 @@ import React, { useState, useEffect, useMemo, useRef, memo } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { OrbitControls, PerspectiveCamera } from '@react-three/drei';
 import * as THREE from 'three';
-import { motion, AnimatePresence } from 'framer-motion';
 import { fetchExoplanets as fetchExoplanetsPipeline } from '@/lib/nasaApi';
-import { 
-  Globe, 
-  Sparkles, 
-  Thermometer, 
-  Orbit as OrbitIcon, 
-  Ruler, 
-  Weight, 
-  Compass, 
-  Search, 
-  RefreshCw, 
-  ShieldCheck, 
-  AlertCircle, 
-  Info, 
-  ExternalLink,
-  ChevronRight,
-  Sliders
+import {
+  Globe,
+  Sparkles,
+  Search,
+  RefreshCw,
+  ShieldCheck,
+  Info,
 } from 'lucide-react';
+import { useDevicePerformance } from '../hooks/useDevicePerformance';
+import { EARTH_TEXTURES } from '../three/earthConfig';
+import {
+  classifyExoplanetVisual,
+  computeDisplayRadius,
+  getExoplanetLabConfig,
+} from '../three/exoplanetConfig';
+import SpaceEnvironment from '../three/lighting/SpaceEnvironment';
+import CinematicPostprocessing from '../three/postprocessing/CinematicPostprocessing';
+import DynamicStarfield from './DynamicStarfield.jsx';
+import {
+  EARTH_VERTEX_GLSL,
+  PLANET_ATMOSPHERE_FRAGMENT_GLSL,
+} from '../three/shaders';
+import {
+  createExoplanetSurfaceTextures,
+  createFallbackPlanetaryTexture,
+} from '../three/textures/proceduralTextures';
+
+const LAB_SUN_DIR = new THREE.Vector3(8, 6, 8).normalize();
 
 // ====================================================
-// Procedural Texture Generator for Exoplanet Classes
+// 3D Rotating Planet Sphere with Rayleigh Limb Shader
 // ====================================================
-function createProceduralExoplanetTexture(planet) {
-  const canvas = document.createElement('canvas');
-  canvas.width = 1024;
-  canvas.height = 512;
-  const ctx = canvas.getContext('2d');
-  if (!ctx) return null;
-
-  const temp = planet?.pl_eqt || 255;
-  const rad = planet?.pl_rade || 1.0;
-
-  // Classify planet type for custom procedural surface
-  let isHotJupiter = rad > 3.5 || temp > 600;
-  let isHycean = rad > 1.8 && rad <= 3.5;
-  let isTidallyLocked = planet?.pl_name?.toLowerCase().includes('trappist') || planet?.pl_name?.toLowerCase().includes('proxima');
-
-  if (isHotJupiter) {
-    // Swirling Gas Giant Bands (Hot Jupiter)
-    const grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
-    grad.addColorStop(0, '#451a03');
-    grad.addColorStop(0.2, '#d97706');
-    grad.addColorStop(0.4, '#b45309');
-    grad.addColorStop(0.6, '#f59e0b');
-    grad.addColorStop(0.8, '#78350f');
-    grad.addColorStop(1, '#451a03');
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    // Thermal Storm Bands
-    ctx.fillStyle = 'rgba(254, 243, 199, 0.25)';
-    for (let i = 0; i < 40; i++) {
-      const y = (i / 40) * canvas.height;
-      const h = Math.random() * 12 + 4;
-      ctx.fillRect(0, y, canvas.width, h);
-    }
-  } else if (isHycean) {
-    // Deep Ocean World (Hycean)
-    const grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
-    grad.addColorStop(0, '#0284c7');
-    grad.addColorStop(0.5, '#0369a1');
-    grad.addColorStop(1, '#075985');
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    // Dense atmospheric swirls
-    ctx.fillStyle = 'rgba(224, 242, 254, 0.35)';
-    for (let i = 0; i < 60; i++) {
-      const x = Math.random() * canvas.width;
-      const y = Math.random() * canvas.height;
-      const r = Math.random() * 80 + 20;
-      ctx.beginPath();
-      ctx.arc(x, y, r, 0, Math.PI * 2);
-      ctx.fill();
-    }
-  } else if (isTidallyLocked) {
-    // Tidally-Locked Red Dwarf World (Copper/Terminator)
-    const grad = ctx.createLinearGradient(0, 0, canvas.width, 0);
-    grad.addColorStop(0, '#1e1b4b'); // Night side (Dark Ice)
-    grad.addColorStop(0.45, '#9a3412'); // Twilight Zone (Habitable Rim)
-    grad.addColorStop(0.55, '#ea580c'); // Dayside (Copper Desert)
-    grad.addColorStop(1, '#b45309');
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    // Surface Craters & Basins
-    ctx.fillStyle = 'rgba(67, 20, 7, 0.4)';
-    for (let i = 0; i < 50; i++) {
-      const x = Math.random() * canvas.width;
-      const y = Math.random() * canvas.height;
-      const r = Math.random() * 45 + 10;
-      ctx.beginPath();
-      ctx.arc(x, y, r, 0, Math.PI * 2);
-      ctx.fill();
-    }
-  } else {
-    // Super-Earth / Earth-like World (Oceans & Continents)
-    ctx.fillStyle = '#0284c7'; // Deep Ocean
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    // Green/Ochre Landmasses
-    ctx.fillStyle = '#15803d';
-    for (let i = 0; i < 70; i++) {
-      const x = (Math.sin(i * 1.7) * 0.45 + 0.5) * canvas.width;
-      const y = (Math.cos(i * 2.3) * 0.4 + 0.5) * canvas.height;
-      const r = Math.abs(Math.sin(i * 3.1)) * 90 + 20;
-      ctx.beginPath();
-      ctx.arc(x, y, r, 0, Math.PI * 2);
-      ctx.fill();
-    }
-
-    // Atmosphere Clouds
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
-    for (let i = 0; i < 40; i++) {
-      const x = Math.random() * canvas.width;
-      const y = Math.random() * canvas.height;
-      const r = Math.random() * 60 + 15;
-      ctx.beginPath();
-      ctx.arc(x, y, r, 0, Math.PI * 2);
-      ctx.fill();
-    }
-  }
-
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.colorSpace = THREE.SRGBColorSpace;
-  texture.wrapS = THREE.RepeatWrapping;
-  texture.wrapT = THREE.ClampToEdgeWrapping;
-  return texture;
-}
-
-// ====================================================
-// 3D Rotating Planet Sphere Component
-// ====================================================
-function InteractivePlanetGlobe({ radius = 1.0, texture, glowColor = '#38bdf8', wireframe = false }) {
+function InteractivePlanetGlobe({
+  position = [0, 0, 0],
+  radius = 1.0,
+  segments = 64,
+  texture,
+  bumpMap = null,
+  bumpScale = 0.03,
+  roughness = 0.68,
+  atmosphereColor = '#38bdf8',
+  rimColor = '#bae6fd',
+  rimPower = 3.4,
+  rimIntensity = 0.95,
+  wireframe = false,
+  reducedMotion = false,
+  rotationRate = 0.14,
+}) {
   const meshRef = useRef();
 
-  useFrame((_, delta) => {
-    if (meshRef.current) {
-      meshRef.current.rotation.y += delta * 0.12;
+  const atmosphereMaterial = useMemo(
+    () =>
+      new THREE.ShaderMaterial({
+        vertexShader: EARTH_VERTEX_GLSL,
+        fragmentShader: PLANET_ATMOSPHERE_FRAGMENT_GLSL,
+        uniforms: {
+          uSunDirection: { value: LAB_SUN_DIR.clone() },
+          uDayColor: { value: new THREE.Color(atmosphereColor) },
+          uRimColor: { value: new THREE.Color(rimColor) },
+          uPower: { value: rimPower },
+          uIntensity: { value: rimIntensity },
+        },
+        blending: THREE.AdditiveBlending,
+        side: THREE.BackSide,
+        transparent: true,
+        depthWrite: false,
+      }),
+    [atmosphereColor, rimColor, rimPower, rimIntensity]
+  );
+
+  useEffect(() => () => atmosphereMaterial.dispose(), [atmosphereMaterial]);
+
+  useFrame((_, rawDelta) => {
+    if (!reducedMotion && meshRef.current) {
+      meshRef.current.rotation.y += Math.min(rawDelta, 0.1) * rotationRate;
     }
   });
 
-  return (
-    <group ref={meshRef}>
-      {/* Main Textured Sphere */}
-      <mesh castShadow receiveShadow>
-        <sphereGeometry args={[radius, 96, 96]} />
-        <meshStandardMaterial
-          map={texture}
-          roughness={0.7}
-          metalness={0.1}
-          wireframe={wireframe}
-        />
-      </mesh>
+  const atmoSegs = Math.max(32, Math.floor(segments * 0.75));
 
-      {/* Atmospheric Glow Halo */}
-      <mesh>
-        <sphereGeometry args={[radius * 1.06, 64, 64]} />
-        <meshBasicMaterial
-          color={glowColor}
-          transparent
-          opacity={0.3}
-          blending={THREE.AdditiveBlending}
-          side={THREE.BackSide}
-          depthWrite={false}
-        />
-      </mesh>
+  return (
+    <group position={position}>
+      <group ref={meshRef}>
+        <mesh>
+          <sphereGeometry args={[radius, segments, segments]} />
+          <meshStandardMaterial
+            map={texture}
+            bumpMap={bumpMap}
+            bumpScale={bumpScale}
+            roughness={roughness}
+            metalness={0.08}
+            wireframe={wireframe}
+          />
+        </mesh>
+      </group>
+
+      {!wireframe && (
+        <mesh scale={[1.075, 1.075, 1.075]}>
+          <sphereGeometry args={[radius, atmoSegs, atmoSegs]} />
+          <primitive object={atmosphereMaterial} attach="material" />
+        </mesh>
+      )}
     </group>
   );
 }
@@ -184,21 +119,49 @@ function ExoplanetLab({ lang = 'en' }) {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [wireframe, setWireframe] = useState(false);
+  const [reducedMotion, setReducedMotion] = useState(false);
+  const [isInView, setIsInView] = useState(true);
+  const [tabVisible, setTabVisible] = useState(true);
+  const [contextLost, setContextLost] = useState(false);
+  const [earthMap, setEarthMap] = useState(null);
 
   const containerRef = useRef(null);
-  const [isInView, setIsInView] = useState(true);
+  const cleanupCanvasRef = useRef(null);
 
-  // Pause 3D animation loop when scrolled out of viewport
+  const { isOptimizedModeActive, supportsWebGL, qualityProfile, gpuTier } = useDevicePerformance();
+  const labConfig = useMemo(() => getExoplanetLabConfig(qualityProfile), [qualityProfile]);
+
   useEffect(() => {
-    if (!containerRef.current || typeof IntersectionObserver === 'undefined') return;
+    if (typeof window === 'undefined' || !window.matchMedia) return undefined;
+    const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const sync = () => setReducedMotion(mq.matches);
+    sync();
+    mq.addEventListener?.('change', sync);
+    return () => mq.removeEventListener?.('change', sync);
+  }, []);
+
+  // Pause 3D render loop when scrolled out of viewport or tab hidden
+  useEffect(() => {
+    if (!containerRef.current || typeof IntersectionObserver === 'undefined') return undefined;
     const observer = new IntersectionObserver(
-      ([entry]) => {
-        setIsInView(entry.isIntersecting);
-      },
+      ([entry]) => setIsInView(entry.isIntersecting),
       { threshold: 0.05 }
     );
     observer.observe(containerRef.current);
     return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    const onVis = () => setTabVisible(!document.hidden);
+    document.addEventListener('visibilitychange', onVis);
+    return () => document.removeEventListener('visibilitychange', onVis);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      cleanupCanvasRef.current?.();
+      cleanupCanvasRef.current = null;
+    };
   }, []);
 
   // Fetch confirmed exoplanet targets from Central NASA API Pipeline
@@ -206,7 +169,9 @@ function ExoplanetLab({ lang = 'en' }) {
     setLoading(true);
     try {
       const list = await fetchExoplanetsPipeline();
-      const valid = Array.isArray(list) ? list.filter(p => p && typeof p.pl_name === 'string' && p.pl_name.trim()) : [];
+      const valid = Array.isArray(list)
+        ? list.filter((p) => p && typeof p.pl_name === 'string' && p.pl_name.trim())
+        : [];
       setExoplanets(valid);
       setSelectedPlanet(valid[0] || null);
     } catch (err) {
@@ -222,56 +187,75 @@ function ExoplanetLab({ lang = 'en' }) {
     fetchExoplanets();
   }, []);
 
-  // Earth Reference Texture & Exoplanet Texture
-  const earthTexture = useMemo(() => {
-    const canvas = document.createElement('canvas');
-    canvas.width = 1024;
-    canvas.height = 512;
-    const ctx = canvas.getContext('2d');
-    if (ctx) {
-      ctx.fillStyle = '#0284c7';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-      ctx.fillStyle = '#166534';
-      for (let i = 0; i < 80; i++) {
-        const x = (Math.sin(i * 1.9) * 0.45 + 0.5) * canvas.width;
-        const y = (Math.cos(i * 2.1) * 0.4 + 0.5) * canvas.height;
-        const r = Math.abs(Math.sin(i * 3.3)) * 80 + 15;
-        ctx.beginPath();
-        ctx.arc(x, y, r, 0, Math.PI * 2);
-        ctx.fill();
+  // Instant fallback Earth texture + local NASA Blue Marble upgrade
+  const fallbackEarthTex = useMemo(() => createFallbackPlanetaryTexture('earth'), []);
+  useEffect(() => () => fallbackEarthTex?.dispose(), [fallbackEarthTex]);
+
+  useEffect(() => {
+    let active = true;
+    let loadedTex = null;
+    const loader = new THREE.TextureLoader();
+    loader.load(
+      EARTH_TEXTURES.day1024,
+      (tex) => {
+        if (!active) {
+          tex.dispose();
+          return;
+        }
+        tex.colorSpace = THREE.SRGBColorSpace;
+        tex.anisotropy = 4;
+        loadedTex = tex;
+        setEarthMap(tex);
+      },
+      undefined,
+      () => {
+        // Retain deterministic fallbackEarthTex cleanly if image decode fails
       }
-    }
-    const tex = new THREE.CanvasTexture(canvas);
-    tex.colorSpace = THREE.SRGBColorSpace;
-    return tex;
+    );
+    return () => {
+      active = false;
+      loadedTex?.dispose();
+    };
   }, []);
 
-  const exoplanetTexture = useMemo(() => {
-    return createProceduralExoplanetTexture(selectedPlanet);
-  }, [selectedPlanet]);
+  const visualProfile = useMemo(
+    () => classifyExoplanetVisual(selectedPlanet),
+    [selectedPlanet]
+  );
 
-  // Release generated textures when selection changes or the component unmounts.
-  useEffect(() => () => earthTexture?.dispose(), [earthTexture]);
-  useEffect(() => () => exoplanetTexture?.dispose(), [exoplanetTexture]);
+  // Deterministic seeded albedo + relief bump map for the selected exoplanet
+  const exoplanetTextures = useMemo(
+    () =>
+      createExoplanetSurfaceTextures(
+        selectedPlanet?.pl_name || 'exoplanet-default',
+        visualProfile.archetype
+      ),
+    [selectedPlanet?.pl_name, visualProfile.archetype]
+  );
 
-  // Scaled Radius for 3D Viewport (Clamped between 0.5 and 2.4 for clean viewing)
-  const displayRadius = useMemo(() => {
-    if (!selectedPlanet?.pl_rade) return 1.0;
-    return Math.min(2.4, Math.max(0.5, selectedPlanet.pl_rade * 0.9));
-  }, [selectedPlanet]);
+  useEffect(() => () => exoplanetTextures.dispose(), [exoplanetTextures]);
+
+  // Scaled Radius for 3D Viewport (clamped cleanly so Earth & Target sit side-by-side)
+  const displayRadius = useMemo(
+    () => computeDisplayRadius(selectedPlanet?.pl_rade),
+    [selectedPlanet?.pl_rade]
+  );
 
   // Filtered Exoplanets List
   const filteredPlanets = useMemo(() => {
     if (!searchQuery.trim()) return exoplanets;
     const q = searchQuery.toLowerCase();
-    return exoplanets.filter(p => p.pl_name.toLowerCase().includes(q) || p.hostname?.toLowerCase().includes(q));
+    return exoplanets.filter(
+      (p) => p.pl_name.toLowerCase().includes(q) || p.hostname?.toLowerCase().includes(q)
+    );
   }, [exoplanets, searchQuery]);
 
-  // Language Dictionary
+  // Language Dictionary (all 3 languages define `subtitle`)
   const UI = {
     en: {
       title: '3D Exoplanet Comparative Habitability Lab',
-      subtitle: 'Side-by-side 3D planetary mesh comparison of Earth with confirmed extrasolar candidates from NASA Exoplanet Archive',
+      subtitle:
+        'Side-by-side 3D planetary mesh comparison of Earth with confirmed extrasolar candidates from NASA Exoplanet Archive',
       earthRef: 'EARTH (REFERENCE: 1.0 R⊕)',
       targetExo: 'TARGET EXOPLANET MESH',
       radiusRatio: 'Radius Ratio',
@@ -285,11 +269,12 @@ function ExoplanetLab({ lang = 'en' }) {
       searchPlaceholder: 'Search exoplanet (e.g. Kepler-452b, TRAPPIST-1e)...',
       refresh: 'Reload TAP Data',
       wireframeToggle: 'Toggle Mesh Wireframe',
-      specSheetTitle: 'Astrophysical Spec Sheet'
+      specSheetTitle: 'Astrophysical Spec Sheet',
     },
     si: {
       title: '3D බාහිර ග්‍රහලෝක සංසන්දනාත්මක විද්‍යාගාරය',
-      subheading: 'නාසා බාහිර ග්‍රහලෝක දත්ත සමුදායේ තහවුරු කළ ග්‍රහලෝක පෘථිවිය සමඟ පසෙකින් පසෙක සංසන්දනය කරන්න',
+      subtitle:
+        'නාසා බාහිර ග්‍රහලෝක දත්ත සමුදායේ තහවුරු කළ ග්‍රහලෝක පෘථිවිය සමඟ පසෙකින් පසෙක සංසන්දනය කරන්න',
       earthRef: 'පෘථිවිය (සංසන්දනාත්මක: 1.0 R⊕)',
       targetExo: 'බාහිර ග්‍රහලෝක ආකෘතිය',
       radiusRatio: 'විෂ්කම්භ අනුපාතය',
@@ -303,11 +288,12 @@ function ExoplanetLab({ lang = 'en' }) {
       searchPlaceholder: 'ග්‍රහලෝකය සොයන්න (උදා: Kepler-452b, TRAPPIST-1e)...',
       refresh: 'දත්ත යාවත්කාලීන කරන්න',
       wireframeToggle: 'වයර්ෆ්‍රේම් ආකෘතිය',
-      specSheetTitle: 'විද්‍යාත්මක දත්ත වාර්තාව'
+      specSheetTitle: 'විද්‍යාත්මක දත්ත වාර්තාව',
     },
     ta: {
       title: '3D புறக்கோள் ஒப்பீட்டு ஆய்வகம்',
-      subheading: 'நாசா புறக்கோள் காப்பகத்தின் உறுதிப்படுத்தப்பட்ட கோள்களை பூமியுடன் ஒப்பீடு செய்திடுங்கள்',
+      subtitle:
+        'நாசா புறக்கோள் காப்பகத்தின் உறுதிப்படுத்தப்பட்ட கோள்களை பூமியுடன் ஒப்பீடு செய்திடுங்கள்',
       earthRef: 'பூமி (ஒப்பீடு: 1.0 R⊕)',
       targetExo: 'இலக்கு புறக்கோள் 3D',
       radiusRatio: 'ஆர விகிதம்',
@@ -321,11 +307,18 @@ function ExoplanetLab({ lang = 'en' }) {
       searchPlaceholder: 'புறக்கோள் தேடுக (எ.கா. Kepler-452b, TRAPPIST-1e)...',
       refresh: 'புதுப்பிக்குக',
       wireframeToggle: 'வலை வடிவமைப்பு',
-      specSheetTitle: 'வானியற்பியல் தரவு அறிக்கை'
-    }
+      specSheetTitle: 'வானியற்பியல் தரவு அறிக்கை',
+    },
   };
 
   const t = UI[lang] || UI.en;
+  const canMeasureCanvas = typeof ResizeObserver !== 'undefined';
+  const showWebGL =
+    canMeasureCanvas && supportsWebGL && labConfig.enableWebGL && !isOptimizedModeActive && !contextLost;
+
+  // Dynamic horizontal spacing so Earth (radius 1.0) and Target never collide
+  const earthX = -1.65;
+  const targetX = 1.45 + Math.max(0, (displayRadius - 1.0) * 0.55);
 
   return (
     <div className="w-full space-y-6 select-none font-sans">
@@ -336,8 +329,8 @@ function ExoplanetLab({ lang = 'en' }) {
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 text-xs font-mono mb-2">
-              <Sparkles className="w-3.5 h-3.5 text-cyan-400 animate-pulse" />
-              <span>NASA EXOPLANET ARCHIVE TAP SYSTEM</span>
+              <Sparkles className={`w-3.5 h-3.5 text-cyan-400 ${reducedMotion ? '' : 'animate-pulse'}`} />
+              <span>NASA EXOPLANET ARCHIVE TAP SYSTEM · {gpuTier.toUpperCase()}</span>
             </div>
             <h2 className="text-xl sm:text-2xl font-black font-display text-white tracking-wide">
               {t.title}
@@ -350,9 +343,11 @@ function ExoplanetLab({ lang = 'en' }) {
           <div className="flex items-center gap-2 self-start md:self-auto">
             <button
               type="button"
-              onClick={() => setWireframe(!wireframe)}
+              onClick={() => setWireframe((v) => !v)}
               className={`px-3.5 py-2 rounded-[14px] border text-xs font-mono font-bold transition cursor-pointer ${
-                wireframe ? 'bg-cyan-500/20 border-cyan-400 text-cyan-300' : 'bg-surface/60 border-line text-ink-2 hover:text-ink'
+                wireframe
+                  ? 'bg-cyan-500/20 border-cyan-400 text-cyan-300'
+                  : 'bg-surface/60 border-line text-ink-2 hover:text-ink'
               }`}
             >
               Wireframe
@@ -371,17 +366,18 @@ function ExoplanetLab({ lang = 'en' }) {
         </div>
       </div>
 
-      {/* Main 3D Side-by-Side Comparison Canvas Grid */}
+      {/* Main 3D Side-by-Side Comparison Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        
-        {/* 3D WebGL Viewport (Left/Top) */}
-        <div ref={containerRef} className="lg:col-span-7 rounded-[14px] apple-liquid-glass p-6 sm:p-7 shadow-2xl flex flex-col justify-between relative overflow-hidden min-h-[480px]">
-          
+        {/* Unified Single-Context 3D WebGL Viewport (or Tier-0 Eco Scale Card) */}
+        <div
+          ref={containerRef}
+          className="lg:col-span-7 rounded-[14px] apple-liquid-glass p-5 sm:p-6 shadow-2xl flex flex-col justify-between relative overflow-hidden min-h-[480px]"
+        >
           {/* Top Scale Callout Header */}
-          <div className="w-full flex items-center justify-between text-xs font-mono text-ink-2 z-10 mb-2">
+          <div className="w-full flex items-center justify-between gap-2 flex-wrap text-xs font-mono text-ink-2 z-10 mb-3">
             <span className="flex items-center gap-1.5 text-cyan-300 font-bold">
               <Globe className="w-4 h-4 text-cyan-400" />
-              SIDE-BY-SIDE 3D MESH COMPARISON
+              UNIFIED 3D SCALE COMPARISON
             </span>
             {selectedPlanet && (
               <span className="px-3 py-1 rounded-full apple-liquid-glass text-cyan-300 font-bold text-[11px] border-cyan-500/30">
@@ -390,75 +386,176 @@ function ExoplanetLab({ lang = 'en' }) {
             )}
           </div>
 
-          {/* Dual 3D Viewport Side-by-Side Layout */}
-          <div className="grid grid-cols-2 gap-4 w-full my-auto h-[320px] relative">
-            
-            {/* Viewport 1: Earth Reference */}
-            <div className="relative rounded-[14px] apple-liquid-glass overflow-hidden flex flex-col justify-between p-3.5">
-              <div className="absolute top-2 left-3 z-10 text-[10px] font-mono text-ink-2 font-bold apple-liquid-glass px-2.5 py-0.5 rounded-[8px] border-white/10">
-                {t.earthRef}
-              </div>
-
-              <div className="w-full h-full cursor-grab active:cursor-grabbing">
-                <Canvas
-                  frameloop={isInView ? 'always' : 'never'}
-                  dpr={[1, 1.2]}
-                  gl={{ powerPreference: 'high-performance', antialias: false }}
-                >
-                  <PerspectiveCamera makeDefault position={[0, 0, 3.8]} fov={50} />
-                  <ambientLight intensity={0.6} />
-                  <directionalLight position={[10, 10, 8]} intensity={1.5} />
-                  <InteractivePlanetGlobe radius={1.0} texture={earthTexture} glowColor="#38bdf8" wireframe={wireframe} />
-                  <OrbitControls enableZoom={false} autoRotate autoRotateSpeed={0.8} />
-                </Canvas>
-              </div>
-
-              <div className="text-center font-mono text-[10px] text-cyan-300 font-bold z-10">
-                R⊕ = 6,371 km • 1.00 Earth Mass
-              </div>
+          {/* Comparative Stage */}
+          <div className="relative w-full h-[340px] rounded-[14px] border border-white/10 bg-[radial-gradient(ellipse_at_50%_45%,rgba(12,34,74,0.35),rgba(2,6,18,0.98)_76%)] overflow-hidden">
+            {/* Corner Planet Badges */}
+            <div className="pointer-events-none absolute top-3 left-3 z-10 rounded-[8px] border border-white/10 bg-abyss/80 px-2.5 py-1 text-[10px] font-mono font-bold text-ink-2">
+              {t.earthRef}
+            </div>
+            <div className="pointer-events-none absolute top-3 right-3 z-10 rounded-[8px] border border-cyan-500/30 bg-abyss/80 px-2.5 py-1 text-[10px] font-mono font-bold text-cyan-300">
+              {selectedPlanet?.pl_name || t.targetExo}
             </div>
 
-            {/* Viewport 2: Target Exoplanet */}
-            <div className="relative rounded-[14px] apple-liquid-glass overflow-hidden flex flex-col justify-between p-3.5">
-              <div className="absolute top-2 left-3 z-10 text-[10px] font-mono text-cyan-300 font-bold apple-liquid-glass px-2.5 py-0.5 rounded-[8px] border-cyan-500/30">
-                {selectedPlanet?.pl_name || t.targetExo}
-              </div>
-
+            {showWebGL ? (
               <div className="w-full h-full cursor-grab active:cursor-grabbing">
                 <Canvas
-                  frameloop={isInView ? 'always' : 'never'}
-                  dpr={[1, 1.2]}
-                  gl={{ powerPreference: 'high-performance', antialias: false }}
+                  frameloop={isInView && tabVisible ? 'always' : 'demand'}
+                  dpr={labConfig.dpr}
+                  gl={{
+                    powerPreference: 'high-performance',
+                    antialias: true,
+                    alpha: true,
+                    toneMapping: THREE.ACESFilmicToneMapping,
+                    toneMappingExposure: 1.12,
+                  }}
+                  onCreated={({ gl }) => {
+                    gl.setClearColor(0x000000, 0);
+                    cleanupCanvasRef.current?.();
+                    const dom = gl.domElement;
+                    const onLost = (e) => {
+                      e.preventDefault();
+                      setContextLost(true);
+                    };
+                    const onRestored = () => setContextLost(false);
+                    dom.addEventListener('webglcontextlost', onLost, false);
+                    dom.addEventListener('webglcontextrestored', onRestored, false);
+                    cleanupCanvasRef.current = () => {
+                      dom.removeEventListener('webglcontextlost', onLost, false);
+                      dom.removeEventListener('webglcontextrestored', onRestored, false);
+                    };
+                  }}
                 >
-                  <PerspectiveCamera makeDefault position={[0, 0, 3.8]} fov={50} />
-                  <ambientLight intensity={0.6} />
-                  <directionalLight position={[10, 10, 8]} intensity={1.5} />
+                  <PerspectiveCamera makeDefault position={[0, 0.35, 6.4]} fov={42} />
+
+                  <ambientLight intensity={0.22} />
+                  <hemisphereLight args={[0xa5d8ff, 0x0b1224, 0.32]} />
+                  <directionalLight position={[8, 6, 8]} intensity={2.2} color="#fff9ed" />
+                  <directionalLight position={[-7, -3, -5]} intensity={0.45} color="#38bdf8" />
+
+                  <SpaceEnvironment
+                    intensity={0.45}
+                    resolution={labConfig.environmentResolution}
+                  />
+
+                  <DynamicStarfield
+                    count={labConfig.starCount}
+                    minRadius={36}
+                    maxRadius={130}
+                    driftSpeed={0.002}
+                    reducedMotion={reducedMotion}
+                  />
+
+                  {/* Left Sphere: Real NASA Blue Marble Earth Reference (1.0 R⊕) */}
+                  <InteractivePlanetGlobe
+                    position={[earthX, 0, 0]}
+                    radius={1.0}
+                    segments={labConfig.sphereSegments}
+                    texture={earthMap || fallbackEarthTex}
+                    roughness={0.62}
+                    atmosphereColor="#38bdf8"
+                    rimColor="#bae6fd"
+                    rimPower={3.5}
+                    rimIntensity={0.95}
+                    wireframe={wireframe}
+                    reducedMotion={reducedMotion}
+                    rotationRate={0.14}
+                  />
+
+                  {/* Right Sphere: Selected Target Exoplanet */}
                   {selectedPlanet && (
                     <InteractivePlanetGlobe
+                      position={[targetX, 0, 0]}
                       radius={displayRadius}
-                      texture={exoplanetTexture}
-                      glowColor={selectedPlanet.pl_eqt > 500 ? '#f59e0b' : '#38bdf8'}
+                      segments={labConfig.sphereSegments}
+                      texture={exoplanetTextures.albedoMap}
+                      bumpMap={exoplanetTextures.bumpMap}
+                      bumpScale={visualProfile.bumpScale}
+                      roughness={visualProfile.roughness}
+                      atmosphereColor={visualProfile.atmosphereColor}
+                      rimColor={visualProfile.rimColor}
+                      rimPower={visualProfile.rimPower}
+                      rimIntensity={visualProfile.rimIntensity}
                       wireframe={wireframe}
+                      reducedMotion={reducedMotion}
+                      rotationRate={0.11}
                     />
                   )}
-                  <OrbitControls enableZoom={false} autoRotate autoRotateSpeed={0.8} />
+
+                  <OrbitControls
+                    enablePan={false}
+                    enableDamping
+                    dampingFactor={0.07}
+                    minDistance={4.0}
+                    maxDistance={10.5}
+                  />
+
+                  <CinematicPostprocessing
+                    enabled={labConfig.enablePostprocessing}
+                    bloomIntensity={labConfig.bloomIntensity}
+                    luminanceThreshold={0.9}
+                    vignetteDarkness={0.38}
+                  />
                 </Canvas>
               </div>
-
-              <div className="text-center font-mono text-[10px] text-amber-300 font-bold z-10">
-                R = {formatValue(selectedPlanet?.pl_rade, 2)} R⊕ • {formatValue(selectedPlanet?.pl_masse, 1)} M⊕
+            ) : (
+              /* Zero-WebGL Tier-0 Eco Comparative Scale Diagram */
+              <div className="flex h-full w-full flex-col items-center justify-center gap-4 px-6">
+                <div className="flex items-center justify-center gap-10">
+                  <div className="flex flex-col items-center gap-2">
+                    <div
+                      className="rounded-full border border-cyan-400/60 bg-[radial-gradient(circle_at_35%_30%,#38bdf8,#0369a1_62%,#082f49)] shadow-[0_0_24px_rgba(56,189,248,0.35)]"
+                      style={{ width: 84, height: 84 }}
+                    />
+                    <span className="font-mono text-[10px] text-cyan-200">1.00 R⊕</span>
+                  </div>
+                  <div className="flex flex-col items-center gap-2">
+                    <div
+                      className="rounded-full border border-amber-400/50 shadow-[0_0_26px_rgba(245,158,11,0.28)]"
+                      style={{
+                        width: Math.round(84 * displayRadius),
+                        height: Math.round(84 * displayRadius),
+                        background: `radial-gradient(circle at 35% 30%, ${visualProfile.rimColor}, ${visualProfile.atmosphereColor} 65%, #0f172a)`,
+                      }}
+                    />
+                    <span className="font-mono text-[10px] text-amber-300">
+                      {formatValue(selectedPlanet?.pl_rade, 2)} R⊕
+                    </span>
+                  </div>
+                </div>
+                {contextLost && (
+                  <button
+                    type="button"
+                    onClick={() => setContextLost(false)}
+                    className="rounded-[10px] bg-cyan-600 px-3.5 py-1.5 font-mono text-xs font-semibold text-white hover:bg-cyan-500 transition"
+                  >
+                    Restore 3D Comparison
+                  </button>
+                )}
               </div>
+            )}
+
+            {/* Bottom Scale Readout Strip */}
+            <div className="pointer-events-none absolute bottom-2.5 left-3 right-3 flex items-center justify-between gap-2 font-mono text-[10px]">
+              <span className="rounded-[8px] border border-white/10 bg-abyss/80 px-2.5 py-0.5 text-cyan-300 font-bold">
+                R⊕ = 6,371 km • 1.00 Earth Mass
+              </span>
+              <span className="rounded-[8px] border border-white/10 bg-abyss/80 px-2.5 py-0.5 text-amber-300 font-bold">
+                R = {formatValue(selectedPlanet?.pl_rade, 2)} R⊕ • {formatValue(selectedPlanet?.pl_masse, 1)} M⊕
+              </span>
             </div>
           </div>
 
-          <div className="text-center text-[11px] font-mono text-ink-3 pt-2 border-t border-white/10">
-            {lang === 'si' ? 'මෙම රූප කලාත්මක සංකල්ප පමණි; මතුපිට, වායුගෝලය හෝ වාසය කළ හැකි බව පිළිබඳ නිරීක්ෂණ නොවේ. දෘශ්‍ය පරිමාණය සීමා කර ඇත.' : lang === 'ta' ? 'இவை கலைக் கற்பனைகள் மட்டுமே; மேற்பரப்பு, வளிமண்டலம் அல்லது வாழ்தகுதி பற்றிய அவதானிப்புகள் அல்ல. காட்சியின் அளவு வரையறுக்கப்பட்டுள்ளது.' : 'Illustrative procedural textures are not observations of surface, atmosphere, or habitability. Display scale is capped.'}
+          <div className="text-center text-[11px] font-mono text-ink-3 pt-3 border-t border-white/10">
+            {lang === 'si'
+              ? 'මෙම රූප කලාත්මක සංකල්ප පමණි; මතුපිට, වායුගෝලය හෝ වාසය කළ හැකි බව පිළිබඳ නිරීක්ෂණ නොවේ. දෘශ්‍ය පරිමාණය සීමා කර ඇත.'
+              : lang === 'ta'
+              ? 'இவை கலைக் கற்பனைகள் மட்டுமே; மேற்பரப்பு, வளிமண்டலம் அல்லது வாழ்தகுதி பற்றிய அவதானிப்புகள் அல்ல. காட்சியின் அளவு வரையறுக்கப்பட்டுள்ளது.'
+              : 'Illustrative procedural textures are not observations of surface, atmosphere, or habitability. Display scale is capped.'}
           </div>
         </div>
 
         {/* Exoplanet Selector & Spec Sheet (Right) */}
         <div className="lg:col-span-5 space-y-4">
-          
           {/* Target Exoplanet Presets Bar */}
           <div className="p-5 rounded-[14px] apple-liquid-glass space-y-3 shadow-xl">
             <div className="relative">
@@ -466,15 +563,16 @@ function ExoplanetLab({ lang = 'en' }) {
               <input
                 type="text"
                 value={searchQuery}
-                onChange={e => setSearchQuery(e.target.value)}
+                onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder={t.searchPlaceholder}
+                aria-label={t.searchPlaceholder}
                 className="w-full pl-10 pr-4 py-2.5 rounded-[14px] apple-liquid-glass text-xs font-mono text-white placeholder-slate-400 focus:outline-none focus:border-cyan-500/60"
               />
             </div>
 
             {/* Quick Target Chips */}
             <div className="flex items-center gap-1.5 overflow-x-auto text-[11px] font-mono pb-1">
-              {filteredPlanets.slice(0, 6).map(p => (
+              {filteredPlanets.slice(0, 6).map((p) => (
                 <button
                   key={p.pl_name}
                   type="button"
@@ -493,13 +591,17 @@ function ExoplanetLab({ lang = 'en' }) {
 
           {!loading && exoplanets.length === 0 && (
             <div role="status" className="p-5 rounded-[14px] apple-liquid-glass text-sm text-ink-2">
-              {lang === 'si' ? 'Exoplanet Archive දත්ත දැනට නොමැත. නැවත උත්සාහ කරන්න.' : lang === 'ta' ? 'Exoplanet Archive தரவு தற்போது கிடைக்கவில்லை. மீண்டும் முயற்சிக்கவும்.' : 'Exoplanet Archive data is unavailable or empty. Please retry.'}
+              {lang === 'si'
+                ? 'Exoplanet Archive දත්ත දැනට නොමැත. නැවත උත්සාහ කරන්න.'
+                : lang === 'ta'
+                ? 'Exoplanet Archive தரவு தற்போது கிடைக்கவில்லை. மீண்டும் முயற்சிக்கவும்.'
+                : 'Exoplanet Archive data is unavailable or empty. Please retry.'}
             </div>
           )}
+
           {/* Archive Spec Sheet Cards */}
           {selectedPlanet && (
             <div className="p-6 rounded-[14px] apple-liquid-glass space-y-4 shadow-xl">
-              
               <div className="flex items-center justify-between border-b border-white/10 pb-3">
                 <div>
                   <h3 className="text-lg font-bold font-display text-white">
@@ -520,26 +622,46 @@ function ExoplanetLab({ lang = 'en' }) {
               <div className="grid grid-cols-2 gap-3 text-xs font-mono">
                 <div className="p-3.5 rounded-[14px] apple-liquid-glass">
                   <span className="text-ink-3 block text-[10px] mb-0.5">{t.radiusRatio}</span>
-                  <span className="text-cyan-300 font-bold text-sm">{formatValue(selectedPlanet.pl_rade, 2)} R⊕</span>
-                  <span className="text-ink-3 block text-[9px] mt-0.5">{Number.isFinite(selectedPlanet.pl_rade) ? `(${Math.round(selectedPlanet.pl_rade * 6371).toLocaleString()} km)` : ''}</span>
+                  <span className="text-cyan-300 font-bold text-sm">
+                    {formatValue(selectedPlanet.pl_rade, 2)} R⊕
+                  </span>
+                  <span className="text-ink-3 block text-[9px] mt-0.5">
+                    {Number.isFinite(selectedPlanet.pl_rade)
+                      ? `(${Math.round(selectedPlanet.pl_rade * 6371).toLocaleString()} km)`
+                      : ''}
+                  </span>
                 </div>
 
                 <div className="p-3.5 rounded-[14px] apple-liquid-glass">
                   <span className="text-ink-3 block text-[10px] mb-0.5">{t.massRatio}</span>
-                  <span className="text-indigo-300 font-bold text-sm">{formatValue(selectedPlanet.pl_masse, 2)} M⊕</span>
+                  <span className="text-indigo-300 font-bold text-sm">
+                    {formatValue(selectedPlanet.pl_masse, 2)} M⊕
+                  </span>
                   <span className="text-ink-3 block text-[9px] mt-0.5">(Earth Mass Multiple)</span>
                 </div>
 
                 <div className="p-3.5 rounded-[14px] apple-liquid-glass">
                   <span className="text-ink-3 block text-[10px] mb-0.5">{t.orbitalPeriod}</span>
-                  <span className="text-amber-300 font-bold text-sm">{formatValue(selectedPlanet.pl_orbper, 1)} Days</span>
-                  <span className="text-ink-3 block text-[9px] mt-0.5">{Number.isFinite(selectedPlanet.pl_orbper) ? `(${(selectedPlanet.pl_orbper / 365.25).toFixed(2)} Earth Years)` : ''}</span>
+                  <span className="text-amber-300 font-bold text-sm">
+                    {formatValue(selectedPlanet.pl_orbper, 1)} Days
+                  </span>
+                  <span className="text-ink-3 block text-[9px] mt-0.5">
+                    {Number.isFinite(selectedPlanet.pl_orbper)
+                      ? `(${(selectedPlanet.pl_orbper / 365.25).toFixed(2)} Earth Years)`
+                      : ''}
+                  </span>
                 </div>
 
                 <div className="p-3.5 rounded-[14px] apple-liquid-glass">
                   <span className="text-ink-3 block text-[10px] mb-0.5">{t.eqTemp}</span>
-                  <span className="text-critical font-bold text-sm">{formatValue(selectedPlanet.pl_eqt, 0)} K</span>
-                  <span className="text-ink-3 block text-[9px] mt-0.5">{Number.isFinite(selectedPlanet.pl_eqt) ? `(${(selectedPlanet.pl_eqt - 273.15).toFixed(1)} °C)` : ''}</span>
+                  <span className="text-critical font-bold text-sm">
+                    {formatValue(selectedPlanet.pl_eqt, 0)} K
+                  </span>
+                  <span className="text-ink-3 block text-[9px] mt-0.5">
+                    {Number.isFinite(selectedPlanet.pl_eqt)
+                      ? `(${(selectedPlanet.pl_eqt - 273.15).toFixed(1)} °C)`
+                      : ''}
+                  </span>
                 </div>
               </div>
 
@@ -548,12 +670,16 @@ function ExoplanetLab({ lang = 'en' }) {
                 <div className="flex items-center justify-between text-ink-2">
                   <span>{t.distance}:</span>
                   <span className="text-cyan-300 font-bold">
-                    {Number.isFinite(selectedPlanet.sy_dist) ? `${(selectedPlanet.sy_dist * 3.26156).toFixed(1)} ly (${selectedPlanet.sy_dist.toFixed(1)} pc)` : 'N/A'}
+                    {Number.isFinite(selectedPlanet.sy_dist)
+                      ? `${(selectedPlanet.sy_dist * 3.26156).toFixed(1)} ly (${selectedPlanet.sy_dist.toFixed(1)} pc)`
+                      : 'N/A'}
                   </span>
                 </div>
                 <div className="flex items-center justify-between text-ink-3 text-[11px] pt-1 border-t border-white/10">
                   <span>{t.facility}:</span>
-                  <span className="text-ink-2">{selectedPlanet.disc_facility || 'N/A'} ({selectedPlanet.disc_year ?? 'N/A'})</span>
+                  <span className="text-ink-2">
+                    {selectedPlanet.disc_facility || 'N/A'} ({selectedPlanet.disc_year ?? 'N/A'})
+                  </span>
                 </div>
               </div>
 
@@ -564,7 +690,8 @@ function ExoplanetLab({ lang = 'en' }) {
                   Astrophysical Overview:
                 </span>
                 <p className="leading-relaxed font-sans text-ink-2 text-[11px]">
-                  {selectedPlanet.description || `NASA Exoplanet Archive record: ${selectedPlanet.pl_name}. Missing values are not estimates. An equilibrium temperature is not a surface measurement or evidence of habitability.`}
+                  {selectedPlanet.description ||
+                    `NASA Exoplanet Archive record: ${selectedPlanet.pl_name}. Missing values are not estimates. An equilibrium temperature is not a surface measurement or evidence of habitability.`}
                 </p>
               </div>
             </div>

@@ -10,6 +10,16 @@
  */
 
 import * as THREE from 'three';
+import type { ExoplanetVisualClass } from '../exoplanetConfig';
+
+function hashSeed(label: string): number {
+  let h = 2166136261 >>> 0;
+  for (let i = 0; i < label.length; i += 1) {
+    h ^= label.charCodeAt(i);
+    h = Math.imul(h, 16777619) >>> 0;
+  }
+  return h || 1337;
+}
 
 function createSeededRng(seed: number): () => number {
   let state = seed >>> 0;
@@ -236,4 +246,206 @@ export function createFallbackPlanetaryTexture(type: 'mars' | 'earth'): THREE.Ca
   texture.wrapS = THREE.RepeatWrapping;
   texture.wrapT = THREE.ClampToEdgeWrapping;
   return texture;
+}
+
+export interface ExoplanetTextureSet {
+  albedoMap: THREE.CanvasTexture | null;
+  bumpMap: THREE.CanvasTexture | null;
+  dispose: () => void;
+}
+
+/**
+ * Generates deterministic, illustrative seeded albedo & relief bump maps for
+ * an exoplanet visual class. Purely client-side & SSR-safe (returns null maps
+ * when `document` is unavailable).
+ */
+export function createExoplanetSurfaceTextures(
+  planetName: string,
+  archetype: ExoplanetVisualClass
+): ExoplanetTextureSet {
+  if (typeof document === 'undefined') {
+    return { albedoMap: null, bumpMap: null, dispose: () => {} };
+  }
+
+  const width = 1024;
+  const height = 512;
+  const albedoCanvas = document.createElement('canvas');
+  albedoCanvas.width = width;
+  albedoCanvas.height = height;
+  const aCtx = albedoCanvas.getContext('2d');
+
+  const bumpCanvas = document.createElement('canvas');
+  bumpCanvas.width = 512;
+  bumpCanvas.height = 256;
+  const bCtx = bumpCanvas.getContext('2d');
+
+  if (!aCtx || !bCtx) {
+    return { albedoMap: null, bumpMap: null, dispose: () => {} };
+  }
+
+  const rng = createSeededRng(hashSeed(`${planetName}:${archetype}`));
+  bCtx.fillStyle = '#808080';
+  bCtx.fillRect(0, 0, bumpCanvas.width, bumpCanvas.height);
+
+  if (archetype === 'hot-jupiter') {
+    const grad = aCtx.createLinearGradient(0, 0, 0, height);
+    grad.addColorStop(0, '#3b1505');
+    grad.addColorStop(0.18, '#b45309');
+    grad.addColorStop(0.36, '#f59e0b');
+    grad.addColorStop(0.52, '#92400e');
+    grad.addColorStop(0.68, '#fbbf24');
+    grad.addColorStop(0.84, '#78350f');
+    grad.addColorStop(1, '#3b1505');
+    aCtx.fillStyle = grad;
+    aCtx.fillRect(0, 0, width, height);
+
+    for (let i = 0; i < 48; i += 1) {
+      const y = (i / 48) * height;
+      const bandH = 3 + rng() * 14;
+      aCtx.fillStyle = i % 2 === 0 ? 'rgba(254, 243, 199, 0.22)' : 'rgba(69, 26, 3, 0.26)';
+      aCtx.fillRect(0, y, width, bandH);
+      bCtx.fillStyle = i % 2 === 0 ? 'rgba(170,170,170,0.35)' : 'rgba(90,90,90,0.35)';
+      bCtx.fillRect(0, y * 0.5, bumpCanvas.width, bandH * 0.5);
+    }
+
+    // Anticyclonic storm ovals
+    for (let i = 0; i < 9; i += 1) {
+      const cx = rng() * width;
+      const cy = (0.18 + rng() * 0.64) * height;
+      const rx = 24 + rng() * 52;
+      const ry = 10 + rng() * 18;
+      const storm = aCtx.createRadialGradient(cx, cy, 2, cx, cy, rx);
+      storm.addColorStop(0, 'rgba(255, 237, 213, 0.62)');
+      storm.addColorStop(0.6, 'rgba(234, 88, 12, 0.38)');
+      storm.addColorStop(1, 'rgba(234, 88, 12, 0)');
+      aCtx.fillStyle = storm;
+      aCtx.beginPath();
+      aCtx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
+      aCtx.fill();
+    }
+  } else if (archetype === 'hycean') {
+    const grad = aCtx.createLinearGradient(0, 0, 0, height);
+    grad.addColorStop(0, '#082f49');
+    grad.addColorStop(0.3, '#0369a1');
+    grad.addColorStop(0.5, '#0284c7');
+    grad.addColorStop(0.7, '#0369a1');
+    grad.addColorStop(1, '#082f49');
+    aCtx.fillStyle = grad;
+    aCtx.fillRect(0, 0, width, height);
+
+    for (let i = 0; i < 70; i += 1) {
+      const cx = rng() * width;
+      const cy = (0.08 + rng() * 0.84) * height;
+      const rx = 24 + rng() * 84;
+      const ry = 10 + rng() * 26;
+      const swirl = aCtx.createRadialGradient(cx, cy, 2, cx, cy, rx);
+      swirl.addColorStop(0, 'rgba(224, 242, 254, 0.42)');
+      swirl.addColorStop(0.65, 'rgba(125, 211, 252, 0.18)');
+      swirl.addColorStop(1, 'rgba(125, 211, 252, 0)');
+      aCtx.fillStyle = swirl;
+      aCtx.beginPath();
+      aCtx.ellipse(cx, cy, rx, ry, (rng() - 0.5) * 0.4, 0, Math.PI * 2);
+      aCtx.fill();
+
+      bCtx.fillStyle = 'rgba(175, 175, 175, 0.25)';
+      bCtx.beginPath();
+      bCtx.ellipse(cx * 0.5, cy * 0.5, rx * 0.5, ry * 0.5, 0, 0, Math.PI * 2);
+      bCtx.fill();
+    }
+  } else if (archetype === 'tidally-locked') {
+    const grad = aCtx.createLinearGradient(0, 0, width, 0);
+    grad.addColorStop(0, '#17153b');
+    grad.addColorStop(0.32, '#3b1d52');
+    grad.addColorStop(0.47, '#9a3412');
+    grad.addColorStop(0.58, '#ea580c');
+    grad.addColorStop(0.76, '#c2410c');
+    grad.addColorStop(1, '#17153b');
+    aCtx.fillStyle = grad;
+    aCtx.fillRect(0, 0, width, height);
+
+    for (let i = 0; i < 85; i += 1) {
+      const cx = rng() * width;
+      const cy = (0.08 + rng() * 0.84) * height;
+      const r = 8 + rng() * 34;
+      const basin = aCtx.createRadialGradient(cx, cy, r * 0.15, cx, cy, r);
+      basin.addColorStop(0, 'rgba(67, 20, 7, 0.52)');
+      basin.addColorStop(0.82, 'rgba(251, 146, 60, 0.28)');
+      basin.addColorStop(1, 'rgba(67, 20, 7, 0)');
+      aCtx.fillStyle = basin;
+      aCtx.beginPath();
+      aCtx.arc(cx, cy, r, 0, Math.PI * 2);
+      aCtx.fill();
+
+      const bGrad = bCtx.createRadialGradient(cx * 0.5, cy * 0.5, r * 0.1, cx * 0.5, cy * 0.5, r * 0.55);
+      bGrad.addColorStop(0, 'rgba(42, 42, 42, 0.72)');
+      bGrad.addColorStop(0.85, 'rgba(220, 220, 220, 0.72)');
+      bGrad.addColorStop(1, 'rgba(128, 128, 128, 0)');
+      bCtx.fillStyle = bGrad;
+      bCtx.beginPath();
+      bCtx.arc(cx * 0.5, cy * 0.5, r * 0.55, 0, Math.PI * 2);
+      bCtx.fill();
+    }
+  } else {
+    // Temperate rocky / Super-Earth illustrative ocean & landmass relief
+    const grad = aCtx.createLinearGradient(0, 0, 0, height);
+    grad.addColorStop(0, '#cbd5e1');
+    grad.addColorStop(0.1, '#0b3b66');
+    grad.addColorStop(0.5, '#0369a1');
+    grad.addColorStop(0.9, '#0b3b66');
+    grad.addColorStop(1, '#cbd5e1');
+    aCtx.fillStyle = grad;
+    aCtx.fillRect(0, 0, width, height);
+
+    for (let i = 0; i < 65; i += 1) {
+      const cx = rng() * width;
+      const cy = (0.14 + rng() * 0.72) * height;
+      const rx = 20 + rng() * 68;
+      const ry = 14 + rng() * 44;
+      aCtx.fillStyle = rng() > 0.35 ? 'rgba(22, 118, 68, 0.85)' : 'rgba(161, 118, 56, 0.76)';
+      aCtx.beginPath();
+      aCtx.ellipse(cx, cy, rx, ry, rng() * Math.PI, 0, Math.PI * 2);
+      aCtx.fill();
+
+      bCtx.fillStyle = 'rgba(215, 215, 215, 0.65)';
+      bCtx.beginPath();
+      bCtx.ellipse(cx * 0.5, cy * 0.5, rx * 0.5, ry * 0.5, rng() * Math.PI, 0, Math.PI * 2);
+      bCtx.fill();
+    }
+
+    for (let i = 0; i < 44; i += 1) {
+      const cx = rng() * width;
+      const cy = (0.08 + rng() * 0.84) * height;
+      const rx = 22 + rng() * 72;
+      const ry = 8 + rng() * 18;
+      const cloud = aCtx.createRadialGradient(cx, cy, 2, cx, cy, rx);
+      cloud.addColorStop(0, 'rgba(248, 250, 252, 0.45)');
+      cloud.addColorStop(1, 'rgba(248, 250, 252, 0)');
+      aCtx.fillStyle = cloud;
+      aCtx.beginPath();
+      aCtx.ellipse(cx, cy, rx, ry, (rng() - 0.5) * 0.35, 0, Math.PI * 2);
+      aCtx.fill();
+    }
+  }
+
+  const albedoMap = new THREE.CanvasTexture(albedoCanvas);
+  albedoMap.colorSpace = THREE.SRGBColorSpace;
+  albedoMap.generateMipmaps = true;
+  albedoMap.minFilter = THREE.LinearMipmapLinearFilter;
+  albedoMap.wrapS = THREE.RepeatWrapping;
+  albedoMap.wrapT = THREE.ClampToEdgeWrapping;
+
+  const bumpMap = new THREE.CanvasTexture(bumpCanvas);
+  bumpMap.generateMipmaps = true;
+  bumpMap.minFilter = THREE.LinearMipmapLinearFilter;
+  bumpMap.wrapS = THREE.RepeatWrapping;
+  bumpMap.wrapT = THREE.ClampToEdgeWrapping;
+
+  return {
+    albedoMap,
+    bumpMap,
+    dispose: () => {
+      albedoMap.dispose();
+      bumpMap.dispose();
+    },
+  };
 }

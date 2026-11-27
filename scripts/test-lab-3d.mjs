@@ -122,7 +122,7 @@ test('SpaceLab3D and CelestialLab3D eliminate legacy shader/MSAA/IBL bugs and wi
   const shaderIndex = readFileSync('src/three/shaders/index.ts', 'utf8');
   const starfield = readFileSync('src/components/DynamicStarfield.jsx', 'utf8');
 
-  assert.ok(shaderIndex.includes('planetAtmosphere.frag.glsl?raw'));
+  assert.ok(shaderIndex.includes('PLANET_ATMOSPHERE_FRAGMENT_GLSL'));
 
   for (const [name, src] of [
     ['SpaceLab3D.jsx', spaceLab],

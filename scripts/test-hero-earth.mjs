@@ -202,16 +202,16 @@ test('OrbitalEarth and PosterEarth satisfy architecture, leak-safety, and zero-t
   assert.match(orbitalSrc, /<PosterEarth/);
   assert.doesNotMatch(orbitalSrc, /https?:\/\//i, 'OrbitalEarth must contain zero external asset URLs');
 
-  // Shader index wires all Phase 2 raw GLSL modules
-  for (const mod of [
-    'earth.vert.glsl?raw',
-    'earthSurface.frag.glsl?raw',
-    'earthClouds.frag.glsl?raw',
-    'earthAtmosphere.frag.glsl?raw',
-    'starfield.vert.glsl?raw',
-    'starfield.frag.glsl?raw',
+  // Shader index exports all Phase 2 GLSL programs backed by canonical *.glsl sources
+  for (const sym of [
+    'EARTH_VERTEX_GLSL',
+    'EARTH_SURFACE_FRAGMENT_GLSL',
+    'EARTH_CLOUDS_FRAGMENT_GLSL',
+    'EARTH_ATMOSPHERE_FRAGMENT_GLSL',
+    'STARFIELD_VERTEX_GLSL',
+    'STARFIELD_FRAGMENT_GLSL',
   ]) {
-    assert.ok(shaderIndexSrc.includes(mod), `src/three/shaders/index.ts must import ${mod}`);
+    assert.ok(shaderIndexSrc.includes(sym), `src/three/shaders/index.ts must export ${sym}`);
   }
 
   // PosterEarth stays completely free of Three.js and raw backdrop-blur utilities
