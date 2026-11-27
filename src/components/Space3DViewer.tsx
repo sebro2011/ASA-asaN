@@ -17,6 +17,8 @@ export const Space3DViewer: React.FC<Space3DViewerProps> = React.memo(({ lang })
   
   const {
     isOptimizedModeActive,
+    gpuTier,
+    qualityProfile,
     reason,
     cores,
     memoryGB,
@@ -58,7 +60,7 @@ export const Space3DViewer: React.FC<Space3DViewerProps> = React.memo(({ lang })
             ) : (
               <>
                 <Orbit className="w-3.5 h-3.5 text-cyan-400" />
-                <span>3D WEBGL ({cores} CORES)</span>
+                <span>{qualityProfile.label.toUpperCase()} ({gpuTier.toUpperCase()} • {cores} CORES)</span>
               </>
             )}
           </button>
