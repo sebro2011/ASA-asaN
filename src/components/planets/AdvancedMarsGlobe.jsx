@@ -1,59 +1,45 @@
 'use client';
 
-import React, { useRef, useMemo } from 'react';
+import React, { useEffect, useRef, useMemo } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
+import {
+  EARTH_VERTEX_GLSL,
+  PLANET_ATMOSPHERE_FRAGMENT_GLSL,
+} from '../../three/shaders';
 
-// Custom Vertex Shader for Atmospheric Glow Haze
-const AtmosphereVertexShader = `
-  varying vec3 vNormal;
-  varying vec3 vPosition;
-
-  void main() {
-    vNormal = normalize(normalMatrix * normal);
-    vPosition = (modelViewMatrix * vec4(position, 1.0)).xyz;
-    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-  }
-`;
-
-// Custom Fragment Shader for Atmospheric Glow Haze
-const AtmosphereFragmentShader = `
-  varying vec3 vNormal;
-  varying vec3 vPosition;
-  uniform vec3 uColor;
-  uniform float uCoefficient;
-  uniform float uPower;
-
-  void main() {
-    vec3 viewDir = normalize(-vPosition);
-    float intensity = pow(uCoefficient - dot(vNormal, viewDir), uPower);
-    gl_FragColor = vec4(uColor, intensity * 0.85);
-  }
-`;
+const DEFAULT_SUN_DIR = new THREE.Vector3(10, 6, 8).normalize();
 
 /**
  * AdvancedMarsGlobe Component
- * Production-ready 3D Mars globe with custom GLSL atmospheric glow shader,
- * Day/Night illumination, and procedural terrain bump detailing.
+ * Production-ready 3D Mars globe with physically consistent BackSide GLSL
+ * dust-limb scattering, procedural terrain bump detailing, and strict GPU cleanup.
  */
-export function AdvancedMarsGlobe({ 
-  radius = 2.4, 
+export function AdvancedMarsGlobe({
+  radius = 2.4,
   rotationSpeed = 0.003,
+  segments = 64,
   showAtmosphere = true,
-  atmosphereColor = '#f97316' // Mars Orange Haze
+  atmosphereColor = '#f97316',
+  reducedMotion = false,
+  sunDirection = DEFAULT_SUN_DIR,
 }) {
   const marsRef = useRef();
   const atmosphereRef = useRef();
 
   // Procedural Canvas Textures for Mars Albedo & Normal Relief (Keyless & 100% Client-Side)
   const { marsTexture, bumpTexture } = useMemo(() => {
+    if (typeof document === 'undefined') {
+      return { marsTexture: null, bumpTexture: null };
+    }
+
     // 1. Mars Albedo Surface Map
     const canvas = document.createElement('canvas');
     canvas.width = 1024;
     canvas.height = 512;
     const ctx = canvas.getContext('2d');
+    if (!ctx) return { marsTexture: null, bumpTexture: null };
 
-    // Base Rust Red / Orange Gradient
     const gradient = ctx.createLinearGradient(0, 0, 0, 512);
     gradient.addColorStop(0, '#7f1d1d');
     gradient.addColorStop(0.25, '#c2410c');
@@ -84,6 +70,7 @@ export function AdvancedMarsGlobe({
     ctx.fill();
 
     const marsTex = new THREE.CanvasTexture(canvas);
+    marsTex.colorSpace = THREE.SRGBColorSpace;
     marsTex.wrapS = THREE.RepeatWrapping;
     marsTex.wrapT = THREE.ClampToEdgeWrapping;
 
@@ -92,6 +79,10 @@ export function AdvancedMarsGlobe({
     bumpCanvas.width = 512;
     bumpCanvas.height = 256;
     const bCtx = bumpCanvas.getContext('2d');
+    if (!bCtx) {
+      marsTex.dispose();
+      return { marsTexture: null, bumpTexture: null };
+    }
     bCtx.fillStyle = '#808080';
     bCtx.fillRect(0, 0, 512, 256);
 
@@ -105,33 +96,52 @@ export function AdvancedMarsGlobe({
       bCtx.fill();
     }
     const bumpTex = new THREE.CanvasTexture(bumpCanvas);
+    bumpTex.wrapS = THREE.RepeatWrapping;
+    bumpTex.wrapT = THREE.ClampToEdgeWrapping;
 
     return { marsTexture: marsTex, bumpTexture: bumpTex };
   }, []);
 
-  // Atmospheric Glow Shader Material
+  // Verified BackSide inward-normal Fresnel & sun-wrap dust atmosphere shader
   const atmosphereMaterial = useMemo(() => {
     return new THREE.ShaderMaterial({
-      vertexShader: AtmosphereVertexShader,
-      fragmentShader: AtmosphereFragmentShader,
+      vertexShader: EARTH_VERTEX_GLSL,
+      fragmentShader: PLANET_ATMOSPHERE_FRAGMENT_GLSL,
       uniforms: {
-        uColor: { value: new THREE.Color(atmosphereColor) },
-        uCoefficient: { value: 0.82 },
-        uPower: { value: 2.8 }
+        uSunDirection: { value: sunDirection.clone() },
+        uDayColor: { value: new THREE.Color(atmosphereColor) },
+        uRimColor: { value: new THREE.Color('#fdba74') },
+        uPower: { value: 3.1 },
+        uIntensity: { value: 0.92 },
       },
       blending: THREE.AdditiveBlending,
       side: THREE.BackSide,
       transparent: true,
-      depthWrite: false
+      depthWrite: false,
     });
-  }, [atmosphereColor]);
+  }, [atmosphereColor, sunDirection]);
 
-  useFrame((_, delta) => {
+  useEffect(() => {
+    return () => {
+      marsTexture?.dispose();
+      bumpTexture?.dispose();
+    };
+  }, [marsTexture, bumpTexture]);
+
+  useEffect(() => {
+    return () => {
+      atmosphereMaterial.dispose();
+    };
+  }, [atmosphereMaterial]);
+
+  useFrame((_, rawDelta) => {
+    if (reducedMotion) return;
+    const delta = Math.min(rawDelta, 0.1);
     if (marsRef.current) {
       marsRef.current.rotation.y += rotationSpeed * delta * 60;
     }
     if (atmosphereRef.current) {
-      atmosphereRef.current.rotation.y += (rotationSpeed * 0.9) * delta * 60;
+      atmosphereRef.current.rotation.y += rotationSpeed * 0.9 * delta * 60;
     }
   });
 
@@ -139,20 +149,20 @@ export function AdvancedMarsGlobe({
     <group>
       {/* Planetary Sphere with Day/Night Diffuse + Bump Lighting */}
       <mesh ref={marsRef}>
-        <sphereGeometry args={[radius, 64, 64]} />
+        <sphereGeometry args={[radius, segments, segments]} />
         <meshStandardMaterial
           map={marsTexture}
           bumpMap={bumpTexture}
           bumpScale={0.06}
-          roughness={0.78}
-          metalness={0.12}
+          roughness={0.82}
+          metalness={0.08}
         />
       </mesh>
 
-      {/* Atmospheric Glow Haze Layer */}
+      {/* Atmospheric Dust Limb Layer */}
       {showAtmosphere && (
-        <mesh ref={atmosphereRef} scale={[1.16, 1.16, 1.16]}>
-          <sphereGeometry args={[radius, 48, 48]} />
+        <mesh ref={atmosphereRef} scale={[1.08, 1.08, 1.08]}>
+          <sphereGeometry args={[radius, Math.max(32, Math.floor(segments * 0.75)), Math.max(32, Math.floor(segments * 0.75))]} />
           <primitive object={atmosphereMaterial} attach="material" />
         </mesh>
       )}

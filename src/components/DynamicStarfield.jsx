@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useRef, useMemo, memo } from 'react';
+import React, { useEffect, useMemo, useRef, memo } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 
@@ -13,190 +13,164 @@ const SPECTRAL_COLORS = [
   new THREE.Color('#ffffff'), // White
   new THREE.Color('#fef08a'), // Yellow-white
   new THREE.Color('#fed7aa'), // Light orange
-  new THREE.Color('#fda4af')  // Reddish-pink
+  new THREE.Color('#fda4af'), // Reddish-pink
 ];
 
+function createSeededRng(seed) {
+  let state = seed >>> 0;
+  return () => {
+    state = (state + 0x6d2b79f5) >>> 0;
+    let t = Math.imul(state ^ (state >>> 15), 1 | state);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+const STARFIELD_VERTEX_SHADER = `
+  attribute float size;
+  attribute vec3 customColor;
+  attribute float twinkleSpeed;
+  attribute float phase;
+
+  uniform float uTime;
+  uniform float uPixelRatio;
+  uniform float uMotionScale;
+
+  varying vec3 vColor;
+  varying float vAlpha;
+
+  void main() {
+    vColor = customColor;
+
+    float wave = sin(uTime * twinkleSpeed + phase) * 0.32 + 0.68;
+    vAlpha = mix(0.88, wave, uMotionScale);
+
+    vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+    gl_Position = projectionMatrix * mvPosition;
+
+    float dist = max(-mvPosition.z, 1.0);
+    gl_PointSize = clamp(size * uPixelRatio * (190.0 / dist) * (0.82 + 0.28 * vAlpha), 1.0, 6.5);
+  }
+`;
+
+const STARFIELD_FRAGMENT_SHADER = `
+  varying vec3 vColor;
+  varying float vAlpha;
+
+  void main() {
+    vec2 coord = gl_PointCoord - vec2(0.5);
+    float distSq = dot(coord, coord);
+    if (distSq > 0.25) discard;
+
+    float core = exp(-distSq * 24.0);
+    float halo = smoothstep(0.25, 0.02, distSq) * 0.48;
+    float glow = clamp(core + halo, 0.0, 1.0);
+    gl_FragColor = vec4(vColor * (0.88 + 0.42 * core), vAlpha * glow);
+  }
+`;
+
 /**
- * DynamicStarfield - Custom Three.js Points starfield with:
- * - Varying particle sizes (realistic stellar magnitude distribution)
- * - Custom vertex & fragment shaders for smooth circular points with soft radial glow
- * - Individual twinkle frequencies and phase offsets
- * - Slow cosmic background drift
+ * DynamicStarfield — Deterministic GPU Points starfield with explicit resource
+ * disposal and `prefers-reduced-motion` support.
  */
 function DynamicStarfield({
-  count = 9500,
+  count = 4800,
   minRadius = 80,
   maxRadius = 380,
-  driftSpeed = 0.008
+  driftSpeed = 0.006,
+  reducedMotion = false,
 }) {
-  const pointsRef = useRef();
+  const pointsRef = useRef(null);
   const { gl } = useThree();
-  const pixelRatio = gl.getPixelRatio();
 
-  // Generate attributes for geometry
-  const { positions, sizes, colors, twinkleSpeeds, phases } = useMemo(() => {
-    const pos = new Float32Array(count * 3);
-    const sz = new Float32Array(count);
-    const col = new Float32Array(count * 3);
-    const speeds = new Float32Array(count);
-    const ph = new Float32Array(count);
+  const { geometry, material } = useMemo(() => {
+    const safeCount = Math.max(0, Math.floor(count));
+    const rng = createSeededRng(20261126 + safeCount);
+    const pos = new Float32Array(safeCount * 3);
+    const sz = new Float32Array(safeCount);
+    const col = new Float32Array(safeCount * 3);
+    const speeds = new Float32Array(safeCount);
+    const ph = new Float32Array(safeCount);
 
-    for (let i = 0; i < count; i++) {
-      // Spherical distribution around center
-      const u = Math.random();
-      const v = Math.random();
+    for (let i = 0; i < safeCount; i += 1) {
+      const u = rng();
+      const v = rng();
       const theta = u * 2.0 * Math.PI;
       const phi = Math.acos(2.0 * v - 1.0);
-      const r = minRadius + Math.cbrt(Math.random()) * (maxRadius - minRadius);
+      const r = minRadius + Math.cbrt(rng()) * (maxRadius - minRadius);
 
-      const x = r * Math.sin(phi) * Math.cos(theta);
-      const y = r * Math.sin(phi) * Math.sin(theta);
-      const z = r * Math.cos(phi);
+      pos[i * 3] = r * Math.sin(phi) * Math.cos(theta);
+      pos[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta);
+      pos[i * 3 + 2] = r * Math.cos(phi);
 
-      pos[i * 3] = x;
-      pos[i * 3 + 1] = y;
-      pos[i * 3 + 2] = z;
-
-      // Power law size distribution: lots of tiny stars (magnitude 5-6), few bright stars
-      const sizeRandom = Math.random();
-      let starSize = 1.2;
+      const sizeRandom = rng();
+      let starSize = 1.1;
       if (sizeRandom > 0.985) {
-        starSize = 4.2 + Math.random() * 2.5; // Bright prominent star
+        starSize = 3.8 + rng() * 2.0;
       } else if (sizeRandom > 0.92) {
-        starSize = 2.8 + Math.random() * 1.4; // Medium star
-      } else if (sizeRandom > 0.70) {
-        starSize = 1.8 + Math.random() * 0.8;
+        starSize = 2.4 + rng() * 1.2;
+      } else if (sizeRandom > 0.7) {
+        starSize = 1.6 + rng() * 0.7;
       } else {
-        starSize = 1.0 + Math.random() * 0.6; // Distant background pinprick
+        starSize = 0.95 + rng() * 0.55;
       }
       sz[i] = starSize;
 
-      // Realistic stellar spectral color selection
-      const colorIndex = Math.floor(Math.random() * SPECTRAL_COLORS.length);
-      const chosenColor = SPECTRAL_COLORS[colorIndex];
+      const chosenColor = SPECTRAL_COLORS[Math.floor(rng() * SPECTRAL_COLORS.length)];
       col[i * 3] = chosenColor.r;
       col[i * 3 + 1] = chosenColor.g;
       col[i * 3 + 2] = chosenColor.b;
 
-      // Random twinkle frequency (0.8 Hz to 4.5 Hz) and phase
-      speeds[i] = 0.8 + Math.random() * 3.7;
-      ph[i] = Math.random() * Math.PI * 2.0;
+      speeds[i] = 0.7 + rng() * 2.8;
+      ph[i] = rng() * Math.PI * 2.0;
     }
 
-    return {
-      positions: pos,
-      sizes: sz,
-      colors: col,
-      twinkleSpeeds: speeds,
-      phases: ph
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    geo.setAttribute('size', new THREE.BufferAttribute(sz, 1));
+    geo.setAttribute('customColor', new THREE.BufferAttribute(col, 3));
+    geo.setAttribute('twinkleSpeed', new THREE.BufferAttribute(speeds, 1));
+    geo.setAttribute('phase', new THREE.BufferAttribute(ph, 1));
+
+    const mat = new THREE.ShaderMaterial({
+      vertexShader: STARFIELD_VERTEX_SHADER,
+      fragmentShader: STARFIELD_FRAGMENT_SHADER,
+      uniforms: {
+        uTime: { value: 0 },
+        uPixelRatio: { value: gl.getPixelRatio() },
+        uMotionScale: { value: reducedMotion ? 0 : 1 },
+      },
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+    });
+
+    return { geometry: geo, material: mat };
+  }, [count, minRadius, maxRadius, gl, reducedMotion]);
+
+  useEffect(() => {
+    return () => {
+      geometry.dispose();
+      material.dispose();
     };
-  }, [count, minRadius, maxRadius]);
+  }, [geometry, material]);
 
-  // Custom Shader Material uniforms
-  const uniforms = useMemo(() => ({
-    uTime: { value: 0 },
-    uPixelRatio: { value: pixelRatio }
-  }), [pixelRatio]);
+  useFrame((_, rawDelta) => {
+    const delta = Math.min(rawDelta, 0.1);
+    material.uniforms.uPixelRatio.value = gl.getPixelRatio();
+    material.uniforms.uMotionScale.value = reducedMotion ? 0 : 1;
+    if (reducedMotion) return;
 
-  // Shader definitions
-  const shader = useMemo(() => ({
-    vertexShader: `
-      attribute float size;
-      attribute vec3 customColor;
-      attribute float twinkleSpeed;
-      attribute float phase;
-
-      uniform float uTime;
-      uniform float uPixelRatio;
-
-      varying vec3 vColor;
-      varying float vAlpha;
-
-      void main() {
-        vColor = customColor;
-
-        // Subtle, asynchronous twinkling calculation
-        float twinkle = sin(uTime * twinkleSpeed + phase) * 0.35 + 0.65;
-        vAlpha = twinkle;
-
-        vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
-        gl_Position = projectionMatrix * mvPosition;
-
-        // Realistic distance attenuation and point size scaling
-        gl_PointSize = size * uPixelRatio * (200.0 / -mvPosition.z) * (0.8 + 0.35 * twinkle);
-      }
-    `,
-    fragmentShader: `
-      varying vec3 vColor;
-      varying float vAlpha;
-
-      void main() {
-        // Soft circular point with smooth edge glow
-        vec2 coord = gl_PointCoord - vec2(0.5);
-        float dist = length(coord);
-        if (dist > 0.5) discard;
-
-        // Radial falloff for glow appearance
-        float glow = smoothstep(0.5, 0.05, dist);
-        gl_FragColor = vec4(vColor, vAlpha * glow);
-      }
-    `
-  }), []);
-
-  // Update time and slow rotation using delta parameter directly (no deprecated Clock)
-  useFrame((_, delta) => {
-    if (uniforms) {
-      uniforms.uTime.value += delta;
-    }
+    material.uniforms.uTime.value += delta;
     if (pointsRef.current) {
       pointsRef.current.rotation.y += delta * driftSpeed;
       pointsRef.current.rotation.x += delta * (driftSpeed * 0.3);
     }
   });
 
-  return (
-    <points ref={pointsRef}>
-      <bufferGeometry>
-        <bufferAttribute
-          attach="attributes-position"
-          count={positions.length / 3}
-          array={positions}
-          itemSize={3}
-        />
-        <bufferAttribute
-          attach="attributes-size"
-          count={sizes.length}
-          array={sizes}
-          itemSize={1}
-        />
-        <bufferAttribute
-          attach="attributes-customColor"
-          count={colors.length / 3}
-          array={colors}
-          itemSize={3}
-        />
-        <bufferAttribute
-          attach="attributes-twinkleSpeed"
-          count={twinkleSpeeds.length}
-          array={twinkleSpeeds}
-          itemSize={1}
-        />
-        <bufferAttribute
-          attach="attributes-phase"
-          count={phases.length}
-          array={phases}
-          itemSize={1}
-        />
-      </bufferGeometry>
-      <shaderMaterial
-        args={[shader]}
-        uniforms={uniforms}
-        transparent
-        depthWrite={false}
-        blending={THREE.AdditiveBlending}
-      />
-    </points>
-  );
+  if (count <= 0) return null;
+
+  return <points ref={pointsRef} geometry={geometry} material={material} frustumCulled={false} />;
 }
 
 export default memo(DynamicStarfield);

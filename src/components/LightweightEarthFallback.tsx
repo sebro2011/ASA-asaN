@@ -34,7 +34,10 @@ interface CelestialTargetInfo {
   id: CelestialTargetKey;
   name: { en: string; si: string; ta: string };
   type: { en: string; si: string; ta: string };
-  image: string;
+  /** Bundled local NASA texture under `/public/textures`, or null for offline procedural/SVG views. */
+  image: string | null;
+  cloudOverlay?: string;
+  surfaceKind: 'texture' | 'lunar' | 'jwst';
   haloColor: string;
   glowColor: string;
   telemetry: {
@@ -64,8 +67,10 @@ const CELESTIAL_TARGETS: Record<CelestialTargetKey, CelestialTargetInfo> = {
       si: 'වාසයට සුදුසු ලෝකය',
       ta: 'வாழ்விட உலகம்'
     },
-    // High-resolution NASA photorealistic Earth composite
-    image: 'https://images.unsplash.com/photo-1614728894747-a83421e2b9c9?auto=format&fit=crop&w=1200&q=85',
+    // Bundled local NASA Blue Marble + cloud cover textures (zero external CDN dependency)
+    image: '/textures/earth/earth-day-1024.jpg',
+    cloudOverlay: '/textures/earth/earth-clouds.webp',
+    surfaceKind: 'texture',
     haloColor: 'rgba(56, 189, 248, 0.4)',
     glowColor: 'rgba(6, 182, 212, 0.35)',
     telemetry: {
@@ -93,7 +98,8 @@ const CELESTIAL_TARGETS: Record<CelestialTargetKey, CelestialTargetInfo> = {
       si: 'පෘථිවියේ ස්වාභාවික චන්ද්‍රයා',
       ta: 'பூமியின் இயற்கை துணைக்கோள்'
     },
-    image: 'https://images.unsplash.com/photo-1522030299830-16b8d3d049fe?auto=format&fit=crop&w=1200&q=85',
+    image: null,
+    surfaceKind: 'lunar',
     haloColor: 'rgba(203, 213, 225, 0.35)',
     glowColor: 'rgba(148, 163, 184, 0.25)',
     telemetry: {
@@ -121,7 +127,9 @@ const CELESTIAL_TARGETS: Record<CelestialTargetKey, CelestialTargetInfo> = {
       si: 'සිව්වන ග්‍රහලෝකය • පර්සවරන්ස්',
       ta: 'நான்காவது கிரகம்'
     },
-    image: 'https://images.unsplash.com/photo-1614728894747-a83421e2b9c9?auto=format&fit=crop&w=1200&q=85',
+    // Bundled local NASA Mars surface map
+    image: '/textures/mars.jpg',
+    surfaceKind: 'texture',
     haloColor: 'rgba(244, 63, 94, 0.4)',
     glowColor: 'rgba(239, 68, 68, 0.3)',
     telemetry: {
@@ -149,7 +157,8 @@ const CELESTIAL_TARGETS: Record<CelestialTargetKey, CelestialTargetInfo> = {
       si: 'අධෝරක්ත අභ්‍යවකාශ නිරීක්ෂණාගාරය',
       ta: 'அகச்சிவப்பு விண்வெளி ஆய்வகம்'
     },
-    image: 'https://images.unsplash.com/photo-1446776811953-b23d57bd21aa?auto=format&fit=crop&w=1200&q=85',
+    image: null,
+    surfaceKind: 'jwst',
     haloColor: 'rgba(245, 158, 11, 0.45)',
     glowColor: 'rgba(217, 119, 6, 0.35)',
     telemetry: {
@@ -309,15 +318,94 @@ export const LightweightEarthFallback: React.FC<LightweightEarthFallbackProps> =
             aria-label="Toggle planetary rotation"
             title="Click to toggle planetary rotation"
           >
-            {/* Photorealistic Celestial Surface Layer */}
-            <div
-              className={`w-full h-full rounded-full bg-cover bg-center ${isRotating ? 'animate-spin' : ''}`}
-              style={{
-                backgroundImage: `url(${target.image})`,
-                animationDuration: '60s',
-                animationTimingFunction: 'linear'
-              }}
-            />
+            {/* Offline Celestial Surface Layer (bundled local NASA textures or crisp offline visuals) */}
+            {target.surfaceKind === 'texture' && target.image ? (
+              <>
+                <div
+                  className={`w-full h-full rounded-full bg-cover bg-center ${isRotating ? 'animate-spin' : ''}`}
+                  style={{
+                    backgroundImage: `url(${target.image})`,
+                    animationDuration: '60s',
+                    animationTimingFunction: 'linear'
+                  }}
+                />
+                {target.cloudOverlay ? (
+                  <div
+                    className={`absolute inset-0 rounded-full bg-cover bg-center opacity-45 mix-blend-screen pointer-events-none ${isRotating ? 'animate-spin' : ''}`}
+                    style={{
+                      backgroundImage: `url(${target.cloudOverlay})`,
+                      animationDuration: '46s',
+                      animationTimingFunction: 'linear'
+                    }}
+                  />
+                ) : null}
+              </>
+            ) : target.surfaceKind === 'lunar' ? (
+              <div
+                className={`w-full h-full rounded-full ${isRotating ? 'animate-spin' : ''}`}
+                style={{
+                  backgroundImage: [
+                    'radial-gradient(circle at 32% 38%, rgba(45,55,72,0.72) 0%, rgba(45,55,72,0.22) 22%, transparent 32%)',
+                    'radial-gradient(circle at 64% 58%, rgba(51,65,85,0.68) 0%, rgba(51,65,85,0.2) 18%, transparent 28%)',
+                    'radial-gradient(circle at 48% 24%, rgba(226,232,240,0.45) 0%, transparent 14%)',
+                    'radial-gradient(circle at 72% 30%, rgba(30,41,59,0.55) 0%, transparent 15%)',
+                    'radial-gradient(circle at 26% 68%, rgba(203,213,225,0.32) 0%, transparent 12%)',
+                    'radial-gradient(circle at 40% 35%, #cbd5e1 0%, #94a3b8 42%, #475569 78%, #1e293b 100%)'
+                  ].join(', '),
+                  animationDuration: '75s',
+                  animationTimingFunction: 'linear'
+                }}
+              />
+            ) : (
+              <div className="w-full h-full rounded-full bg-[radial-gradient(circle_at_35%_30%,#172554_0%,#050b16_65%,#03060e_100%)] flex items-center justify-center p-6">
+                <svg
+                  viewBox="0 0 200 200"
+                  className="w-full h-full drop-shadow-[0_0_24px_rgba(245,158,11,0.45)]"
+                  aria-hidden="true"
+                >
+                  {/* Five-layer diamond sunshield silhouette */}
+                  <polygon
+                    points="100,130 184,158 100,186 16,158"
+                    fill="rgba(192,139,184,0.28)"
+                    stroke="rgba(226,232,240,0.45)"
+                    strokeWidth="1.2"
+                  />
+                  <polygon
+                    points="100,122 178,150 100,176 22,150"
+                    fill="rgba(148,163,184,0.22)"
+                    stroke="rgba(148,163,184,0.4)"
+                    strokeWidth="1"
+                  />
+                  {/* Gold hexagonal primary mirror cluster */}
+                  {[
+                    [100, 56], [80, 68], [120, 68],
+                    [60, 80], [100, 80], [140, 80],
+                    [80, 92], [120, 92], [100, 104],
+                    [60, 104], [140, 104], [80, 116], [120, 116]
+                  ].map(([cx, cy], idx) => (
+                    <polygon
+                      key={idx}
+                      points={`${cx},${cy - 10} ${cx + 9},${cy - 5} ${cx + 9},${cy + 5} ${cx},${cy + 10} ${cx - 9},${cy + 5} ${cx - 9},${cy - 5}`}
+                      fill={idx === 4 ? '#0a1322' : 'url(#jwstGoldHex)'}
+                      stroke="#fef08a"
+                      strokeWidth="0.9"
+                    />
+                  ))}
+                  {/* Secondary mirror tripod */}
+                  <line x1="100" y1="30" x2="100" y2="80" stroke="#e2e8f0" strokeWidth="1.4" opacity="0.8" />
+                  <line x1="100" y1="30" x2="62" y2="112" stroke="#cbd5e1" strokeWidth="1.1" opacity="0.65" />
+                  <line x1="100" y1="30" x2="138" y2="112" stroke="#cbd5e1" strokeWidth="1.1" opacity="0.65" />
+                  <circle cx="100" cy="30" r="5" fill="#fbbf24" stroke="#fef3c7" strokeWidth="1.2" />
+                  <defs>
+                    <linearGradient id="jwstGoldHex" x1="0%" y1="0%" x2="100%" y2="100%">
+                      <stop offset="0%" stopColor="#fde68a" />
+                      <stop offset="55%" stopColor="#d97706" />
+                      <stop offset="100%" stopColor="#92400e" />
+                    </linearGradient>
+                  </defs>
+                </svg>
+              </div>
+            )}
 
             {/* Atmosphere Rayleigh Scattering Cyan Rim Glow Filter */}
             <div 

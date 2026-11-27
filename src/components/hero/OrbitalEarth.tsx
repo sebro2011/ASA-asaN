@@ -1,176 +1,294 @@
 'use client';
 
 /**
- * OrbitalEarth — the homepage's focal 3D planet.
+ * OrbitalEarth — the homepage's focal 3D planet (Phase 2 Cinematic Upgrade).
  *
- * Everything drawn here is derived from real NASA Blue Marble / Black Marble
- * imagery bundled in `/public/textures/earth`. There are no procedural
- * continents: if a texture fails to decode, the canvas is replaced by the
- * static `PosterEarth` composition rather than an invented planet.
+ * Everything drawn here is derived from real NASA Blue Marble / Black Marble /
+ * global cloud imagery bundled in `/public/textures/earth`. There are no
+ * procedural continents: if WebGL is unavailable, context is lost, Eco mode is
+ * active, or a texture fails to decode, the scene falls back seamlessly to
+ * `PosterEarth`.
  *
  * Rendering rules
- *  - WebGL is feature-detected; low-end devices get the poster.
- *  - Idle rotation pauses when the tab is hidden or the hero is off-screen.
- *  - `prefers-reduced-motion` disables rotation entirely (the scene still
- *    renders: the requirement is to remove motion, not the imagery).
+ *  - Governed by the Phase 1 4-tier GPU quality engine (`useDevicePerformance`
+ *    + `getHeroEarthConfig`), reusing the cached WebGL capability probe.
+ *  - Modular GLSL shaders (`src/three/shaders/*`) deliver ocean solar sunglint,
+ *    Rayleigh terminator twilight scattering, cloud-cast shadows, warm Black
+ *    Marble city lights, and a sun-aware BackSide atmospheric horizon glow.
+ *  - Idle rotation, star twinkle, and subtle desktop pointer parallax pause
+ *    when hidden/off-screen and disable completely under `prefers-reduced-motion`
+ *    or `still`.
  */
 
 import React, { Suspense, useEffect, useMemo, useRef, useState } from 'react';
-import { Canvas, useFrame, useLoader } from '@react-three/fiber';
+import { Canvas, useFrame, useLoader, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { PosterEarth } from './PosterEarth';
 import { useDevicePerformance } from '../../hooks/useDevicePerformance';
+import { getHeroEarthConfig, type HeroEarthConfig } from '../../three/earthConfig';
+import {
+  createManagedShaderMaterial,
+  createUniforms,
+  EARTH_ATMOSPHERE_FRAGMENT_GLSL,
+  EARTH_CLOUDS_FRAGMENT_GLSL,
+  EARTH_SURFACE_FRAGMENT_GLSL,
+  EARTH_VERTEX_GLSL,
+  STARFIELD_FRAGMENT_GLSL,
+  STARFIELD_VERTEX_GLSL,
+} from '../../three/shaders';
 
-const DAY_MAP = '/textures/earth/earth-day.jpg';
-const NIGHT_MAP = '/textures/earth/earth-night.jpg';
-const CLOUD_MAP = '/textures/earth/earth-clouds.webp';
+const TWO_PI = Math.PI * 2;
+const EARTH_ROTATION_SPEED = 0.018;
+const CLOUD_RELATIVE_SPEED = 0.008;
 
-function supportsWebGL(): boolean {
-  if (typeof document === 'undefined') return false;
-  try {
-    const probe = document.createElement('canvas');
-    const context = probe.getContext('webgl2') || probe.getContext('webgl');
-    if (!context) return false;
-    const lose = (context as WebGLRenderingContext).getExtension?.('WEBGL_lose_context');
-    lose?.loseContext();
-    return true;
-  } catch {
-    return false;
-  }
+/** Deterministic PRNG (Mulberry32) so the orbital starfield never flickers across remounts. */
+function createSeededRng(seed: number): () => number {
+  let state = seed >>> 0;
+  return () => {
+    state = (state + 0x6d2b79f5) >>> 0;
+    let t = Math.imul(state ^ (state >>> 15), 1 | state);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
 }
 
-const vertexShader = /* glsl */ `
-  varying vec2 vUv;
-  varying vec3 vNormalWorld;
-  varying vec3 vPositionWorld;
+/** Realistic stellar blackbody tints (O/B blue-white, A/F white, G cream, K pale amber). */
+const STAR_PALETTE: ReadonlyArray<readonly [number, number, number]> = [
+  [0.74, 0.87, 1.0],
+  [0.86, 0.92, 1.0],
+  [0.98, 0.98, 1.0],
+  [1.0, 0.95, 0.88],
+  [1.0, 0.86, 0.72],
+];
 
-  void main() {
-    vUv = uv;
-    vNormalWorld = normalize(mat3(modelMatrix) * normal);
-    vec4 world = modelMatrix * vec4(position, 1.0);
-    vPositionWorld = world.xyz;
-    gl_Position = projectionMatrix * viewMatrix * world;
-  }
-`;
+function OrbitalStarfield({
+  count,
+  reducedMotion,
+}: {
+  count: number;
+  reducedMotion: boolean;
+}) {
+  const { gl } = useThree();
+  const pointsRef = useRef<THREE.Points>(null);
 
-const surfaceFragment = /* glsl */ `
-  uniform sampler2D uDay;
-  uniform sampler2D uNight;
-  uniform vec3 uSunDirection;
+  const { geometry, material } = useMemo(() => {
+    const rng = createSeededRng(20260412);
+    const positions = new Float32Array(count * 3);
+    const sizes = new Float32Array(count);
+    const phases = new Float32Array(count);
+    const colors = new Float32Array(count * 3);
 
-  varying vec2 vUv;
-  varying vec3 vNormalWorld;
-  varying vec3 vPositionWorld;
+    for (let i = 0; i < count; i += 1) {
+      const u = rng();
+      const v = rng();
+      const theta = u * TWO_PI;
+      const phi = Math.acos(2 * v - 1);
+      const radius = 14 + rng() * 14;
 
-  void main() {
-    vec3 normal = normalize(vNormalWorld);
-    vec3 view = normalize(cameraPosition - vPositionWorld);
-    float sun = dot(normal, normalize(uSunDirection));
+      const sinPhi = Math.sin(phi);
+      positions[i * 3] = radius * sinPhi * Math.cos(theta);
+      positions[i * 3 + 1] = radius * Math.cos(phi);
+      positions[i * 3 + 2] = radius * sinPhi * Math.sin(theta) - 6;
 
-    // A soft, physically-plausible terminator: city lights fade in over a
-    // narrow band so the day/night boundary never looks cut out.
-    float dayMix = smoothstep(-0.18, 0.34, sun);
+      // Power-law size distribution: many faint pinpricks, a few brighter stars.
+      const brightnessBias = Math.pow(rng(), 2.8);
+      sizes[i] = 1.0 + brightnessBias * 2.4;
+      phases[i] = rng();
 
-    vec3 day = texture2D(uDay, vUv).rgb;
-    vec3 night = texture2D(uNight, vUv).rgb;
-    night = pow(night, vec3(1.25)) * vec3(1.28, 1.12, 0.84);
+      const palette = STAR_PALETTE[Math.floor(rng() * STAR_PALETTE.length)];
+      const dim = 0.55 + brightnessBias * 0.45;
+      colors[i * 3] = palette[0] * dim;
+      colors[i * 3 + 1] = palette[1] * dim;
+      colors[i * 3 + 2] = palette[2] * dim;
+    }
 
-    // Air scattering is strongest near the limb and only on the lit side.
-    float fresnel = pow(1.0 - max(dot(normal, view), 0.0), 2.6);
-    vec3 atmosphere = vec3(0.24, 0.56, 0.94) * fresnel * (0.25 + 0.95 * dayMix);
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    geo.setAttribute('aSize', new THREE.BufferAttribute(sizes, 1));
+    geo.setAttribute('aPhase', new THREE.BufferAttribute(phases, 1));
+    geo.setAttribute('aColor', new THREE.BufferAttribute(colors, 3));
 
-    vec3 color = mix(night * 0.85, day, dayMix) + atmosphere;
-    gl_FragColor = vec4(color, 1.0);
-  }
-`;
+    const mat = createManagedShaderMaterial({
+      vertexShader: STARFIELD_VERTEX_GLSL,
+      fragmentShader: STARFIELD_FRAGMENT_GLSL,
+      uniforms: createUniforms({
+        uTime: 0,
+        uPixelRatio: gl.getPixelRatio(),
+        uMotionScale: reducedMotion ? 0 : 1,
+      }),
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+    });
 
-const cloudFragment = /* glsl */ `
-  uniform sampler2D uClouds;
-  uniform vec3 uSunDirection;
-  uniform float uOpacity;
+    return { geometry: geo, material: mat };
+  }, [count, gl, reducedMotion]);
 
-  varying vec2 vUv;
-  varying vec3 vNormalWorld;
-  varying vec3 vPositionWorld;
+  useEffect(() => {
+    return () => {
+      geometry.dispose();
+      material.dispose();
+    };
+  }, [geometry, material]);
 
-  void main() {
-    vec4 cloud = texture2D(uClouds, vUv);
-    if (cloud.a < 0.01) discard;
-    float sun = dot(normalize(vNormalWorld), normalize(uSunDirection));
-    float lit = smoothstep(-0.22, 0.4, sun);
-    vec3 tint = mix(vec3(0.05, 0.08, 0.13), vec3(0.94, 0.97, 1.0), lit);
-    gl_FragColor = vec4(tint, cloud.a * uOpacity * (0.18 + 0.82 * lit));
-  }
-`;
+  useFrame((state, delta) => {
+    material.uniforms.uPixelRatio.value = gl.getPixelRatio();
+    material.uniforms.uMotionScale.value = reducedMotion ? 0 : 1;
+    if (reducedMotion) return;
+    material.uniforms.uTime.value = state.clock.elapsedTime;
+    if (pointsRef.current) {
+      pointsRef.current.rotation.y += delta * 0.0022;
+    }
+  });
 
-function Planet({ reducedMotion }: { reducedMotion: boolean }) {
-  const group = useRef<THREE.Group>(null);
-  const clouds = useRef<THREE.Mesh>(null);
-  const [day, night, cloud] = useLoader(THREE.TextureLoader, [DAY_MAP, NIGHT_MAP, CLOUD_MAP]);
+  if (count <= 0) return null;
 
-  useMemo(() => {
+  return <points ref={pointsRef} geometry={geometry} material={material} frustumCulled={false} />;
+}
+
+interface PlanetProps {
+  config: HeroEarthConfig;
+  reducedMotion: boolean;
+  pointerRef: React.MutableRefObject<{ x: number; y: number }>;
+}
+
+function Planet({ config, reducedMotion, pointerRef }: PlanetProps) {
+  const { gl, invalidate } = useThree();
+  const rigRef = useRef<THREE.Group>(null);
+  const planetRef = useRef<THREE.Group>(null);
+  const cloudsRef = useRef<THREE.Mesh>(null);
+
+  const [day, night, cloud] = useLoader(THREE.TextureLoader, [
+    config.dayTexture,
+    config.nightTexture,
+    config.cloudTexture,
+  ]);
+
+  useEffect(() => {
+    const maxAnisotropy = Math.min(config.anisotropy, gl.capabilities.getMaxAnisotropy());
     [day, night, cloud].forEach((texture) => {
       texture.colorSpace = THREE.SRGBColorSpace;
-      texture.anisotropy = 4;
+      texture.anisotropy = maxAnisotropy;
       texture.wrapS = THREE.RepeatWrapping;
+      texture.needsUpdate = true;
     });
     cloud.premultiplyAlpha = false;
-  }, [day, night, cloud]);
+    invalidate();
+  }, [day, night, cloud, config.anisotropy, gl, invalidate]);
 
-  const sunDirection = useMemo(() => new THREE.Vector3(-0.55, 0.28, 0.78).normalize(), []);
-  const surfaceUniforms = useMemo(
-    () => ({ uDay: { value: day }, uNight: { value: night }, uSunDirection: { value: sunDirection } }),
-    [day, night, sunDirection]
+  const sunDirection = useMemo(() => new THREE.Vector3(-0.56, 0.28, 0.78).normalize(), []);
+
+  const surfaceMaterial = useMemo(
+    () =>
+      createManagedShaderMaterial({
+        vertexShader: EARTH_VERTEX_GLSL,
+        fragmentShader: EARTH_SURFACE_FRAGMENT_GLSL,
+        uniforms: createUniforms({
+          uDay: day,
+          uNight: night,
+          uClouds: cloud,
+          uSunDirection: sunDirection,
+          uCloudOffsetU: 0,
+          uCloudShadowStrength: config.cloudShadowStrength,
+          uReliefStrength: config.reliefStrength,
+          uOceanSpecularStrength: config.oceanSpecularStrength,
+        }),
+      }),
+    [
+      day,
+      night,
+      cloud,
+      sunDirection,
+      config.cloudShadowStrength,
+      config.reliefStrength,
+      config.oceanSpecularStrength,
+    ]
   );
-  const cloudUniforms = useMemo(
-    () => ({ uClouds: { value: cloud }, uSunDirection: { value: sunDirection }, uOpacity: { value: 0.52 } }),
+
+  const cloudMaterial = useMemo(
+    () =>
+      createManagedShaderMaterial({
+        vertexShader: EARTH_VERTEX_GLSL,
+        fragmentShader: EARTH_CLOUDS_FRAGMENT_GLSL,
+        uniforms: createUniforms({
+          uClouds: cloud,
+          uSunDirection: sunDirection,
+          uOpacity: 0.56,
+        }),
+        transparent: true,
+        depthWrite: false,
+      }),
     [cloud, sunDirection]
   );
 
-  useFrame((_, delta) => {
-    if (reducedMotion) return;
-    if (group.current) group.current.rotation.y += delta * 0.018;
-    if (clouds.current) clouds.current.rotation.y += delta * 0.026;
+  const atmosphereMaterial = useMemo(
+    () =>
+      createManagedShaderMaterial({
+        vertexShader: EARTH_VERTEX_GLSL,
+        fragmentShader: EARTH_ATMOSPHERE_FRAGMENT_GLSL,
+        uniforms: createUniforms({
+          uSunDirection: sunDirection,
+          uIntensity: 1.08,
+        }),
+        transparent: true,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+        side: THREE.BackSide,
+      }),
+    [sunDirection]
+  );
+
+  useEffect(() => {
+    return () => {
+      surfaceMaterial.dispose();
+      cloudMaterial.dispose();
+      atmosphereMaterial.dispose();
+    };
+  }, [surfaceMaterial, cloudMaterial, atmosphereMaterial]);
+
+  useFrame((_, rawDelta) => {
+    // Clamp frame delta to prevent jarring jumps after tab resume.
+    const delta = Math.min(rawDelta, 0.1);
+
+    if (!reducedMotion) {
+      if (planetRef.current) {
+        planetRef.current.rotation.y += delta * EARTH_ROTATION_SPEED;
+      }
+      if (cloudsRef.current) {
+        cloudsRef.current.rotation.y += delta * CLOUD_RELATIVE_SPEED;
+        // Keep projected cloud shadows locked to the drifting cloud mesh.
+        surfaceMaterial.uniforms.uCloudOffsetU.value =
+          ((-cloudsRef.current.rotation.y / TWO_PI) % 1 + 1) % 1;
+      }
+    }
+
+    if (rigRef.current) {
+      const targetX = config.enableParallax && !reducedMotion ? pointerRef.current.y * 0.045 : 0;
+      const targetY = config.enableParallax && !reducedMotion ? pointerRef.current.x * 0.065 : 0;
+      const ease = 1 - Math.exp(-delta * 3.5);
+      rigRef.current.rotation.x += (targetX - rigRef.current.rotation.x) * ease;
+      rigRef.current.rotation.y += (targetY - rigRef.current.rotation.y) * ease;
+    }
   });
 
   return (
-    <group ref={group} rotation={[0.18, -1.2, 0.05]}>
-      <mesh>
-        <sphereGeometry args={[1, 96, 96]} />
-        <shaderMaterial vertexShader={vertexShader} fragmentShader={surfaceFragment} uniforms={surfaceUniforms} />
-      </mesh>
+    <group ref={rigRef} position={[0.42, -0.32, 0]}>
+      <group ref={planetRef} rotation={[0.18, -1.2, 0.05]}>
+        {/* NASA Blue Marble / Black Marble surface with ocean glint, twilight & cloud shadows */}
+        <mesh material={surfaceMaterial}>
+          <sphereGeometry args={[1, config.sphereSegments, config.sphereSegments]} />
+        </mesh>
 
-      <mesh ref={clouds}>
-        <sphereGeometry args={[1.004, 96, 96]} />
-        <shaderMaterial
-          vertexShader={vertexShader}
-          fragmentShader={cloudFragment}
-          uniforms={cloudUniforms}
-          transparent
-          depthWrite={false}
-        />
-      </mesh>
+        {/* Elevated NASA global cloud deck */}
+        <mesh ref={cloudsRef} material={cloudMaterial}>
+          <sphereGeometry args={[1.0055, config.sphereSegments, config.sphereSegments]} />
+        </mesh>
 
-      {/* Atmospheric halo: a back-faced shell that reads as scattered light. */}
-      <mesh scale={1.045}>
-        <sphereGeometry args={[1, 64, 64]} />
-        <shaderMaterial
-          transparent
-          depthWrite={false}
-          blending={THREE.AdditiveBlending}
-          side={THREE.BackSide}
-          vertexShader={vertexShader}
-          fragmentShader={/* glsl */ `
-            varying vec3 vNormalWorld;
-            varying vec3 vPositionWorld;
-            void main() {
-              vec3 view = normalize(cameraPosition - vPositionWorld);
-              float rim = pow(1.0 - max(dot(normalize(vNormalWorld), view), 0.0), 3.4);
-              gl_FragColor = vec4(vec3(0.22, 0.55, 0.92) * rim * 0.9, rim * 0.85);
-            }
-          `}
-        />
-      </mesh>
+        {/* Sun-aware Rayleigh / Mie outer atmospheric scattering shell */}
+        <mesh scale={1.11} material={atmosphereMaterial}>
+          <sphereGeometry args={[1, config.atmosphereSegments, config.atmosphereSegments]} />
+        </mesh>
+      </group>
     </group>
   );
 }
@@ -182,16 +300,19 @@ export interface OrbitalEarthProps {
 }
 
 export default function OrbitalEarth({ className = '', still = false }: OrbitalEarthProps) {
-  const { isOptimizedModeActive } = useDevicePerformance();
-  const [capable, setCapable] = useState(false);
-  const [failed, setFailed] = useState(false);
+  const { isOptimizedModeActive, supportsWebGL, qualityProfile } = useDevicePerformance();
+  const config = useMemo(() => getHeroEarthConfig(qualityProfile), [qualityProfile]);
+
+  const [contextLost, setContextLost] = useState(false);
   const [reducedMotion, setReducedMotion] = useState(false);
-  const [visible, setVisible] = useState(true);
+  const [inView, setInView] = useState(true);
+  const [tabVisible, setTabVisible] = useState(true);
   const hostRef = useRef<HTMLDivElement>(null);
+  const pointerRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const cleanupCanvasRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
-    setCapable(supportsWebGL());
-    if (!window.matchMedia) return undefined;
+    if (typeof window === 'undefined' || !window.matchMedia) return undefined;
     const query = window.matchMedia('(prefers-reduced-motion: reduce)');
     const sync = () => setReducedMotion(query.matches);
     sync();
@@ -202,46 +323,104 @@ export default function OrbitalEarth({ className = '', still = false }: OrbitalE
   useEffect(() => {
     const node = hostRef.current;
     if (!node || typeof IntersectionObserver === 'undefined') return undefined;
-    const observer = new IntersectionObserver((entries) => setVisible(entries.some((e) => e.isIntersecting)), {
-      rootMargin: '140px'
-    });
+    const observer = new IntersectionObserver(
+      (entries) => setInView(entries.some((entry) => entry.isIntersecting)),
+      { rootMargin: '140px' }
+    );
     observer.observe(node);
     return () => observer.disconnect();
   }, []);
 
   useEffect(() => {
-    const onVisibility = () => setVisible(!document.hidden);
+    const onVisibility = () => setTabVisible(!document.hidden);
     document.addEventListener('visibilitychange', onVisibility);
     return () => document.removeEventListener('visibilitychange', onVisibility);
   }, []);
 
-  const showCanvas = capable && !failed && !isOptimizedModeActive;
+  useEffect(() => {
+    if (!config.enableParallax || reducedMotion || still || typeof window === 'undefined') {
+      pointerRef.current = { x: 0, y: 0 };
+      return undefined;
+    }
+    const onPointerMove = (event: PointerEvent) => {
+      if (event.pointerType === 'touch') return;
+      const nx = (event.clientX / Math.max(window.innerWidth, 1)) * 2 - 1;
+      const ny = (event.clientY / Math.max(window.innerHeight, 1)) * 2 - 1;
+      pointerRef.current = {
+        x: Math.max(-1, Math.min(1, nx)),
+        y: Math.max(-1, Math.min(1, ny)),
+      };
+    };
+    window.addEventListener('pointermove', onPointerMove, { passive: true });
+    return () => window.removeEventListener('pointermove', onPointerMove);
+  }, [config.enableParallax, reducedMotion, still]);
+
+  useEffect(() => {
+    return () => {
+      cleanupCanvasRef.current?.();
+      cleanupCanvasRef.current = null;
+    };
+  }, []);
+
+  const canMeasureCanvas = typeof ResizeObserver !== 'undefined';
+  const showCanvas =
+    canMeasureCanvas && supportsWebGL && config.enableWebGL && !contextLost && !isOptimizedModeActive;
+  const activeFrameloop = inView && tabVisible && !(reducedMotion || still) ? 'always' : 'demand';
 
   return (
-    <div ref={hostRef} className={`pointer-events-none absolute inset-0 overflow-hidden ${className}`} aria-hidden="true">
-      {/* Deep-space gradient behind the planet keeps edges from looking pasted on. */}
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_72%_58%,rgba(24,86,164,0.30),rgba(5,9,18,0)_62%)]" />
+    <div
+      ref={hostRef}
+      className={`pointer-events-none absolute inset-0 overflow-hidden ${className}`}
+      aria-hidden="true"
+    >
+      {/* Deep-space atmospheric backdrop keeps planet transitions seamless against void. */}
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_72%_58%,rgba(28,104,196,0.34),rgba(5,9,18,0)_64%)]" />
       {showCanvas ? (
         <Canvas
           className="!absolute inset-0"
           flat
-          dpr={[1, 1.75]}
-          frameloop={visible ? 'always' : 'demand'}
+          dpr={config.dpr}
+          frameloop={activeFrameloop}
           camera={{ position: [0, 0.05, 2.42], fov: 36 }}
-          gl={{ antialias: true, alpha: true, powerPreference: 'high-performance' }}
-          onCreated={({ gl }) => gl.setClearColor(0x000000, 0)}
+          gl={{
+            antialias: config.antialias,
+            alpha: true,
+            powerPreference: 'high-performance',
+          }}
+          onCreated={({ gl }) => {
+            gl.setClearColor(0x000000, 0);
+            cleanupCanvasRef.current?.();
+            const domElement = gl.domElement;
+            const handleLost = (event: Event) => {
+              event.preventDefault();
+              setContextLost(true);
+            };
+            const handleRestored = () => {
+              setContextLost(false);
+            };
+            domElement.addEventListener('webglcontextlost', handleLost, false);
+            domElement.addEventListener('webglcontextrestored', handleRestored, false);
+            cleanupCanvasRef.current = () => {
+              domElement.removeEventListener('webglcontextlost', handleLost, false);
+              domElement.removeEventListener('webglcontextrestored', handleRestored, false);
+            };
+          }}
         >
-          <ambientLight intensity={0.15} />
           <Suspense fallback={null}>
-            <group position={[0.42, -0.32, 0]}>
-              <Planet reducedMotion={reducedMotion || still} />
-            </group>
+            <OrbitalStarfield count={config.starCount} reducedMotion={reducedMotion || still} />
+            <Planet
+              config={config}
+              reducedMotion={reducedMotion || still}
+              pointerRef={pointerRef}
+            />
           </Suspense>
         </Canvas>
       ) : (
         <PosterEarth />
       )}
-      {showCanvas && <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(90deg,rgba(4,7,15,0.86)_0%,rgba(4,7,15,0.28)_48%,rgba(4,7,15,0)_72%)]" />}
+      {showCanvas && (
+        <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(90deg,rgba(4,7,15,0.86)_0%,rgba(4,7,15,0.28)_48%,rgba(4,7,15,0)_72%)]" />
+      )}
     </div>
   );
 }
