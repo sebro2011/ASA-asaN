@@ -51,21 +51,22 @@ const mat = (color, metalness = 0.6, roughness = 0.45) =>
   new THREE.MeshStandardMaterial({ color, metalness, roughness });
 
 const M = {
-  truss: mat(0x9aa6b2, 0.85, 0.35),
-  module: mat(0xe8edf2, 0.25, 0.55),
-  moduleDark: mat(0xb8c2cc, 0.5, 0.5),
-  solar: mat(0x1d3f8f, 0.55, 0.35),
-  solarFrame: mat(0xc7d0da, 0.8, 0.3),
-  radiator: mat(0xf2f5f8, 0.3, 0.4),
-  gold: mat(0xd9a441, 1.0, 0.28),
-  goldFoil: mat(0xc98a2e, 0.9, 0.42),
-  sunshield: mat(0xc08bb8, 0.15, 0.6),
-  graphite: mat(0x23282d, 0.75, 0.45),
-  black: mat(0x0e1116, 0.4, 0.6),
-  white: mat(0xf4f6f8, 0.2, 0.5),
-  red: mat(0xb3372e, 0.5, 0.45),
-  wheel: mat(0x1b1e22, 0.6, 0.55),
-  copper: mat(0xb5643d, 0.85, 0.35),
+  truss: mat(0xa2aebc, 0.88, 0.3),
+  module: mat(0xeaf0f5, 0.28, 0.48),
+  moduleDark: mat(0xb8c2cc, 0.55, 0.45),
+  solar: mat(0x183a8a, 0.72, 0.24),
+  solarFrame: mat(0xcbd5e1, 0.85, 0.26),
+  radiator: mat(0xf4f7fa, 0.32, 0.36),
+  gold: mat(0xf5b938, 0.98, 0.14),
+  goldFoil: mat(0xd69632, 0.92, 0.34),
+  sunshield: mat(0xb87ec8, 0.82, 0.28),
+  sunshieldTop: mat(0xdbe4f0, 0.9, 0.2),
+  graphite: mat(0x23282d, 0.78, 0.38),
+  black: mat(0x0e1116, 0.45, 0.55),
+  white: mat(0xf4f6f8, 0.22, 0.46),
+  red: mat(0xb3372e, 0.5, 0.42),
+  wheel: mat(0x1b1e22, 0.65, 0.5),
+  copper: mat(0xc46d3e, 0.9, 0.28),
 };
 
 function mesh(geometry, material, x = 0, y = 0, z = 0, rx = 0, ry = 0, rz = 0) {
@@ -128,55 +129,85 @@ function buildJWST() {
   const g = new THREE.Group();
   g.name = 'JWST';
 
-  // Primary mirror: 18 gold hex segments in the classic centre + two wings.
-  const hexGeo = new THREE.CylinderGeometry(0.34, 0.34, 0.08, 6);
-  const hexRing = [
-    [0, 0],
-    [0.62, 0],
-    [-0.62, 0],
-    [0.31, 0.54],
-    [-0.31, 0.54],
-    [0.31, -0.54],
-    [-0.31, -0.54],
+  // Primary mirror: authentic 18 gold-beryllium hexagonal segments arranged in
+  // 2 concentric rings (6 inner + 12 outer) surrounding the central aft-optics baffle.
+  const hexGeo = new THREE.CylinderGeometry(0.28, 0.28, 0.06, 6);
+  const mirrorOffsets = [
+    // Inner ring of 6 segments
+    [-0.51, 0],
+    [0.51, 0],
+    [-0.255, 0.442],
+    [0.255, 0.442],
+    [-0.255, -0.442],
+    [0.255, -0.442],
+    // Outer ring of 12 segments
+    [-1.02, 0],
+    [1.02, 0],
+    [-0.765, 0.442],
+    [0.765, 0.442],
+    [-0.765, -0.442],
+    [0.765, -0.442],
+    [-0.51, 0.884],
+    [0, 0.884],
+    [0.51, 0.884],
+    [-0.51, -0.884],
+    [0, -0.884],
+    [0.51, -0.884],
   ];
-  const wing = (sign) => {
-    g.add(mesh(hexGeo, M.gold, sign * 0.93, 0.54, 0, Math.PI / 2));
-    g.add(mesh(hexGeo, M.gold, sign * 0.93, -0.54, 0, Math.PI / 2));
-    g.add(mesh(hexGeo, M.gold, sign * 1.24, 0, 0, Math.PI / 2));
-  };
-  hexRing.forEach(([x, y]) => g.add(mesh(hexGeo, M.gold, x, y, 0, Math.PI / 2)));
-  wing(1);
-  wing(-1);
+  mirrorOffsets.forEach(([x, y]) => {
+    g.add(mesh(hexGeo, M.gold, x, y + 0.35, 0, Math.PI / 2, 0, Math.PI / 6));
+  });
 
-  // Secondary mirror on three struts in front of the primary.
-  g.add(mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.05, 6), M.graphite, 0, 0, -0.95, Math.PI / 2));
+  // Central Aft Optical Subsystem (AOS) dark baffle in the hollow center.
+  g.add(mesh(new THREE.CylinderGeometry(0.18, 0.24, 0.32, 6), M.black, 0, 0.35, -0.14, Math.PI / 2));
+
+  // Secondary mirror on carbon-composite tripod struts in front of the primary.
+  g.add(mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.055, 16), M.gold, 0, 0.35, -1.18, Math.PI / 2));
+  g.add(mesh(new THREE.CylinderGeometry(0.22, 0.22, 0.04, 16), M.graphite, 0, 0.35, -1.21, Math.PI / 2));
   for (const [x, y] of [
-    [0.3, 0.26],
-    [-0.3, 0.26],
-    [0, -0.32],
+    [0.62, 0.95],
+    [-0.62, 0.95],
+    [0, -0.62],
   ]) {
-    const strut = mesh(new THREE.CylinderGeometry(0.025, 0.025, 1.05, 8), M.graphite, x / 2, y / 2, -0.5);
-    strut.lookAt(new THREE.Vector3(x, y, -0.95));
+    const start = new THREE.Vector3(x, y + 0.35, -0.02);
+    const end = new THREE.Vector3(0, 0.35, -1.18);
+    const length = start.distanceTo(end);
+    const mid = start.clone().add(end).multiplyScalar(0.5);
+    const strut = mesh(new THREE.CylinderGeometry(0.024, 0.024, length, 8), M.graphite, mid.x, mid.y, mid.z);
+    strut.lookAt(end);
     strut.rotateX(Math.PI / 2);
     g.add(strut);
   }
 
-  // Bus / instrument block behind the mirror.
-  g.add(mesh(new THREE.BoxGeometry(0.9, 0.7, 0.7), M.graphite, 0, 0, 0.65));
+  // ISIM science instrument module & spacecraft bus behind the mirror.
+  g.add(mesh(new THREE.BoxGeometry(0.95, 0.85, 0.72), M.graphite, 0, 0.32, 0.56));
+  g.add(mesh(new THREE.CylinderGeometry(0.14, 0.14, 0.45, 12), M.goldFoil, 0, -0.35, 0.58));
 
-  // Five-layer sunshield, each plate larger than the one above it.
+  // Five-layer diamond Kapton sunshield beneath the optical telescope element.
+  const shieldShape = new THREE.Shape();
+  shieldShape.moveTo(0, 2.35);
+  shieldShape.lineTo(1.52, 0.15);
+  shieldShape.lineTo(0, -2.15);
+  shieldShape.lineTo(-1.52, 0.15);
+  shieldShape.closePath();
+  const shieldExtrude = new THREE.ExtrudeGeometry(shieldShape, {
+    depth: 0.018,
+    bevelEnabled: false,
+  });
+
   for (let i = 0; i < 5; i += 1) {
-    const size = 2.6 + i * 0.42;
+    const scale = 1 - i * 0.036;
     const plate = mesh(
-      new THREE.BoxGeometry(size, size * 0.66, 0.02),
-      i === 4 ? M.radiator : M.sunshield,
+      shieldExtrude,
+      i >= 3 ? M.sunshieldTop : M.sunshield,
       0,
-      0,
-      1.05 + i * 0.09,
-      -0.12,
+      -0.98 + i * 0.075,
+      0.1,
+      -Math.PI / 2,
       0,
       0
     );
+    plate.scale.set(scale, scale, 1);
     g.add(plate);
   }
   return g;

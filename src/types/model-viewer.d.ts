@@ -14,12 +14,14 @@ declare global {
           'ar-scale'?: string;
           'camera-controls'?: boolean;
           'camera-orbit'?: string;
+          'camera-target'?: string;
           'auto-rotate'?: boolean;
           'auto-rotate-delay'?: string | number;
           'rotation-per-second'?: string;
           'shadow-intensity'?: string | number;
           'shadow-softness'?: string | number;
           exposure?: string | number;
+          'tone-mapping'?: string;
           'environment-image'?: string;
           'touch-action'?: string;
           onError?: (event: Event) => void;
