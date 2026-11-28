@@ -178,7 +178,7 @@ const INITIAL_SATELLITES = [
     inclination: 76.54,
     crew: 'Robotic X-Ray Observatory',
     status: {
-      en: 'Operational in High Elliptical Orbit • Capturing relativistic relativistic jets from Sagittarius A*',
+      en: 'Operational in High Elliptical Orbit • Capturing relativistic jets from Sagittarius A*',
       si: 'ක්‍රියාකාරීයි • Sagittarius A* කළු කුහරයේ අධිවේගී කිරණ ජාලයන් නිරීක්ෂණය කරයි',
       ta: 'செயல்பாட்டில் உள்ளது • கருந்துளைகளில் இருந்து வெளிவரும் கதிர்வீச்சை ஆராய்கிறது'
     },
