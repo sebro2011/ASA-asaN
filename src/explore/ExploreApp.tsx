@@ -40,7 +40,6 @@ const ARPlanetViewer = lazy(() =>
 const RocketLaunchSimulator = lazy(() => import('../components/RocketLaunchSimulator'));
 const AsteroidRadar = lazy(() => import('../components/AsteroidRadar.jsx'));
 const ISSTracker = lazy(() => import('../components/ISSTracker.jsx'));
-const IssTracker2D = lazy(() => import('../components/IssTracker2D.jsx'));
 const ExoplanetLab = lazy(() => import('../components/ExoplanetLab.jsx'));
 const EPICViewer = lazy(() => import('../components/EPICViewer.jsx'));
 const MissionsTimeline = lazy(() =>
@@ -545,12 +544,7 @@ export default function ExploreApp({ tab, onSelectTab, onExitToWorkspace, onOpen
                   </div>
                 )}
 
-                {activeTab === 'iss' && (
-                  <div className="space-y-6">
-                    <IssTracker2D lang={lang} />
-                    <ISSTracker />
-                  </div>
-                )}
+                {activeTab === 'iss' && <ISSTracker />}
 
                 </Suspense>
                 </ErrorBoundary>
