@@ -1,54 +1,28 @@
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { SupportedLanguage, translations } from '../i18n/translations';
 import { SPACE_MISSIONS, SpaceMission } from '../data/missions';
 import { useFavorites } from '../utils/favorites';
 import { VoiceSearchInput } from './VoiceSearchInput';
-import { fetchGroundedMissionSearch } from '@/lib/nasaApi';
 import { MissionsAnalytics } from './MissionsAnalytics';
-import { 
-  Rocket, 
-  Milestone, 
-  ShieldCheck, 
-  Radio, 
-  CheckCircle2, 
-  ChevronRight, 
-  Gauge, 
-  Sparkles, 
-  Heart, 
-  Zap, 
-  Globe, 
-  ExternalLink, 
-  Loader2, 
-  Search, 
-  RotateCcw, 
+import {
+  Rocket,
+  Milestone,
+  ShieldCheck,
+  Radio,
+  CheckCircle2,
+  Gauge,
+  Sparkles,
+  Heart,
+  Search,
+  RotateCcw,
   Info,
   Clock,
-  Volume2,
-  VolumeX,
-  Copy,
-  Check,
-  Bookmark,
-  Compass,
-  Telescope,
-  Atom,
-  Flame,
-  BarChart3
+  BarChart3,
 } from 'lucide-react';
-import { a11yLabel } from '../lib/a11yLabels';
 
 interface MissionsTimelineProps {
   lang: SupportedLanguage;
   initialMissionId?: string;
-}
-
-interface GroundedSearchResult {
-  query: string;
-  answer: string;
-  sources: { title: string; url: string; domain?: string }[];
-  searchQueries?: string[];
-  provider?: string;
-  error?: string;
-  fallbackMessage?: string;
 }
 
 // Quick 1-click preset filter suggestions
@@ -64,16 +38,6 @@ const QUICK_SEARCH_CHIPS = [
   { id: 'mars', label: { en: 'Mars Explorers', si: 'අඟහරු ගවේෂණ', ta: 'செவ்வாய்' }, query: 'Mars' },
 ];
 
-// Trending Google Search Grounding Exploration Topics
-const TRENDING_GROUNDED_TOPICS = [
-  { id: 'europa-clipper', name: { en: 'Europa Clipper', si: 'යුරෝපා ක්ලිපර්', ta: 'யூரோப்பா கிளிப்பர்' }, query: 'Europa Clipper mission NASA status' },
-  { id: 'parker-solar', name: { en: 'Parker Solar Probe', si: 'පාකර් සූර්ය යානය', ta: 'பார்க்கர் விண்கலம்' }, query: 'Parker Solar Probe record close approach NASA' },
-  { id: 'artemis-3', name: { en: 'Artemis III Crewed Landing', si: 'ආටෙමිස් III සඳ ගොඩබැසීම', ta: 'ஆர்ட்டெமிஸ் III மனித தரையிறக்கம்' }, query: 'Artemis 3 NASA crew landing updates' },
-  { id: 'dragonfly', name: { en: 'Dragonfly Titan Rotorcraft', si: 'ඩ්‍රැගන්ෆ්ලයි ටයිටන් යානය', ta: 'டிராகன்ஃபிளை விண்கலம்' }, query: 'Dragonfly mission Saturn moon Titan NASA' },
-  { id: 'roman-telescope', name: { en: 'Nancy Grace Roman Telescope', si: 'රෝමන් අභ්‍යවකාශ දුරේක්ෂය', ta: 'ரோமன் விண்வெளி தொலைநோக்கி' }, query: 'Nancy Grace Roman Space Telescope launch date' },
-  { id: 'osiris-apex', name: { en: 'OSIRIS-APEX (Apophis)', si: 'ඔසිරිස්-ඇපෙක්ස් ඇපොෆිස්', ta: 'ஒசிரிஸ்-அபெக்ஸ்' }, query: 'OSIRIS-APEX asteroid Apophis mission NASA' },
-];
-
 export const MissionsTimeline: React.FC<MissionsTimelineProps> = React.memo(({ lang, initialMissionId }) => {
   const t = translations[lang];
   const { isMissionSaved, toggleSaveMission } = useFavorites();
@@ -83,13 +47,6 @@ export const MissionsTimeline: React.FC<MissionsTimelineProps> = React.memo(({ l
   const [searchExecutionMs, setSearchExecutionMs] = useState<number>(1.2);
   const [activeChipId, setActiveChipId] = useState<string>('all');
   const [subTab, setSubTab] = useState<'timeline' | 'analytics'>('timeline');
-
-  // Google Search Grounding state
-  const [isGroundedSearching, setIsGroundedSearching] = useState<boolean>(false);
-  const [groundedResult, setGroundedResult] = useState<GroundedSearchResult | null>(null);
-  const [showGroundedSection, setShowGroundedSection] = useState<boolean>(false);
-  const [isSpeaking, setIsSpeaking] = useState<boolean>(false);
-  const [copiedBriefing, setCopiedBriefing] = useState<boolean>(false);
 
   useEffect(() => {
     if (initialMissionId && initialMissionId !== selectedMissionId) {
@@ -156,21 +113,10 @@ export const MissionsTimeline: React.FC<MissionsTimelineProps> = React.memo(({ l
     setSearchExecutionMs(executionDuration);
   }, [executionDuration]);
 
-  // Speech cleanup on unmount
-  useEffect(() => {
-    return () => {
-      if ('speechSynthesis' in window) {
-        window.speechSynthesis.cancel();
-      }
-    };
-  }, []);
-
   const handleSearchChange = (val: string) => {
     setSearchQuery(val);
     if (!val.trim()) {
       setActiveChipId('all');
-      setGroundedResult(null);
-      setShowGroundedSection(false);
       return;
     }
 
@@ -196,8 +142,6 @@ export const MissionsTimeline: React.FC<MissionsTimelineProps> = React.memo(({ l
   const handleChipClick = (chip: typeof QUICK_SEARCH_CHIPS[0]) => {
     setActiveChipId(chip.id);
     setSearchQuery(chip.query);
-    setGroundedResult(null);
-    setShowGroundedSection(false);
 
     if (chip.query) {
       const q = chip.query.toLowerCase();
@@ -216,89 +160,6 @@ export const MissionsTimeline: React.FC<MissionsTimelineProps> = React.memo(({ l
   const handleClearSearch = () => {
     setSearchQuery('');
     setActiveChipId('all');
-    setGroundedResult(null);
-    setShowGroundedSection(false);
-    if ('speechSynthesis' in window) {
-      window.speechSynthesis.cancel();
-      setIsSpeaking(false);
-    }
-  };
-
-  // Google Search Grounding with Gemini 3.5 Flash
-  const handleGroundedSearch = async (termToSearch?: string) => {
-    const queryTerm = termToSearch || searchQuery;
-    if (!queryTerm.trim()) return;
-
-    if ('speechSynthesis' in window) {
-      window.speechSynthesis.cancel();
-      setIsSpeaking(false);
-    }
-
-    setIsGroundedSearching(true);
-    setShowGroundedSection(true);
-
-    try {
-      const data = await fetchGroundedMissionSearch(queryTerm, lang);
-      if (data && data.answer) {
-        setGroundedResult(data as GroundedSearchResult);
-      } else {
-        setGroundedResult({
-          query: queryTerm,
-          answer: lang === 'si'
-            ? 'සජීවී ගූගල් දත්ත සෙවීම සම්බන්ධ කරගත නොහැකි විය. කරුණාකර නැවත උත්සාහ කරන්න.'
-            : lang === 'ta'
-            ? 'நேரடி கூகுள் தேடலை இணைக்க முடியவில்லை. மீண்டும் முயற்சிக்கவும்.'
-            : 'Could not connect to live Google search grounding. Please try again.',
-          sources: []
-        });
-      }
-    } catch {
-      setGroundedResult({
-        query: queryTerm,
-        answer: lang === 'si'
-          ? 'සෙවීම් සේවාව තාවකාලිකව සීමාවී ඇත.'
-          : lang === 'ta'
-          ? 'தேடல் சேவை தற்காலிகமாக கிடைக்கவில்லை.'
-          : 'Search service temporarily busy.',
-        sources: []
-      });
-    } finally {
-      setIsGroundedSearching(false);
-    }
-  };
-
-  // Text-to-speech audio read aloud
-  const handleToggleSpeech = () => {
-    if (!('speechSynthesis' in window) || !groundedResult?.answer) return;
-
-    if (isSpeaking) {
-      window.speechSynthesis.cancel();
-      setIsSpeaking(false);
-      return;
-    }
-
-    window.speechSynthesis.cancel();
-    const cleanText = groundedResult.answer
-      .replace(/###/g, '')
-      .replace(/\*\*/g, '')
-      .replace(/#/g, '');
-
-    const utterance = new SpeechSynthesisUtterance(cleanText);
-    utterance.lang = lang === 'si' ? 'si-LK' : lang === 'ta' ? 'ta-IN' : 'en-US';
-    utterance.rate = 0.95;
-
-    utterance.onend = () => setIsSpeaking(false);
-    utterance.onerror = () => setIsSpeaking(false);
-
-    window.speechSynthesis.speak(utterance);
-    setIsSpeaking(true);
-  };
-
-  const handleCopyBriefing = () => {
-    if (!groundedResult?.answer) return;
-    navigator.clipboard.writeText(groundedResult.answer);
-    setCopiedBriefing(true);
-    setTimeout(() => setCopiedBriefing(false), 2000);
   };
 
   const currentMission: SpaceMission = 
@@ -382,10 +243,10 @@ export const MissionsTimeline: React.FC<MissionsTimelineProps> = React.memo(({ l
               lang={lang}
               placeholder={
                 lang === 'si'
-                  ? 'මෙහෙයුම් නම හඬින් හෝ ලියා සොයන්න (උදා: ඇපලෝ 11, ආටෙමිස්, යුරෝපා ක්ලිපර්)...'
+                  ? 'මෙහෙයුම් නම හඬින් හෝ ලියා සොයන්න (උදා: ඇපලෝ 11, ආටෙමිස්, ජේම්ස් වෙබ්)...'
                   : lang === 'ta'
-                  ? 'பணிகளை குரல் மூலம் தேடுங்கள் (எ.கா: அப்பல்லோ 11, ஆர்ட்டெமிஸ், யூரோப்பா)...'
-                  : 'Speak or search missions (e.g., Apollo 11, Artemis, Europa Clipper)...'
+                  ? 'பணிகளை குரல் மூலம் தேடுங்கள் (எ.கா: அப்பல்லோ 11, ஆர்ட்டெமிஸ், ஜேம்ஸ் வெப்)...'
+                  : 'Speak or search missions (e.g., Apollo 11, Artemis, James Webb)...'
               }
             />
           </div>
@@ -450,198 +311,7 @@ export const MissionsTimeline: React.FC<MissionsTimelineProps> = React.memo(({ l
             );
           })}
         </div>
-
-        {/* Google Grounded Discovery Trending Highlights Strip */}
-        <div className="pt-2 border-t border-line/70 space-y-2">
-          <div className="flex items-center justify-between gap-3 flex-wrap">
-            <div className="flex items-center gap-2 text-xs font-mono text-cyan-300 font-semibold">
-              <Globe className="h-3.5 w-3.5 text-atmo" strokeWidth={1.8} />
-              <span>
-                {lang === 'si'
-                  ? 'මූලාශ්‍ර සහිත AI සෙවුම (අන්තර්ජාලය හරහා):'
-                  : lang === 'ta'
-                    ? 'மூலங்களுடன் கூடிய AI தேடல் (இணையம் வழியாக):'
-                    : 'Grounded AI search with cited sources:'}
-              </span>
-            </div>
-
-            <button
-              onClick={() => handleGroundedSearch(searchQuery || 'NASA Space Missions 2026 Telemetry')}
-              disabled={isGroundedSearching}
-              className="inline-flex items-center gap-1.5 rounded-[8px] border border-atmo/40 bg-atmo/10 px-3 py-1.5 font-mono text-[11px] font-semibold text-atmo transition-colors hover:bg-atmo/15 disabled:opacity-50"
-            >
-              {isGroundedSearching ? (
-                <>
-                  <Loader2 className="w-3.5 h-3.5 text-white animate-spin" />
-                  <span>{lang === 'si' ? 'සොයමින්...' : lang === 'ta' ? 'தேடுகிறது...' : 'Searching...'}</span>
-                </>
-              ) : (
-                <>
-                  <Search className="w-3.5 h-3.5" />
-                  <span>{lang === 'si' ? 'සෙවීම අරඹන්න' : lang === 'ta' ? 'தேடலைத் தொடங்கு' : 'Run grounded search'}</span>
-                </>
-              )}
-            </button>
-          </div>
-
-          {/* Trending Mission Pills */}
-          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
-            {TRENDING_GROUNDED_TOPICS.map(topic => (
-              <button
-                key={topic.id}
-                onClick={() => {
-                  setSearchQuery(topic.name[lang] || topic.name.en);
-                  handleGroundedSearch(topic.query);
-                }}
-                className="px-2.5 py-1 rounded-[8px] bg-blue-950/40 hover:bg-blue-900/60 text-cyan-300 hover:text-ink border border-blue-500/30 text-[11px] font-medium whitespace-nowrap transition flex items-center gap-1 shadow-sm"
-              >
-                <Compass className="w-3 h-3 text-cyan-400" />
-                <span>{topic.name[lang] || topic.name.en}</span>
-              </button>
-            ))}
-          </div>
-        </div>
       </div>
-
-      {/* Google Search Grounded Briefing Card */}
-      {showGroundedSection && (
-        <div className="space-y-4 rounded-[14px] border border-line bg-surface/40 p-5 sm:p-6">
-          <div className="flex items-center justify-between border-b border-cyan-500/20 pb-4 flex-wrap gap-3">
-            <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-[10px] border border-atmo/30 bg-atmo/10 p-[1.5px]">
-                <div className="w-full h-full bg-abyss rounded-[14px] flex items-center justify-center">
-                  <Globe className="w-5 h-5 text-cyan-400" />
-                </div>
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <h4 className="text-base font-bold text-white font-display">
-                    Google Search Grounded Discovery
-                  </h4>
-                  <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-emerald-500/20 text-signal border border-emerald-500/40 flex items-center gap-1">
-                    <span className="h-1.5 w-1.5 rounded-full bg-signal" />
-                    gemini-3.5-flash
-                  </span>
-                </div>
-                <p className="text-xs text-ink-3 font-mono">
-                  {lang === 'si' 
-                    ? `"${groundedResult?.query || searchQuery}" පිළිබඳ සජීවීව තහවුරු කළ විද්‍යාත්මක තොරතුරු` 
-                    : lang === 'ta' 
-                    ? `"${groundedResult?.query || searchQuery}" பற்றிய நேரடித் தரவுகள்` 
-                    : `Live verified facts & telemetry for "${groundedResult?.query || searchQuery}"`}
-                </p>
-              </div>
-            </div>
-
-            {/* Quick Actions: Audio Speech & Copy */}
-            <div className="flex items-center gap-2">
-              <button
-                onClick={handleToggleSpeech}
-                className={`px-3 py-1.5 rounded-[10px] border text-xs font-semibold flex items-center gap-1.5 transition ${
-                  isSpeaking
-                    ? 'border-caution/40 bg-caution/10 text-caution'
-                    : 'bg-surface/60 border-line text-ink-2 hover:text-ink'
-                }`}
-                title="Read aloud in your language"
-              >
-                {isSpeaking ? <VolumeX className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5 text-cyan-400" />}
-                <span>{isSpeaking ? (lang === 'si' ? 'නවත්වන්න' : 'Stop') : (lang === 'si' ? 'හඬින් අසන්න' : lang === 'ta' ? 'கேளுங்கள்' : 'Listen')}</span>
-              </button>
-
-              <button
-                onClick={handleCopyBriefing}
-                className="px-3 py-1.5 rounded-[10px] bg-surface/60 border border-line hover:border-cyan-500/40 text-ink-2 hover:text-ink text-xs font-semibold flex items-center gap-1.5 transition"
-                title="Copy briefing"
-              >
-                {copiedBriefing ? <Check className="w-3.5 h-3.5 text-signal" /> : <Copy className="w-3.5 h-3.5 text-cyan-400" />}
-                <span>{copiedBriefing ? (lang === 'si' ? 'පිටපත් විය!' : 'Copied!') : (lang === 'si' ? 'පිටපත්' : lang === 'ta' ? 'நகல்' : 'Copy')}</span>
-              </button>
-
-              <button
-                type="button"
-                aria-label={a11yLabel('close', lang)}
-                onClick={() => {
-                  setShowGroundedSection(false);
-                  if ('speechSynthesis' in window) {
-                    window.speechSynthesis.cancel();
-                    setIsSpeaking(false);
-                  }
-                }}
-                className="text-xs font-mono text-ink-3 hover:text-ink px-2.5 py-1.5 rounded-[10px] hover:bg-surface-2 border border-transparent hover:border-line"
-              >
-                ✕
-              </button>
-            </div>
-          </div>
-
-          {/* Search Queries Executed */}
-          {groundedResult?.searchQueries && groundedResult.searchQueries.length > 0 && (
-            <div className="flex items-center gap-2 flex-wrap text-[11px] font-mono text-ink-3">
-              <span className="text-ink-4">{lang === 'si' ? 'සෙවූ විමසුම්:' : lang === 'ta' ? 'தேடல் கேள்விகள்:' : 'Queries Executed:'}</span>
-              {groundedResult.searchQueries.map((sq, i) => (
-                <span key={i} className="px-2 py-0.5 rounded-md bg-abyss border border-line text-cyan-300">
-                  🔍 {sq}
-                </span>
-              ))}
-            </div>
-          )}
-
-          {/* Content Loading State */}
-          {isGroundedSearching ? (
-            <div className="py-12 flex flex-col items-center justify-center gap-3 text-cyan-300 font-mono text-xs">
-              <div className="relative">
-                <div className="w-12 h-12 rounded-full border-2 border-cyan-500/20 border-t-cyan-400 animate-spin" />
-                <Globe className="absolute inset-0 m-auto h-5 w-5 text-atmo" strokeWidth={1.6} />
-              </div>
-              <span>
-                {lang === 'si' 
-                  ? 'Google Search Grounding මඟින් සජීවී නාසා සහ අභ්‍යවකාශ දත්ත පිරික්සමින් පවතී...' 
-                  : lang === 'ta' 
-                  ? 'கூகுள் தேடல் மூலம் நேரடி நாசா தரவுகள் திரட்டப்படுகின்றன...' 
-                  : 'Retrieving live space telemetry & official NASA sources via Google Search Grounding...'}
-              </span>
-            </div>
-          ) : groundedResult ? (
-            <div className="space-y-4">
-              {/* Formatted Answer Body */}
-              <div className="text-ink-2 text-xs sm:text-sm leading-relaxed whitespace-pre-line bg-abyss/70 p-5 rounded-[14px] border border-cyan-500/20 font-sans shadow-inner space-y-2">
-                {groundedResult.answer}
-              </div>
-
-              {/* Web Sources & Grounding Citations */}
-              {groundedResult.sources && groundedResult.sources.length > 0 && (
-                <div className="pt-2">
-                  <span className="text-[11px] font-mono text-ink-3 uppercase tracking-wider block mb-2 font-semibold">
-                    {lang === 'si' ? 'තහවුරු කළ නිල මූලාශ්‍ර සහ සබැඳි:' : lang === 'ta' ? 'சரிபார்க்கப்பட்ட அதிகாரப்பூர்வ இணைப்புகள்:' : 'Verified Official Sources & Grounding Citations:'}
-                  </span>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
-                    {groundedResult.sources.map((src, idx) => (
-                      <a
-                        key={idx}
-                        href={src.url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="p-2.5 rounded-[10px] bg-surface/65 hover:bg-surface-2 border border-line hover:border-cyan-500/50 text-cyan-300 hover:text-cyan-200 flex items-center justify-between gap-2 font-mono text-xs transition group shadow-sm"
-                      >
-                        <div className="flex items-center gap-2 truncate">
-                          <span className="w-2 h-2 rounded-full bg-cyan-400 shrink-0" />
-                          <div className="truncate">
-                            <div className="truncate font-semibold text-white group-hover:text-cyan-200">{src.title}</div>
-                            {src.domain && (
-                              <div className="text-[10px] text-ink-4">{src.domain}</div>
-                            )}
-                          </div>
-                        </div>
-                        <ExternalLink className="w-3.5 h-3.5 text-ink-3 group-hover:text-cyan-300 shrink-0" />
-                      </a>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          ) : null}
-        </div>
-      )}
 
       {/* No Local Results Fallback Card */}
       {filteredMissions.length === 0 && (
@@ -652,31 +322,25 @@ export const MissionsTimeline: React.FC<MissionsTimelineProps> = React.memo(({ l
           <div>
             <h4 className="text-base font-bold text-white">
               {lang === 'si'
-                ? `"${searchQuery}" සඳහා ස්ථානීය මෙහෙයුම් හමුනොවීය`
+                ? `"${searchQuery}" සඳහා මෙහෙයුම් හමුනොවීය`
                 : lang === 'ta'
-                ? `"${searchQuery}" க்கான உள்ளூர் பணிகள் எதுவும் கிடைக்கவில்லை`
-                : `No local missions matching "${searchQuery}"`}
+                ? `"${searchQuery}" க்கான பணிகள் எதுவும் கிடைக்கவில்லை`
+                : `No missions matching "${searchQuery}"`}
             </h4>
             <p className="text-xs text-ink-3 mt-1 max-w-md mx-auto">
               {lang === 'si'
-                ? 'කෙසේ වෙතත්, ඔබට Google Search Grounding මඟින් මෙම මෙහෙයුම ගැන සජීවී තොරතුරු ලබාගත හැක.'
+                ? 'වෙනත් මූල පදයක් උත්සාහ කරන්න හෝ සියලුම මෙහෙයුම් නැවත පෙන්වන්න.'
                 : lang === 'ta'
-                ? 'ஆயினும் கூகுள் தேடல் மூலம் இந்த பணி பற்றிய நேரடி தகவல்களை பெறலாம்.'
-                : 'You can query live Google search data to discover facts about this mission.'}
+                ? 'வேறு முக்கிய வார்த்தையை முயற்சிக்கவும் அல்லது அனைத்து பணிகளையும் மீண்டும் காட்டவும்.'
+                : 'Try a different keyword or reset the filter to browse all missions in the archive.'}
             </p>
           </div>
 
           <div className="flex items-center justify-center gap-3">
             <button
-              onClick={() => handleGroundedSearch()}
-              className="inline-flex items-center gap-2 rounded-[8px] bg-atmo px-3.5 py-2 text-[12px] font-semibold text-[#04202b] transition-colors hover:bg-atmo-soft"
-            >
-              <Globe className="w-4 h-4" />
-              <span>{lang === 'si' ? 'Google සමඟ සජීවීව සොයන්න' : lang === 'ta' ? 'கூகுள் மூலம் தேடு' : 'Search Live on Web'}</span>
-            </button>
-            <button
+              type="button"
               onClick={handleClearSearch}
-              className="px-4 py-2 rounded-[10px] bg-surface-2 text-ink-2 hover:text-ink text-xs font-semibold transition"
+              className="px-4 py-2 rounded-[10px] bg-surface-2 text-ink-2 hover:text-ink text-xs font-semibold transition cursor-pointer"
             >
               {lang === 'si' ? 'සියල්ල පෙන්වන්න' : lang === 'ta' ? 'அனைத்தையும் காட்டு' : 'Reset All'}
             </button>

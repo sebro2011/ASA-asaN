@@ -46,7 +46,6 @@ const EPICViewer = lazy(() => import('../components/EPICViewer.jsx'));
 const MissionsTimeline = lazy(() =>
   import('../components/MissionsTimeline').then((m) => ({ default: m.MissionsTimeline }))
 );
-const MarsImageTagger = lazy(() => import('../components/MarsImageTagger.jsx'));
 const CommunityPage = lazy(() => import('../community/CommunityPage'));
 const MarsRoverPhotos = lazy(() => import('../components/MarsRoverPhotos'));
 const MarsArchiveExplorer = lazy(() => import('../components/MarsArchiveExplorer'));
@@ -511,7 +510,6 @@ export default function ExploreApp({ tab, onSelectTab, onExitToWorkspace, onOpen
                     <MissionsTimeline lang={lang} initialMissionId={targetMissionId} />
                     <MarsRoverPhotos lang={lang} />
                     <MarsArchiveExplorer lang={lang} />
-                    <MarsImageTagger lang={lang} />
                     <SolarWeather />
                   </div>
                 )}
